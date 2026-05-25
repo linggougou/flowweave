@@ -14,6 +14,12 @@ export type ExecutionStepLog = {
   message?: string;
   startedAt: string;
   finishedAt?: string;
+  screenshotPath?: string;
+};
+
+export type FragilityWarning = {
+  stepId: string;
+  message: string;
 };
 
 export type StudioExecution = {
@@ -24,7 +30,7 @@ export type StudioExecution = {
   steps: ExecutionStepLog[];
   startedAt: string;
   finishedAt?: string;
-  screenshotPath?: string;
+  fragilityWarnings?: FragilityWarning[];
 };
 
 export type RunFlowResult = {

@@ -15,6 +15,7 @@
   "dependencies": {
     "@flowweave/flow-dsl": "workspace:*",
     "@flowweave/project-knowledge": "workspace:*",
+    "@flowweave/page-intelligence": "workspace:*",
     "@flowweave/runtime": "workspace:*",
     "@flowweave/shared": "workspace:*",
     "@flowweave/ui": "workspace:*",

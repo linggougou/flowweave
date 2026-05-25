@@ -167,6 +167,15 @@ export function App() {
           </span>
         </div>
         {error ? <p className="error">{error}</p> : null}
+        {execution?.fragilityWarnings && execution.fragilityWarnings.length > 0 ? (
+          <ul className="fragility-warnings">
+            {execution.fragilityWarnings.map((w) => (
+              <li key={w.stepId}>
+                <strong>{w.stepId}</strong>：{w.message}
+              </li>
+            ))}
+          </ul>
+        ) : null}
         <StepLogTable steps={steps} emptyMessage="选择项目并点击「运行流程」查看步骤日志" />
       </main>
     </div>

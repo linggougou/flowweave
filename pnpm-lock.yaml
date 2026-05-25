@@ -76,6 +76,9 @@ importers:
       '@flowweave/flow-dsl':
         specifier: workspace:*
         version: link:../../packages/flow-dsl
+      '@flowweave/page-intelligence':
+        specifier: workspace:*
+        version: link:../../packages/page-intelligence
       '@flowweave/project-knowledge':
         specifier: workspace:*
         version: link:../../packages/project-knowledge
@@ -204,6 +207,9 @@ importers:
 
   packages/page-intelligence:
     dependencies:
+      '@flowweave/flow-dsl':
+        specifier: workspace:*
+        version: link:../flow-dsl
       '@flowweave/shared':
         specifier: workspace:*
         version: link:../shared

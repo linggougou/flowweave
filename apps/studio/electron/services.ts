@@ -9,6 +9,7 @@ import {
   type ExecutionWithProject,
   type ProjectRef,
 } from "@flowweave/project-knowledge";
+import { analyzeFlowFragility } from "@flowweave/page-intelligence";
 import { executeFlow, type ExecutionResult as RuntimeExecutionResult } from "@flowweave/runtime";
 import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
 import type {
@@ -164,6 +165,9 @@ export async function runFlow(projectId: string): Promise<StudioExecution> {
     steps: mapRuntimeSteps(runtimeResult),
     startedAt,
     finishedAt: new Date().toISOString(),
+    fragilityWarnings: analyzeFlowFragility(flow)
+      .filter((i) => i.severity === "warning")
+      .map((i) => ({ stepId: i.stepId, message: i.message })),
   };
 
   if (runtimeResult.error) {
