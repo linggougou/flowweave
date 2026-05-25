@@ -76,7 +76,11 @@ export default defineBackground(() => {
 
         if (message.type === MSG_EXPORT_FLOW) {
           const session = await loadSession();
-          const flow = buildFlowFromEvents(session.events, session.meta);
+          const flow = buildFlowFromEvents(session.events, {
+            ...session.meta,
+            flowId: `flow-${session.meta.sessionId}`,
+            name: "录制流程",
+          });
           const json = JSON.stringify(flow, null, 2);
           const response: ExportFlowResponse = {
             ok: true,

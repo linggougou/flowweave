@@ -153,6 +153,18 @@ export class ProjectKnowledgeRepository {
     return projects.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
+  listFlows(projectId: string): Array<{ id: string; name: string }> {
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    try {
+      return db
+        .select({ id: dbSchema.flows.id, name: dbSchema.flows.name })
+        .from(dbSchema.flows)
+        .all();
+    } finally {
+      closeProjectDatabase(sqlite);
+    }
+  }
+
   getFlow(flowId: string): FlowDocument | null {
     let entries: string[];
     try {

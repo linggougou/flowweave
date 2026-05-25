@@ -57,6 +57,10 @@ describe("ProjectKnowledgeRepository", () => {
     const loaded = repo.getFlow(flowId);
     expect(loaded?.id).toBe(flowId);
     expect(loaded?.name).toBe("登录流程");
+
+    const flows = repo.listFlows(project.id);
+    expect(flows).toHaveLength(1);
+    expect(flows[0]?.id).toBe(flowId);
   });
 
   it("saveExecution 持久化步骤日志且截图仅存路径", () => {

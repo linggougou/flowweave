@@ -1,6 +1,13 @@
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
 import type { FlowDocument } from "@flowweave/flow-dsl";
-import { executeFlow, type ExecutionResult } from "@flowweave/runtime";
-import { getDefaultDataDir } from "@flowweave/project-knowledge";
+import {
+  ProjectKnowledgeRepository,
+  type ExecutionResult as KnowledgeExecutionResult,
+  type ProjectRef,
+} from "@flowweave/project-knowledge";
+import { executeFlow, type ExecutionResult as RuntimeExecutionResult } from "@flowweave/runtime";
 import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
 import type {
   ExecutionStepLog,
@@ -8,41 +15,48 @@ import type {
   StudioProject,
 } from "../src/shared/studio-api-types.js";
 
+const repo = new ProjectKnowledgeRepository();
 const executions = new Map<string, StudioExecution>();
 
-/** R5 合并后改为 project-knowledge `listProjects()` */
-export async function listProjects(): Promise<StudioProject[]> {
-  void getDefaultDataDir();
-  const now = new Date().toISOString();
-  return [
-    {
-      id: "demo-login",
-      name: "演示：登录流程",
-      createdAt: now,
-    },
-  ];
-}
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+const loginFixtureUrl = pathToFileURL(
+  join(repoRoot, "examples/fixtures/login.html"),
+).href;
 
-function buildDemoFlow(projectId: string): FlowDocument {
+const SEED_PROJECT_NAME = "登录演示";
+const SEED_FLOW_ID = "flow_login_fixture";
+
+function buildLoginFixtureFlow(projectId: string): FlowDocument {
   const now = new Date().toISOString();
   return {
     schemaVersion: FLOW_SCHEMA_VERSION,
-    id: `flow-${projectId}`,
+    id: SEED_FLOW_ID,
     projectId,
-    name: "演示流程",
+    name: "登录 Fixture 流程",
     variables: [],
     steps: [
       {
-        id: "step-navigate",
-        label: "打开页面",
+        id: "s1",
         type: "navigate",
-        url: "https://example.com",
+        url: loginFixtureUrl,
+        waitUntil: "domcontentloaded",
       },
       {
-        id: "step-wait",
-        label: "等待加载",
-        type: "wait",
-        ms: 500,
+        id: "s2",
+        type: "fill",
+        target: { strategies: [{ kind: "css", selector: "#username" }] },
+        value: "demo",
+      },
+      {
+        id: "s3",
+        type: "fill",
+        target: { strategies: [{ kind: "css", selector: "#password" }] },
+        value: "secret",
+      },
+      {
+        id: "s4",
+        type: "click",
+        target: { strategies: [{ kind: "css", selector: "#submit" }] },
       },
     ],
     meta: {
@@ -53,7 +67,45 @@ function buildDemoFlow(projectId: string): FlowDocument {
   };
 }
 
-function mapRuntimeSteps(result: ExecutionResult): ExecutionStepLog[] {
+function ensureSeedProject(): ProjectRef {
+  const existing = repo.listProjects();
+  if (existing.length > 0) {
+    const first = existing[0]!;
+    const flows = repo.listFlows(first.id);
+    if (flows.length === 0) {
+      repo.saveFlow(first.id, buildLoginFixtureFlow(first.id));
+    }
+    return first;
+  }
+  const project = repo.createProject(SEED_PROJECT_NAME);
+  repo.saveFlow(project.id, buildLoginFixtureFlow(project.id));
+  return project;
+}
+
+export async function listProjects(): Promise<StudioProject[]> {
+  ensureSeedProject();
+  return repo.listProjects().map((p) => ({
+    id: p.id,
+    name: p.name,
+    createdAt: p.createdAt,
+  }));
+}
+
+function resolveFlowForProject(projectId: string): FlowDocument {
+  const flows = repo.listFlows(projectId);
+  const first = flows[0];
+  if (first) {
+    const doc = repo.getFlow(first.id);
+    if (doc) {
+      return doc;
+    }
+  }
+  const flow = buildLoginFixtureFlow(projectId);
+  repo.saveFlow(projectId, flow);
+  return flow;
+}
+
+function mapRuntimeSteps(result: RuntimeExecutionResult): ExecutionStepLog[] {
   return result.steps.map((step) => ({
     stepIndex: step.stepIndex,
     stepId: step.stepId,
@@ -65,42 +117,43 @@ function mapRuntimeSteps(result: ExecutionResult): ExecutionStepLog[] {
   }));
 }
 
-function buildPendingStepLogs(flow: FlowDocument): ExecutionStepLog[] {
-  const startedAt = new Date().toISOString();
-  return flow.steps.map((step, stepIndex) => ({
-    stepIndex,
-    stepId: step.id,
-    label: step.label ?? step.type,
-    status: "pending" as const,
-    startedAt,
-  }));
+function toKnowledgeExecution(
+  runtime: RuntimeExecutionResult,
+  flowId: string,
+): KnowledgeExecutionResult {
+  const finishedAt = new Date().toISOString();
+  return {
+    executionId: runtime.executionId,
+    flowId,
+    status: runtime.status === "success" ? "success" : "failed",
+    startedAt: runtime.steps[0]?.startedAt,
+    finishedAt,
+    steps: runtime.steps.map((step) => ({
+      stepIndex: step.stepIndex,
+      stepId: step.stepId,
+      status: step.status === "success" ? "passed" : "failed",
+      durationMs: step.durationMs,
+      errorMessage: step.message,
+    })),
+  };
 }
 
 export async function runFlow(projectId: string): Promise<StudioExecution> {
-  const flow = buildDemoFlow(projectId);
+  const flow = resolveFlowForProject(projectId);
   const startedAt = new Date().toISOString();
-  const steps = buildPendingStepLogs(flow);
-
-  const record: StudioExecution = {
-    executionId: "",
-    projectId,
-    flowId: flow.id,
-    status: "running",
-    steps,
-    startedAt,
-  };
-
-  for (const step of record.steps) {
-    step.status = "running";
-  }
 
   const runtimeResult = await executeFlow(flow, { headless: true });
-  record.executionId = runtimeResult.executionId;
-  executions.set(record.executionId, record);
+  repo.saveExecution(projectId, toKnowledgeExecution(runtimeResult, flow.id));
 
-  record.steps = mapRuntimeSteps(runtimeResult);
-  record.status = runtimeResult.status === "success" ? "passed" : "failed";
-  record.finishedAt = new Date().toISOString();
+  const record: StudioExecution = {
+    executionId: runtimeResult.executionId,
+    projectId,
+    flowId: flow.id,
+    status: runtimeResult.status === "success" ? "passed" : "failed",
+    steps: mapRuntimeSteps(runtimeResult),
+    startedAt,
+    finishedAt: new Date().toISOString(),
+  };
 
   if (runtimeResult.error) {
     const last = record.steps.at(-1);
@@ -110,8 +163,6 @@ export async function runFlow(projectId: string): Promise<StudioExecution> {
   }
 
   executions.set(record.executionId, record);
-
-  // R5：saveExecution(projectId, runtimeResult)
   return record;
 }
 

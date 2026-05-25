@@ -16,9 +16,9 @@
 
 | 轨道 | 分支 | Agent | 状态 | 验收 |
 |------|------|-------|------|------|
-| R1 recorder | `feat/p1-recorder` | 3d3acde7 | running | — |
-| R2 runtime | `feat/p1-runtime` | 49ca873f | running | — |
-| R3 extension | `feat/p1-extension` | 4251cdf1 | running | — |
+| R1 recorder | `feat/p1-recorder` | 3d3acde7 | ✅ merged | — |
+| R2 runtime | `feat/p1-runtime` | 49ca873f | ✅ merged | — |
+| R3 extension | `feat/p1-extension` | 4251cdf1 | ✅ merged | — |
 | R4 studio | `feat/p1-studio` | 369da3d1 | running | — |
 | R5 knowledge | `feat/p1-knowledge` | 40f0d962 | running | — |
 
