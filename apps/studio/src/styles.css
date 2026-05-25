@@ -67,6 +67,62 @@ body {
   background: #1f2a3d;
 }
 
+.execution-history {
+  margin-top: 1.5rem;
+}
+
+.execution-history h2 {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  color: #9aa7b8;
+  font-weight: 600;
+}
+
+.execution-history-empty {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #6b7785;
+}
+
+.execution-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.execution-history-item {
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid #2a3441;
+  border-radius: 6px;
+  background: #1a2129;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.execution-history-item:hover,
+.execution-history-item.active {
+  border-color: #3d8bfd;
+  background: #1f2a3d;
+}
+
+.execution-history-id {
+  font-size: 0.8125rem;
+  font-family: ui-monospace, monospace;
+}
+
+.execution-history-meta {
+  font-size: 0.75rem;
+  color: #9aa7b8;
+}
+
 .main {
   padding: 1rem 1.25rem;
   display: flex;

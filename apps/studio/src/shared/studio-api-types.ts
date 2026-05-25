@@ -31,10 +31,19 @@ export type RunFlowResult = {
   status: StudioExecution["status"];
 };
 
+export type ExecutionSummary = {
+  executionId: string;
+  flowId: string;
+  status: StudioExecution["status"];
+  startedAt?: string;
+  finishedAt?: string;
+};
+
 export type StudioApi = {
   listProjects: () => Promise<StudioProject[]>;
   runFlow: (projectId: string) => Promise<RunFlowResult>;
   getExecution: (executionId: string) => Promise<StudioExecution | null>;
+  listExecutions: (projectId: string) => Promise<ExecutionSummary[]>;
 };
 
 declare global {

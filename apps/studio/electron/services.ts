@@ -5,12 +5,14 @@ import type { FlowDocument } from "@flowweave/flow-dsl";
 import {
   ProjectKnowledgeRepository,
   type ExecutionResult as KnowledgeExecutionResult,
+  type ExecutionWithProject,
   type ProjectRef,
 } from "@flowweave/project-knowledge";
 import { executeFlow, type ExecutionResult as RuntimeExecutionResult } from "@flowweave/runtime";
 import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
 import type {
   ExecutionStepLog,
+  ExecutionSummary,
   StudioExecution,
   StudioProject,
 } from "../src/shared/studio-api-types.js";
@@ -166,6 +168,52 @@ export async function runFlow(projectId: string): Promise<StudioExecution> {
   return record;
 }
 
+function mapKnowledgeStatus(status: KnowledgeExecutionResult["status"]): StudioExecution["status"] {
+  if (status === "success") {
+    return "passed";
+  }
+  return "failed";
+}
+
+function fromKnowledgeExecution(
+  stored: ExecutionWithProject,
+): StudioExecution {
+  const startedAt = stored.startedAt ?? new Date(0).toISOString();
+  return {
+    executionId: stored.executionId,
+    projectId: stored.projectId,
+    flowId: stored.flowId,
+    status: mapKnowledgeStatus(stored.status),
+    startedAt,
+    finishedAt: stored.finishedAt,
+    steps: stored.steps.map((step) => ({
+      stepIndex: step.stepIndex,
+      stepId: step.stepId,
+      label: step.stepId,
+      status: step.status,
+      message: step.errorMessage,
+      startedAt,
+      finishedAt: stored.finishedAt,
+    })),
+  };
+}
+
 export function getExecution(executionId: string): StudioExecution | null {
+  const stored = repo.getExecution(executionId);
+  if (stored) {
+    const record = fromKnowledgeExecution(stored);
+    executions.set(executionId, record);
+    return record;
+  }
   return executions.get(executionId) ?? null;
+}
+
+export function listExecutions(projectId: string): ExecutionSummary[] {
+  return repo.listExecutions(projectId, 5).map((item) => ({
+    executionId: item.executionId,
+    flowId: item.flowId,
+    status: mapKnowledgeStatus(item.status),
+    startedAt: item.startedAt,
+    finishedAt: item.finishedAt,
+  }));
 }

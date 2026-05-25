@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import path from "node:path";
 import { IPC_CHANNELS } from "./ipc-channels.js";
-import { getExecution, listProjects, runFlow } from "./services.js";
+import { getExecution, listExecutions, listProjects, runFlow } from "./services.js";
 
 function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.listProjects, () => listProjects());
@@ -22,6 +22,13 @@ function registerIpcHandlers(): void {
       throw new Error("executionId 无效");
     }
     return getExecution(executionId);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.listExecutions, (_event, projectId: string) => {
+    if (typeof projectId !== "string" || projectId.length === 0) {
+      throw new Error("projectId 无效");
+    }
+    return listExecutions(projectId);
   });
 }
 

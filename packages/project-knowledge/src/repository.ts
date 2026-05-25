@@ -3,7 +3,7 @@ import { readdirSync, statSync } from "node:fs";
 
 import type { FlowDocument } from "@flowweave/flow-dsl";
 import { parseFlowDocument } from "@flowweave/flow-dsl";
-import { eq } from "drizzle-orm";
+import { asc, desc, eq } from "drizzle-orm";
 
 import {
   closeProjectDatabase,
@@ -12,7 +12,27 @@ import {
   resolveProjectStorePath,
 } from "./db/client.js";
 import * as dbSchema from "./db/schema.js";
-import type { ExecutionResult, ProjectRef } from "./types.js";
+import type {
+  ExecutionResult,
+  ExecutionWithProject,
+  ProjectRef,
+  StepLog,
+} from "./types.js";
+
+const EXECUTION_STATUSES = ["success", "failed", "cancelled"] as const;
+const STEP_STATUSES = ["passed", "failed", "skipped"] as const;
+
+function parseExecutionStatus(status: string): ExecutionResult["status"] {
+  return EXECUTION_STATUSES.includes(status as ExecutionResult["status"])
+    ? (status as ExecutionResult["status"])
+    : "failed";
+}
+
+function parseStepStatus(status: string): StepLog["status"] {
+  return STEP_STATUSES.includes(status as StepLog["status"])
+    ? (status as StepLog["status"])
+    : "failed";
+}
 
 export type ProjectKnowledgeRepositoryOptions = {
   /** 覆盖默认数据目录，测试时传入临时目录 */
@@ -197,5 +217,87 @@ export class ProjectKnowledgeRepository {
     }
 
     return null;
+  }
+
+  listExecutions(projectId: string, limit = 50): ExecutionResult[] {
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    try {
+      const rows = db
+        .select()
+        .from(dbSchema.executions)
+        .where(eq(dbSchema.executions.projectId, projectId))
+        .orderBy(desc(dbSchema.executions.startedAt), desc(dbSchema.executions.finishedAt))
+        .limit(limit)
+        .all();
+
+      return rows.map((row) => this.assembleExecution(db, row));
+    } finally {
+      closeProjectDatabase(sqlite);
+    }
+  }
+
+  getExecution(executionId: string): ExecutionWithProject | null {
+    let entries: string[];
+    try {
+      entries = readdirSync(this.dataDir);
+    } catch {
+      return null;
+    }
+
+    for (const entry of entries) {
+      const storePath = resolveProjectStorePath(entry, this.dataDir);
+      try {
+        statSync(storePath);
+      } catch {
+        continue;
+      }
+
+      const { db, sqlite } = openProjectDatabase(entry, this.dataDir);
+      try {
+        const row = db
+          .select()
+          .from(dbSchema.executions)
+          .where(eq(dbSchema.executions.id, executionId))
+          .get();
+        if (row) {
+          return {
+            projectId: row.projectId,
+            ...this.assembleExecution(db, row),
+          };
+        }
+      } finally {
+        closeProjectDatabase(sqlite);
+      }
+    }
+
+    return null;
+  }
+
+  private assembleExecution(
+    db: ReturnType<typeof openProjectDatabase>["db"],
+    executionRow: typeof dbSchema.executions.$inferSelect,
+  ): ExecutionResult {
+    const stepRows = db
+      .select()
+      .from(dbSchema.executionSteps)
+      .where(eq(dbSchema.executionSteps.executionId, executionRow.id))
+      .orderBy(asc(dbSchema.executionSteps.stepIndex))
+      .all();
+
+    return {
+      executionId: executionRow.id,
+      flowId: executionRow.flowId,
+      status: parseExecutionStatus(executionRow.status),
+      startedAt: executionRow.startedAt ?? undefined,
+      finishedAt: executionRow.finishedAt ?? undefined,
+      steps: stepRows.map((step) => ({
+        stepIndex: step.stepIndex,
+        stepId: step.stepId,
+        status: parseStepStatus(step.status),
+        durationMs: step.durationMs ?? undefined,
+        errorMessage: step.errorMessage ?? undefined,
+        screenshotPath: step.screenshotPath ?? undefined,
+      })),
+    };
   }
 }

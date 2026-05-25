@@ -96,4 +96,69 @@ describe("ProjectKnowledgeRepository", () => {
     const repo = new ProjectKnowledgeRepository({ dataDir });
     expect(repo.getFlow("missing_flow")).toBeNull();
   });
+
+  it("listExecutions / getExecution 从 executions 与 execution_steps 组装", () => {
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-pk-"));
+    const repo = new ProjectKnowledgeRepository({ dataDir });
+
+    const project = repo.createProject("历史查询项目");
+    const flowId = "flow_history_1";
+    repo.saveFlow(project.id, sampleFlow(project.id, flowId));
+
+    const older: ExecutionResult = {
+      executionId: "exec_older",
+      flowId,
+      status: "failed",
+      startedAt: "2026-05-25T10:00:00.000Z",
+      finishedAt: "2026-05-25T10:00:02.000Z",
+      steps: [
+        {
+          stepIndex: 0,
+          stepId: "s1",
+          status: "failed",
+          durationMs: 800,
+          errorMessage: "超时",
+        },
+      ],
+    };
+
+    const newer: ExecutionResult = {
+      executionId: "exec_newer",
+      flowId,
+      status: "success",
+      startedAt: "2026-05-25T12:00:00.000Z",
+      finishedAt: "2026-05-25T12:00:05.000Z",
+      steps: [
+        {
+          stepIndex: 0,
+          stepId: "s1",
+          status: "passed",
+          durationMs: 1200,
+          screenshotPath: "/tmp/flowweave/screenshots/exec_newer_step0.png",
+        },
+      ],
+    };
+
+    repo.saveExecution(project.id, older);
+    repo.saveExecution(project.id, newer);
+
+    const listed = repo.listExecutions(project.id, 10);
+    expect(listed).toHaveLength(2);
+    expect(listed[0]?.executionId).toBe("exec_newer");
+    expect(listed[1]?.executionId).toBe("exec_older");
+    expect(listed[0]?.steps[0]?.screenshotPath).toContain("exec_newer_step0");
+
+    const limited = repo.listExecutions(project.id, 1);
+    expect(limited).toHaveLength(1);
+    expect(limited[0]?.executionId).toBe("exec_newer");
+
+    const loaded = repo.getExecution("exec_older");
+    expect(loaded?.projectId).toBe(project.id);
+    expect(loaded?.flowId).toBe(flowId);
+    expect(loaded?.status).toBe("failed");
+    expect(loaded?.steps).toHaveLength(1);
+    expect(loaded?.steps[0]?.errorMessage).toBe("超时");
+
+    expect(repo.getExecution("missing_exec")).toBeNull();
+  });
 });

@@ -24,3 +24,8 @@ export type ExecutionResult = {
   startedAt?: string;
   finishedAt?: string;
 };
+
+/** 带项目上下文的执行结果（getExecution 查询时使用） */
+export type ExecutionWithProject = ExecutionResult & {
+  projectId: string;
+};

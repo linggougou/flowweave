@@ -7,6 +7,8 @@ const studioApi: StudioApi = {
   runFlow: (projectId: string) => ipcRenderer.invoke(IPC_CHANNELS.runFlow, projectId),
   getExecution: (executionId: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.getExecution, executionId),
+  listExecutions: (projectId: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.listExecutions, projectId),
 };
 
 contextBridge.exposeInMainWorld("flowweaveStudio", studioApi);
