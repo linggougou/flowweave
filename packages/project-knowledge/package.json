@@ -10,15 +10,19 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean",
+    "build": "tsup src/index.ts --format esm --dts --clean --external better-sqlite3",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run"
   },
   "dependencies": {
-    "@flowweave/shared": "workspace:*"
+    "@flowweave/flow-dsl": "workspace:*",
+    "@flowweave/shared": "workspace:*",
+    "better-sqlite3": "^11.8.1",
+    "drizzle-orm": "^0.38.3"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
