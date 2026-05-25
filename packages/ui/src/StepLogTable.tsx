@@ -8,6 +8,7 @@ export type StepLogRow = {
   message?: string;
   startedAt: string;
   finishedAt?: string;
+  screenshotPath?: string;
 };
 
 export type StepLogTableProps = {
@@ -39,6 +40,7 @@ export function StepLogTable({
           <th>步骤</th>
           <th>状态</th>
           <th>说明</th>
+          <th>截图</th>
           <th>开始</th>
           <th>结束</th>
         </tr>
@@ -50,6 +52,9 @@ export function StepLogTable({
             <td>{step.label}</td>
             <td>{STATUS_LABEL[step.status] ?? step.status}</td>
             <td>{step.message ?? "—"}</td>
+            <td className="fw-step-screenshot" title={step.screenshotPath}>
+              {step.screenshotPath ? shortenPath(step.screenshotPath) : "—"}
+            </td>
             <td>{formatTime(step.startedAt)}</td>
             <td>{step.finishedAt ? formatTime(step.finishedAt) : "—"}</td>
           </tr>
@@ -57,6 +62,13 @@ export function StepLogTable({
       </tbody>
     </table>
   );
+}
+
+function shortenPath(path: string): string {
+  if (path.length <= 48) {
+    return path;
+  }
+  return `…${path.slice(-44)}`;
 }
 
 function formatTime(iso: string): string {

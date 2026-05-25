@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -95,6 +95,15 @@ describe("ProjectKnowledgeRepository", () => {
     dataDir = mkdtempSync(join(tmpdir(), "flowweave-pk-"));
     const repo = new ProjectKnowledgeRepository({ dataDir });
     expect(repo.getFlow("missing_flow")).toBeNull();
+  });
+
+  it("allocateRunDirectory 创建 runs 子目录", () => {
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-pk-"));
+    const repo = new ProjectKnowledgeRepository({ dataDir });
+    const project = repo.createProject("运行目录");
+    const runDir = repo.allocateRunDirectory(project.id, "exec_test_1");
+    expect(runDir).toContain(join(project.id, "runs", "exec_test_1"));
+    expect(existsSync(runDir)).toBe(true);
   });
 
   it("listExecutions / getExecution 从 executions 与 execution_steps 组装", () => {

@@ -11,6 +11,7 @@ import {
   openProjectDatabase,
   resolveProjectStorePath,
 } from "./db/client.js";
+import { ensureRunDirectory } from "./paths.js";
 import * as dbSchema from "./db/schema.js";
 import type {
   ExecutionResult,
@@ -44,6 +45,11 @@ export class ProjectKnowledgeRepository {
 
   constructor(options: ProjectKnowledgeRepositoryOptions = {}) {
     this.dataDir = expandHomePath(options.dataDir ?? "~/.flowweave/projects");
+  }
+
+  /** 为单次执行创建 `runs/<executionId>/` 目录 */
+  allocateRunDirectory(projectId: string, executionId: string): string {
+    return ensureRunDirectory(this.dataDir, projectId, executionId);
   }
 
   createProject(name: string): ProjectRef {

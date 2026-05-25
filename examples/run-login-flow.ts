@@ -3,6 +3,7 @@
  *
  * 运行：pnpm exec tsx examples/run-login-flow.ts
  */
+import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -75,8 +76,12 @@ async function main() {
   console.log(`项目: ${project.id}`);
   console.log(`执行 Flow: ${flow.id}`);
 
-  const result = await executeFlow(flow, { headless: true });
+  const executionId = randomUUID();
+  const artifactDir = repo.allocateRunDirectory(project.id, executionId);
+  const result = await executeFlow(flow, { headless: true, executionId, artifactDir });
   repo.saveExecution(project.id, toKnowledge(result, flow.id));
+
+  console.log(`运行目录: ${artifactDir}`);
 
   console.log(`状态: ${result.status}`);
   console.log(`步骤: ${result.steps.length}`);

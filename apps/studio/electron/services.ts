@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -116,6 +117,7 @@ function mapRuntimeSteps(result: RuntimeExecutionResult): ExecutionStepLog[] {
     message: step.message,
     startedAt: step.startedAt,
     finishedAt: step.endedAt,
+    screenshotPath: step.screenshotPath,
   }));
 }
 
@@ -136,6 +138,7 @@ function toKnowledgeExecution(
       status: step.status === "success" ? "passed" : "failed",
       durationMs: step.durationMs,
       errorMessage: step.message,
+      screenshotPath: step.screenshotPath,
     })),
   };
 }
@@ -143,8 +146,14 @@ function toKnowledgeExecution(
 export async function runFlow(projectId: string): Promise<StudioExecution> {
   const flow = resolveFlowForProject(projectId);
   const startedAt = new Date().toISOString();
+  const executionId = randomUUID();
+  const artifactDir = repo.allocateRunDirectory(projectId, executionId);
 
-  const runtimeResult = await executeFlow(flow, { headless: true });
+  const runtimeResult = await executeFlow(flow, {
+    headless: true,
+    executionId,
+    artifactDir,
+  });
   repo.saveExecution(projectId, toKnowledgeExecution(runtimeResult, flow.id));
 
   const record: StudioExecution = {
@@ -194,6 +203,7 @@ function fromKnowledgeExecution(
       message: step.errorMessage,
       startedAt,
       finishedAt: stored.finishedAt,
+      screenshotPath: step.screenshotPath,
     })),
   };
 }

@@ -1,7 +1,10 @@
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
+
 import type { FlowDocument, NormalizedStep, Target } from "@flowweave/flow-dsl";
+import { FlowWeaveError } from "@flowweave/shared";
 
 type LocatorStrategy = Target["strategies"][number];
-import { FlowWeaveError } from "@flowweave/shared";
 import { chromium, type Locator, type Page } from "playwright";
 import type { ExecutionOptions, ExecutionResult, StepLog } from "./types.js";
 
@@ -51,10 +54,21 @@ async function resolveTarget(page: Page, target: Target): Promise<Locator> {
   );
 }
 
+async function captureStepScreenshot(
+  page: Page,
+  artifactDir: string,
+  stepIndex: number,
+): Promise<string> {
+  const screenshotPath = join(artifactDir, `step-${stepIndex}.png`);
+  await page.screenshot({ path: screenshotPath, fullPage: false });
+  return screenshotPath;
+}
+
 async function runStep(
   page: Page,
   step: NormalizedStep,
   stepIndex: number,
+  artifactDir?: string,
 ): Promise<StepLog> {
   const startedAt = nowIso();
   const startMs = Date.now();
@@ -105,6 +119,9 @@ async function runStep(
     }
 
     const endedAt = nowIso();
+    const screenshotPath = artifactDir
+      ? await captureStepScreenshot(page, artifactDir, stepIndex)
+      : undefined;
     return {
       stepIndex,
       stepId: step.id,
@@ -113,6 +130,7 @@ async function runStep(
       startedAt,
       endedAt,
       durationMs: Date.now() - startMs,
+      screenshotPath,
     };
   } catch (error) {
     const endedAt = nowIso();
@@ -122,6 +140,14 @@ async function runStep(
         : error instanceof Error
           ? error.message
           : String(error);
+    let screenshotPath: string | undefined;
+    if (artifactDir) {
+      try {
+        screenshotPath = await captureStepScreenshot(page, artifactDir, stepIndex);
+      } catch {
+        screenshotPath = undefined;
+      }
+    }
     return {
       stepIndex,
       stepId: step.id,
@@ -131,6 +157,7 @@ async function runStep(
       endedAt,
       durationMs: Date.now() - startMs,
       message,
+      screenshotPath,
     };
   }
 }
@@ -142,7 +169,11 @@ export async function executeFlow(
 ): Promise<ExecutionResult> {
   const headless = options.headless ?? true;
   const timeoutMs = options.timeoutMs ?? 30_000;
-  const executionId = crypto.randomUUID();
+  const executionId = options.executionId ?? crypto.randomUUID();
+  const artifactDir = options.artifactDir;
+  if (artifactDir) {
+    mkdirSync(artifactDir, { recursive: true });
+  }
   const stepLogs: StepLog[] = [];
 
   const browser = await chromium.launch({ headless });
@@ -156,7 +187,7 @@ export async function executeFlow(
       if (!step) {
         continue;
       }
-      const log = await runStep(page, step, stepIndex);
+      const log = await runStep(page, step, stepIndex, artifactDir);
       stepLogs.push(log);
       if (log.status === "failed") {
         return {

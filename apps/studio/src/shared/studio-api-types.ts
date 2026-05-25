@@ -24,6 +24,7 @@ export type StudioExecution = {
   steps: ExecutionStepLog[];
   startedAt: string;
   finishedAt?: string;
+  screenshotPath?: string;
 };
 
 export type RunFlowResult = {

@@ -1,6 +1,9 @@
+import { existsSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
 import type { FlowDocument } from "@flowweave/flow-dsl";
 import { executeFlow } from "./playwright-runner.js";
@@ -51,6 +54,29 @@ function buildLoginFlow(): FlowDocument {
 }
 
 describe("executeFlow", () => {
+  let artifactDir: string | undefined;
+
+  afterEach(() => {
+    if (artifactDir) {
+      rmSync(artifactDir, { recursive: true, force: true });
+      artifactDir = undefined;
+    }
+  });
+
+  it("artifactDir 时每步写入截图文件", async () => {
+    artifactDir = mkdtempSync(join(tmpdir(), "fw-runtime-artifacts-"));
+    const result = await executeFlow(buildLoginFlow(), {
+      headless: true,
+      artifactDir,
+    });
+    expect(result.status).toBe("success");
+    for (let i = 0; i < result.steps.length; i++) {
+      const shot = join(artifactDir, `step-${i}.png`);
+      expect(existsSync(shot)).toBe(true);
+      expect(result.steps[i]?.screenshotPath).toBe(shot);
+    }
+  });
+
   it("对 login.html fixture 执行 navigate / fill / click 流程", async () => {
     const result = await executeFlow(buildLoginFlow(), { headless: true });
 
