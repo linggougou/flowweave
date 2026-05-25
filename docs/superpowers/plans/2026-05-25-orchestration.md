@@ -7,20 +7,20 @@
 | 阶段 | 状态 |
 |------|------|
 | Plan | ✅ 完成 |
-| P0 提交 main | 进行中 |
-| Worktree 创建 | 待执行 |
-| 五轨道并行 | 待执行 |
+| P0 提交 main | ✅ 完成 |
+| Worktree 创建 | ✅ 由各 subagent 自动创建 |
+| 五轨道并行 | 🔄 进行中（5 agents） |
 | 合并集成 | 待执行 |
 
 ## 轨道状态
 
 | 轨道 | 分支 | Agent | 状态 | 验收 |
 |------|------|-------|------|------|
-| R1 recorder | `feat/p1-recorder` | TBD | pending | — |
-| R2 runtime | `feat/p1-runtime` | TBD | pending | — |
-| R3 extension | `feat/p1-extension` | TBD | pending | — |
-| R4 studio | `feat/p1-studio` | TBD | pending | — |
-| R5 knowledge | `feat/p1-knowledge` | TBD | pending | — |
+| R1 recorder | `feat/p1-recorder` | 3d3acde7 | running | — |
+| R2 runtime | `feat/p1-runtime` | 49ca873f | running | — |
+| R3 extension | `feat/p1-extension` | 4251cdf1 | running | — |
+| R4 studio | `feat/p1-studio` | 369da3d1 | running | — |
+| R5 knowledge | `feat/p1-knowledge` | 40f0d962 | running | — |
 
 ## 合并队列
 
