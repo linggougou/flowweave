@@ -3,7 +3,8 @@
   "compilerOptions": {
     "lib": ["ES2022", "DOM"],
     "noEmit": true,
-    "rootDir": "./src"
+    "rootDir": ".",
+    "types": ["wxt/browser"]
   },
-  "include": ["src/**/*"]
+  "include": ["entrypoints/**/*", "lib/**/*", ".wxt/**/*.ts"]
 }
