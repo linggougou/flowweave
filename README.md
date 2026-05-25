@@ -59,7 +59,10 @@ pnpm typecheck
 pnpm lint
 pnpm test
 pnpm build
+pnpm e2e:login   # 登录 fixture 端到端（需 Node 20 + chromium）
 ```
+
+详见 [P1 端到端指南](docs/guides/p1-e2e.md)、[P2–P4 路线图](docs/superpowers/plans/2026-05-25-p2-p4-roadmap.md)。
 
 要求 Node.js ≥ 20（见 `.nvmrc`）。
 
@@ -67,8 +70,8 @@ pnpm build
 
 | 阶段 | 目标 |
 |------|------|
-| **P0** | 工程基座、文档、包骨架 ← 当前 |
-| **P1** | 扩展录制 + studio 回放 |
-| **P2** | 项目知识库 + 执行日志 |
+| **P0** | 工程基座、文档、包骨架 ✅ |
+| **P1** | 扩展录制 + studio 回放 + `pnpm e2e:login` ✅ |
+| **P2** | 项目知识库 + 执行历史 ← 进行中 |
 | **P3** | 页面 / 接口理解 |
 | **P4** | AI 编排与体检 |
