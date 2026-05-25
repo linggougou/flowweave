@@ -1,0 +1,7 @@
+node_modules
+dist
+.turbo
+.wxt
+out
+coverage
+pnpm-lock.yaml

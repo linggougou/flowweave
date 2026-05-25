@@ -1,0 +1,17 @@
+---
+description: FlowWeave 核心开发约定（包边界、阶段、验证）
+globs:
+  - "**/*.{ts,tsx,js,jsx,json,md}"
+alwaysApply: true
+---
+
+# FlowWeave 开发规则
+
+1. 编码前阅读仓库根目录 `AGENTS.md` 与 `docs/architecture/overview.md`。
+2. `apps/*` 不得互相依赖；业务逻辑放在 `packages/*`。
+3. 禁止跨包 deep import；只使用各包 `src/index.ts` 导出。
+4. `ai-orchestrator` 不得直接调用 Playwright；执行经 `@flowweave/runtime`。
+5. Flow 结构变更必须更新 `@flowweave/flow-dsl` 的 Zod Schema 与 `schemaVersion` 迁移。
+6. P1 目标：录制 + 回放闭环；不要提前实现完整 AI 编排。
+7. 完成前运行：`pnpm typecheck && pnpm lint && pnpm test`（或说明未跑原因）。
+8. 用户可见文案使用简体中文。

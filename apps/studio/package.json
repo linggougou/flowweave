@@ -1,0 +1,23 @@
+{
+  "name": "@flowweave/app-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node -e \"console.log('@flowweave/app-studio: Electron 构建于 P1 启用')\"",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run --passWithNoTests",
+    "dev": "node -e \"console.log('@flowweave/app-studio: dev 于 P1 启用')\""
+  },
+  "dependencies": {
+    "@flowweave/runtime": "workspace:*",
+    "@flowweave/project-knowledge": "workspace:*",
+    "@flowweave/ui": "workspace:*",
+    "@flowweave/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

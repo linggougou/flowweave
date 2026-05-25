@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FlowWeave 登录 Fixture</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 360px;
+        margin: 2rem auto;
+      }
+      label {
+        display: block;
+        margin-top: 1rem;
+      }
+      input,
+      button {
+        width: 100%;
+        margin-top: 0.25rem;
+        padding: 0.5rem;
+      }
+      #message {
+        margin-top: 1rem;
+        color: green;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>登录</h1>
+    <form id="login-form">
+      <label>
+        用户名
+        <input id="username" name="username" type="text" autocomplete="username" />
+      </label>
+      <label>
+        密码
+        <input id="password" name="password" type="password" autocomplete="current-password" />
+      </label>
+      <button type="submit" id="submit">登录</button>
+    </form>
+    <p id="message" hidden>登录成功</p>
+    <script>
+      document.getElementById("login-form").addEventListener("submit", (e) => {
+        e.preventDefault();
+        document.getElementById("message").hidden = false;
+      });
+    </script>
+  </body>
+</html>

@@ -2,37 +2,73 @@
 
 织流是一个通用网页流程自动化与页面智能分析平台。
 
-它的目标不是简单录制网页点击，而是把网页项目逐步沉淀为可执行、可维护、可诊断、可优化的自动化资产。平台会围绕录制引擎、执行引擎、页面理解、接口理解、AI 编排和项目知识库持续扩展。
+它的目标不是简单录制网页点击，而是把网页项目逐步沉淀为可执行、可维护、可诊断、可优化的自动化资产。
 
-## 当前仓库结构
+## 技术栈（P0 已落地）
+
+- **Monorepo**：pnpm workspaces + Turborepo
+- **语言**：TypeScript（strict）
+- **流程契约**：Zod Flow DSL（`@flowweave/flow-dsl`）
+- **执行内核（P1）**：Playwright（`@flowweave/runtime`）
+- **桌面端（P1）**：Electron + Vite + React（`apps/studio`）
+- **扩展（P1）**：WXT（`apps/extension`）
+
+## 仓库结构
 
 ```text
 flowweave/
-├── apps/                 # 面向用户的应用入口
-│   ├── studio/           # 桌面工作台
-│   ├── extension/        # 浏览器扩展
-│   └── web/              # Web 控制台
-├── packages/             # 核心能力包
-│   ├── recorder/
-│   ├── runtime/
+├── apps/
+│   ├── extension/        # 浏览器扩展（WXT，P1）
+│   ├── studio/           # 桌面工作台（Electron，P1）
+│   └── web/              # Web 控制台（P2 加强）
+├── packages/
+│   ├── shared/           # 错误码、常量
+│   ├── flow-dsl/         # Flow Schema（Zod）
+│   ├── recorder/         # 录制引擎（P1）
+│   ├── runtime/          # 执行引擎（P1）
 │   ├── page-intelligence/
-│   ├── ai-orchestrator/
-│   ├── project-knowledge/
-│   └── shared/
-├── docs/                 # 设计、计划与产品文档
-├── examples/             # 示例与演示素材
-├── scripts/              # 工具脚本
-└── .codex/               # 任务上下文、操作日志与验证记录
+│   ├── network-intelligence/
+│   ├── project-knowledge/  # SQLite（P2）
+│   ├── ai-orchestrator/    # AI SDK（P4）
+│   └── ui/
+├── docs/
+│   ├── architecture/overview.md
+│   ├── adr/
+│   └── domain/flow-dsl.md
+├── AGENTS.md             # 项目 Agent 规范
+├── CONTRIBUTING.md
+└── .codex/
 ```
 
-## 已有文档
+## 文档入口
 
-1. 产品设计文档：`docs/superpowers/specs/2026-05-25-web-automation-platform-design.md`
-2. 初始化计划：`docs/superpowers/plans/2026-05-25-flowweave-bootstrap-plan.md`
+| 文档 | 说明 |
+|------|------|
+| [架构总览](docs/architecture/overview.md) | 逻辑/物理架构、阶段规划 |
+| [Flow DSL](docs/domain/flow-dsl.md) | 流程语言规范 |
+| [ADR](docs/adr/README.md) | 架构决策记录 |
+| [AGENTS.md](AGENTS.md) | AI / 开发者协作规范 |
+| [产品设计](docs/superpowers/specs/2026-05-25-web-automation-platform-design.md) | 产品定义 |
 
-## 下一步讨论建议
+## 本地开发
 
-1. 完整功能地图
-2. 产品信息架构
-3. 核心页面与交互流
-4. 技术栈与首批工程约束
+```bash
+corepack enable
+pnpm install
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
+```
+
+要求 Node.js ≥ 20（见 `.nvmrc`）。
+
+## 交付阶段
+
+| 阶段 | 目标 |
+|------|------|
+| **P0** | 工程基座、文档、包骨架 ← 当前 |
+| **P1** | 扩展录制 + studio 回放 |
+| **P2** | 项目知识库 + 执行日志 |
+| **P3** | 页面 / 接口理解 |
+| **P4** | AI 编排与体检 |

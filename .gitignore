@@ -5,8 +5,15 @@ build/
 coverage/
 .turbo/
 .vite/
+.wxt/
+out/
 .cache/
 *.log
 .DS_Store
 .env
 .env.*
+# 本地项目数据（运行时生成）
+.flowweave/
+
+# git worktrees（并行开发）
+.worktrees/
