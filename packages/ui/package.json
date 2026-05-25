@@ -16,9 +16,14 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@flowweave/shared": "workspace:*"
+    "@flowweave/shared": "workspace:*",
+    "react": "^19.0.0"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
   },
   "devDependencies": {
+    "@types/react": "^19.0.2",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

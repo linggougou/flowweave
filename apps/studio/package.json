@@ -3,21 +3,35 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "dist-electron/main.cjs",
   "scripts": {
-    "build": "node -e \"console.log('@flowweave/app-studio: Electron 构建于 P1 启用')\"",
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint src",
+    "build:electron": "node ./scripts/build-electron.mjs",
+    "build": "pnpm build:electron && vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.electron.json",
+    "lint": "eslint src electron",
     "test": "vitest run --passWithNoTests",
-    "dev": "node -e \"console.log('@flowweave/app-studio: dev 于 P1 启用')\""
+    "dev": "pnpm build:electron && concurrently -k \"vite\" \"wait-on http://127.0.0.1:5173 && VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\""
   },
   "dependencies": {
-    "@flowweave/runtime": "workspace:*",
+    "@flowweave/flow-dsl": "workspace:*",
     "@flowweave/project-knowledge": "workspace:*",
+    "@flowweave/runtime": "workspace:*",
+    "@flowweave/shared": "workspace:*",
     "@flowweave/ui": "workspace:*",
-    "@flowweave/shared": "workspace:*"
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "electron": "^33.2.1",
+    "esbuild": "^0.24.2",
     "typescript": "^5.7.2",
-    "vitest": "^2.1.8"
+    "vite": "^6.0.6",
+    "vitest": "^2.1.8",
+    "wait-on": "^8.0.1"
   }
 }
