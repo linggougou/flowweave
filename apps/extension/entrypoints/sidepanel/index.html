@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowWeave 录制</title>
+    <style>
+      :root {
+        font-family:
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        color: #0f172a;
+        background: #f8fafc;
+      }
+      body {
+        margin: 0;
+        padding: 16px;
+        min-width: 280px;
+      }
+      h1 {
+        font-size: 1.125rem;
+        margin: 0 0 12px;
+      }
+      .stat {
+        font-size: 2rem;
+        font-weight: 700;
+        margin: 8px 0 4px;
+      }
+      .meta {
+        color: #64748b;
+        font-size: 0.8125rem;
+        margin-bottom: 16px;
+        word-break: break-all;
+      }
+      button {
+        width: 100%;
+        padding: 10px 12px;
+        border: none;
+        border-radius: 8px;
+        background: #2563eb;
+        color: #fff;
+        font-size: 0.9375rem;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      button:not(:disabled):hover {
+        background: #1d4ed8;
+      }
+      .status {
+        margin-top: 12px;
+        font-size: 0.8125rem;
+        color: #475569;
+        min-height: 1.25rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>FlowWeave 录制</h1>
+    <p>已记录事件</p>
+    <p class="stat" id="event-count">0</p>
+    <p class="meta" id="session-meta">会话加载中…</p>
+    <button type="button" id="export-btn" disabled>导出 Flow JSON</button>
+    <p class="status" id="status" role="status"></p>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
