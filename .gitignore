@@ -1,6 +1,8 @@
 node_modules/
 dist/
+dist-server/
 dist-electron/
+.codegraph/
 build/
 .next/
 coverage/
