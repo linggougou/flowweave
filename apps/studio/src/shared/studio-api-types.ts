@@ -41,6 +41,11 @@ export type RunFlowResult = {
   status: StudioExecution["status"];
 };
 
+/** 运行流程时的选项；showBrowser 为 true 时弹出 Playwright 浏览器窗口 */
+export type RunFlowOptions = {
+  showBrowser?: boolean;
+};
+
 export type ExecutionSummary = {
   executionId: string;
   flowId: string;
@@ -67,7 +72,11 @@ export type StudioFlowVersion = {
 export type StudioApi = {
   listProjects: () => Promise<StudioProject[]>;
   listFlows: (projectId: string) => Promise<StudioFlowRef[]>;
-  runFlow: (projectId: string, flowId?: string) => Promise<RunFlowResult>;
+  runFlow: (
+    projectId: string,
+    flowId?: string,
+    options?: RunFlowOptions,
+  ) => Promise<RunFlowResult>;
   getExecution: (executionId: string) => Promise<StudioExecution | null>;
   listExecutions: (projectId: string) => Promise<ExecutionSummary[]>;
   listFlowVersions: (projectId: string, flowId: string) => Promise<StudioFlowVersion[]>;

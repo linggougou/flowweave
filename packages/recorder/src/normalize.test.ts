@@ -182,6 +182,33 @@ describe("buildFlowFromEvents", () => {
     expect(() => flowDocumentSchema.parse(flow)).not.toThrow();
   });
 
+  it("无 navigate 时用首条事件的 url 自动补 open 步骤", () => {
+    const events: RecordedEvent[] = [
+      event({
+        id: "c1",
+        type: "click",
+        timestamp: 100,
+        url: "https://app.example.com/login",
+        payload: { selector: "#email" },
+      }),
+      event({
+        id: "f1",
+        type: "fill",
+        timestamp: 200,
+        url: "https://app.example.com/login",
+        payload: { selector: "#email", value: "user@test.com" },
+      }),
+    ];
+
+    const flow = buildFlowFromEvents(events, baseMeta);
+
+    expect(flow.steps[0]).toMatchObject({
+      type: "navigate",
+      url: "https://app.example.com/login",
+    });
+    expect(flow.steps).toHaveLength(3);
+  });
+
   it("无有效步骤时抛出校验错误", () => {
     expect(() =>
       buildFlowFromEvents(

@@ -1,12 +1,12 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { IPC_CHANNELS } from "./ipc-channels.js";
-import type { StudioApi } from "../src/shared/studio-api-types.js";
+import type { RunFlowOptions, StudioApi } from "../src/shared/studio-api-types.js";
 
 const studioApi: StudioApi = {
   listProjects: () => ipcRenderer.invoke(IPC_CHANNELS.listProjects),
   listFlows: (projectId: string) => ipcRenderer.invoke(IPC_CHANNELS.listFlows, projectId),
-  runFlow: (projectId: string, flowId?: string) =>
-    ipcRenderer.invoke(IPC_CHANNELS.runFlow, projectId, flowId),
+  runFlow: (projectId: string, flowId?: string, options?: RunFlowOptions) =>
+    ipcRenderer.invoke(IPC_CHANNELS.runFlow, projectId, flowId, options),
   getExecution: (executionId: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.getExecution, executionId),
   listExecutions: (projectId: string) =>

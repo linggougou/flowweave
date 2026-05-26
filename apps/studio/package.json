@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "dist-electron/main.cjs",
+  "main": "dist-electron/main.mjs",
   "scripts": {
     "build:electron": "node ./scripts/build-electron.mjs",
     "build": "pnpm build:electron && vite build",

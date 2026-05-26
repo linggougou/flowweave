@@ -4,7 +4,10 @@ import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parseFlowDocument } from "@flowweave/flow-dsl";
-import { ProjectKnowledgeRepository } from "@flowweave/project-knowledge";
+import {
+  ProjectKnowledgeRepository,
+  type ExecutionResult,
+} from "@flowweave/project-knowledge";
 import { FlowWeaveError } from "@flowweave/shared";
 
 import { readJsonBody } from "./http-utils.js";
@@ -130,8 +133,60 @@ async function handleApi(
       return true;
     }
 
+    if (segments[3] === "runs" && segments.length === 4 && method === "POST") {
+      const body = (await readJsonBody(req)) as { executionId?: string };
+      if (!body.executionId) {
+        sendJson(res, 400, { error: "缺少 executionId" });
+        return true;
+      }
+      const artifactDir = repo.allocateRunDirectory(projectId, body.executionId);
+      sendJson(res, 200, { artifactDir });
+      return true;
+    }
+
     if (segments[3] === "executions" && segments.length === 4 && method === "GET") {
       sendJson(res, 200, repo.listExecutions(projectId, 50));
+      return true;
+    }
+
+    if (segments[3] === "executions" && segments.length === 4 && method === "POST") {
+      try {
+        const body = (await readJsonBody(req)) as ExecutionResult;
+        if (!body.executionId || !body.flowId) {
+          sendJson(res, 400, { error: "执行记录格式无效" });
+          return true;
+        }
+        repo.saveExecution(projectId, body);
+        sendJson(res, 200, { executionId: body.executionId });
+      } catch (err: unknown) {
+        sendJson(res, 400, {
+          error: err instanceof Error ? err.message : "保存执行失败",
+        });
+      }
+      return true;
+    }
+
+    if (segments[3] === "page-snapshots" && segments.length === 4 && method === "POST") {
+      try {
+        const body = (await readJsonBody(req)) as {
+          summary?: unknown;
+          snapshotPath?: string;
+        };
+        if (!body.summary || typeof body.summary !== "object") {
+          sendJson(res, 400, { error: "缺少 summary" });
+          return true;
+        }
+        const record = repo.savePageSnapshot(
+          projectId,
+          body.summary as Parameters<typeof repo.savePageSnapshot>[1],
+          body.snapshotPath,
+        );
+        sendJson(res, 200, record);
+      } catch (err: unknown) {
+        sendJson(res, 400, {
+          error: err instanceof Error ? err.message : "保存快照失败",
+        });
+      }
       return true;
     }
 

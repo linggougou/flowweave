@@ -15,6 +15,20 @@ import type {
   StudioProject,
 } from "./shared/studio-api-types.js";
 
+const SHOW_BROWSER_STORAGE_KEY = "flowweave:studio-show-browser";
+
+function readShowBrowserPreference(): boolean {
+  try {
+    const raw = localStorage.getItem(SHOW_BROWSER_STORAGE_KEY);
+    if (raw === "0" || raw === "false") {
+      return false;
+    }
+    return true;
+  } catch {
+    return true;
+  }
+}
+
 function getStudioApi() {
   if (!window.flowweaveStudio) {
     throw new Error("未找到 flowweaveStudio API，请确认 preload 已加载");
@@ -51,6 +65,7 @@ export function App() {
   const [executionHistory, setExecutionHistory] = useState<ExecutionSummary[]>([]);
   const [execution, setExecution] = useState<StudioExecution | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showBrowser, setShowBrowser] = useState(readShowBrowserPreference);
   const [error, setError] = useState<string | null>(null);
 
   const refreshProjects = useCallback(async () => {
@@ -137,7 +152,9 @@ export function App() {
     setError(null);
     try {
       const api = getStudioApi();
-      const result = await api.runFlow(selectedProjectId, selectedFlowId);
+      const result = await api.runFlow(selectedProjectId, selectedFlowId, {
+        showBrowser,
+      });
       const detail = await api.getExecution(result.executionId);
       setExecution(detail);
       await refreshExecutionHistory(selectedProjectId);
@@ -295,6 +312,23 @@ export function App() {
           >
             Flow 版本
           </button>
+          <label className="run-option" title="开启后会弹出 Chromium 窗口，便于确认是否在执行">
+            <input
+              type="checkbox"
+              checked={showBrowser}
+              disabled={loading}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setShowBrowser(next);
+                try {
+                  localStorage.setItem(SHOW_BROWSER_STORAGE_KEY, next ? "1" : "0");
+                } catch {
+                  // ignore
+                }
+              }}
+            />
+            显示浏览器窗口
+          </label>
           <button
             type="button"
             disabled={!selectedProjectId || !selectedFlowId || loading}

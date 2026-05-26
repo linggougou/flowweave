@@ -21,19 +21,31 @@ function registerIpcHandlers(): void {
     return listFlows(projectId);
   });
 
-  ipcMain.handle(IPC_CHANNELS.runFlow, async (_event, projectId: string, flowId?: string) => {
+  ipcMain.handle(
+    IPC_CHANNELS.runFlow,
+    async (
+      _event,
+      projectId: string,
+      flowId?: string,
+      options?: { showBrowser?: boolean },
+    ) => {
     if (typeof projectId !== "string" || projectId.length === 0) {
       throw new Error("projectId 无效");
     }
     if (flowId !== undefined && (typeof flowId !== "string" || flowId.length === 0)) {
       throw new Error("flowId 无效");
     }
-    const record = await runFlow(projectId, flowId);
+    const showBrowser =
+      options && typeof options === "object" && options.showBrowser === false
+        ? false
+        : true;
+    const record = await runFlow(projectId, flowId, { showBrowser });
     return {
       executionId: record.executionId,
       status: record.status,
     };
-  });
+    },
+  );
 
   ipcMain.handle(IPC_CHANNELS.getExecution, (_event, executionId: string) => {
     if (typeof executionId !== "string" || executionId.length === 0) {

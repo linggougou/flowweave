@@ -147,6 +147,20 @@ body {
   gap: 1rem;
 }
 
+.run-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  color: #9aa7b8;
+  cursor: pointer;
+  user-select: none;
+}
+
+.run-option input {
+  cursor: pointer;
+}
+
 .toolbar {
   display: flex;
   align-items: center;

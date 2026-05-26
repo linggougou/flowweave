@@ -6,9 +6,6 @@ mkdirSync("dist-electron", { recursive: true });
 const externals = [
   "electron",
   "@flowweave/runtime",
-  "@flowweave/project-knowledge",
-  "@flowweave/flow-dsl",
-  "@flowweave/shared",
   "playwright",
   "playwright-core",
 ];
@@ -24,8 +21,8 @@ await esbuild.build({
   ...shared,
   entryPoints: ["electron/main.ts"],
   platform: "node",
-  format: "cjs",
-  outfile: "dist-electron/main.cjs",
+  format: "esm",
+  outfile: "dist-electron/main.mjs",
 });
 
 await esbuild.build({

@@ -184,14 +184,41 @@ export function normalizeRecordedEvent(event: RecordedEvent): NormalizedStep | n
   }
 }
 
+/** 清空录制会话后若未刷新页面，事件里可能没有 navigate；用首条事件的 url 补一步 */
+function ensureLeadingNavigate(
+  steps: NormalizedStep[],
+  events: RecordedEvent[],
+): NormalizedStep[] {
+  if (steps.length === 0 || steps[0]?.type === "navigate") {
+    return steps;
+  }
+  const firstUrl = events.find((e) => typeof e.url === "string" && e.url.length > 0)?.url;
+  if (!firstUrl || firstUrl === "about:blank") {
+    return steps;
+  }
+  const anchor = events.find((e) => e.url === firstUrl) ?? events[0];
+  return [
+    {
+      id: `nav-auto-${anchor?.id ?? "0"}`,
+      type: "navigate",
+      url: firstUrl,
+      waitUntil: "domcontentloaded",
+    },
+    ...steps,
+  ];
+}
+
 /** 将录制事件序列聚合为 Flow 文档 */
 export function buildFlowFromEvents(
   events: RecordedEvent[],
   meta: BuildFlowFromEventsMeta,
 ): FlowDocument {
-  const steps = events
-    .map((event) => normalizeRecordedEvent(event))
-    .filter((step): step is NormalizedStep => step !== null);
+  const steps = ensureLeadingNavigate(
+    events
+      .map((event) => normalizeRecordedEvent(event))
+      .filter((step): step is NormalizedStep => step !== null),
+    events,
+  );
 
   if (steps.length === 0) {
     throw new FlowWeaveError(

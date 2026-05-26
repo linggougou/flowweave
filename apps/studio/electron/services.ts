@@ -3,12 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import type { FlowDocument } from "@flowweave/flow-dsl";
-import {
-  ProjectKnowledgeRepository,
-  type ExecutionResult as KnowledgeExecutionResult,
-  type ExecutionWithProject,
-  type ProjectRef,
-} from "@flowweave/project-knowledge";
+import type { ExecutionResult as KnowledgeExecutionResult } from "@flowweave/project-knowledge";
 import { analyzeFlowFragility } from "@flowweave/page-intelligence";
 import { executeFlow, type ExecutionResult as RuntimeExecutionResult } from "@flowweave/runtime";
 import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
@@ -19,8 +14,22 @@ import type {
   StudioFlowVersion,
   StudioProject,
 } from "../src/shared/studio-api-types.js";
+import {
+  apiAllocateRunDirectory,
+  apiCreateProject,
+  apiGetExecution,
+  apiGetFlow,
+  apiGetFlowVersion,
+  apiListExecutions,
+  apiListFlowVersions,
+  apiListFlows,
+  apiListProjects,
+  apiRestoreFlowVersion,
+  apiSaveExecution,
+  apiSaveFlow,
+  apiSavePageSnapshot,
+} from "./knowledge-client.js";
 
-const repo = new ProjectKnowledgeRepository();
 const executions = new Map<string, StudioExecution>();
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -72,57 +81,54 @@ function buildLoginFixtureFlow(projectId: string): FlowDocument {
   };
 }
 
-function ensureSeedProject(): ProjectRef {
-  const existing = repo.listProjects();
+async function ensureSeedProject(): Promise<StudioProject> {
+  const existing = await apiListProjects();
   if (existing.length > 0) {
     const first = existing[0]!;
-    const flows = repo.listFlows(first.id);
+    const flows = await apiListFlows(first.id);
     if (flows.length === 0) {
-      repo.saveFlow(first.id, buildLoginFixtureFlow(first.id));
+      await apiSaveFlow(first.id, buildLoginFixtureFlow(first.id));
     }
-    return first;
+    return {
+      id: first.id,
+      name: first.name,
+      createdAt: first.createdAt,
+      baseUrl: first.baseUrl,
+    };
   }
-  const project = repo.createProject(SEED_PROJECT_NAME);
-  repo.ensureDefaultEnvironment(project.id, "本地 Fixture", loginFixtureUrl);
-  repo.saveFlow(project.id, buildLoginFixtureFlow(project.id));
-  return project;
-}
-
-function mapProject(p: ProjectRef): StudioProject {
-  const env = repo.getDefaultEnvironment(p.id);
+  const project = await apiCreateProject(SEED_PROJECT_NAME);
+  await apiSaveFlow(project.id, buildLoginFixtureFlow(project.id));
   return {
-    id: p.id,
-    name: p.name,
-    createdAt: p.createdAt,
-    baseUrl: env?.baseUrl,
+    id: project.id,
+    name: project.name,
+    createdAt: project.createdAt,
+    baseUrl: loginFixtureUrl,
   };
 }
 
 export async function listProjects(): Promise<StudioProject[]> {
-  const seed = ensureSeedProject();
-  repo.ensureDefaultEnvironment(seed.id, "本地 Fixture", loginFixtureUrl);
-  return repo.listProjects().map(mapProject);
+  await ensureSeedProject();
+  const projects = await apiListProjects();
+  return projects.map((p) => ({
+    id: p.id,
+    name: p.name,
+    createdAt: p.createdAt,
+    baseUrl: p.baseUrl,
+  }));
 }
 
-function resolveFlowForRun(projectId: string, flowId?: string): FlowDocument {
+async function resolveFlowForRun(projectId: string, flowId?: string): Promise<FlowDocument> {
   if (flowId) {
-    const doc = repo.getFlowInProject(projectId, flowId);
-    if (!doc) {
-      throw new Error(`未找到 Flow：${flowId}`);
-    }
-    return doc;
+    return apiGetFlow(projectId, flowId);
   }
 
-  const flows = repo.listFlows(projectId);
+  const flows = await apiListFlows(projectId);
   const first = flows[0];
   if (first) {
-    const doc = repo.getFlowInProject(projectId, first.id);
-    if (doc) {
-      return doc;
-    }
+    return apiGetFlow(projectId, first.id);
   }
   const flow = buildLoginFixtureFlow(projectId);
-  repo.saveFlow(projectId, flow);
+  await apiSaveFlow(projectId, flow);
   return flow;
 }
 
@@ -162,21 +168,31 @@ function toKnowledgeExecution(
   };
 }
 
-export async function runFlow(projectId: string, flowId?: string): Promise<StudioExecution> {
-  const flow = resolveFlowForRun(projectId, flowId);
+export type RunFlowServiceOptions = {
+  /** 为 true 时显示 Playwright 浏览器窗口（headless: false） */
+  showBrowser?: boolean;
+};
+
+export async function runFlow(
+  projectId: string,
+  flowId?: string,
+  options: RunFlowServiceOptions = {},
+): Promise<StudioExecution> {
+  const flow = await resolveFlowForRun(projectId, flowId);
   const startedAt = new Date().toISOString();
   const executionId = randomUUID();
-  const artifactDir = repo.allocateRunDirectory(projectId, executionId);
+  const artifactDir = await apiAllocateRunDirectory(projectId, executionId);
+  const showBrowser = options.showBrowser ?? true;
 
   const runtimeResult = await executeFlow(flow, {
-    headless: true,
+    headless: !showBrowser,
     executionId,
     artifactDir,
   });
-  repo.saveExecution(projectId, toKnowledgeExecution(runtimeResult, flow.id));
+  await apiSaveExecution(projectId, toKnowledgeExecution(runtimeResult, flow.id));
 
   for (const snap of runtimeResult.pageSnapshots ?? []) {
-    repo.savePageSnapshot(projectId, snap.summary, snap.filePath);
+    await apiSavePageSnapshot(projectId, snap.summary, snap.filePath);
   }
 
   const record: StudioExecution = {
@@ -211,7 +227,7 @@ function mapKnowledgeStatus(status: KnowledgeExecutionResult["status"]): StudioE
 }
 
 function fromKnowledgeExecution(
-  stored: ExecutionWithProject,
+  stored: Awaited<ReturnType<typeof apiGetExecution>> & object,
 ): StudioExecution {
   const startedAt = stored.startedAt ?? new Date(0).toISOString();
   return {
@@ -235,8 +251,8 @@ function fromKnowledgeExecution(
   };
 }
 
-export function getExecution(executionId: string): StudioExecution | null {
-  const stored = repo.getExecution(executionId);
+export async function getExecution(executionId: string): Promise<StudioExecution | null> {
+  const stored = await apiGetExecution(executionId);
   if (stored) {
     const record = fromKnowledgeExecution(stored);
     executions.set(executionId, record);
@@ -245,8 +261,9 @@ export function getExecution(executionId: string): StudioExecution | null {
   return executions.get(executionId) ?? null;
 }
 
-export function listExecutions(projectId: string): ExecutionSummary[] {
-  return repo.listExecutions(projectId, 5).map((item) => ({
+export async function listExecutions(projectId: string): Promise<ExecutionSummary[]> {
+  const items = await apiListExecutions(projectId);
+  return items.slice(0, 5).map((item) => ({
     executionId: item.executionId,
     flowId: item.flowId,
     status: mapKnowledgeStatus(item.status),
@@ -255,18 +272,27 @@ export function listExecutions(projectId: string): ExecutionSummary[] {
   }));
 }
 
-export function listFlows(projectId: string): Array<{ id: string; name: string }> {
-  return repo.listFlows(projectId);
+export async function listFlows(projectId: string): Promise<Array<{ id: string; name: string }>> {
+  return apiListFlows(projectId);
 }
 
-export function listFlowVersions(projectId: string, flowId: string): StudioFlowVersion[] {
-  return repo.listFlowVersions(projectId, flowId);
+export async function listFlowVersions(
+  projectId: string,
+  flowId: string,
+): Promise<StudioFlowVersion[]> {
+  return apiListFlowVersions(projectId, flowId);
 }
 
-export function getFlowVersion(projectId: string, versionId: string): FlowDocument | null {
-  return repo.getFlowVersion(projectId, versionId);
+export async function getFlowVersion(
+  projectId: string,
+  versionId: string,
+): Promise<FlowDocument | null> {
+  return apiGetFlowVersion(projectId, versionId);
 }
 
-export function restoreFlowVersion(projectId: string, versionId: string): FlowDocument {
-  return repo.restoreFlowVersion(projectId, versionId);
+export async function restoreFlowVersion(
+  projectId: string,
+  versionId: string,
+): Promise<FlowDocument> {
+  return apiRestoreFlowVersion(projectId, versionId);
 }
