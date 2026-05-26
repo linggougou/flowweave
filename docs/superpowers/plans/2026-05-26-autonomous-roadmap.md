@@ -128,5 +128,5 @@ API Key 仅本地；禁止自动写入无确认。
 | PHASE 1 | ✅ DONE |
 | PHASE 2 | ✅ 环境/快照/HAR 基础已落地 |
 | PHASE 3 | 🟡 HAR 解析完成；深度映射待做 |
-| PHASE 4 | PENDING |
+| PHASE 4 | 🟡 启发式 NL→Flow 已落地；AI SDK 待接 |
 | PHASE 5 | PENDING |
