@@ -5,7 +5,8 @@ import type { StudioApi } from "../src/shared/studio-api-types.js";
 const studioApi: StudioApi = {
   listProjects: () => ipcRenderer.invoke(IPC_CHANNELS.listProjects),
   listFlows: (projectId: string) => ipcRenderer.invoke(IPC_CHANNELS.listFlows, projectId),
-  runFlow: (projectId: string) => ipcRenderer.invoke(IPC_CHANNELS.runFlow, projectId),
+  runFlow: (projectId: string, flowId?: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.runFlow, projectId, flowId),
   getExecution: (executionId: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.getExecution, executionId),
   listExecutions: (projectId: string) =>

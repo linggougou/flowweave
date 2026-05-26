@@ -44,6 +44,8 @@ flowweave/
 
 | 文档 | 说明 |
 |------|------|
+| **[快速启动](docs/guides/quickstart.md)** | **本地跑通（推荐首读）** |
+| [先跑通开发计划](docs/superpowers/plans/2026-05-26-run-first-roadmap.md) | 当前里程碑（AI 冻结） |
 | [架构总览](docs/architecture/overview.md) | 逻辑/物理架构、阶段规划 |
 | [Flow DSL](docs/domain/flow-dsl.md) | 流程语言规范 |
 | [ADR](docs/adr/README.md) | 架构决策记录 |
@@ -55,14 +57,20 @@ flowweave/
 ```bash
 corepack enable
 pnpm install
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm build
-pnpm e2e:login   # 登录 fixture 端到端（需 Node 20 + chromium）
+pnpm exec playwright install chromium   # 首次
+pnpm typecheck && pnpm lint && pnpm test && pnpm build
+pnpm e2e:login
 ```
 
-详见 [P1 端到端指南](docs/guides/p1-e2e.md)、[P2–P4 路线图](docs/superpowers/plans/2026-05-25-p2-p4-roadmap.md)。
+**三端开发**：
+
+```bash
+pnpm dev:web         # Web + API（扩展同步依赖）
+pnpm dev:studio      # Studio 桌面端
+pnpm dev:extension   # 浏览器扩展（WXT 热更新）
+```
+
+详见 [快速启动](docs/guides/quickstart.md)、[P1 端到端](docs/guides/p1-e2e.md)。
 
 要求 Node.js ≥ 20（见 `.nvmrc`）。
 
@@ -71,7 +79,7 @@ pnpm e2e:login   # 登录 fixture 端到端（需 Node 20 + chromium）
 | 阶段 | 目标 |
 |------|------|
 | **P0** | 工程基座、文档、包骨架 ✅ |
-| **P1** | 扩展录制 + studio 回放 + `pnpm e2e:login` ✅ |
-| **P2** | 项目知识库 + 执行历史 ← 进行中 |
-| **P3** | 页面 / 接口理解 |
-| **P4** | AI 编排与体检 |
+| **P1** | 扩展录制 + Studio 回放 + `pnpm e2e:login` ✅ |
+| **P2** | 知识库 + 执行历史 + 版本 ✅ 主体完成 |
+| **M1–M4** | **先跑通**：文档、选 Flow 运行、smoke、CI ← **当前主线** |
+| **P3 深度 / P4 AI** | ⏸ 冻结，跑通稳定后再做 |

@@ -17,6 +17,7 @@ import {
   type SyncKnowledgeMessage,
   type SyncKnowledgeResponse,
 } from "../../lib/messages.js";
+import { STORAGE_SELECTED_PROJECT_KEY } from "../../lib/storage-keys.js";
 
 const API_BASE_KEY = "flowweave:api-base";
 
@@ -76,8 +77,17 @@ function renderProjects(): void {
   }
 }
 
+async function restoreSelectedProject(): Promise<void> {
+  const stored = await browser.storage.local.get(STORAGE_SELECTED_PROJECT_KEY);
+  const projectId = stored[STORAGE_SELECTED_PROJECT_KEY] as string | undefined;
+  if (projectId) {
+    selectedProjectId = projectId;
+  }
+}
+
 async function persistProjectSelection(projectId: string): Promise<void> {
   selectedProjectId = projectId;
+  await browser.storage.local.set({ [STORAGE_SELECTED_PROJECT_KEY]: projectId });
   const message = { type: MSG_SET_PROJECT, projectId } as const;
   await browser.runtime.sendMessage(message);
 }
@@ -178,6 +188,9 @@ syncBtn?.addEventListener("click", () => {
   })();
 });
 
-void loadProjects();
+void (async () => {
+  await restoreSelectedProject();
+  await loadProjects();
+})();
 const timer = window.setInterval(() => void refreshSession(), 1000);
 window.addEventListener("unload", () => window.clearInterval(timer));

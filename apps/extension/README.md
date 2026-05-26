@@ -7,7 +7,7 @@ Chromium MV3 录制扩展，基于 [WXT](https://wxt.dev/) 构建。将页面上
 ```bash
 # 在仓库根目录
 pnpm install
-pnpm --filter @flowweave/app-extension dev
+pnpm dev:extension
 ```
 
 `dev` 会启动 WXT 开发模式并输出可加载的 `dist/`（或 `.output/` 下的 chrome-mv3 目录，以构建日志为准）。

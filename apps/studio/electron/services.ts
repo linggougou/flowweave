@@ -104,7 +104,15 @@ export async function listProjects(): Promise<StudioProject[]> {
   return repo.listProjects().map(mapProject);
 }
 
-function resolveFlowForProject(projectId: string): FlowDocument {
+function resolveFlowForRun(projectId: string, flowId?: string): FlowDocument {
+  if (flowId) {
+    const doc = repo.getFlowInProject(projectId, flowId);
+    if (!doc) {
+      throw new Error(`未找到 Flow：${flowId}`);
+    }
+    return doc;
+  }
+
   const flows = repo.listFlows(projectId);
   const first = flows[0];
   if (first) {
@@ -153,8 +161,8 @@ function toKnowledgeExecution(
   };
 }
 
-export async function runFlow(projectId: string): Promise<StudioExecution> {
-  const flow = resolveFlowForProject(projectId);
+export async function runFlow(projectId: string, flowId?: string): Promise<StudioExecution> {
+  const flow = resolveFlowForRun(projectId, flowId);
   const startedAt = new Date().toISOString();
   const executionId = randomUUID();
   const artifactDir = repo.allocateRunDirectory(projectId, executionId);

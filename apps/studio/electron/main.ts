@@ -21,11 +21,14 @@ function registerIpcHandlers(): void {
     return listFlows(projectId);
   });
 
-  ipcMain.handle(IPC_CHANNELS.runFlow, async (_event, projectId: string) => {
+  ipcMain.handle(IPC_CHANNELS.runFlow, async (_event, projectId: string, flowId?: string) => {
     if (typeof projectId !== "string" || projectId.length === 0) {
       throw new Error("projectId 无效");
     }
-    const record = await runFlow(projectId);
+    if (flowId !== undefined && (typeof flowId !== "string" || flowId.length === 0)) {
+      throw new Error("flowId 无效");
+    }
+    const record = await runFlow(projectId, flowId);
     return {
       executionId: record.executionId,
       status: record.status,

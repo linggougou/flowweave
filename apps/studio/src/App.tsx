@@ -125,14 +125,14 @@ export function App() {
   };
 
   const handleRun = async () => {
-    if (!selectedProjectId) {
+    if (!selectedProjectId || !selectedFlowId) {
       return;
     }
     setLoading(true);
     setError(null);
     try {
       const api = getStudioApi();
-      const result = await api.runFlow(selectedProjectId);
+      const result = await api.runFlow(selectedProjectId, selectedFlowId);
       const detail = await api.getExecution(result.executionId);
       setExecution(detail);
       await refreshExecutionHistory(selectedProjectId);
@@ -274,11 +274,15 @@ export function App() {
           </button>
           <button
             type="button"
-            disabled={!selectedProjectId || loading}
+            disabled={!selectedProjectId || !selectedFlowId || loading}
+            title={!selectedFlowId ? "请先在侧栏选择一个 Flow" : undefined}
             onClick={() => void handleRun()}
           >
             {loading ? "运行中…" : "运行流程"}
           </button>
+          {!selectedFlowId && selectedProjectId ? (
+            <span className="status">请先在侧栏选择一个 Flow</span>
+          ) : null}
           <span className="status">
             {execution
               ? `执行 ${execution.executionId.slice(0, 8)}… · ${execution.status}`

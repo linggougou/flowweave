@@ -1,5 +1,7 @@
 # FlowWeave 自主执行 Roadmap
 
+> **已 superseded**：请以 **[先跑通计划](./2026-05-26-run-first-roadmap.md)** 为准（AI 冻结，先跑通后智能）。
+
 > 模式：PLAN → IMPLEMENT → VERIFY → REFINE → CONTINUE  
 > 更新：2026-05-26
 

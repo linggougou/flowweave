@@ -14,6 +14,7 @@
 2. [Flow DSL](./docs/domain/flow-dsl.md)
 3. [ADR 索引](./docs/adr/README.md)
 4. [产品设计](./docs/superpowers/specs/2026-05-25-web-automation-platform-design.md)
+5. **[先跑通开发计划](./docs/superpowers/plans/2026-05-26-run-first-roadmap.md)**（当前主线；AI 冻结）
 
 ## 包依赖（强制）
 
@@ -45,13 +46,15 @@ shared ← flow-dsl ← runtime → page-intelligence
 
 ## 分阶段约束
 
-- **P0**：工具链、文档、包骨架 — 当前阶段
-- **P1**：extension 录制 → studio 回放（不上 AI）
-- **P2**：project-knowledge + 执行日志
-- **P3**：page / network intelligence
-- **P4**：ai-orchestrator
+- **P0**：工具链、文档、包骨架 — ✅ 已完成
+- **P1**：extension 录制 → studio 回放（不上 AI）— ✅ 已完成
+- **P2**：project-knowledge + 执行日志 — 🟡 主体完成，见 [先跑通计划](./docs/superpowers/plans/2026-05-26-run-first-roadmap.md)
+- **P3**：page / network intelligence — **基础能力已有，深度功能冻结**（非当前主线）
+- **P4**：ai-orchestrator — **冻结**，后续智能阶段再接入
 
-未达阶段的包不得引入重量级依赖阻塞 P1。
+**当前有效路线图**：[docs/superpowers/plans/2026-05-26-run-first-roadmap.md](./docs/superpowers/plans/2026-05-26-run-first-roadmap.md)
+
+未达阶段的包不得引入重量级依赖阻塞「先跑通」主线。
 
 ## 代码规范
 

@@ -12,6 +12,7 @@ import {
   type SessionState,
   type SyncKnowledgeResponse,
 } from "../lib/messages.js";
+import { STORAGE_SELECTED_PROJECT_KEY } from "../lib/storage-keys.js";
 
 const STORAGE_KEY = "flowweave:recording-session";
 
@@ -28,13 +29,20 @@ function createSessionMeta(projectId = "pending"): RecorderSessionMeta {
   };
 }
 
+async function getDefaultProjectId(): Promise<string> {
+  const stored = await browser.storage.local.get(STORAGE_SELECTED_PROJECT_KEY);
+  const projectId = stored[STORAGE_SELECTED_PROJECT_KEY] as string | undefined;
+  return projectId ?? "pending";
+}
+
 async function loadSession(): Promise<StoredSession> {
   const stored = await browser.storage.session.get(STORAGE_KEY);
   const raw = stored[STORAGE_KEY] as StoredSession | undefined;
   if (raw?.meta && Array.isArray(raw.events)) {
     return raw;
   }
-  const session: StoredSession = { meta: createSessionMeta(), events: [] };
+  const projectId = await getDefaultProjectId();
+  const session: StoredSession = { meta: createSessionMeta(projectId), events: [] };
   await browser.storage.session.set({ [STORAGE_KEY]: session });
   return session;
 }
