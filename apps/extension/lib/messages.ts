@@ -3,6 +3,8 @@ import type { RecordedEvent } from "@flowweave/shared";
 export const MSG_RECORD_EVENT = "flowweave:record-event" as const;
 export const MSG_GET_SESSION = "flowweave:get-session" as const;
 export const MSG_EXPORT_FLOW = "flowweave:export-flow" as const;
+export const MSG_SYNC_KNOWLEDGE = "flowweave:sync-knowledge" as const;
+export const MSG_SET_PROJECT = "flowweave:set-project" as const;
 
 export type RecordEventMessage = {
   type: typeof MSG_RECORD_EVENT;
@@ -17,7 +19,24 @@ export type ExportFlowMessage = {
   type: typeof MSG_EXPORT_FLOW;
 };
 
-export type ExtensionMessage = RecordEventMessage | GetSessionMessage | ExportFlowMessage;
+export type SyncKnowledgeMessage = {
+  type: typeof MSG_SYNC_KNOWLEDGE;
+  projectId: string;
+  apiBase?: string;
+  changeMessage?: string;
+};
+
+export type SetProjectMessage = {
+  type: typeof MSG_SET_PROJECT;
+  projectId: string;
+};
+
+export type ExtensionMessage =
+  | RecordEventMessage
+  | GetSessionMessage
+  | ExportFlowMessage
+  | SyncKnowledgeMessage
+  | SetProjectMessage;
 
 export type SessionState = {
   eventCount: number;
@@ -31,3 +50,14 @@ export type ExportFlowResponse = {
   json: string;
   filename: string;
 };
+
+export type SyncKnowledgeResponse =
+  | {
+      ok: true;
+      flowId: string;
+      name: string;
+      projectId: string;
+    }
+  | { ok: false; error: string };
+
+export type SetProjectResponse = { ok: true; projectId: string } | { ok: false; error: string };

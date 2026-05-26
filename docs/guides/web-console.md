@@ -27,6 +27,14 @@ pnpm --filter @flowweave/app-web start
 | Flow | 按项目列出 Flow，查看当前步骤数 |
 | Flow 版本 | `saveFlow` 更新前自动写入 `flow_versions`；可预览 JSON、一键恢复 |
 | 执行历史 | 只读展示 `listExecutions` / 步骤日志 |
+| 扩展同步 | `POST /api/projects/:id/flows` 接收浏览器扩展写入的 Flow |
+
+## 扩展录制同步
+
+1. 终端运行 `pnpm dev:web`（API `127.0.0.1:3847`）。
+2. Chrome 加载 `apps/extension` 构建产物（`pnpm --filter @flowweave/app-extension dev`）。
+3. 侧栏选择目标项目，点击 **同步到知识库**。
+4. 在 Studio / Web 控制台即可看到同一 Flow 并运行。
 
 ## Flow 版本规则
 

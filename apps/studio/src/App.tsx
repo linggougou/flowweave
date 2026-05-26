@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { APP_DISPLAY_NAME } from "@flowweave/ui";
-import { StepLogTable } from "@flowweave/ui";
+import type { FlowDocument } from "@flowweave/flow-dsl";
+import { APP_DISPLAY_NAME, FlowVersionList, StepLogTable } from "@flowweave/ui";
 import type {
   ExecutionStepLog,
   ExecutionSummary,
   StudioExecution,
+  StudioFlowRef,
+  StudioFlowVersion,
   StudioProject,
 } from "./shared/studio-api-types.js";
 
@@ -32,8 +34,15 @@ function formatExecutionTime(iso?: string): string {
 }
 
 export function App() {
+  const [tab, setTab] = useState<"executions" | "versions">("executions");
   const [projects, setProjects] = useState<StudioProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [flows, setFlows] = useState<StudioFlowRef[]>([]);
+  const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
+  const [versions, setVersions] = useState<StudioFlowVersion[]>([]);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [previewVersion, setPreviewVersion] = useState<FlowDocument | null>(null);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
   const [executionHistory, setExecutionHistory] = useState<ExecutionSummary[]>([]);
   const [execution, setExecution] = useState<StudioExecution | null>(null);
   const [loading, setLoading] = useState(false);
@@ -54,6 +63,30 @@ export function App() {
     setExecutionHistory(history);
   }, []);
 
+  const refreshFlows = useCallback(async (projectId: string) => {
+    const api = getStudioApi();
+    const list = await api.listFlows(projectId);
+    setFlows(list);
+    if (list.length === 0) {
+      setSelectedFlowId(null);
+      setVersions([]);
+      return;
+    }
+    const fallback = list[0]?.id ?? null;
+    const flowId = selectedFlowId && list.some((it) => it.id === selectedFlowId)
+      ? selectedFlowId
+      : fallback;
+    setSelectedFlowId(flowId);
+  }, [selectedFlowId]);
+
+  const refreshVersions = useCallback(async (projectId: string, flowId: string) => {
+    const api = getStudioApi();
+    const list = await api.listFlowVersions(projectId, flowId);
+    setVersions(list);
+    setSelectedVersionId(null);
+    setPreviewVersion(null);
+  }, []);
+
   useEffect(() => {
     void refreshProjects().catch((err: unknown) => {
       setError(err instanceof Error ? err.message : "加载项目失败");
@@ -63,12 +96,27 @@ export function App() {
   useEffect(() => {
     if (!selectedProjectId) {
       setExecutionHistory([]);
+      setFlows([]);
+      setVersions([]);
       return;
     }
     void refreshExecutionHistory(selectedProjectId).catch((err: unknown) => {
       setError(err instanceof Error ? err.message : "加载执行历史失败");
     });
-  }, [selectedProjectId, refreshExecutionHistory]);
+    void refreshFlows(selectedProjectId).catch((err: unknown) => {
+      setError(err instanceof Error ? err.message : "加载 Flow 列表失败");
+    });
+  }, [selectedProjectId, refreshExecutionHistory, refreshFlows]);
+
+  useEffect(() => {
+    if (!selectedProjectId || !selectedFlowId) {
+      setVersions([]);
+      return;
+    }
+    void refreshVersions(selectedProjectId, selectedFlowId).catch((err: unknown) => {
+      setError(err instanceof Error ? err.message : "加载版本历史失败");
+    });
+  }, [selectedProjectId, selectedFlowId, refreshVersions]);
 
   const loadExecution = async (executionId: string) => {
     const api = getStudioApi();
@@ -96,6 +144,29 @@ export function App() {
   };
 
   const steps: ExecutionStepLog[] = execution?.steps ?? [];
+
+  const loadVersion = async (versionId: string) => {
+    if (!selectedProjectId) return;
+    setSelectedVersionId(versionId);
+    const api = getStudioApi();
+    const detail = await api.getFlowVersion(selectedProjectId, versionId);
+    setPreviewVersion(detail);
+  };
+
+  const handleRestore = async (versionId: string) => {
+    if (!selectedProjectId || !selectedFlowId) return;
+    setRestoringId(versionId);
+    setError(null);
+    try {
+      const api = getStudioApi();
+      await api.restoreFlowVersion(selectedProjectId, versionId);
+      await refreshVersions(selectedProjectId, selectedFlowId);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "恢复版本失败");
+    } finally {
+      setRestoringId(null);
+    }
+  };
 
   return (
     <div className="app">
@@ -157,9 +228,50 @@ export function App() {
             )}
           </section>
         ) : null}
+        {selectedProjectId ? (
+          <section className="execution-history">
+            <h2>Flow 列表</h2>
+            {flows.length === 0 ? (
+              <p className="execution-history-empty">暂无 Flow</p>
+            ) : (
+              <ul className="execution-history-list">
+                {flows.map((flow) => (
+                  <li key={flow.id}>
+                    <button
+                      type="button"
+                      className={
+                        selectedFlowId === flow.id
+                          ? "execution-history-item active"
+                          : "execution-history-item"
+                      }
+                      onClick={() => setSelectedFlowId(flow.id)}
+                    >
+                      <span className="execution-history-id">{flow.name}</span>
+                      <span className="execution-history-meta">{flow.id}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        ) : null}
       </aside>
       <main className="main">
         <div className="toolbar">
+          <button
+            type="button"
+            className={tab === "executions" ? "tab-btn active" : "tab-btn"}
+            onClick={() => setTab("executions")}
+          >
+            执行日志
+          </button>
+          <button
+            type="button"
+            className={tab === "versions" ? "tab-btn active" : "tab-btn"}
+            onClick={() => setTab("versions")}
+          >
+            Flow 版本
+          </button>
           <button
             type="button"
             disabled={!selectedProjectId || loading}
@@ -183,7 +295,41 @@ export function App() {
             ))}
           </ul>
         ) : null}
-        <StepLogTable steps={steps} emptyMessage="选择项目并点击「运行流程」查看步骤日志" />
+        {tab === "executions" ? (
+          <StepLogTable steps={steps} emptyMessage="选择项目并点击「运行流程」查看步骤日志" />
+        ) : (
+          <section className="flow-version-panel">
+            {selectedFlowId ? (
+              <>
+                <FlowVersionList
+                  versions={versions.map((v) => ({
+                    id: v.id,
+                    version: v.version,
+                    name: v.name,
+                    stepCount: v.stepCount,
+                    createdAt: v.createdAt,
+                    changeMessage: v.changeMessage,
+                  }))}
+                  selectedVersionId={selectedVersionId}
+                  restoringId={restoringId}
+                  onSelect={(id) => void loadVersion(id)}
+                  onRestore={(id) => void handleRestore(id)}
+                  emptyMessage="暂无历史版本，修改并保存 Flow 后会自动生成"
+                />
+                {previewVersion ? (
+                  <details className="flow-preview" open>
+                    <summary>
+                      版本预览 · {previewVersion.name}（{previewVersion.steps.length} 步）
+                    </summary>
+                    <pre>{JSON.stringify(previewVersion, null, 2)}</pre>
+                  </details>
+                ) : null}
+              </>
+            ) : (
+              <p className="execution-history-empty">当前项目暂无 Flow</p>
+            )}
+          </section>
+        )}
       </main>
     </div>
   );

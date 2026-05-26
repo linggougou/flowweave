@@ -116,7 +116,7 @@ API Key 仅本地；禁止自动写入无确认。
 
 **验收标准**
 
-- [ ] 扩展导出 → 知识库 → Studio 可运行同 Flow
+- [x] 扩展导出 → 知识库 → Studio 可运行同 Flow
 - [ ] CI 在 Node 20 稳定绿
 
 ---
@@ -129,4 +129,4 @@ API Key 仅本地；禁止自动写入无确认。
 | PHASE 2 | ✅ 环境/快照/HAR 基础已落地 |
 | PHASE 3 | 🟡 HAR 解析完成；深度映射待做 |
 | PHASE 4 | 🟡 启发式 NL→Flow 已落地；AI SDK 待接 |
-| PHASE 5 | PENDING |
+| PHASE 5 | 🟡 扩展→知识库同步、Web 控制台已落地 |

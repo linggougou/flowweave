@@ -1,10 +1,25 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import path from "node:path";
 import { IPC_CHANNELS } from "./ipc-channels.js";
-import { getExecution, listExecutions, listProjects, runFlow } from "./services.js";
+import {
+  getExecution,
+  getFlowVersion,
+  listExecutions,
+  listFlows,
+  listFlowVersions,
+  listProjects,
+  restoreFlowVersion,
+  runFlow,
+} from "./services.js";
 
 function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.listProjects, () => listProjects());
+  ipcMain.handle(IPC_CHANNELS.listFlows, (_event, projectId: string) => {
+    if (typeof projectId !== "string" || projectId.length === 0) {
+      throw new Error("projectId 无效");
+    }
+    return listFlows(projectId);
+  });
 
   ipcMain.handle(IPC_CHANNELS.runFlow, async (_event, projectId: string) => {
     if (typeof projectId !== "string" || projectId.length === 0) {
@@ -30,6 +45,39 @@ function registerIpcHandlers(): void {
     }
     return listExecutions(projectId);
   });
+
+  ipcMain.handle(IPC_CHANNELS.listFlowVersions, (_event, projectId: string, flowId: string) => {
+    if (typeof projectId !== "string" || projectId.length === 0) {
+      throw new Error("projectId 无效");
+    }
+    if (typeof flowId !== "string" || flowId.length === 0) {
+      throw new Error("flowId 无效");
+    }
+    return listFlowVersions(projectId, flowId);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.getFlowVersion, (_event, projectId: string, versionId: string) => {
+    if (typeof projectId !== "string" || projectId.length === 0) {
+      throw new Error("projectId 无效");
+    }
+    if (typeof versionId !== "string" || versionId.length === 0) {
+      throw new Error("versionId 无效");
+    }
+    return getFlowVersion(projectId, versionId);
+  });
+
+  ipcMain.handle(
+    IPC_CHANNELS.restoreFlowVersion,
+    (_event, projectId: string, versionId: string) => {
+      if (typeof projectId !== "string" || projectId.length === 0) {
+        throw new Error("projectId 无效");
+      }
+      if (typeof versionId !== "string" || versionId.length === 0) {
+        throw new Error("versionId 无效");
+      }
+      return restoreFlowVersion(projectId, versionId);
+    },
+  );
 }
 
 async function createWindow(): Promise<void> {

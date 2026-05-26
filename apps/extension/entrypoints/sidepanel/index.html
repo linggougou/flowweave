@@ -23,6 +23,20 @@
         font-size: 1.125rem;
         margin: 0 0 12px;
       }
+      label {
+        display: block;
+        font-size: 0.8125rem;
+        color: #475569;
+        margin-bottom: 4px;
+      }
+      select {
+        width: 100%;
+        margin-bottom: 8px;
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
+        font-size: 0.875rem;
+      }
       .stat {
         font-size: 2rem;
         font-weight: 700;
@@ -43,13 +57,21 @@
         color: #fff;
         font-size: 0.9375rem;
         cursor: pointer;
+        margin-bottom: 8px;
+      }
+      button.secondary {
+        background: #0f766e;
+      }
+      button.ghost {
+        background: #e2e8f0;
+        color: #0f172a;
       }
       button:disabled {
         opacity: 0.5;
         cursor: not-allowed;
       }
       button:not(:disabled):hover {
-        background: #1d4ed8;
+        filter: brightness(0.95);
       }
       .status {
         margin-top: 12px;
@@ -57,13 +79,25 @@
         color: #475569;
         min-height: 1.25rem;
       }
+      .hint {
+        font-size: 0.75rem;
+        color: #64748b;
+        margin: 0 0 12px;
+      }
     </style>
   </head>
   <body>
     <h1>FlowWeave 录制</h1>
+    <p class="hint">同步需先在本机运行 <code>pnpm dev:web</code></p>
+    <label for="project-select">目标项目</label>
+    <select id="project-select">
+      <option value="">加载项目中…</option>
+    </select>
+    <button type="button" id="refresh-projects-btn" class="ghost">刷新项目列表</button>
     <p>已记录事件</p>
     <p class="stat" id="event-count">0</p>
     <p class="meta" id="session-meta">会话加载中…</p>
+    <button type="button" id="sync-btn" class="secondary" disabled>同步到知识库</button>
     <button type="button" id="export-btn" disabled>导出 Flow JSON</button>
     <p class="status" id="status" role="status"></p>
     <script type="module" src="./main.ts"></script>

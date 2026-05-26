@@ -16,6 +16,7 @@ import type {
   ExecutionStepLog,
   ExecutionSummary,
   StudioExecution,
+  StudioFlowVersion,
   StudioProject,
 } from "../src/shared/studio-api-types.js";
 
@@ -107,7 +108,7 @@ function resolveFlowForProject(projectId: string): FlowDocument {
   const flows = repo.listFlows(projectId);
   const first = flows[0];
   if (first) {
-    const doc = repo.getFlow(first.id);
+    const doc = repo.getFlowInProject(projectId, first.id);
     if (doc) {
       return doc;
     }
@@ -242,4 +243,20 @@ export function listExecutions(projectId: string): ExecutionSummary[] {
     startedAt: item.startedAt,
     finishedAt: item.finishedAt,
   }));
+}
+
+export function listFlows(projectId: string): Array<{ id: string; name: string }> {
+  return repo.listFlows(projectId);
+}
+
+export function listFlowVersions(projectId: string, flowId: string): StudioFlowVersion[] {
+  return repo.listFlowVersions(projectId, flowId);
+}
+
+export function getFlowVersion(projectId: string, versionId: string): FlowDocument | null {
+  return repo.getFlowVersion(projectId, versionId);
+}
+
+export function restoreFlowVersion(projectId: string, versionId: string): FlowDocument {
+  return repo.restoreFlowVersion(projectId, versionId);
 }

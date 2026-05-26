@@ -3,7 +3,11 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { parseFlowDocument } from "@flowweave/flow-dsl";
 import { ProjectKnowledgeRepository } from "@flowweave/project-knowledge";
+import { FlowWeaveError } from "@flowweave/shared";
+
+import { readJsonBody } from "./http-utils.js";
 
 const WEB_API_PORT = Number(process.env.FLOWWEAVE_WEB_PORT ?? 3847);
 const repo = new ProjectKnowledgeRepository();
@@ -46,13 +50,25 @@ async function handleApi(
 
   const segments = pathname.split("/").filter(Boolean);
 
-  if (segments[0] === "api" && segments[1] === "projects" && method === "GET") {
-    if (segments.length === 2) {
+  if (segments[0] === "api" && segments[1] === "health" && method === "GET") {
+    sendJson(res, 200, { ok: true });
+    return true;
+  }
+
+  if (segments[0] === "api" && segments[1] === "projects") {
+    if (segments.length === 2 && method === "GET") {
       const projects = repo.listProjects().map((p) => {
         const env = repo.getDefaultEnvironment(p.id);
         return { ...p, baseUrl: env?.baseUrl };
       });
       sendJson(res, 200, projects);
+      return true;
+    }
+
+    if (segments.length === 2 && method === "POST") {
+      const body = (await readJsonBody(req)) as { name?: string };
+      const project = repo.createProject(body.name?.trim() || "新项目");
+      sendJson(res, 201, project);
       return true;
     }
 
@@ -64,6 +80,28 @@ async function handleApi(
 
     if (segments[3] === "flows" && segments.length === 4 && method === "GET") {
       sendJson(res, 200, repo.listFlows(projectId));
+      return true;
+    }
+
+    if (segments[3] === "flows" && segments.length === 4 && method === "POST") {
+      try {
+        const body = (await readJsonBody(req)) as {
+          flow?: unknown;
+          changeMessage?: string;
+        };
+        const rawFlow = body.flow ?? body;
+        const flow = parseFlowDocument(rawFlow);
+        repo.saveFlow(projectId, flow, body.changeMessage ?? "扩展录制同步");
+        sendJson(res, 200, { flowId: flow.id, name: flow.name, projectId });
+      } catch (err: unknown) {
+        const message =
+          err instanceof FlowWeaveError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : "保存 Flow 失败";
+        sendJson(res, 400, { error: message });
+      }
       return true;
     }
 

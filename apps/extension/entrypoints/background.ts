@@ -1,12 +1,16 @@
 import { parseRecordedEvent, type RecordedEvent, type RecorderSessionMeta } from "@flowweave/shared";
 import { buildFlowFromEvents } from "../lib/flow-export.js";
+import { DEFAULT_KNOWLEDGE_API_BASE, saveFlowToKnowledge } from "../lib/knowledge-client.js";
 import {
   MSG_EXPORT_FLOW,
   MSG_GET_SESSION,
   MSG_RECORD_EVENT,
+  MSG_SET_PROJECT,
+  MSG_SYNC_KNOWLEDGE,
   type ExportFlowResponse,
   type ExtensionMessage,
   type SessionState,
+  type SyncKnowledgeResponse,
 } from "../lib/messages.js";
 
 const STORAGE_KEY = "flowweave:recording-session";
@@ -16,10 +20,10 @@ type StoredSession = {
   events: RecordedEvent[];
 };
 
-function createSessionMeta(): RecorderSessionMeta {
+function createSessionMeta(projectId = "pending"): RecorderSessionMeta {
   return {
     sessionId: crypto.randomUUID(),
-    projectId: "default",
+    projectId,
     startedAt: new Date().toISOString(),
   };
 }
@@ -86,6 +90,47 @@ export default defineBackground(() => {
             ok: true,
             json,
             filename: `flow-${session.meta.sessionId.slice(0, 8)}.json`,
+          };
+          sendResponse(response);
+          return;
+        }
+
+        if (message.type === MSG_SET_PROJECT) {
+          const session = await loadSession();
+          session.meta.projectId = message.projectId;
+          await saveSession(session);
+          sendResponse({ ok: true, projectId: message.projectId });
+          return;
+        }
+
+        if (message.type === MSG_SYNC_KNOWLEDGE) {
+          const session = await loadSession();
+          if (session.events.length === 0) {
+            sendResponse({ ok: false, error: "暂无录制事件" } satisfies SyncKnowledgeResponse);
+            return;
+          }
+          const flow = buildFlowFromEvents(session.events, {
+            ...session.meta,
+            projectId: message.projectId,
+            flowId: `flow-${session.meta.sessionId}`,
+            name: "录制流程",
+          });
+          const storedApi = await browser.storage.local.get("flowweave:api-base");
+          const apiBase =
+            message.apiBase ??
+            (storedApi["flowweave:api-base"] as string | undefined) ??
+            DEFAULT_KNOWLEDGE_API_BASE;
+          const saved = await saveFlowToKnowledge(
+            String(apiBase),
+            message.projectId,
+            flow,
+            message.changeMessage ?? "扩展侧栏同步",
+          );
+          const response: SyncKnowledgeResponse = {
+            ok: true,
+            flowId: saved.flowId,
+            name: saved.name,
+            projectId: saved.projectId,
           };
           sendResponse(response);
           return;

@@ -1,4 +1,5 @@
 /** 渲染进程与 preload 共享的 Studio API 类型 */
+import type { FlowDocument } from "@flowweave/flow-dsl";
 
 export type StudioProject = {
   id: string;
@@ -47,11 +48,30 @@ export type ExecutionSummary = {
   finishedAt?: string;
 };
 
+export type StudioFlowRef = {
+  id: string;
+  name: string;
+};
+
+export type StudioFlowVersion = {
+  id: string;
+  flowId: string;
+  version: number;
+  name: string;
+  stepCount: number;
+  createdAt: string;
+  changeMessage?: string;
+};
+
 export type StudioApi = {
   listProjects: () => Promise<StudioProject[]>;
+  listFlows: (projectId: string) => Promise<StudioFlowRef[]>;
   runFlow: (projectId: string) => Promise<RunFlowResult>;
   getExecution: (executionId: string) => Promise<StudioExecution | null>;
   listExecutions: (projectId: string) => Promise<ExecutionSummary[]>;
+  listFlowVersions: (projectId: string, flowId: string) => Promise<StudioFlowVersion[]>;
+  getFlowVersion: (projectId: string, versionId: string) => Promise<FlowDocument | null>;
+  restoreFlowVersion: (projectId: string, versionId: string) => Promise<FlowDocument>;
 };
 
 declare global {
