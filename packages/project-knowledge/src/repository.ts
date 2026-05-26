@@ -3,7 +3,7 @@ import { readdirSync, statSync } from "node:fs";
 
 import type { FlowDocument } from "@flowweave/flow-dsl";
 import { parseFlowDocument } from "@flowweave/flow-dsl";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, max } from "drizzle-orm";
 
 import {
   closeProjectDatabase,
@@ -18,6 +18,7 @@ import type { PageSnapshotSummary } from "@flowweave/page-intelligence";
 import type {
   ExecutionResult,
   ExecutionWithProject,
+  FlowVersionRecord,
   PageSnapshotRecord,
   ProjectEnvironment,
   ProjectRef,
@@ -202,12 +203,13 @@ export class ProjectKnowledgeRepository {
     }
   }
 
-  saveFlow(projectId: string, flow: FlowDocument): void {
+  saveFlow(projectId: string, flow: FlowDocument, changeMessage?: string): void {
     const parsed = parseFlowDocument(flow);
     const document = {
       ...parsed,
       projectId,
     };
+    const documentJson = JSON.stringify(document);
 
     const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
     try {
@@ -216,19 +218,28 @@ export class ProjectKnowledgeRepository {
         id: document.id,
         projectId,
         name: document.name,
-        documentJson: JSON.stringify(document),
+        documentJson,
         schemaVersion: document.schemaVersion,
         createdAt: document.meta.createdAt,
         updatedAt: now,
       };
 
       const existing = db
-        .select({ id: dbSchema.flows.id })
+        .select()
         .from(dbSchema.flows)
         .where(eq(dbSchema.flows.id, document.id))
         .get();
 
       if (existing) {
+        if (existing.documentJson !== documentJson) {
+          this.appendFlowVersion(db, {
+            projectId,
+            flowId: document.id,
+            documentJson: existing.documentJson,
+            changeMessage: changeMessage ?? "保存前自动快照",
+            createdAt: now,
+          });
+        }
         db.update(dbSchema.flows).set(row).where(eq(dbSchema.flows.id, document.id)).run();
       } else {
         db.insert(dbSchema.flows).values(row).run();
@@ -236,6 +247,121 @@ export class ProjectKnowledgeRepository {
     } finally {
       closeProjectDatabase(sqlite);
     }
+  }
+
+  getFlowInProject(projectId: string, flowId: string): FlowDocument | null {
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    try {
+      const row = db
+        .select()
+        .from(dbSchema.flows)
+        .where(eq(dbSchema.flows.id, flowId))
+        .get();
+      if (!row) {
+        return null;
+      }
+      return parseFlowDocument(JSON.parse(row.documentJson));
+    } finally {
+      closeProjectDatabase(sqlite);
+    }
+  }
+
+  listFlowVersions(projectId: string, flowId: string, limit = 50): FlowVersionRecord[] {
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    try {
+      return db
+        .select()
+        .from(dbSchema.flowVersions)
+        .where(
+          and(
+            eq(dbSchema.flowVersions.projectId, projectId),
+            eq(dbSchema.flowVersions.flowId, flowId),
+          ),
+        )
+        .orderBy(desc(dbSchema.flowVersions.version))
+        .limit(limit)
+        .all()
+        .map((row) => this.toFlowVersionRecord(row));
+    } finally {
+      closeProjectDatabase(sqlite);
+    }
+  }
+
+  getFlowVersion(projectId: string, versionId: string): FlowDocument | null {
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    try {
+      const row = db
+        .select()
+        .from(dbSchema.flowVersions)
+        .where(
+          and(
+            eq(dbSchema.flowVersions.projectId, projectId),
+            eq(dbSchema.flowVersions.id, versionId),
+          ),
+        )
+        .get();
+      if (!row) {
+        return null;
+      }
+      return parseFlowDocument(JSON.parse(row.documentJson));
+    } finally {
+      closeProjectDatabase(sqlite);
+    }
+  }
+
+  restoreFlowVersion(projectId: string, versionId: string): FlowDocument {
+    const document = this.getFlowVersion(projectId, versionId);
+    if (!document) {
+      throw new Error(`未找到版本: ${versionId}`);
+    }
+    this.saveFlow(projectId, document, "从版本恢复");
+    return document;
+  }
+
+  private appendFlowVersion(
+    db: ReturnType<typeof openProjectDatabase>["db"],
+    input: {
+      projectId: string;
+      flowId: string;
+      documentJson: string;
+      changeMessage?: string;
+      createdAt: string;
+    },
+  ): void {
+    const maxRow = db
+      .select({ value: max(dbSchema.flowVersions.version) })
+      .from(dbSchema.flowVersions)
+      .where(eq(dbSchema.flowVersions.flowId, input.flowId))
+      .get();
+    const nextVersion = (maxRow?.value ?? 0) + 1;
+
+    db.insert(dbSchema.flowVersions)
+      .values({
+        id: randomUUID(),
+        flowId: input.flowId,
+        projectId: input.projectId,
+        version: nextVersion,
+        documentJson: input.documentJson,
+        changeMessage: input.changeMessage ?? null,
+        createdAt: input.createdAt,
+      })
+      .run();
+  }
+
+  private toFlowVersionRecord(
+    row: typeof dbSchema.flowVersions.$inferSelect,
+  ): FlowVersionRecord {
+    const doc = parseFlowDocument(JSON.parse(row.documentJson));
+    return {
+      id: row.id,
+      flowId: row.flowId,
+      projectId: row.projectId,
+      version: row.version,
+      name: doc.name,
+      stepCount: doc.steps.length,
+      createdAt: row.createdAt,
+      changeMessage: row.changeMessage ?? undefined,
+    };
   }
 
   saveExecution(projectId: string, result: ExecutionResult): void {

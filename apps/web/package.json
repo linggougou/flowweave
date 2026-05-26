@@ -4,19 +4,33 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node -e \"console.log('@flowweave/app-web: Vite 构建于 P2 加强')\"",
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint src",
-    "test": "vitest run --passWithNoTests",
-    "dev": "node -e \"console.log('@flowweave/app-web: dev 于 P2 加强')\""
+    "build:client": "vite build",
+    "build:server": "tsup server/index.ts --format esm --dts --clean --external better-sqlite3 --out-dir dist-server",
+    "build": "pnpm build:client && pnpm build:server",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.server.json",
+    "lint": "eslint src server",
+    "test": "vitest run",
+    "dev": "concurrently -k \"tsx watch server/index.ts\" \"vite\"",
+    "start": "node dist-server/index.js"
   },
   "dependencies": {
+    "@flowweave/flow-dsl": "workspace:*",
     "@flowweave/project-knowledge": "workspace:*",
+    "@flowweave/shared": "workspace:*",
     "@flowweave/ui": "workspace:*",
-    "@flowweave/shared": "workspace:*"
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.2",
+    "vite": "^6.0.6",
     "vitest": "^2.1.8"
   }
 }

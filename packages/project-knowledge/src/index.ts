@@ -9,6 +9,7 @@ export type {
   ProjectRef,
   ProjectEnvironment,
   PageSnapshotRecord,
+  FlowVersionRecord,
   ExecutionResult,
   ExecutionWithProject,
   StepLog,

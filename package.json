@@ -11,7 +11,8 @@
     "test": "turbo test",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
-    "e2e:login": "tsx examples/run-login-flow.ts"
+    "e2e:login": "tsx examples/run-login-flow.ts",
+    "dev:web": "pnpm --filter @flowweave/app-web dev"
   },
   "dependencies": {
     "@flowweave/flow-dsl": "workspace:*",

@@ -19,6 +19,20 @@ export const flows = sqliteTable("flows", {
   updatedAt: text("updated_at").notNull(),
 });
 
+export const flowVersions = sqliteTable("flow_versions", {
+  id: text("id").primaryKey(),
+  flowId: text("flow_id")
+    .notNull()
+    .references(() => flows.id, { onDelete: "cascade" }),
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  version: integer("version").notNull(),
+  documentJson: text("document_json").notNull(),
+  changeMessage: text("change_message"),
+  createdAt: text("created_at").notNull(),
+});
+
 export const executions = sqliteTable("executions", {
   id: text("id").primaryKey(),
   projectId: text("project_id")

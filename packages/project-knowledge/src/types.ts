@@ -4,6 +4,18 @@ export type ProjectRef = {
   createdAt: string;
 };
 
+/** Flow 历史版本摘要（列表展示） */
+export type FlowVersionRecord = {
+  id: string;
+  flowId: string;
+  projectId: string;
+  version: number;
+  name: string;
+  stepCount: number;
+  createdAt: string;
+  changeMessage?: string;
+};
+
 export type ProjectEnvironment = {
   id: string;
   projectId: string;

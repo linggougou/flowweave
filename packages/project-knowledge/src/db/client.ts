@@ -68,6 +68,21 @@ CREATE TABLE IF NOT EXISTS page_snapshots (
   captured_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS flow_versions (
+  id TEXT PRIMARY KEY NOT NULL,
+  flow_id TEXT NOT NULL REFERENCES flows(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  version INTEGER NOT NULL,
+  document_json TEXT NOT NULL,
+  change_message TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_flow_versions_flow_version
+  ON flow_versions(flow_id, version);
+CREATE INDEX IF NOT EXISTS idx_flow_versions_project_flow
+  ON flow_versions(project_id, flow_id);
+
 CREATE INDEX IF NOT EXISTS idx_flows_project_id ON flows(project_id);
 CREATE INDEX IF NOT EXISTS idx_page_snapshots_project_id ON page_snapshots(project_id);
 CREATE INDEX IF NOT EXISTS idx_executions_project_id ON executions(project_id);

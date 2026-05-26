@@ -197,4 +197,45 @@ describe("ProjectKnowledgeRepository", () => {
 
     expect(repo.getExecution("missing_exec")).toBeNull();
   });
+
+  it("saveFlow 更新时写入版本历史并可恢复", () => {
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-pk-"));
+    const repo = new ProjectKnowledgeRepository({ dataDir });
+    const project = repo.createProject("版本项目");
+    const flowId = "flow_version_1";
+
+    const v1 = sampleFlow(project.id, flowId);
+    repo.saveFlow(project.id, v1);
+
+    const v2 = {
+      ...v1,
+      name: "登录流程 v2",
+      steps: [
+        ...v1.steps,
+        {
+          id: "s2",
+          type: "click" as const,
+          target: { strategies: [{ kind: "css" as const, selector: "#submit" }] },
+        },
+      ],
+      meta: { ...v1.meta, updatedAt: new Date().toISOString() },
+    };
+    repo.saveFlow(project.id, v2, "新增提交按钮");
+
+    const versions = repo.listFlowVersions(project.id, flowId);
+    expect(versions).toHaveLength(1);
+    expect(versions[0]?.version).toBe(1);
+    expect(versions[0]?.stepCount).toBe(1);
+    expect(versions[0]?.changeMessage).toBe("新增提交按钮");
+
+    const current = repo.getFlowInProject(project.id, flowId);
+    expect(current?.steps).toHaveLength(2);
+
+    repo.restoreFlowVersion(project.id, versions[0]!.id);
+    const restored = repo.getFlowInProject(project.id, flowId);
+    expect(restored?.steps).toHaveLength(1);
+
+    const afterRestore = repo.listFlowVersions(project.id, flowId);
+    expect(afterRestore.length).toBeGreaterThanOrEqual(2);
+  });
 });
