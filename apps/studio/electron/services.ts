@@ -82,17 +82,25 @@ function ensureSeedProject(): ProjectRef {
     return first;
   }
   const project = repo.createProject(SEED_PROJECT_NAME);
+  repo.ensureDefaultEnvironment(project.id, "本地 Fixture", loginFixtureUrl);
   repo.saveFlow(project.id, buildLoginFixtureFlow(project.id));
   return project;
 }
 
-export async function listProjects(): Promise<StudioProject[]> {
-  ensureSeedProject();
-  return repo.listProjects().map((p) => ({
+function mapProject(p: ProjectRef): StudioProject {
+  const env = repo.getDefaultEnvironment(p.id);
+  return {
     id: p.id,
     name: p.name,
     createdAt: p.createdAt,
-  }));
+    baseUrl: env?.baseUrl,
+  };
+}
+
+export async function listProjects(): Promise<StudioProject[]> {
+  const seed = ensureSeedProject();
+  repo.ensureDefaultEnvironment(seed.id, "本地 Fixture", loginFixtureUrl);
+  return repo.listProjects().map(mapProject);
 }
 
 function resolveFlowForProject(projectId: string): FlowDocument {
@@ -156,6 +164,10 @@ export async function runFlow(projectId: string): Promise<StudioExecution> {
     artifactDir,
   });
   repo.saveExecution(projectId, toKnowledgeExecution(runtimeResult, flow.id));
+
+  for (const snap of runtimeResult.pageSnapshots ?? []) {
+    repo.savePageSnapshot(projectId, snap.summary, snap.filePath);
+  }
 
   const record: StudioExecution = {
     executionId: runtimeResult.executionId,

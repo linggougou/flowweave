@@ -5,6 +5,7 @@ export type { ExecutionOptions } from "./types.js";
 export type {
   ExecutionResult,
   ExecutionStatus,
+  RuntimePageSnapshot,
   StepLog,
   StepLogStatus,
 } from "./types.js";

@@ -4,6 +4,23 @@ export type ProjectRef = {
   createdAt: string;
 };
 
+export type ProjectEnvironment = {
+  id: string;
+  projectId: string;
+  name: string;
+  baseUrl: string;
+  isDefault: boolean;
+};
+
+export type PageSnapshotRecord = {
+  id: string;
+  projectId: string;
+  url: string;
+  title?: string;
+  snapshotPath?: string;
+  capturedAt: string;
+};
+
 /** 单步执行日志（截图等大文件仅存路径） */
 export type StepLog = {
   stepIndex: number;

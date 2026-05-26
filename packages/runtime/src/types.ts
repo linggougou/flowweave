@@ -1,4 +1,5 @@
 import type { NormalizedStep } from "@flowweave/flow-dsl";
+import type { PageSnapshotSummary } from "@flowweave/page-intelligence";
 
 export type ExecutionStatus = "success" | "failed";
 
@@ -17,10 +18,18 @@ export interface StepLog {
   screenshotPath?: string;
 }
 
+export type RuntimePageSnapshot = {
+  stepIndex: number;
+  filePath: string;
+  summary: PageSnapshotSummary;
+};
+
 export interface ExecutionResult {
   executionId: string;
   status: ExecutionStatus;
   steps: StepLog[];
+  harPath?: string;
+  pageSnapshots?: RuntimePageSnapshot[];
   error?: {
     message: string;
     stepIndex?: number;
@@ -36,4 +45,6 @@ export type ExecutionOptions = {
   executionId?: string;
   /** 运行产物目录；设置后每步写入 step-<n>.png */
   artifactDir?: string;
+  /** 是否记录 HAR（需 artifactDir），默认 true */
+  recordHar?: boolean;
 };

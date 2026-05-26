@@ -97,6 +97,33 @@ describe("ProjectKnowledgeRepository", () => {
     expect(repo.getFlow("missing_flow")).toBeNull();
   });
 
+  it("saveEnvironment 与 getDefaultEnvironment", () => {
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-pk-"));
+    const repo = new ProjectKnowledgeRepository({ dataDir });
+    const project = repo.createProject("环境测试");
+    const env = repo.saveEnvironment(project.id, "预发", "https://staging.example.com", true);
+    expect(env.baseUrl).toBe("https://staging.example.com");
+    const loaded = repo.getDefaultEnvironment(project.id);
+    expect(loaded?.id).toBe(env.id);
+  });
+
+  it("savePageSnapshot 与 listPageSnapshots", () => {
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-pk-"));
+    const repo = new ProjectKnowledgeRepository({ dataDir });
+    const project = repo.createProject("快照");
+    const record = repo.savePageSnapshot(project.id, {
+      url: "https://example.com",
+      title: "示例",
+      formCount: 1,
+      buttonCount: 2,
+      linkCount: 3,
+      capturedAt: new Date().toISOString(),
+    });
+    const list = repo.listPageSnapshots(project.id);
+    expect(list).toHaveLength(1);
+    expect(list[0]?.id).toBe(record.id);
+  });
+
   it("allocateRunDirectory 创建 runs 子目录", () => {
     dataDir = mkdtempSync(join(tmpdir(), "flowweave-pk-"));
     const repo = new ProjectKnowledgeRepository({ dataDir });

@@ -32,6 +32,29 @@ export const executions = sqliteTable("executions", {
   finishedAt: text("finished_at"),
 });
 
+export const projectEnvironments = sqliteTable("project_environments", {
+  id: text("id").primaryKey(),
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  baseUrl: text("base_url").notNull(),
+  isDefault: integer("is_default").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
+
+export const pageSnapshots = sqliteTable("page_snapshots", {
+  id: text("id").primaryKey(),
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  url: text("url").notNull(),
+  title: text("title"),
+  summaryJson: text("summary_json").notNull(),
+  snapshotPath: text("snapshot_path"),
+  capturedAt: text("captured_at").notNull(),
+});
+
 export const executionSteps = sqliteTable("execution_steps", {
   id: text("id").primaryKey(),
   executionId: text("execution_id")

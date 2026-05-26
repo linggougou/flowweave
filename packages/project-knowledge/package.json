@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@flowweave/flow-dsl": "workspace:*",
+    "@flowweave/page-intelligence": "workspace:*",
     "@flowweave/shared": "workspace:*",
     "better-sqlite3": "^11.8.1",
     "drizzle-orm": "^0.38.3"

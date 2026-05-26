@@ -3,7 +3,7 @@ import { readdirSync, statSync } from "node:fs";
 
 import type { FlowDocument } from "@flowweave/flow-dsl";
 import { parseFlowDocument } from "@flowweave/flow-dsl";
-import { asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 
 import {
   closeProjectDatabase,
@@ -13,9 +13,13 @@ import {
 } from "./db/client.js";
 import { ensureRunDirectory } from "./paths.js";
 import * as dbSchema from "./db/schema.js";
+import type { PageSnapshotSummary } from "@flowweave/page-intelligence";
+
 import type {
   ExecutionResult,
   ExecutionWithProject,
+  PageSnapshotRecord,
+  ProjectEnvironment,
   ProjectRef,
   StepLog,
 } from "./types.js";
@@ -70,7 +74,132 @@ export class ProjectKnowledgeRepository {
       closeProjectDatabase(sqlite);
     }
 
+    this.ensureDefaultEnvironment(id, "默认环境", "https://example.com");
     return { id, name, createdAt: now };
+  }
+
+  ensureDefaultEnvironment(projectId: string, name: string, baseUrl: string): ProjectEnvironment {
+    const existing = this.getDefaultEnvironment(projectId);
+    if (existing) {
+      return existing;
+    }
+    return this.saveEnvironment(projectId, name, baseUrl, true);
+  }
+
+  saveEnvironment(
+    projectId: string,
+    name: string,
+    baseUrl: string,
+    isDefault = false,
+  ): ProjectEnvironment {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    try {
+      if (isDefault) {
+        db.update(dbSchema.projectEnvironments)
+          .set({ isDefault: 0 })
+          .where(eq(dbSchema.projectEnvironments.projectId, projectId))
+          .run();
+      }
+      db.insert(dbSchema.projectEnvironments)
+        .values({
+          id,
+          projectId,
+          name,
+          baseUrl,
+          isDefault: isDefault ? 1 : 0,
+          createdAt: now,
+        })
+        .run();
+    } finally {
+      closeProjectDatabase(sqlite);
+    }
+    return { id, projectId, name, baseUrl, isDefault };
+  }
+
+  getDefaultEnvironment(projectId: string): ProjectEnvironment | null {
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    try {
+      const row =
+        db
+          .select()
+          .from(dbSchema.projectEnvironments)
+          .where(
+            and(
+              eq(dbSchema.projectEnvironments.projectId, projectId),
+              eq(dbSchema.projectEnvironments.isDefault, 1),
+            ),
+          )
+          .get() ?? null;
+      if (!row) {
+        return null;
+      }
+      return {
+        id: row.id,
+        projectId: row.projectId,
+        name: row.name,
+        baseUrl: row.baseUrl,
+        isDefault: row.isDefault === 1,
+      };
+    } finally {
+      closeProjectDatabase(sqlite);
+    }
+  }
+
+  savePageSnapshot(
+    projectId: string,
+    summary: PageSnapshotSummary,
+    snapshotPath?: string,
+  ): PageSnapshotRecord {
+    const id = randomUUID();
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    try {
+      db.insert(dbSchema.pageSnapshots)
+        .values({
+          id,
+          projectId,
+          url: summary.url,
+          title: summary.title,
+          summaryJson: JSON.stringify(summary),
+          snapshotPath: snapshotPath ?? null,
+          capturedAt: summary.capturedAt,
+        })
+        .run();
+    } finally {
+      closeProjectDatabase(sqlite);
+    }
+    return {
+      id,
+      projectId,
+      url: summary.url,
+      title: summary.title,
+      snapshotPath,
+      capturedAt: summary.capturedAt,
+    };
+  }
+
+  listPageSnapshots(projectId: string, limit = 20): PageSnapshotRecord[] {
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    try {
+      return db
+        .select()
+        .from(dbSchema.pageSnapshots)
+        .where(eq(dbSchema.pageSnapshots.projectId, projectId))
+        .orderBy(desc(dbSchema.pageSnapshots.capturedAt))
+        .limit(limit)
+        .all()
+        .map((row) => ({
+          id: row.id,
+          projectId: row.projectId,
+          url: row.url,
+          title: row.title ?? undefined,
+          snapshotPath: row.snapshotPath ?? undefined,
+          capturedAt: row.capturedAt,
+        }));
+    } finally {
+      closeProjectDatabase(sqlite);
+    }
   }
 
   saveFlow(projectId: string, flow: FlowDocument): void {

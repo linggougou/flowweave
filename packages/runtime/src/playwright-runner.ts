@@ -1,12 +1,18 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { FlowDocument, NormalizedStep, Target } from "@flowweave/flow-dsl";
+import { buildPageSnapshotSummary } from "@flowweave/page-intelligence";
 import { FlowWeaveError } from "@flowweave/shared";
 
 type LocatorStrategy = Target["strategies"][number];
 import { chromium, type Locator, type Page } from "playwright";
-import type { ExecutionOptions, ExecutionResult, StepLog } from "./types.js";
+import type {
+  ExecutionOptions,
+  ExecutionResult,
+  RuntimePageSnapshot,
+  StepLog,
+} from "./types.js";
 
 export type { ExecutionOptions };
 
@@ -64,11 +70,30 @@ async function captureStepScreenshot(
   return screenshotPath;
 }
 
+async function capturePageSummary(
+  page: Page,
+  artifactDir: string,
+  stepIndex: number,
+): Promise<RuntimePageSnapshot> {
+  const raw = await page.evaluate(() => ({
+    url: location.href,
+    title: document.title,
+    formCount: document.forms.length,
+    buttonCount: document.querySelectorAll("button").length,
+    linkCount: document.querySelectorAll("a").length,
+  }));
+  const summary = buildPageSnapshotSummary(raw);
+  const filePath = join(artifactDir, `page-${stepIndex}.json`);
+  writeFileSync(filePath, JSON.stringify(summary, null, 2), "utf-8");
+  return { stepIndex, filePath, summary };
+}
+
 async function runStep(
   page: Page,
   step: NormalizedStep,
   stepIndex: number,
   artifactDir?: string,
+  pageSnapshots?: RuntimePageSnapshot[],
 ): Promise<StepLog> {
   const startedAt = nowIso();
   const startMs = Date.now();
@@ -79,6 +104,9 @@ async function runStep(
         await page.goto(step.url, {
           waitUntil: step.waitUntil ?? "load",
         });
+        if (artifactDir && pageSnapshots) {
+          pageSnapshots.push(await capturePageSummary(page, artifactDir, stepIndex));
+        }
         break;
       case "click": {
         const locator = await resolveTarget(page, step.target);
@@ -175,10 +203,15 @@ export async function executeFlow(
     mkdirSync(artifactDir, { recursive: true });
   }
   const stepLogs: StepLog[] = [];
+  const pageSnapshots: RuntimePageSnapshot[] = [];
+  const recordHar = artifactDir ? (options.recordHar ?? true) : false;
+  const harPath = artifactDir && recordHar ? join(artifactDir, "network.har") : undefined;
 
   const browser = await chromium.launch({ headless });
   try {
-    const context = await browser.newContext();
+    const context = await browser.newContext(
+      harPath ? { recordHar: { path: harPath, mode: "minimal" } } : undefined,
+    );
     const page = await context.newPage();
     page.setDefaultTimeout(timeoutMs);
 
@@ -187,22 +220,28 @@ export async function executeFlow(
       if (!step) {
         continue;
       }
-      const log = await runStep(page, step, stepIndex, artifactDir);
+      const log = await runStep(page, step, stepIndex, artifactDir, pageSnapshots);
       stepLogs.push(log);
       if (log.status === "failed") {
+        await context.close();
         return {
           executionId,
           status: "failed",
           steps: stepLogs,
+          harPath,
+          pageSnapshots,
           error: { message: log.message ?? "步骤执行失败", stepIndex },
         };
       }
     }
 
+    await context.close();
     return {
       executionId,
       status: "success",
       steps: stepLogs,
+      harPath,
+      pageSnapshots,
     };
   } finally {
     await browser.close();

@@ -49,7 +49,27 @@ CREATE TABLE IF NOT EXISTS execution_steps (
   screenshot_path TEXT
 );
 
+CREATE TABLE IF NOT EXISTS project_environments (
+  id TEXT PRIMARY KEY NOT NULL,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  base_url TEXT NOT NULL,
+  is_default INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS page_snapshots (
+  id TEXT PRIMARY KEY NOT NULL,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  url TEXT NOT NULL,
+  title TEXT,
+  summary_json TEXT NOT NULL,
+  snapshot_path TEXT,
+  captured_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_flows_project_id ON flows(project_id);
+CREATE INDEX IF NOT EXISTS idx_page_snapshots_project_id ON page_snapshots(project_id);
 CREATE INDEX IF NOT EXISTS idx_executions_project_id ON executions(project_id);
 CREATE INDEX IF NOT EXISTS idx_execution_steps_execution_id ON execution_steps(execution_id);
 `;

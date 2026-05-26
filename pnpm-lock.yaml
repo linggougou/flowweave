@@ -229,6 +229,9 @@ importers:
       '@flowweave/flow-dsl':
         specifier: workspace:*
         version: link:../flow-dsl
+      '@flowweave/page-intelligence':
+        specifier: workspace:*
+        version: link:../page-intelligence
       '@flowweave/shared':
         specifier: workspace:*
         version: link:../shared
@@ -276,6 +279,9 @@ importers:
       '@flowweave/flow-dsl':
         specifier: workspace:*
         version: link:../flow-dsl
+      '@flowweave/page-intelligence':
+        specifier: workspace:*
+        version: link:../page-intelligence
       '@flowweave/recorder':
         specifier: workspace:*
         version: link:../recorder

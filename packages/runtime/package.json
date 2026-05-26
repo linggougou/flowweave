@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@flowweave/flow-dsl": "workspace:*",
+    "@flowweave/page-intelligence": "workspace:*",
     "@flowweave/recorder": "workspace:*",
     "@flowweave/shared": "workspace:*",
     "playwright": "^1.49.1"

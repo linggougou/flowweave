@@ -4,6 +4,7 @@ export type StudioProject = {
   id: string;
   name: string;
   createdAt: string;
+  baseUrl?: string;
 };
 
 export type ExecutionStepLog = {

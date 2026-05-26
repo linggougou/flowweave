@@ -114,7 +114,14 @@ export function App() {
                 }
                 onClick={() => setSelectedProjectId(project.id)}
               >
-                {project.name}
+                <span className="project-item-name">{project.name}</span>
+                {project.baseUrl ? (
+                  <span className="project-item-env" title={project.baseUrl}>
+                    {project.baseUrl.length > 36
+                      ? `…${project.baseUrl.slice(-32)}`
+                      : project.baseUrl}
+                  </span>
+                ) : null}
               </button>
             </li>
           ))}

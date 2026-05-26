@@ -5,7 +5,14 @@ export {
   resolveRunDirectory,
   ensureRunDirectory,
 } from "./paths.js";
-export type { ProjectRef, ExecutionResult, ExecutionWithProject, StepLog } from "./types.js";
+export type {
+  ProjectRef,
+  ProjectEnvironment,
+  PageSnapshotRecord,
+  ExecutionResult,
+  ExecutionWithProject,
+  StepLog,
+} from "./types.js";
 export { ProjectKnowledgeRepository } from "./repository.js";
 export type { ProjectKnowledgeRepositoryOptions } from "./repository.js";
 export {
