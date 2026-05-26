@@ -7,7 +7,6 @@ import {
   type StepLogRow,
 } from "@flowweave/ui";
 import type {
-  ExecutionStepLog,
   ExecutionSummary,
   StudioExecution,
   StudioFlowRef,

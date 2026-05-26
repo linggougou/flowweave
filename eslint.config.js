@@ -7,6 +7,9 @@ export default tseslint.config(
   {
     ignores: [
       "**/dist/**",
+      "**/dist-server/**",
+      "**/dist-electron/**",
+      "**/.worktrees/**",
       "**/node_modules/**",
       "**/.turbo/**",
       "**/.wxt/**",

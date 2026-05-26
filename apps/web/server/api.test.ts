@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
-import { parseFlowDocument } from "@flowweave/flow-dsl";
 import { ProjectKnowledgeRepository } from "@flowweave/project-knowledge";
 import { afterEach, describe, expect, it } from "vitest";
 
