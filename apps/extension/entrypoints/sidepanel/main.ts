@@ -6,6 +6,7 @@ import {
   type KnowledgeProject,
 } from "../../lib/knowledge-client.js";
 import {
+  MSG_CLEAR_SESSION,
   MSG_EXPORT_FLOW,
   MSG_GET_SESSION,
   MSG_SET_PROJECT,
@@ -24,6 +25,7 @@ const API_BASE_KEY = "flowweave:api-base";
 const countEl = document.getElementById("event-count");
 const metaEl = document.getElementById("session-meta");
 const exportBtn = document.getElementById("export-btn") as HTMLButtonElement | null;
+const clearBtn = document.getElementById("clear-btn") as HTMLButtonElement | null;
 const syncBtn = document.getElementById("sync-btn") as HTMLButtonElement | null;
 const statusEl = document.getElementById("status");
 const projectSelect = document.getElementById("project-select") as HTMLSelectElement | null;
@@ -163,6 +165,14 @@ exportBtn?.addEventListener("click", () => {
 
     downloadJson(response.filename, response.json);
     setStatus("已触发下载");
+  })();
+});
+
+clearBtn?.addEventListener("click", () => {
+  void (async () => {
+    const state = (await browser.runtime.sendMessage({ type: MSG_CLEAR_SESSION })) as SessionState;
+    renderSession(state);
+    setStatus("已清空当前录制会话");
   })();
 });
 

@@ -135,6 +135,7 @@ function mapRuntimeSteps(result: RuntimeExecutionResult): ExecutionStepLog[] {
     message: step.message,
     startedAt: step.startedAt,
     finishedAt: step.endedAt,
+    durationMs: step.durationMs,
     screenshotPath: step.screenshotPath,
   }));
 }
@@ -226,6 +227,7 @@ function fromKnowledgeExecution(
       label: step.stepId,
       status: step.status,
       message: step.errorMessage,
+      durationMs: step.durationMs,
       startedAt,
       finishedAt: stored.finishedAt,
       screenshotPath: step.screenshotPath,

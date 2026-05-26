@@ -5,6 +5,7 @@ export const MSG_GET_SESSION = "flowweave:get-session" as const;
 export const MSG_EXPORT_FLOW = "flowweave:export-flow" as const;
 export const MSG_SYNC_KNOWLEDGE = "flowweave:sync-knowledge" as const;
 export const MSG_SET_PROJECT = "flowweave:set-project" as const;
+export const MSG_CLEAR_SESSION = "flowweave:clear-session" as const;
 
 export type RecordEventMessage = {
   type: typeof MSG_RECORD_EVENT;
@@ -31,12 +32,17 @@ export type SetProjectMessage = {
   projectId: string;
 };
 
+export type ClearSessionMessage = {
+  type: typeof MSG_CLEAR_SESSION;
+};
+
 export type ExtensionMessage =
   | RecordEventMessage
   | GetSessionMessage
   | ExportFlowMessage
   | SyncKnowledgeMessage
-  | SetProjectMessage;
+  | SetProjectMessage
+  | ClearSessionMessage;
 
 export type SessionState = {
   eventCount: number;

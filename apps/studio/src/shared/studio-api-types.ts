@@ -14,6 +14,7 @@ export type ExecutionStepLog = {
   label: string;
   status: "pending" | "running" | "passed" | "failed" | "skipped";
   message?: string;
+  durationMs?: number;
   startedAt: string;
   finishedAt?: string;
   screenshotPath?: string;
@@ -72,6 +73,7 @@ export type StudioApi = {
   listFlowVersions: (projectId: string, flowId: string) => Promise<StudioFlowVersion[]>;
   getFlowVersion: (projectId: string, versionId: string) => Promise<FlowDocument | null>;
   restoreFlowVersion: (projectId: string, versionId: string) => Promise<FlowDocument>;
+  openPath: (filePath: string) => Promise<{ ok: true }>;
 };
 
 declare global {

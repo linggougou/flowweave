@@ -2,6 +2,7 @@ import { parseRecordedEvent, type RecordedEvent, type RecorderSessionMeta } from
 import { buildFlowFromEvents } from "../lib/flow-export.js";
 import { DEFAULT_KNOWLEDGE_API_BASE, saveFlowToKnowledge } from "../lib/knowledge-client.js";
 import {
+  MSG_CLEAR_SESSION,
   MSG_EXPORT_FLOW,
   MSG_GET_SESSION,
   MSG_RECORD_EVENT,
@@ -108,6 +109,17 @@ export default defineBackground(() => {
           session.meta.projectId = message.projectId;
           await saveSession(session);
           sendResponse({ ok: true, projectId: message.projectId });
+          return;
+        }
+
+        if (message.type === MSG_CLEAR_SESSION) {
+          const projectId = await getDefaultProjectId();
+          const session: StoredSession = {
+            meta: createSessionMeta(projectId),
+            events: [],
+          };
+          await saveSession(session);
+          sendResponse(toSessionState(session));
           return;
         }
 

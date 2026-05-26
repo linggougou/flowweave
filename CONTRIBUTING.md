@@ -10,10 +10,21 @@
 ```bash
 corepack enable
 pnpm install
-pnpm typecheck
-pnpm lint
-pnpm test
+pnpm doctor              # 环境自检
+SKIP_E2E=1 pnpm smoke    # 或 pnpm smoke:full
 ```
+
+完整跑通见 [docs/guides/quickstart.md](./docs/guides/quickstart.md)。
+
+### 构建与加载应用
+
+| 应用 | 开发 | 生产构建 |
+|------|------|----------|
+| Web + API | `pnpm dev:web` | `pnpm --filter @flowweave/app-web build && pnpm --filter @flowweave/app-web start` |
+| Studio | `pnpm dev:studio` | `pnpm --filter @flowweave/app-studio build` 后 `electron .`（在 `apps/studio`） |
+| 扩展 | `pnpm dev:extension` | `pnpm --filter @flowweave/app-extension build`，Chrome 加载 `apps/extension/dist/chrome-mv3` |
+
+扩展同步知识库前需先启动 Web API（`dev:web`）。
 
 ## 分支与提交
 

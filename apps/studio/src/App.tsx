@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FlowDocument } from "@flowweave/flow-dsl";
-import { APP_DISPLAY_NAME, FlowVersionList, StepLogTable } from "@flowweave/ui";
+import {
+  APP_DISPLAY_NAME,
+  FlowVersionList,
+  StepLogTable,
+  type StepLogRow,
+} from "@flowweave/ui";
 import type {
   ExecutionStepLog,
   ExecutionSummary,
@@ -143,7 +148,25 @@ export function App() {
     }
   };
 
-  const steps: ExecutionStepLog[] = execution?.steps ?? [];
+  const steps: StepLogRow[] = (execution?.steps ?? []).map((step) => ({
+    stepIndex: step.stepIndex,
+    stepId: step.stepId,
+    label: step.label,
+    status: step.status,
+    message: step.message,
+    durationMs: step.durationMs,
+    startedAt: step.startedAt,
+    finishedAt: step.finishedAt,
+    screenshotPath: step.screenshotPath,
+  }));
+
+  const openScreenshot = (filePath: string) => {
+    void getStudioApi()
+      .openPath(filePath)
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : "无法打开截图");
+      });
+  };
 
   const loadVersion = async (versionId: string) => {
     if (!selectedProjectId) return;
@@ -300,7 +323,11 @@ export function App() {
           </ul>
         ) : null}
         {tab === "executions" ? (
-          <StepLogTable steps={steps} emptyMessage="选择项目并点击「运行流程」查看步骤日志" />
+          <StepLogTable
+            steps={steps}
+            emptyMessage="选择项目并点击「运行流程」查看步骤日志"
+            onOpenScreenshot={openScreenshot}
+          />
         ) : (
           <section className="flow-version-panel">
             {selectedFlowId ? (

@@ -124,4 +124,7 @@ pnpm --filter @flowweave/runtime exec playwright install chromium
 
 - 执行细节：[p1-e2e.md](./p1-e2e.md)
 - Web / API：[web-console.md](./web-console.md)
+- 运行产物：[run-artifacts.md](./run-artifacts.md)
+- **v1 手测清单**：[manual-qa.md](./manual-qa.md)
+- **发行说明**：[v1.0.0.md](../releases/v1.0.0.md)
 - **开发计划**：[run-first-roadmap.md](../superpowers/plans/2026-05-26-run-first-roadmap.md)（AI 功能已冻结，先跑通为主）

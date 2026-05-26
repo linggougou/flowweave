@@ -146,6 +146,7 @@ export function App() {
     label: step.stepId,
     status: step.status,
     message: step.errorMessage,
+    durationMs: step.durationMs,
     startedAt: executionDetail?.startedAt ?? "—",
     finishedAt: executionDetail?.finishedAt,
     screenshotPath: step.screenshotPath,

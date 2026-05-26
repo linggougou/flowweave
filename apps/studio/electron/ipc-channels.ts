@@ -7,4 +7,5 @@ export const IPC_CHANNELS = {
   listFlowVersions: "studio:list-flow-versions",
   getFlowVersion: "studio:get-flow-version",
   restoreFlowVersion: "studio:restore-flow-version",
+  openPath: "studio:open-path",
 } as const;

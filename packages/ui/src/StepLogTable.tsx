@@ -6,6 +6,7 @@ export type StepLogRow = {
   label: string;
   status: string;
   message?: string;
+  durationMs?: number;
   startedAt: string;
   finishedAt?: string;
   screenshotPath?: string;
@@ -14,6 +15,7 @@ export type StepLogRow = {
 export type StepLogTableProps = {
   steps: StepLogRow[];
   emptyMessage?: string;
+  onOpenScreenshot?: (filePath: string) => void;
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -27,6 +29,7 @@ const STATUS_LABEL: Record<string, string> = {
 export function StepLogTable({
   steps,
   emptyMessage = "暂无步骤日志",
+  onOpenScreenshot,
 }: StepLogTableProps): ReactNode {
   if (steps.length === 0) {
     return <p className="fw-step-log-empty">{emptyMessage}</p>;
@@ -39,6 +42,7 @@ export function StepLogTable({
           <th>#</th>
           <th>步骤</th>
           <th>状态</th>
+          <th>耗时</th>
           <th>说明</th>
           <th>截图</th>
           <th>开始</th>
@@ -51,9 +55,25 @@ export function StepLogTable({
             <td>{step.stepIndex + 1}</td>
             <td>{step.label}</td>
             <td>{STATUS_LABEL[step.status] ?? step.status}</td>
+            <td>{formatDuration(step.durationMs)}</td>
             <td>{step.message ?? "—"}</td>
-            <td className="fw-step-screenshot" title={step.screenshotPath}>
-              {step.screenshotPath ? shortenPath(step.screenshotPath) : "—"}
+            <td className="fw-step-screenshot">
+              {step.screenshotPath ? (
+                onOpenScreenshot ? (
+                  <button
+                    type="button"
+                    className="fw-step-screenshot-btn"
+                    title={step.screenshotPath}
+                    onClick={() => onOpenScreenshot(step.screenshotPath!)}
+                  >
+                    {shortenPath(step.screenshotPath)}
+                  </button>
+                ) : (
+                  <span title={step.screenshotPath}>{shortenPath(step.screenshotPath)}</span>
+                )
+              ) : (
+                "—"
+              )}
             </td>
             <td>{formatTime(step.startedAt)}</td>
             <td>{step.finishedAt ? formatTime(step.finishedAt) : "—"}</td>
@@ -64,6 +84,16 @@ export function StepLogTable({
   );
 }
 
+function formatDuration(ms?: number): string {
+  if (ms === undefined || Number.isNaN(ms)) {
+    return "—";
+  }
+  if (ms < 1000) {
+    return `${ms}ms`;
+  }
+  return `${(ms / 1000).toFixed(2)}s`;
+}
+
 function shortenPath(path: string): string {
   if (path.length <= 48) {
     return path;
@@ -72,6 +102,9 @@ function shortenPath(path: string): string {
 }
 
 function formatTime(iso: string): string {
+  if (iso === "—") {
+    return iso;
+  }
   try {
     return new Date(iso).toLocaleTimeString("zh-CN");
   } catch {

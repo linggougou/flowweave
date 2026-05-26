@@ -328,3 +328,18 @@ body {
 .fw-step-log-table th {
   background: #1c2430;
 }
+
+.fw-step-screenshot-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #7eb8ff;
+  cursor: pointer;
+  font-size: inherit;
+  text-align: left;
+  text-decoration: underline;
+}
+
+.fw-step-screenshot-btn:hover {
+  color: #a8d0ff;
+}

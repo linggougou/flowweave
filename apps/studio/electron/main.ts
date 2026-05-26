@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, shell } from "electron";
 import path from "node:path";
 import { IPC_CHANNELS } from "./ipc-channels.js";
 import {
@@ -81,6 +81,17 @@ function registerIpcHandlers(): void {
       return restoreFlowVersion(projectId, versionId);
     },
   );
+
+  ipcMain.handle(IPC_CHANNELS.openPath, async (_event, filePath: string) => {
+    if (typeof filePath !== "string" || filePath.length === 0) {
+      throw new Error("路径无效");
+    }
+    const result = await shell.openPath(filePath);
+    if (result) {
+      throw new Error(result);
+    }
+    return { ok: true };
+  });
 }
 
 async function createWindow(): Promise<void> {

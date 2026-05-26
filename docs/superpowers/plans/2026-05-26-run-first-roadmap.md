@@ -174,9 +174,9 @@ pnpm --filter @flowweave/app-extension dev
 
 | 里程碑 | 状态 | 备注 |
 |--------|------|------|
-| M1 本地跑通 | 🔲 待做 | quickstart + README |
-| M2 闭环加固 | 🔲 待做 | Studio 选 Flow 运行 |
-| M3 可观测 | 🟡 部分 | 历史/版本已有；diff/截图预览未做 |
-| M4 工程质量 | 🟡 部分 | smoke / doctor 已就绪；CI 稳定待确认 |
-| M5 产品增强 | ⏸ 可选 | — |
+| M1 本地跑通 | ✅ 完成 | quickstart、doctor、dev 脚本 |
+| M2 闭环加固 | ✅ 完成 | 选 Flow 运行、项目持久化、[manual-qa](../../guides/manual-qa.md) |
+| M3 可观测 | ✅ 完成 | 耗时列、截图打开、[run-artifacts](../../guides/run-artifacts.md) |
+| M4 工程质量 | ✅ 完成 | smoke、CI Playwright、CONTRIBUTING、[v1.0.0](../../releases/v1.0.0.md) |
+| M5 产品增强 | 🟡 最小 | 扩展清空录制；其余可选 |
 | 智能阶段（P4/P3 深度） | ⏸ 冻结 | 用户明确要求延后 |

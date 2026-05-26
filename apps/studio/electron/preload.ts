@@ -17,6 +17,7 @@ const studioApi: StudioApi = {
     ipcRenderer.invoke(IPC_CHANNELS.getFlowVersion, projectId, versionId),
   restoreFlowVersion: (projectId: string, versionId: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.restoreFlowVersion, projectId, versionId),
+  openPath: (filePath: string) => ipcRenderer.invoke(IPC_CHANNELS.openPath, filePath),
 };
 
 contextBridge.exposeInMainWorld("flowweaveStudio", studioApi);
