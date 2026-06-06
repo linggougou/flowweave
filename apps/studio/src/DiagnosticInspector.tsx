@@ -1,7 +1,10 @@
 import type { ReactNode } from "react";
 import { buildFailureInsight } from "./shared/failure-insights.js";
 import { buildDiagnosticRepairSuggestions } from "./shared/repair-suggestions.js";
-import type { ExecutionStepLog } from "./shared/studio-api-types.js";
+import type {
+  ExecutionStepLog,
+  StudioDiagnosticTargetHints,
+} from "./shared/studio-api-types.js";
 
 type DiagnosticInspectorProps = {
   steps: ExecutionStepLog[];
@@ -47,6 +50,96 @@ function countStrategyAttempts(
   };
 }
 
+function includesKeyword(value: string | undefined, keywords: string[]): boolean {
+  const normalized = value?.toLowerCase() ?? "";
+  return keywords.some((keyword) => normalized.includes(keyword));
+}
+
+function formatScopeKind(
+  scopeKind?: StudioDiagnosticTargetHints["scopeKind"],
+): string {
+  switch (scopeKind) {
+    case "row":
+      return "列表行";
+    case "listitem":
+      return "列表项";
+    case "dialog":
+      return "弹层";
+    case "tabpanel":
+      return "页签面板";
+    case "section":
+      return "区域";
+    case "card":
+      return "卡片";
+    default:
+      return "—";
+  }
+}
+
+function buildAmbiguityClues(step: ExecutionStepLog): string[] {
+  const attempts = step.diagnostic?.strategyAttempts ?? [];
+  const ambiguousAttempt = attempts.find(
+    (attempt) =>
+      !attempt.success &&
+      (attempt.matchedCount > 1 ||
+        (attempt.visibleCount !== undefined && attempt.visibleCount > 1) ||
+        includesKeyword(attempt.error, [
+          "strict mode violation",
+          "resolved to",
+          "tie",
+          "tied",
+          "same score",
+          "并列",
+          "候选评分",
+          "无法唯一确认",
+        ])),
+  );
+
+  if (!ambiguousAttempt) {
+    return [];
+  }
+
+  const clues = [
+    `当前策略 ${ambiguousAttempt.label} 一次命中 ${ambiguousAttempt.matchedCount} 个候选${
+      ambiguousAttempt.visibleCount !== undefined
+        ? `，其中可见 ${ambiguousAttempt.visibleCount} 个`
+        : ""
+    }。`,
+  ];
+  const scopeText = step.diagnostic?.targetHints?.scopeText?.trim();
+  const scopeKind = step.diagnostic?.targetHints?.scopeKind;
+  const scopeKindLabel = scopeKind ? formatScopeKind(scopeKind) : undefined;
+
+  if (scopeText) {
+    clues.push(
+      `记录到的作用域线索：${scopeKindLabel ? `${scopeKindLabel}“${scopeText}”` : `“${scopeText}”`}。`,
+    );
+  } else if (scopeKindLabel) {
+    clues.push(`当前只记录到作用域类型“${scopeKindLabel}”，还缺少能区分目标的标题或编号。`);
+  } else {
+    clues.push(
+      "当前没有记录到列表行、弹层标题或卡片摘要这类作用域线索，所以同名目标之间仍然无法区分。",
+    );
+  }
+
+  if (
+    includesKeyword(ambiguousAttempt.error, [
+      "tie",
+      "tied",
+      "same score",
+      "并列",
+      "候选评分",
+      "无法唯一确认",
+    ])
+  ) {
+    clues.push("runtime 已判定候选并列，继续重放仍可能点到错误目标。");
+  } else {
+    clues.push("当前定位范围仍然过宽，重复按钮之间仍然容易点错对象。");
+  }
+
+  return clues;
+}
+
 export function DiagnosticInspector({
   steps,
   selectedStepIndex,
@@ -69,6 +162,7 @@ export function DiagnosticInspector({
   const insight = buildFailureInsight(activeStep);
   const summary = countStrategyAttempts(activeStep);
   const repairSuggestions = buildDiagnosticRepairSuggestions(activeStep);
+  const ambiguityClues = buildAmbiguityClues(activeStep);
 
   return (
     <section className="flow-preview">
@@ -143,6 +237,19 @@ export function DiagnosticInspector({
             <p className="flow-content-meta" style={{ marginTop: 8 }}>
               {insight.pageSummary ?? "当前步骤没有页面快照摘要。"}
             </p>
+          </div>
+        </div>
+      ) : null}
+
+      {ambiguityClues.length > 0 ? (
+        <div className="flow-preview" style={{ margin: "0 0 16px" }}>
+          <strong>歧义线索</strong>
+          <div style={{ display: "grid", gap: 8, marginTop: 12 }}>
+            {ambiguityClues.map((clue, index) => (
+              <p key={`${activeStep.stepId}-ambiguity-${index}`} className="flow-content-meta" style={{ margin: 0 }}>
+                {clue}
+              </p>
+            ))}
           </div>
         </div>
       ) : null}
@@ -272,6 +379,18 @@ export function DiagnosticInspector({
                   <tr>
                     <th>文本样本</th>
                     <td>{diagnostic.targetHints.textSample ?? "—"}</td>
+                  </tr>
+                  <tr>
+                    <th>作用域类型</th>
+                    <td>
+                      {diagnostic.targetHints.scopeKind
+                        ? formatScopeKind(diagnostic.targetHints.scopeKind)
+                        : "—"}
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>作用域文本</th>
+                    <td>{diagnostic.targetHints.scopeText ?? "—"}</td>
                   </tr>
                 </tbody>
               </table>

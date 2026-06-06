@@ -28,6 +28,27 @@ type FragilitySummary = {
   stepNumbers: number[];
 };
 
+function formatScopeKind(
+  scopeKind?: StudioDiagnosticTargetHints["scopeKind"],
+): string | undefined {
+  switch (scopeKind) {
+    case "row":
+      return "列表行";
+    case "listitem":
+      return "列表项";
+    case "dialog":
+      return "弹层";
+    case "tabpanel":
+      return "页签面板";
+    case "section":
+      return "区域";
+    case "card":
+      return "卡片";
+    default:
+      return undefined;
+  }
+}
+
 function severityRank(severity: RepairSuggestion["severity"]): number {
   return severity === "error" ? 0 : 1;
 }
@@ -88,11 +109,20 @@ function describeTargetHints(targetHints?: StudioDiagnosticTargetHints): string 
     return undefined;
   }
 
+  const scopeKindLabel = formatScopeKind(targetHints.scopeKind);
+  const scopeText = targetHints.scopeText?.trim();
   const parts = [
     targetHints.labelText ? `关联文案“${targetHints.labelText}”` : undefined,
     targetHints.placeholder ? `占位提示“${targetHints.placeholder}”` : undefined,
     targetHints.nameAttr ? `name=${targetHints.nameAttr}` : undefined,
     targetHints.textSample ? `文本样本“${targetHints.textSample}”` : undefined,
+    scopeText
+      ? scopeKindLabel
+        ? `作用域线索 ${scopeKindLabel}“${scopeText}”`
+        : `作用域线索“${scopeText}”`
+      : scopeKindLabel
+        ? `作用域类型 ${scopeKindLabel}`
+        : undefined,
   ].filter((item): item is string => Boolean(item));
 
   if (parts.length === 0) {
@@ -105,6 +135,20 @@ function describeTargetHints(targetHints?: StudioDiagnosticTargetHints): string 
 function includesKeyword(value: string | undefined, keywords: string[]): boolean {
   const normalized = value?.toLowerCase() ?? "";
   return keywords.some((keyword) => normalized.includes(keyword));
+}
+
+function hasAmbiguityTieSignal(attempt: StudioDiagnosticStrategyAttempt): boolean {
+  return includesKeyword(attempt.error, [
+    "tie",
+    "tied",
+    "same score",
+    "equal score",
+    "并列",
+    "同分",
+    "平分",
+    "候选评分",
+    "无法唯一确认",
+  ]);
 }
 
 function isLikelyCustomEditableTarget(targetHints?: StudioDiagnosticTargetHints): boolean {
@@ -214,6 +258,52 @@ function buildAttemptReason(
   return parts.join("，") + "。";
 }
 
+function buildScopedRetargetSuggestion(
+  step: ExecutionStepLog,
+  attempt: StudioDiagnosticStrategyAttempt,
+  targetHints?: StudioDiagnosticTargetHints,
+): RankedRepairSuggestion | null {
+  const scopeText = targetHints?.scopeText?.trim();
+  if (!scopeText) {
+    return null;
+  }
+
+  const scopeKindLabel = formatScopeKind(targetHints?.scopeKind) ?? "区域";
+  return {
+    id: `strategy:scope-retarget:${step.stepId}`,
+    source: "strategy",
+    severity: "error",
+    priority: 0,
+    title: `重新录制到正确${scopeKindLabel}`,
+    action: `回到包含“${scopeText}”的${scopeKindLabel}重新录制这一步，再直接点击该${scopeKindLabel}里的目标，尽量保留标题、编号或主键文案这类上下文。`,
+    reason: hasAmbiguityTieSignal(attempt)
+      ? `${buildAttemptReason(attempt, "runtime 判断候选并列")}当前记录的作用域线索是 ${scopeKindLabel}“${scopeText}”，但还不足以唯一确认目标。`
+      : `${buildAttemptReason(attempt, "当前目标仍可能落到错误位置")}当前记录的作用域线索是 ${scopeKindLabel}“${scopeText}”。`,
+  };
+}
+
+function buildMissingScopeSuggestion(
+  step: ExecutionStepLog,
+  attempt: StudioDiagnosticStrategyAttempt,
+  targetHints?: StudioDiagnosticTargetHints,
+): RankedRepairSuggestion {
+  const scopeKindLabel = formatScopeKind(targetHints?.scopeKind);
+  const reasonSuffix = scopeKindLabel
+    ? `当前只记录到作用域类型 ${scopeKindLabel}，但还缺少可区分的标题或编号。`
+    : "当前没有记录到列表行、弹层标题或卡片摘要这类作用域线索。";
+
+  return {
+    id: `strategy:scope-missing:${step.stepId}`,
+    source: "strategy",
+    severity: "warning",
+    priority: 2,
+    title: "补上作用域线索后再重录",
+    action:
+      "如果这是列表行、卡片或弹层内的操作，重新录制时先进入对应上下文，再点击目标本身，让 Flow 带回更可区分的标题、编号或主键文案。",
+    reason: `${buildAttemptReason(attempt, "页面上存在多个同名候选")}${reasonSuffix}`,
+  };
+}
+
 export function buildFragilityRepairSuggestions(
   warnings: FragilityIssue[],
 ): RepairSuggestion[] {
@@ -239,16 +329,26 @@ export function buildDiagnosticRepairSuggestions(
       (attempt.visibleCount !== undefined && attempt.visibleCount > 1) ||
       includesKeyword(attempt.error, ["strict mode violation", "resolved to"]),
   );
+  const tieAttempt = failedAttempts.find(hasAmbiguityTieSignal);
+  const scopedRetargetSuggestion =
+    broadAttempt ? buildScopedRetargetSuggestion(step, tieAttempt ?? broadAttempt, targetHints) : null;
+  if (scopedRetargetSuggestion) {
+    ranked.push(scopedRetargetSuggestion);
+  }
   if (broadAttempt) {
     ranked.push({
       id: `strategy:broad:${step.stepId}`,
       source: "strategy",
       severity: "error",
-      priority: 0,
+      priority: scopedRetargetSuggestion ? 1 : 0,
       title: "先收窄目标范围",
-      action: "给目标补充更稳定的 name、label 或 testId，避免一条策略同时命中多个候选。",
+      action:
+        "给目标补充更稳定的 name、label 或 testId，避免一条策略同时命中多个候选；如果这是列表行、卡片或弹层内的操作，优先重新录制到带标题或编号的上下文。",
       reason: buildAttemptReason(broadAttempt, "页面上的目标还不够唯一"),
     });
+  }
+  if (broadAttempt && !targetHints?.scopeText?.trim()) {
+    ranked.push(buildMissingScopeSuggestion(step, tieAttempt ?? broadAttempt, targetHints));
   }
 
   const hiddenAttempt = failedAttempts.find(
