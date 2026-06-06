@@ -111,6 +111,34 @@ function buildMatrixCases(baseUrl: string, workspaceDir: string): MatrixCase[] {
     "utf-8",
   );
 
+  const expiredStorageStatePath = join(workspaceDir, "session-expired-storage-state.json");
+  writeFileSync(
+    expiredStorageStatePath,
+    JSON.stringify(
+      {
+        cookies: [],
+        origins: [
+          {
+            origin: new URL(baseUrl).origin,
+            localStorage: [
+              {
+                name: "flowweave:session-user",
+                value: "矩阵验证用户",
+              },
+              {
+                name: "flowweave:session-status",
+                value: "expired",
+              },
+            ],
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+    "utf-8",
+  );
+
   return [
     {
       name: "checkbox-select",
@@ -347,6 +375,190 @@ function buildMatrixCases(baseUrl: string, workspaceDir: string): MatrixCase[] {
               {
                 kind: "css",
                 selector: "#archive-result[data-ready='true']",
+              },
+            ],
+          },
+        },
+      ]),
+    },
+    {
+      name: "session-expired-dashboard",
+      flow: buildFlow("flow_session_expired_dashboard", "会话失效恢复流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "session-expired-dashboard.html",
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#refresh-session" }] },
+        },
+        {
+          id: "s3",
+          type: "wait",
+          condition: "hidden",
+          target: { strategies: [{ kind: "css", selector: "#session-refreshing" }] },
+        },
+        {
+          id: "s4",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#dashboard-panel[data-ready='true']",
+              },
+            ],
+          },
+        },
+      ]),
+      options: {
+        storageStatePath: expiredStorageStatePath,
+      },
+    },
+    {
+      name: "paginated-list",
+      flow: buildFlow("flow_paginated_list", "分页列表切换流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "paginated-list.html",
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#next-page" }] },
+        },
+        {
+          id: "s3",
+          type: "wait",
+          condition: "hidden",
+          target: { strategies: [{ kind: "css", selector: "#pagination-loading" }] },
+        },
+        {
+          id: "s4",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#page-summary[data-ready='true'][data-page='2']",
+              },
+            ],
+          },
+        },
+      ]),
+    },
+    {
+      name: "drawer-edit-form",
+      flow: buildFlow("flow_drawer_edit_form", "抽屉表单编辑流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "drawer-edit-form.html",
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#edit-rule-512" }] },
+        },
+        {
+          id: "s3",
+          type: "wait",
+          condition: "visible",
+          target: { strategies: [{ kind: "css", selector: "#edit-drawer[data-ready='true']" }] },
+        },
+        {
+          id: "s4",
+          type: "fill",
+          target: { strategies: [{ kind: "css", selector: "#drawer-owner" }] },
+          value: "江遥",
+        },
+        {
+          id: "s5",
+          type: "select",
+          target: { strategies: [{ kind: "css", selector: "#drawer-priority" }] },
+          values: ["p0"],
+        },
+        {
+          id: "s6",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#save-drawer" }] },
+        },
+        {
+          id: "s7",
+          type: "wait",
+          condition: "hidden",
+          target: { strategies: [{ kind: "css", selector: "#edit-drawer" }] },
+        },
+        {
+          id: "s8",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#drawer-result[data-ready='true']",
+              },
+            ],
+          },
+        },
+      ]),
+    },
+    {
+      name: "toast-popconfirm",
+      flow: buildFlow("flow_toast_popconfirm", "轻量确认提交流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "toast-popconfirm.html",
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#open-popconfirm" }] },
+        },
+        {
+          id: "s3",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#toast-popconfirm[data-ready='true']",
+              },
+            ],
+          },
+        },
+        {
+          id: "s4",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#toast-confirm" }] },
+        },
+        {
+          id: "s5",
+          type: "wait",
+          condition: "hidden",
+          target: { strategies: [{ kind: "css", selector: "#toast-popconfirm" }] },
+        },
+        {
+          id: "s6",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#toast-result[data-ready='true']",
               },
             ],
           },

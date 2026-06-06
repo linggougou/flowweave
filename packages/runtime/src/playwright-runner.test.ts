@@ -538,7 +538,7 @@ describe("executeFlow", () => {
     };
 
     const summary = await matrixModule.runRealPageFixtureMatrix({ headless: true });
-    expect(summary.results).toHaveLength(7);
+    expect(summary.results).toHaveLength(11);
     expect(summary.results.map((item) => item.name)).toEqual([
       "checkbox-select",
       "delayed-panel",
@@ -547,6 +547,10 @@ describe("executeFlow", () => {
       "session-dashboard",
       "filterable-list",
       "modal-bulk-action",
+      "session-expired-dashboard",
+      "paginated-list",
+      "drawer-edit-form",
+      "toast-popconfirm",
     ]);
     expect(summary.failed).toHaveLength(0);
   });

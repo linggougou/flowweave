@@ -2,7 +2,7 @@
 
 本矩阵起始于 `Benchmarks` 轨道第一阶段，用于沉淀稳定、可复现的本地 HTML fixture。
 
-当前 `Benchmarks` 第三阶段已经把这些 fixture 接入真实回归脚本：
+当前 `Benchmarks` 第四阶段已经把这些 fixture 接入真实回归脚本：
 
 - `examples/real-page-smoke.ts`
 - `examples/run-real-page-smoke.ts`
@@ -27,6 +27,10 @@
 | `examples/fixtures/session-dashboard.html` | 登录态 localStorage 注入、受会话影响的页面初始化 | 通过 `storageState` 预置登录态 -> 打开日报 -> 等待结果面板可见 | `#session-state`、`#session-user`、`#report-panel[data-ready="true"]`、`#report-owner` | `storageStatePath` 透传、登录态环境注入、真实页面会话恢复 |
 | `examples/fixtures/filterable-list.html` | 列表筛选、局部 loading、结果数量回填 | 输入关键字 -> 选择状态 -> 点击筛选 -> 等待 loading 消失 | `#filter-summary[data-ready="true"][data-count="2"]`、`#result-count`、`#result-status`、`#result-keyword` | 筛选链路稳定等待、列表结果数量断言、局部刷新与空结果态前置能力 |
 | `examples/fixtures/modal-bulk-action.html` | 覆盖层弹窗、批量操作、确认文本填写 | 勾选任务 -> 打开弹窗 -> 填写原因 -> 确认归档 -> 等待弹窗关闭和结果展示 | `#archive-modal[data-ready="true"]`、`#confirm-archive`、`#archive-result[data-ready="true"]`、`#archive-result-summary` | Modal 遮罩层稳定定位、弹窗内表单填写、关闭后结果区断言、批量操作链路 |
+| `examples/fixtures/session-expired-dashboard.html` | 失效会话恢复、局部 loading、恢复后仪表盘重新可用 | 通过 `storageState` 预置失效会话 -> 点击恢复会话 -> 等待 loading 消失 -> 断言恢复面板可见 | `#session-refreshing`、`#dashboard-panel[data-ready="true"]`、`#session-state[data-tone="success"]`、`#refresh-result` | 会话失效恢复、会话相关页局部刷新、恢复后重新可操作 |
+| `examples/fixtures/paginated-list.html` | 后台分页切换、页码摘要、结果列表换页 | 点击下一页 -> 等待 `#pagination-loading` 消失 -> 断言 `#page-summary[data-page="2"]` | `#pagination-loading`、`#page-summary[data-ready="true"][data-page="2"]`、`#current-page`、`#page-anchor` | 分页按钮稳定性、页码更新、结果区间断言、后台列表换页 |
+| `examples/fixtures/drawer-edit-form.html` | Drawer 打开、表单编辑、保存后关闭并回填结果 | 打开 Drawer -> 填写负责人 -> 选择优先级 -> 保存 -> 等待 Drawer 关闭和结果区展示 | `#edit-drawer[data-ready="true"]`、`#save-drawer`、`#drawer-result[data-ready="true"]`、`#result-owner`、`#result-priority` | Drawer 侧栏稳定定位、表单填写、保存后等待侧栏关闭与列表回填 |
+| `examples/fixtures/toast-popconfirm.html` | 轻量确认 toast、确认后关闭、结果区回显 | 点击提交审核 -> 等待 toast 可见 -> 点击确认 -> 等待 toast 消失 -> 断言结果区可见 | `#toast-popconfirm[data-ready="true"]`、`#toast-confirm`、`#toast-result[data-ready="true"]`、`#result-summary` | 轻量确认而非 Modal、短暂浮层稳定定位、确认后消失与结果回显 |
 
 ## 页面细节
 
@@ -120,10 +124,62 @@
   - 适合覆盖 Modal 遮罩层、批量工具条、弹窗确认表单。
   - 适合验证“元素可见但被遮罩层影响”“提交后等待弹窗关闭再继续”的真实稳定性问题。
 
+### `session-expired-dashboard.html`
+
+- 交互目的：
+  - 模拟“登录过但会话失效”的后台仪表盘场景。
+  - 为 runtime 提供带 `storageState` 打开的失效环境恢复基准，而不是只覆盖正常登录态。
+- 关键断言：
+  - 打开页面后 `#session-state` 初始为失效态，`#session-expired-banner[data-state="expired"]` 可见。
+  - 点击 `#refresh-session` 后 `#session-refreshing` 先显示，约 `820ms` 后隐藏。
+  - 恢复完成后 `#dashboard-panel[data-ready="true"]` 可见，`#refresh-result` 与 `#queue-owner` 回填恢复结果。
+- 后续自动化价值：
+  - 适合覆盖会话过期、重新注入环境、恢复后重新可操作的后台真实路径。
+  - 适合验证“不是流程错，而是会话失效”的脆弱性场景。
+
+### `paginated-list.html`
+
+- 交互目的：
+  - 模拟后台列表页常见的换页操作，而不是只做筛选。
+  - 为 runtime 提供“点击分页 -> 局部 loading -> 列表和摘要同步更新”的稳定基准。
+- 关键断言：
+  - 点击 `#next-page` 后 `#pagination-loading` 显示，约 `680ms` 后隐藏。
+  - `#page-summary[data-ready="true"][data-page="2"]` 能直接作为分页成功断言。
+  - `#current-page`、`#visible-range`、`#page-anchor` 和表格行内容都会切换到第 2 页。
+- 后续自动化价值：
+  - 适合覆盖分页按钮、页码状态、结果区间和后台表格换页。
+  - 适合作为后续排序、页大小、跨页选择等场景的基础夹具。
+
+### `drawer-edit-form.html`
+
+- 交互目的：
+  - 模拟后台常见的“从列表打开 Drawer 编辑侧栏”的场景。
+  - 为 runtime 提供覆盖列表页内打开侧栏、编辑表单、保存后关闭并回填结果的稳定基准。
+- 关键断言：
+  - 点击 `#edit-rule-512` 后 `#edit-drawer[data-ready="true"]` 可见。
+  - 修改 `#drawer-owner` 和 `#drawer-priority` 后点击保存，约 `760ms` 后 Drawer 关闭。
+  - `#drawer-result[data-ready="true"]` 展示最终保存结果，列表中的 `#row-owner-512`、`#row-priority-512` 同步更新。
+- 后续自动化价值：
+  - 适合覆盖 Drawer 侧栏、输入框与下拉框组合、保存后等待侧栏关闭。
+  - 适合验证“结果区已更新但 Drawer 还没完全收起”这类真实时序问题。
+
+### `toast-popconfirm.html`
+
+- 交互目的：
+  - 模拟不再使用大弹窗，而改用轻量 toast 做二次确认的后台交互。
+  - 为 runtime 提供短暂浮层确认、确认后关闭和结果区回显的稳定基准。
+- 关键断言：
+  - 点击 `#open-popconfirm` 后 `#toast-popconfirm[data-ready="true"]` 可见。
+  - 点击 `#toast-confirm` 后 `#toast-status` 进入处理中，约 `640ms` 后 toast 消失。
+  - `#toast-result[data-ready="true"]` 显示提交成功结果，`#result-summary` 可直接做强断言。
+- 后续自动化价值：
+  - 适合覆盖轻量确认浮层，而不是传统 Modal。
+  - 适合验证确认按钮点击后短暂 UI 消失与结果回显的链路稳定性。
+
 ## 当前回归入口
 
 - `examples/real-page-smoke.ts`
-  - 统一定义 7 个 fixture 的 Flow、上传测试文件和 `storageStatePath` 注入配置。
+  - 统一定义 11 个 fixture 的 Flow、上传测试文件和 `storageStatePath` 注入配置。
 - `examples/run-real-page-smoke.ts`
   - 负责打印矩阵结果、耗时和每个 case 的产物目录。
 - `pnpm e2e:real-pages`
@@ -133,8 +189,8 @@
 
 ## 后续扩展建议
 
-1. 增补分页、Tab 切换、抽屉侧栏、二次确认 toast 等更贴近后台页面的基准。
-2. 把 `session-dashboard` 扩展为“登录态失效 -> 回到访客模式”的双态基准。
+1. 增补空结果页、批量跨页选择、联动筛选和抽屉内二次保存校验等更贴近后台页面的基准。
+2. 把 `session-expired-dashboard` 扩展为“恢复失败 -> 二次重试成功”的双态基准。
 3. 为矩阵汇总保留成功率、失败类型与平均耗时，形成可比对的长期基线。
 
 ## 备注
@@ -142,4 +198,5 @@
 - 第一阶段只落 fixture 与文档，不改 runtime / test，是为了避免在 Foundation / Runtime 轨道接口未完全合入前引入耦合。
 - 第二阶段已新增 `examples/run-real-page-smoke.ts`、runtime 矩阵测试与 `session-dashboard.html`。
 - 第三阶段继续扩到 `filterable-list.html` 与 `modal-bulk-action.html`，矩阵总数提升到 `7`。
+- 第四阶段继续扩到 `session-expired-dashboard.html`、`paginated-list.html`、`drawer-edit-form.html` 与 `toast-popconfirm.html`，矩阵总数提升到 `11`。
 - 矩阵脚本直接从 `packages/*/src/index.ts` 导入 live implementation，避免脚本误吃旧 `dist` 产物，导致基准结果与当前源码脱节。

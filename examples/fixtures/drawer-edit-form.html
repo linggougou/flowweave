@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowWeave Drawer 编辑表单 Fixture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui,
+          sans-serif;
+        --bg: #f3f1f8;
+        --panel: #fdfcff;
+        --border: #d5cee6;
+        --text: #2f2840;
+        --muted: #6f6385;
+        --accent: #6a4ab5;
+        --accent-soft: rgba(106, 74, 181, 0.12);
+        --success: #2b6a58;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top right, rgba(106, 74, 181, 0.16), transparent 32%),
+          linear-gradient(180deg, #fbfaff 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      body[data-drawer-open="true"] {
+        overflow: hidden;
+      }
+
+      main {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 40px 20px 72px;
+      }
+
+      .hero,
+      .shell,
+      .result,
+      .drawer-card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: 0 20px 44px rgba(47, 40, 64, 0.08);
+      }
+
+      .hero,
+      .shell,
+      .result {
+        padding: 24px;
+      }
+
+      .hero {
+        margin-bottom: 20px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 12px 10px;
+        border-bottom: 1px solid rgba(111, 99, 133, 0.16);
+        text-align: left;
+      }
+
+      th {
+        color: var(--muted);
+      }
+
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+
+      button {
+        border: none;
+        border-radius: 14px;
+        padding: 11px 16px;
+        background: var(--accent);
+        color: #fff;
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      .result {
+        margin-top: 18px;
+      }
+
+      .result[hidden],
+      .drawer-shell[hidden] {
+        display: none;
+      }
+
+      .drawer-shell {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        justify-content: flex-end;
+        background: rgba(35, 24, 58, 0.24);
+      }
+
+      .drawer-card {
+        width: min(100%, 440px);
+        height: 100%;
+        padding: 24px;
+        border-radius: 28px 0 0 28px;
+        overflow-y: auto;
+      }
+
+      .field {
+        margin-top: 16px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+      }
+
+      input,
+      select {
+        width: 100%;
+        border-radius: 14px;
+        border: 1px solid var(--border);
+        padding: 12px 14px;
+        background: #fff;
+        color: var(--text);
+      }
+
+      .drawer-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        margin-top: 20px;
+      }
+
+      .ghost {
+        background: #fff;
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+
+      #drawer-status {
+        min-height: 24px;
+        margin-top: 14px;
+        color: var(--muted);
+      }
+
+      .meta-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+        margin-top: 14px;
+      }
+
+      .meta-grid div {
+        padding: 14px;
+        border-radius: 18px;
+        background: rgba(106, 74, 181, 0.08);
+      }
+
+      .meta-grid strong {
+        display: block;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      @media (max-width: 640px) {
+        main {
+          padding-inline: 14px;
+        }
+
+        .drawer-card {
+          width: 100%;
+          border-radius: 24px 24px 0 0;
+          height: auto;
+          margin-top: auto;
+        }
+
+        .drawer-actions {
+          flex-direction: column;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <p>Fixture 目标：验证 Drawer 打开、表单编辑、保存后关闭 Drawer 与结果回显。</p>
+        <h1 id="page-title">流程规则维护台</h1>
+        <p>
+          推荐后续自动化步骤：打开编辑 Drawer、修改负责人与优先级、保存、等待 Drawer 关闭，再断言结果区和列表回填。
+        </p>
+      </section>
+
+      <section id="drawer-shell" class="shell" data-loading="false">
+        <table aria-label="流程规则列表">
+          <thead>
+            <tr>
+              <th>规则编号</th>
+              <th>负责人</th>
+              <th>优先级</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr id="rule-row-512">
+              <td>FW-RULE-512</td>
+              <td id="row-owner-512">苏柚</td>
+              <td id="row-priority-512">P2</td>
+              <td>
+                <button
+                  id="edit-rule-512"
+                  type="button"
+                  data-owner="苏柚"
+                  data-priority="p2"
+                >
+                  编辑规则
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <section
+          id="drawer-result"
+          class="result"
+          hidden
+          data-ready="false"
+          aria-labelledby="result-title"
+        >
+          <h2 id="result-title">保存结果</h2>
+          <div class="meta-grid">
+            <div>
+              <strong>负责人</strong>
+              <span id="result-owner">-</span>
+            </div>
+            <div>
+              <strong>优先级</strong>
+              <span id="result-priority">-</span>
+            </div>
+            <div>
+              <strong>状态</strong>
+              <span id="result-status">未保存</span>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <div
+      id="edit-drawer"
+      class="drawer-shell"
+      hidden
+      data-ready="false"
+      aria-hidden="true"
+    >
+      <aside class="drawer-card" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+        <p id="drawer-badge">侧栏状态：待编辑</p>
+        <h2 id="drawer-title">编辑流程规则</h2>
+        <p>修改负责人和优先级后保存，Drawer 关闭后结果区会显示最新值。</p>
+
+        <div class="field">
+          <label for="drawer-owner">负责人</label>
+          <input id="drawer-owner" type="text" placeholder="请输入负责人" />
+        </div>
+
+        <div class="field">
+          <label for="drawer-priority">优先级</label>
+          <select id="drawer-priority">
+            <option value="p2">P2</option>
+            <option value="p1">P1</option>
+            <option value="p0">P0</option>
+          </select>
+        </div>
+
+        <p id="drawer-status">请确认修改内容。</p>
+
+        <div class="drawer-actions">
+          <button id="cancel-drawer" type="button" class="ghost">取消</button>
+          <button id="save-drawer" type="button">保存修改</button>
+        </div>
+      </aside>
+    </div>
+
+    <script>
+      const body = document.body;
+      const shell = document.getElementById("drawer-shell");
+      const editButton = document.getElementById("edit-rule-512");
+      const rowOwner = document.getElementById("row-owner-512");
+      const rowPriority = document.getElementById("row-priority-512");
+      const drawer = document.getElementById("edit-drawer");
+      const drawerBadge = document.getElementById("drawer-badge");
+      const ownerInput = document.getElementById("drawer-owner");
+      const prioritySelect = document.getElementById("drawer-priority");
+      const drawerStatus = document.getElementById("drawer-status");
+      const cancelButton = document.getElementById("cancel-drawer");
+      const saveButton = document.getElementById("save-drawer");
+      const result = document.getElementById("drawer-result");
+      const resultOwner = document.getElementById("result-owner");
+      const resultPriority = document.getElementById("result-priority");
+      const resultStatus = document.getElementById("result-status");
+
+      function syncDrawerState() {
+        const valid = ownerInput.value.trim().length >= 2;
+        saveButton.disabled = !valid;
+        drawerStatus.textContent = valid
+          ? "内容已可保存。"
+          : "负责人至少需要 2 个字符。";
+      }
+
+      function closeDrawer() {
+        drawer.hidden = true;
+        drawer.dataset.ready = "false";
+        drawer.setAttribute("aria-hidden", "true");
+        body.dataset.drawerOpen = "false";
+      }
+
+      editButton.addEventListener("click", () => {
+        ownerInput.value = editButton.dataset.owner || "";
+        prioritySelect.value = editButton.dataset.priority || "p2";
+        drawer.hidden = false;
+        drawer.dataset.ready = "true";
+        drawer.setAttribute("aria-hidden", "false");
+        body.dataset.drawerOpen = "true";
+        drawerBadge.textContent = "侧栏状态：编辑中";
+        syncDrawerState();
+      });
+
+      ownerInput.addEventListener("input", syncDrawerState);
+      prioritySelect.addEventListener("change", syncDrawerState);
+      cancelButton.addEventListener("click", closeDrawer);
+
+      saveButton.addEventListener("click", () => {
+        if (saveButton.disabled || shell.dataset.loading === "true") {
+          return;
+        }
+
+        shell.dataset.loading = "true";
+        shell.setAttribute("aria-busy", "true");
+        drawerStatus.textContent = "正在保存规则，请稍候...";
+        saveButton.disabled = true;
+
+        window.setTimeout(() => {
+          const owner = ownerInput.value.trim();
+          const priorityLabel = prioritySelect.value.toUpperCase();
+
+          rowOwner.textContent = owner;
+          rowPriority.textContent = priorityLabel;
+          editButton.dataset.owner = owner;
+          editButton.dataset.priority = prioritySelect.value;
+          result.hidden = false;
+          result.dataset.ready = "true";
+          resultOwner.textContent = owner;
+          resultPriority.textContent = priorityLabel;
+          resultStatus.textContent = "已保存并同步到列表";
+          shell.dataset.loading = "false";
+          shell.removeAttribute("aria-busy");
+          closeDrawer();
+          drawerBadge.textContent = "侧栏状态：已完成";
+          syncDrawerState();
+        }, 760);
+      });
+    </script>
+  </body>
+</html>

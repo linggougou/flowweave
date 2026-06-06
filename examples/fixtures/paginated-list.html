@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowWeave 分页列表 Fixture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui,
+          sans-serif;
+        --bg: #eef4f2;
+        --panel: #fbfefd;
+        --border: #c7d9d2;
+        --text: #1f352f;
+        --muted: #617770;
+        --accent: #1f6f63;
+        --accent-soft: rgba(31, 111, 99, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top left, rgba(31, 111, 99, 0.14), transparent 34%),
+          linear-gradient(180deg, #f9fdfb 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 40px 20px 72px;
+      }
+
+      .hero,
+      .shell,
+      .summary {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: 0 20px 44px rgba(31, 53, 47, 0.08);
+      }
+
+      .hero,
+      .shell,
+      .summary {
+        padding: 24px;
+      }
+
+      .hero {
+        margin-bottom: 20px;
+      }
+
+      .toolbar,
+      .pager,
+      .summary-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .toolbar {
+        justify-content: space-between;
+      }
+
+      .loading {
+        margin-top: 16px;
+        padding: 10px 14px;
+        border-radius: 16px;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .loading[hidden],
+      .summary[hidden] {
+        display: none;
+      }
+
+      table {
+        width: 100%;
+        margin-top: 18px;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 12px 10px;
+        text-align: left;
+        border-bottom: 1px solid rgba(97, 119, 112, 0.18);
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .pager {
+        justify-content: flex-end;
+        margin-top: 18px;
+      }
+
+      button {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 11px 14px;
+        font: inherit;
+        background: #fff;
+        color: var(--text);
+        cursor: pointer;
+      }
+
+      button[aria-current="page"] {
+        border-color: transparent;
+        background: var(--accent);
+        color: #fff;
+        font-weight: 700;
+      }
+
+      button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      .summary {
+        margin-top: 18px;
+      }
+
+      .summary-grid {
+        margin-top: 14px;
+      }
+
+      .summary-box {
+        flex: 1 1 180px;
+        padding: 16px;
+        border-radius: 18px;
+        background: rgba(31, 111, 99, 0.08);
+      }
+
+      .summary-box strong {
+        display: block;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      .summary-box span {
+        font-size: 1.1rem;
+        font-weight: 700;
+      }
+
+      #page-status {
+        min-height: 24px;
+        margin-top: 16px;
+        color: var(--muted);
+      }
+
+      @media (max-width: 640px) {
+        main {
+          padding-inline: 14px;
+        }
+
+        .toolbar,
+        .pager {
+          justify-content: flex-start;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <p>Fixture 目标：验证分页按钮点击、局部 loading、页码切换和结果摘要落点。</p>
+        <h1 id="page-title">订单复核列表</h1>
+        <p>
+          推荐后续自动化步骤：点击下一页、等待 loading 消失，再断言页码摘要、可见记录区间和当前行内容。
+        </p>
+      </section>
+
+      <section id="page-shell" class="shell" data-page="1" data-loading="false">
+        <div class="toolbar">
+          <p id="page-caption">当前展示待复核订单列表。</p>
+          <span id="total-count">总记录：9</span>
+        </div>
+
+        <div id="pagination-loading" class="loading" hidden aria-live="polite">
+          正在切换分页并刷新当前结果...
+        </div>
+
+        <p id="page-status">初始停留在第 1 页。</p>
+
+        <table aria-label="分页订单列表">
+          <thead>
+            <tr>
+              <th>编号</th>
+              <th>客户</th>
+              <th>处理状态</th>
+            </tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
+
+        <div class="pager" aria-label="分页导航">
+          <button id="prev-page" type="button" disabled>上一页</button>
+          <button id="page-1" type="button" aria-current="page">1</button>
+          <button id="page-2" type="button">2</button>
+          <button id="page-3" type="button">3</button>
+          <button id="next-page" type="button">下一页</button>
+        </div>
+
+        <section
+          id="page-summary"
+          class="summary"
+          data-ready="true"
+          data-page="1"
+          aria-labelledby="summary-title"
+        >
+          <h2 id="summary-title">分页结果摘要</h2>
+          <div class="summary-grid">
+            <div class="summary-box">
+              <strong>当前页</strong>
+              <span id="current-page">第 1 页</span>
+            </div>
+            <div class="summary-box">
+              <strong>可见区间</strong>
+              <span id="visible-range">1-3 / 9</span>
+            </div>
+            <div class="summary-box">
+              <strong>定位锚点</strong>
+              <span id="page-anchor">FW-PAGE-1</span>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const shell = document.getElementById("page-shell");
+      const tableBody = document.getElementById("table-body");
+      const loading = document.getElementById("pagination-loading");
+      const pageStatus = document.getElementById("page-status");
+      const pageCaption = document.getElementById("page-caption");
+      const pageSummary = document.getElementById("page-summary");
+      const currentPage = document.getElementById("current-page");
+      const visibleRange = document.getElementById("visible-range");
+      const pageAnchor = document.getElementById("page-anchor");
+      const prevButton = document.getElementById("prev-page");
+      const nextButton = document.getElementById("next-page");
+      const numberedButtons = [
+        document.getElementById("page-1"),
+        document.getElementById("page-2"),
+        document.getElementById("page-3"),
+      ];
+
+      const pageData = {
+        1: [
+          ["FW-201", "山岚医疗", "待复核"],
+          ["FW-202", "北港供应链", "待补件"],
+          ["FW-203", "星河零售", "待复核"],
+        ],
+        2: [
+          ["FW-204", "南浦物流", "待复核"],
+          ["FW-205", "嘉禾制造", "待同步"],
+          ["FW-206", "临川品牌", "待复核"],
+        ],
+        3: [
+          ["FW-207", "河汀教育", "待补款"],
+          ["FW-208", "远岸传媒", "待归档"],
+          ["FW-209", "白榆咨询", "待复核"],
+        ],
+      };
+
+      function renderPage(page) {
+        const rows = pageData[page] || pageData[1];
+        shell.dataset.page = String(page);
+        tableBody.innerHTML = rows
+          .map(
+            ([code, customer, status], index) => `
+              <tr id="row-${page}-${index + 1}">
+                <td>${code}</td>
+                <td>${customer}</td>
+                <td>${status}</td>
+              </tr>
+            `,
+          )
+          .join("");
+        pageSummary.dataset.ready = "true";
+        pageSummary.dataset.page = String(page);
+        currentPage.textContent = `第 ${page} 页`;
+        visibleRange.textContent = `${(page - 1) * 3 + 1}-${page * 3} / 9`;
+        pageAnchor.textContent = `FW-PAGE-${page}`;
+        pageCaption.textContent = `当前页已刷新为第 ${page} 页数据。`;
+        pageStatus.textContent = `分页切换完成：第 ${page} 页。`;
+        prevButton.disabled = page <= 1;
+        nextButton.disabled = page >= 3;
+        numberedButtons.forEach((button, index) => {
+          button.setAttribute("aria-current", index + 1 === page ? "page" : "false");
+        });
+      }
+
+      function goToPage(page) {
+        if (shell.dataset.loading === "true" || page === Number(shell.dataset.page)) {
+          return;
+        }
+
+        shell.dataset.loading = "true";
+        shell.setAttribute("aria-busy", "true");
+        loading.hidden = false;
+        pageSummary.dataset.ready = "false";
+        pageStatus.textContent = `正在切换到第 ${page} 页...`;
+
+        window.setTimeout(() => {
+          renderPage(page);
+          shell.dataset.loading = "false";
+          shell.removeAttribute("aria-busy");
+          loading.hidden = true;
+        }, 680);
+      }
+
+      prevButton.addEventListener("click", () => goToPage(Number(shell.dataset.page) - 1));
+      nextButton.addEventListener("click", () => goToPage(Number(shell.dataset.page) + 1));
+      numberedButtons.forEach((button, index) => {
+        button.addEventListener("click", () => goToPage(index + 1));
+      });
+
+      renderPage(1);
+    </script>
+  </body>
+</html>
