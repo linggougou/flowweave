@@ -51,6 +51,50 @@ function roleNameSignature(step: NormalizedStep): string | undefined {
   return `${roleStrategy.role}:${roleStrategy.name ?? ""}`;
 }
 
+function sameStringArray(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function isEquivalentConsecutiveStep(previous: NormalizedStep, current: NormalizedStep): boolean {
+  if (previous.type !== current.type) {
+    return false;
+  }
+
+  switch (current.type) {
+    case "navigate":
+      return previous.type === "navigate" && previous.url === current.url;
+    case "select":
+      return (
+        previous.type === "select" &&
+        targetSignature(previous) === targetSignature(current) &&
+        sameStringArray(previous.values, current.values)
+      );
+    case "setChecked":
+      return (
+        previous.type === "setChecked" &&
+        targetSignature(previous) === targetSignature(current) &&
+        previous.checked === current.checked
+      );
+    case "upload":
+      return (
+        previous.type === "upload" &&
+        targetSignature(previous) === targetSignature(current) &&
+        sameStringArray(previous.files, current.files)
+      );
+    default:
+      return false;
+  }
+}
+
+function pushStep(result: NormalizedStep[], step: NormalizedStep): void {
+  const previous = result.at(-1);
+  if (previous && isEquivalentConsecutiveStep(previous, step)) {
+    result[result.length - 1] = step;
+    return;
+  }
+  result.push(step);
+}
+
 function isLabelForControlClick(clickStep: NormalizedStep, targetStep: NormalizedStep): boolean {
   const clickCss = cssOf(clickStep);
   const targetCss = cssOf(targetStep);
@@ -122,7 +166,7 @@ export function filterNoisyInteractionSteps(steps: NormalizedStep[]): Normalized
     }
 
     if (current) {
-      result.push(current);
+      pushStep(result, current);
     }
   }
 

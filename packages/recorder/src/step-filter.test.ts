@@ -99,6 +99,105 @@ describe("filterNoisyInteractionSteps", () => {
 
     expect(steps.map((step) => step.type)).toEqual(["select"]);
   });
+
+  it("合并连续同 URL 的 navigate，保留最后一次", () => {
+    const steps = filterNoisyInteractionSteps([
+      {
+        id: "1",
+        type: "navigate",
+        url: "https://example.com/dashboard",
+      },
+      {
+        id: "2",
+        type: "navigate",
+        url: "https://example.com/dashboard",
+      },
+      {
+        id: "3",
+        type: "click",
+        target: { strategies: [{ kind: "css", selector: "#refresh" }] },
+      },
+    ]);
+
+    expect(steps).toHaveLength(2);
+    expect(steps[0]).toMatchObject({
+      id: "2",
+      type: "navigate",
+      url: "https://example.com/dashboard",
+    });
+  });
+
+  it("合并连续重复的 select，保留最后一次", () => {
+    const steps = filterNoisyInteractionSteps([
+      {
+        id: "1",
+        type: "select",
+        target: { strategies: [{ kind: "css", selector: "#city" }] },
+        values: ["shanghai"],
+      },
+      {
+        id: "2",
+        type: "select",
+        target: { strategies: [{ kind: "css", selector: "#city" }] },
+        values: ["shanghai"],
+      },
+    ]);
+
+    expect(steps).toHaveLength(1);
+    expect(steps[0]).toMatchObject({
+      id: "2",
+      type: "select",
+      values: ["shanghai"],
+    });
+  });
+
+  it("合并连续重复的 setChecked，保留最后一次", () => {
+    const steps = filterNoisyInteractionSteps([
+      {
+        id: "1",
+        type: "setChecked",
+        target: { strategies: [{ kind: "css", selector: "#agree" }] },
+        checked: true,
+      },
+      {
+        id: "2",
+        type: "setChecked",
+        target: { strategies: [{ kind: "css", selector: "#agree" }] },
+        checked: true,
+      },
+    ]);
+
+    expect(steps).toHaveLength(1);
+    expect(steps[0]).toMatchObject({
+      id: "2",
+      type: "setChecked",
+      checked: true,
+    });
+  });
+
+  it("合并连续重复的 upload，保留最后一次", () => {
+    const steps = filterNoisyInteractionSteps([
+      {
+        id: "1",
+        type: "upload",
+        target: { strategies: [{ kind: "css", selector: "#resume" }] },
+        files: ["{{upload_resume_1}}"],
+      },
+      {
+        id: "2",
+        type: "upload",
+        target: { strategies: [{ kind: "css", selector: "#resume" }] },
+        files: ["{{upload_resume_1}}"],
+      },
+    ]);
+
+    expect(steps).toHaveLength(1);
+    expect(steps[0]).toMatchObject({
+      id: "2",
+      type: "upload",
+      files: ["{{upload_resume_1}}"],
+    });
+  });
 });
 
 describe("mergeConsecutiveFillSteps", () => {

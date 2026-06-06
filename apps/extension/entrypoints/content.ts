@@ -48,6 +48,76 @@ function readUploadFiles(element: HTMLInputElement): string[] {
   return Array.from(element.files ?? []).map((file) => file.name).filter((name) => name.length > 0);
 }
 
+function normalizeUploadTokenPart(value: string): string {
+  const normalized = value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  return normalized.length > 0 ? normalized : "file";
+}
+
+function buildUploadReplayInputs(element: HTMLInputElement, fileNames: string[]): string[] {
+  const tokenSeed = normalizeUploadTokenPart(
+    element.name || element.id || element.getAttribute("aria-label") || "upload",
+  );
+  return fileNames.map((_name, index) => `{{upload_${tokenSeed}_${index + 1}}}`);
+}
+
+const PRESS_KEYS = new Set(["Enter", "Tab", "Escape"]);
+const MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta"]);
+
+function normalizePressKey(key: string): string {
+  if (key === "Esc") {
+    return "Escape";
+  }
+  if (key === " ") {
+    return "Space";
+  }
+  return key;
+}
+
+function buildRecordedPressKey(event: KeyboardEvent): string | null {
+  if (event.isComposing || event.repeat) {
+    return null;
+  }
+
+  const key = normalizePressKey(event.key);
+  if (MODIFIER_KEYS.has(key)) {
+    return null;
+  }
+
+  const hasShortcutModifier = event.ctrlKey || event.altKey || event.metaKey;
+  if (!hasShortcutModifier && !PRESS_KEYS.has(key)) {
+    return null;
+  }
+
+  const parts: string[] = [];
+  if (event.ctrlKey) {
+    parts.push("Control");
+  }
+  if (event.altKey) {
+    parts.push("Alt");
+  }
+  if (event.shiftKey && key !== "Shift") {
+    parts.push("Shift");
+  }
+  if (event.metaKey) {
+    parts.push("Meta");
+  }
+  parts.push(key);
+  return parts.join("+");
+}
+
+function resolvePressTarget(target: EventTarget | null): Element | null {
+  if (!(target instanceof Element)) {
+    return null;
+  }
+
+  const resolved = resolveClickTarget(target);
+  if (resolved === document.body || resolved === document.documentElement) {
+    return null;
+  }
+
+  return resolved;
+}
+
 let lastFillSignature = "";
 
 function recordInteractionFromElement(element: Element): void {
@@ -69,14 +139,17 @@ function recordInteractionFromElement(element: Element): void {
     }
 
     if (inputType === "file") {
-      const files = readUploadFiles(element);
-      if (files.length === 0) {
+      const fileNames = readUploadFiles(element);
+      if (fileNames.length === 0) {
         return;
       }
-      const payload = buildInteractionPayload(element, "upload", {
-        inputType,
-        files,
-      });
+      const payload = {
+        ...buildInteractionPayload(element, "upload", {
+          inputType,
+        }),
+        files: buildUploadReplayInputs(element, fileNames),
+        fileNames,
+      };
       sendEvent({
         type: "fill",
         timestamp: Date.now(),
@@ -115,6 +188,28 @@ function recordInteractionFromElement(element: Element): void {
   lastFillSignature = signature;
   sendEvent({
     type: "fill",
+    timestamp: Date.now(),
+    url: window.location.href,
+    payload,
+  });
+}
+
+function recordPress(event: KeyboardEvent): void {
+  const key = buildRecordedPressKey(event);
+  if (!key) {
+    return;
+  }
+
+  const target = resolvePressTarget(event.target);
+  const payload = target
+    ? {
+        ...buildInteractionPayload(target, "click"),
+        key,
+      }
+    : { key };
+
+  sendEvent({
+    type: "keypress",
     timestamp: Date.now(),
     url: window.location.href,
     payload,
@@ -187,6 +282,14 @@ export default defineContentScript({
         inputDebounce = setTimeout(() => {
           recordInteractionFromElement(target);
         }, 400);
+      },
+      true,
+    );
+
+    document.addEventListener(
+      "keydown",
+      (ev) => {
+        recordPress(ev);
       },
       true,
     );

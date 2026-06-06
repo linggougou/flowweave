@@ -87,6 +87,13 @@ function readStringArray(payload: Record<string, unknown>, key: string): string[
   return items.length > 0 ? items : undefined;
 }
 
+function isReplayableUploadInput(value: string): boolean {
+  return (
+    /^\{\{\s*[A-Za-z0-9_]+\s*\}\}$/.test(value) ||
+    /^(?:file:\/\/|\/|\.{1,2}\/|[A-Za-z]:[\\/]|\\\\)/.test(value)
+  );
+}
+
 function buildTargetHints(payload: Record<string, unknown>): Target["hints"] | undefined {
   const hints: NonNullable<Target["hints"]> = {};
   const tagName = readString(payload, "tagName");
@@ -220,6 +227,9 @@ function normalizeFill(event: RecordedEvent): NormalizedStep | null {
   const target = buildTargetFromPayload(event.payload);
   const files = readStringArray(event.payload, "files");
   if (target && payload.inputType === "file" && files) {
+    if (!files.every(isReplayableUploadInput)) {
+      return null;
+    }
     return {
       id: event.id,
       type: "upload",
@@ -262,6 +272,29 @@ function normalizeSelect(event: RecordedEvent): NormalizedStep | null {
   };
 }
 
+function normalizeKeypress(event: RecordedEvent): NormalizedStep | null {
+  const key = readString(event.payload, "key");
+  if (!key) {
+    return null;
+  }
+
+  const target = buildTargetFromPayload(event.payload);
+  if (!target) {
+    return {
+      id: event.id,
+      type: "press",
+      key,
+    };
+  }
+
+  return {
+    id: event.id,
+    type: "press",
+    key,
+    target,
+  };
+}
+
 /** 将单条录制事件转为标准步骤；不支持或信息不足时返回 null */
 export function normalizeRecordedEvent(event: RecordedEvent): NormalizedStep | null {
   switch (event.type) {
@@ -273,6 +306,8 @@ export function normalizeRecordedEvent(event: RecordedEvent): NormalizedStep | n
       return normalizeFill(event);
     case "select":
       return normalizeSelect(event);
+    case "keypress":
+      return normalizeKeypress(event);
     default:
       return null;
   }

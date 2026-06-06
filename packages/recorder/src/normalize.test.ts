@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
 import type { RecordedEvent } from "@flowweave/shared";
 import { flowDocumentSchema } from "@flowweave/flow-dsl";
+import { parseRecordedEvent } from "../../shared/src/recording-protocol.js";
 import {
   buildFlowFromEvents,
   normalizeRecordedEvent,
@@ -209,9 +210,48 @@ describe("normalizeRecordedEvent", () => {
     });
   });
 
-  it("将 file input 事件转为 upload 步骤", () => {
+  it("将 keypress 事件转为 press 步骤并保留目标", () => {
     const step = normalizeRecordedEvent(
       event({
+        id: "evt_press",
+        type: "keypress",
+        timestamp: 2250,
+        url: "https://example.com/search",
+        payload: {
+          selector: "#keyword",
+          role: "textbox",
+          name: "搜索词",
+          key: "Enter",
+          tagName: "input",
+          inputType: "text",
+          nameAttr: "keyword",
+          labelText: "搜索词",
+        },
+      }),
+    );
+
+    expect(step).toEqual({
+      id: "evt_press",
+      type: "press",
+      key: "Enter",
+      target: {
+        strategies: [
+          { kind: "role", role: "textbox", name: "搜索词" },
+          { kind: "css", selector: "#keyword" },
+        ],
+        hints: {
+          tagName: "input",
+          inputType: "text",
+          nameAttr: "keyword",
+          labelText: "搜索词",
+        },
+      },
+    });
+  });
+
+  it("将 file input 事件中的占位回放输入转为 upload 步骤", () => {
+    const step = normalizeRecordedEvent(
+      parseRecordedEvent({
         id: "evt_upload",
         type: "fill",
         timestamp: 2300,
@@ -219,7 +259,8 @@ describe("normalizeRecordedEvent", () => {
         payload: {
           selector: "#resume",
           inputType: "file",
-          files: ["/tmp/resume.pdf"],
+          files: ["{{upload_resume_1}}"],
+          fileNames: ["resume.pdf"],
           tagName: "input",
           nameAttr: "resume",
           labelText: "上传简历",
@@ -239,8 +280,46 @@ describe("normalizeRecordedEvent", () => {
           labelText: "上传简历",
         },
       },
+      files: ["{{upload_resume_1}}"],
+    });
+  });
+
+  it("upload 仍接受显式文件路径作为回放输入", () => {
+    const step = normalizeRecordedEvent(
+      parseRecordedEvent({
+        id: "evt_upload_path",
+        type: "fill",
+        timestamp: 2310,
+        url: "https://example.com/upload",
+        payload: {
+          selector: "#resume",
+          inputType: "file",
+          files: ["/tmp/resume.pdf"],
+        },
+      }),
+    );
+
+    expect(step).toMatchObject({
+      type: "upload",
       files: ["/tmp/resume.pdf"],
     });
+  });
+
+  it("拒绝把裸文件名当作 upload 的可回放输入", () => {
+    expect(() =>
+      parseRecordedEvent({
+        id: "evt_upload_invalid",
+        type: "fill",
+        timestamp: 2320,
+        url: "https://example.com/upload",
+        payload: {
+          selector: "#resume",
+          inputType: "file",
+          files: ["resume.pdf"],
+          fileNames: ["resume.pdf"],
+        },
+      }),
+    ).toThrow(/可回放.*裸文件名/);
   });
 
   it("将 navigate 事件转为 navigate 步骤", () => {
@@ -418,5 +497,39 @@ describe("buildFlowFromEvents", () => {
 
     expect(flow.steps).toHaveLength(2);
     expect(flow.steps.map((step) => step.type)).toEqual(["navigate", "setChecked"]);
+  });
+
+  it("构建 Flow 时去掉连续同 URL 的 navigate 噪声", () => {
+    const events: RecordedEvent[] = [
+      event({
+        id: "n1",
+        type: "navigate",
+        timestamp: 0,
+        url: "https://app.example.com/dashboard",
+      }),
+      event({
+        id: "n2",
+        type: "navigate",
+        timestamp: 10,
+        url: "https://app.example.com/dashboard",
+      }),
+      event({
+        id: "c1",
+        type: "click",
+        timestamp: 20,
+        url: "https://app.example.com/dashboard",
+        payload: { selector: "#refresh" },
+      }),
+    ];
+
+    const flow = buildFlowFromEvents(events, baseMeta);
+
+    expect(flow.steps).toHaveLength(2);
+    expect(flow.steps.map((step) => step.type)).toEqual(["navigate", "click"]);
+    expect(flow.steps[0]).toMatchObject({
+      id: "n2",
+      type: "navigate",
+      url: "https://app.example.com/dashboard",
+    });
   });
 });
