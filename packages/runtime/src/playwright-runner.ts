@@ -3,13 +3,14 @@ import { join } from "node:path";
 
 import type { FlowDocument, NormalizedStep, Target } from "@flowweave/flow-dsl";
 import { buildPageSnapshotSummary } from "@flowweave/page-intelligence";
-import { FlowWeaveError } from "@flowweave/shared";
+import { FlowWeaveError, interpolateTemplateString } from "@flowweave/shared";
 
 type LocatorStrategy = Target["strategies"][number];
 import { chromium, type Locator, type Page } from "playwright";
 import type {
   ExecutionOptions,
   ExecutionResult,
+  ExecutionVariables,
   RuntimePageSnapshot,
   StepLog,
 } from "./types.js";
@@ -47,19 +48,12 @@ function formatUnknownError(error: unknown): string {
 
 function interpolateString(
   value: string,
-  variables?: ExecutionOptions["variables"],
+  variables?: ExecutionVariables,
 ): string {
-  if (!variables) {
-    return value;
-  }
-
-  return value.replace(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g, (match, variableName: string) => {
-    const resolved = variables[variableName];
-    return resolved === undefined ? match : String(resolved);
-  });
+  return interpolateTemplateString(value, variables);
 }
 
-function interpolateStepValue<T>(value: T, variables?: ExecutionOptions["variables"]): T {
+function interpolateStepValue<T>(value: T, variables?: ExecutionVariables): T {
   if (typeof value === "string") {
     return interpolateString(value, variables) as T;
   }

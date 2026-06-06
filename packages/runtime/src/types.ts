@@ -40,6 +40,7 @@ export interface ExecutionResult {
 }
 
 export type ExecutionVariableValue = string | number | boolean;
+export type ExecutionVariables = Record<string, ExecutionVariableValue>;
 
 export type ExecutionCookie = Parameters<BrowserContext["addCookies"]>[0][number];
 
@@ -57,7 +58,7 @@ export type ExecutionOptions = {
   /** 为相对路径 navigate 提供基础地址 */
   baseUrl?: string;
   /** 运行时变量，供后续插值与环境注入使用 */
-  variables?: Record<string, ExecutionVariableValue>;
+  variables?: ExecutionVariables;
   /** Playwright storageState JSON 文件路径 */
   storageStatePath?: string;
   /** 追加注入到 BrowserContext 的 Cookie 列表 */

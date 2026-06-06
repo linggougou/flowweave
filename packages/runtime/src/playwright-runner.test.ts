@@ -22,6 +22,8 @@ const checkboxSelectFixtureUrl = pathToFileURL(
 const delayedPanelFixtureUrl = pathToFileURL(
   join(fixturesDir, "delayed-panel.html"),
 ).href;
+const spaRouteFixtureUrl = pathToFileURL(join(fixturesDir, "spa-route.html")).href;
+const filterableListFixtureUrl = pathToFileURL(join(fixturesDir, "filterable-list.html")).href;
 const uploadFormFixtureUrl = pathToFileURL(join(fixturesDir, "upload-form.html")).href;
 
 const baseMeta = {
@@ -75,6 +77,16 @@ function buildFlow(id: string, name: string, steps: FlowDocument["steps"]): Flow
     variables: [],
     steps,
     meta: baseMeta,
+  };
+}
+
+function buildRecordedFlowMeta(flowId: string, name: string) {
+  return {
+    sessionId: `${flowId}_session`,
+    projectId: "proj_test",
+    startedAt: "2026-06-06T23:10:00.000Z",
+    flowId,
+    name,
   };
 }
 
@@ -343,6 +355,76 @@ describe("executeFlow", () => {
     expect(result.status).toBe("success");
   });
 
+  it("使用共享占位符协议插值导航地址、目标策略与上传文件数组", async () => {
+    const uploadDir = mkdtempSync(join(tmpdir(), "fw-runtime-shared-placeholder-"));
+    cleanupPaths.add(uploadDir);
+    const evidenceA = join(uploadDir, "evidence-a.txt");
+    const evidenceB = join(uploadDir, "evidence-b.txt");
+    writeFileSync(evidenceA, "alpha", "utf-8");
+    writeFileSync(evidenceB, "beta", "utf-8");
+
+    const result = await executeFlow(
+      buildFlow("flow_shared_placeholder_contract", "共享占位符协议回放", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "{{fixture-path}}",
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "fill",
+          target: {
+            strategies: [{ kind: "role", role: "textbox", name: "{{字段.提交人}}" }],
+          },
+          value: "{{操作员}}",
+        },
+        {
+          id: "s3",
+          type: "upload",
+          target: {
+            strategies: [{ kind: "testId", testId: "{{上传.test-id}}" }],
+          },
+          files: ["{{附件一}}", "{{附件二}}"],
+        },
+        {
+          id: "s4",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#submit-upload" }] },
+        },
+        {
+          id: "s5",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [{ kind: "css", selector: "#upload-result[data-ready='true']" }],
+          },
+        },
+      ]),
+      {
+        headless: true,
+        baseUrl: fixturesBaseUrl,
+        variables: {
+          "fixture-path": "upload-form.html",
+          "字段.提交人": "提交人",
+          "上传.test-id": "evidence-files",
+          操作员: "共享协议值班同学",
+          附件一: evidenceA,
+          附件二: evidenceB,
+        },
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.steps.map((step) => step.type)).toEqual([
+      "navigate",
+      "fill",
+      "upload",
+      "click",
+      "wait",
+    ]);
+  });
+
   it("支持将录制事件构建出的 upload Flow 直接回放", async () => {
     const uploadDir = mkdtempSync(join(tmpdir(), "fw-runtime-recorded-upload-"));
     cleanupPaths.add(uploadDir);
@@ -407,13 +489,7 @@ describe("executeFlow", () => {
           },
         }),
       ],
-      {
-        sessionId: "sess_upload",
-        projectId: "proj_test",
-        startedAt: "2026-06-06T23:10:00.000Z",
-        flowId: "flow_recorded_upload",
-        name: "录制上传流程",
-      },
+      buildRecordedFlowMeta("flow_recorded_upload", "录制上传流程"),
     );
 
     expect(flow.variables).toEqual([
@@ -438,6 +514,146 @@ describe("executeFlow", () => {
       "navigate",
       "fill",
       "upload",
+      "click",
+    ]);
+  });
+
+  it("支持将录制事件构建出的 spa-route Flow 直接回放", async () => {
+    const flow = buildFlowFromEvents(
+      [
+        parseRecordedEvent({
+          id: "evt_nav_spa",
+          type: "navigate",
+          timestamp: 0,
+          url: spaRouteFixtureUrl,
+          payload: {
+            url: "{{fixture-path}}",
+            waitUntil: "domcontentloaded",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_settings",
+          type: "click",
+          timestamp: 100,
+          url: spaRouteFixtureUrl,
+          payload: {
+            selector: "#nav-settings",
+            role: "button",
+            name: "设置",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_ready_card",
+          type: "click",
+          timestamp: 200,
+          url: `${spaRouteFixtureUrl}#settings`,
+          payload: {
+            selector: "#route-card[data-ready='true']",
+          },
+        }),
+      ],
+      buildRecordedFlowMeta("flow_recorded_spa_route", "录制路由流程"),
+    );
+
+    const result = await executeFlow(flow, {
+      headless: true,
+      baseUrl: fixturesBaseUrl,
+      variables: {
+        "fixture-path": "spa-route.html",
+      },
+    });
+
+    expect(result.status).toBe("success");
+    expect(result.steps.map((step) => step.type)).toEqual([
+      "navigate",
+      "click",
+      "click",
+    ]);
+  });
+
+  it("支持将录制事件构建出的 filterable-list Flow 直接回放", async () => {
+    const flow = buildFlowFromEvents(
+      [
+        parseRecordedEvent({
+          id: "evt_nav_filter",
+          type: "navigate",
+          timestamp: 0,
+          url: filterableListFixtureUrl,
+          payload: {
+            url: "{{fixture.file}}",
+            waitUntil: "domcontentloaded",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_fill_keyword",
+          type: "fill",
+          timestamp: 100,
+          url: filterableListFixtureUrl,
+          payload: {
+            selector: "#keyword",
+            role: "textbox",
+            name: "关键字",
+            value: "{{筛选关键字}}",
+            inputType: "text",
+            tagName: "input",
+            nameAttr: "keyword",
+            labelText: "关键字",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_select_status",
+          type: "select",
+          timestamp: 200,
+          url: filterableListFixtureUrl,
+          payload: {
+            selector: "#status-filter",
+            testId: "status-filter",
+            values: ["{{筛选.状态}}"],
+            tagName: "select",
+            nameAttr: "statusFilter",
+            labelText: "任务状态",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_apply_filter",
+          type: "click",
+          timestamp: 300,
+          url: filterableListFixtureUrl,
+          payload: {
+            selector: "#apply-filters",
+            role: "button",
+            name: "应用筛选",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_summary",
+          type: "click",
+          timestamp: 400,
+          url: filterableListFixtureUrl,
+          payload: {
+            selector: "#filter-summary[data-ready='true'][data-count='2']",
+          },
+        }),
+      ],
+      buildRecordedFlowMeta("flow_recorded_filterable_list", "录制列表筛选流程"),
+    );
+
+    const result = await executeFlow(flow, {
+      headless: true,
+      baseUrl: fixturesBaseUrl,
+      variables: {
+        "fixture.file": "filterable-list.html",
+        筛选关键字: "待同步",
+        "筛选.状态": "needs-review",
+      },
+    });
+
+    expect(result.status).toBe("success");
+    expect(result.steps.map((step) => step.type)).toEqual([
+      "navigate",
+      "fill",
+      "select",
+      "click",
       "click",
     ]);
   });
