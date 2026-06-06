@@ -117,22 +117,38 @@ function extractExecutableVariableNames(step: NormalizedStep): string[] {
   }
 }
 
-function hasNthOfTypeSelector(step: Extract<NormalizedStep, { type: "click" | "fill" }>): boolean {
-  return step.target.strategies.some(
+function getTargetForFragilityCheck(step: NormalizedStep): StepTarget | undefined {
+  switch (step.type) {
+    case "click":
+    case "fill":
+    case "select":
+    case "setChecked":
+    case "upload":
+      return step.target;
+    case "press":
+      return step.target;
+    default:
+      return undefined;
+  }
+}
+
+function hasNthOfTypeSelector(target: StepTarget): boolean {
+  return target.strategies.some(
     (strategy) =>
       strategy.kind === "css" && /:nth-of-type\(\s*\d+\s*\)/.test(strategy.selector),
   );
 }
 
-function hasOnlyTextStrategies(step: Extract<NormalizedStep, { type: "click" | "fill" }>): boolean {
-  return step.target.strategies.every((strategy) => strategy.kind === "text");
+function hasOnlyTextStrategies(target: StepTarget): boolean {
+  return target.strategies.every((strategy) => strategy.kind === "text");
 }
 
 function inspectStep(step: NormalizedStep, stepIndex: number): FragilityIssue[] {
   const issues: FragilityIssue[] = [];
 
-  if (step.type === "click" || step.type === "fill") {
-    const strategies = step.target.strategies;
+  const target = getTargetForFragilityCheck(step);
+  if (target) {
+    const strategies = target.strategies;
     if (strategies.length === 0) {
       issues.push({
         stepId: step.id,
@@ -153,7 +169,7 @@ function inspectStep(step: NormalizedStep, stepIndex: number): FragilityIssue[] 
         severity: "warning",
       });
     }
-    if (hasNthOfTypeSelector(step)) {
+    if (hasNthOfTypeSelector(target)) {
       issues.push({
         stepId: step.id,
         stepIndex,
@@ -162,7 +178,7 @@ function inspectStep(step: NormalizedStep, stepIndex: number): FragilityIssue[] 
         severity: "warning",
       });
     }
-    if (hasOnlyTextStrategies(step)) {
+    if (hasOnlyTextStrategies(target)) {
       issues.push({
         stepId: step.id,
         stepIndex,
