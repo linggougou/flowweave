@@ -75,6 +75,7 @@ function toStudioExecution(
     startedAt,
     finishedAt: stored.finishedAt,
     environmentName: stored.runContext?.environmentName,
+    flowSnapshot: stored.flowSnapshot,
     runContext: stored.runContext,
     steps: stored.steps.map((step) => {
       const storedStep = step as ExecutionWithProject["steps"][number] & Partial<ExecutionStepLog>;

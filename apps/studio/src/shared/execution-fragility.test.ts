@@ -4,7 +4,9 @@ import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
 import type { FlowDocument } from "@flowweave/flow-dsl";
 
 import {
+  buildExecutionCompatibilityWarnings,
   buildExecutionFragilityIssues,
+  hasFragilityRelevantRunContext,
   resolveExecutionFlow,
 } from "./execution-fragility.js";
 
@@ -116,5 +118,172 @@ describe("buildExecutionFragilityIssues", () => {
     const codes = issues.map((issue) => issue.code);
     expect(codes).toContain("MISSING_ENVIRONMENT");
     expect(codes).toContain("MISSING_VARIABLE");
+  });
+});
+
+describe("buildExecutionCompatibilityWarnings", () => {
+  it("缺少 Flow 快照与运行上下文时提示旧记录边界", () => {
+    const warnings = buildExecutionCompatibilityWarnings({});
+    const codes = warnings.map((warning) => warning.code);
+
+    expect(codes).toEqual(["FLOW_SNAPSHOT_MISSING", "RUN_CONTEXT_MISSING"]);
+  });
+
+  it("仅缺少运行上下文时只提示上下文不完整", () => {
+    const warnings = buildExecutionCompatibilityWarnings({
+      flowSnapshot: sampleFlow(),
+    });
+
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.code).toBe("RUN_CONTEXT_MISSING");
+  });
+
+  it("Flow 快照与运行上下文完整时不再提示兼容边界", () => {
+    const warnings = buildExecutionCompatibilityWarnings({
+      flowSnapshot: sampleFlow(),
+      runContext: {
+        environmentName: "预发已登录",
+        baseUrl: "https://staging.example.com",
+        variables: {
+          username: "alice",
+        },
+      },
+    });
+
+    expect(warnings).toEqual([]);
+  });
+
+  it("只有环境名但缺少 baseUrl 与变量时，仍提示上下文不完整", () => {
+    const warnings = buildExecutionCompatibilityWarnings({
+      flowSnapshot: sampleFlow(),
+      runContext: {
+        environmentName: "仅名称环境",
+      },
+    });
+
+    expect(warnings.map((warning) => warning.code)).toContain("RUN_CONTEXT_MISSING");
+  });
+
+  it("不依赖环境与变量的旧记录，不应误报上下文不完整", () => {
+    const standaloneFlow: FlowDocument = {
+      ...sampleFlow(),
+      steps: [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "https://example.com/dashboard",
+        },
+      ],
+      variables: [],
+    };
+
+    const warnings = buildExecutionCompatibilityWarnings({
+      flowSnapshot: standaloneFlow,
+    });
+
+    expect(warnings).toEqual([]);
+  });
+
+  it("仅在说明字段出现字面变量占位符时，不应误报上下文不完整", () => {
+    const previewOnlyFlow: FlowDocument = {
+      ...sampleFlow(),
+      steps: [
+        {
+          id: "s1",
+          label: "说明 {{preview-only}}",
+          type: "click",
+          target: {
+            strategies: [{ kind: "role", role: "button", name: "保存" }],
+            hints: {
+              labelText: "{{hint-only}}",
+              textSample: "{{sample-only}}",
+            },
+          },
+        },
+      ],
+      variables: [],
+    };
+
+    const warnings = buildExecutionCompatibilityWarnings({
+      flowSnapshot: previewOnlyFlow,
+    });
+
+    expect(warnings).toEqual([]);
+  });
+
+  it("变量已有默认值时，缺少运行上下文也不应误报", () => {
+    const defaultVariableFlow: FlowDocument = {
+      ...sampleFlow(),
+      steps: [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "https://example.com/dashboard",
+        },
+        {
+          id: "s2",
+          type: "fill",
+          target: {
+            strategies: [{ kind: "css", selector: "#username" }],
+          },
+          value: "{{username}}",
+        },
+      ],
+      variables: [
+        {
+          name: "username",
+          type: "string",
+          required: false,
+          defaultValue: "alice",
+        },
+      ],
+    };
+
+    const warnings = buildExecutionCompatibilityWarnings({
+      flowSnapshot: defaultVariableFlow,
+    });
+
+    expect(warnings).toEqual([]);
+  });
+});
+
+describe("hasFragilityRelevantRunContext", () => {
+  it("不依赖环境与变量的 Flow，不应误报上下文不完整", () => {
+    const standaloneFlow: FlowDocument = {
+      ...sampleFlow(),
+      steps: [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "https://example.com/dashboard",
+        },
+      ],
+      variables: [],
+    };
+
+    expect(
+      hasFragilityRelevantRunContext(
+        {
+          environmentName: "仅名称环境",
+        },
+        standaloneFlow,
+      ),
+    ).toBe(true);
+  });
+
+  it("Flow 不依赖环境与变量时，即使 runContext 缺失也视为上下文充分", () => {
+    const standaloneFlow: FlowDocument = {
+      ...sampleFlow(),
+      steps: [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "https://example.com/dashboard",
+        },
+      ],
+      variables: [],
+    };
+
+    expect(hasFragilityRelevantRunContext(undefined, standaloneFlow)).toBe(true);
   });
 });

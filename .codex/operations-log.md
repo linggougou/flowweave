@@ -1123,3 +1123,164 @@
   - 执行记录现在同时持久化 `runContext` 与执行当时的 Flow 快照。
   - 历史执行页的步骤标签与 fragility 会优先绑定执行时状态，避免被当前 Flow 后续编辑污染。
   - 二次只读评审已确认“未发现阻塞级问题”；剩余边界仅是旧记录若没有 `flowSnapshot`，仍会回退到当前 Flow。
+
+## 2026-06-06 续跑记录 - 旧历史执行兼容提示
+
+- 时间：2026-06-06 19:32:00 CST
+- 任务目标：在不改动 runtime 与知识库主链路的前提下，补齐 Studio 对旧历史执行记录的兼容提示，避免用户把“当前 Flow 回退”或“缺失运行上下文”的退化结果误解成完整历史复原。
+- 所用技能：
+  - `using-superpowers`
+  - `subagent-driven-development`
+  - `verification-before-completion`
+  - `brainstorming`
+    - 本轮不发散新产品设计，直接沿用现有真实页面稳定性路线与已批准设计，只做主线内的兼容补齐。
+- 工具与环境说明：
+  - 当前环境未提供 `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code`。
+  - 本轮继续使用仓库文档、现有实现、CodeGraph 替代性检索与本地 Node 20 验证。
+- 上下文检索结果：
+  - 已分析相似实现：
+    - `apps/studio/src/App.tsx`
+    - `apps/studio/src/FragilityNotice.tsx`
+    - `apps/studio/src/DiagnosticInspector.tsx`
+    - `apps/studio/src/FlowEmptyGuide.tsx`
+  - 已生成上下文摘要：
+    - `.codex/context-summary-historical-execution-compatibility.md`
+
+## 编码前检查 - 旧历史执行兼容提示
+
+时间：2026-06-06 19:32:00 CST
+
+□ 已查阅上下文摘要文件：`.codex/context-summary-historical-execution-compatibility.md`
+□ 将使用以下可复用组件：
+- `StudioExecution`：现有执行页唯一数据源
+- `execution-fragility.ts`：历史执行共享判断逻辑落点
+- `FragilityNotice` / `DiagnosticInspector`：执行页提示信息层级与文案模式参考
+□ 将遵循命名约定：共享判断逻辑放 `apps/studio/src/shared/`，展示组件保持轻量
+□ 将遵循代码风格：TypeScript strict、中文文案、单一职责、小步 TDD
+□ 确认不重复造轮子，证明：已检查执行页、提示组件和诊断组件，当前仓库没有针对旧执行兼容边界的现成提示实现
+
+## 单 agent 串行执行说明 - 旧历史执行兼容提示
+
+- 时间：2026-06-06 19:32:00 CST
+- 本轮改动将集中在：
+  - `apps/studio/src/App.tsx`
+  - `apps/studio/src/shared/*`
+  - 可能新增一个小型提示组件与样式
+- 不并行派发原因：
+  - 改动写入区域高度重叠，若拆子代理会在同一执行页装配点、同一 DTO 判断逻辑与同一 CSS 区域产生高概率冲突。
+  - 本轮目标更像“体验边界补齐”而非独立功能拆包，主代理本地串行闭环成本更低。
+- 补偿措施：
+  - 先写共享层红灯测试，再做最小实现，最后用 Node 20 跑局部与仓库级验证。
+
+## 实现完成 - 旧历史执行兼容提示
+
+- 时间：2026-06-06 19:39:07 CST
+- 实现范围：
+  - `apps/studio/src/shared/studio-api-types.ts`
+    - `StudioExecution` 新增 `flowSnapshot?: FlowDocument`
+    - 新增 `StudioExecutionCompatibilityWarning`
+  - `apps/studio/src/shared/execution-fragility.ts`
+    - 新增 `buildExecutionCompatibilityWarnings()`
+    - 统一判断：
+      - 缺少 `flowSnapshot` 时提示“当前 Flow 回退”
+      - 缺少 `runContext` 时提示“环境 / 变量上下文不完整”
+  - `apps/studio/src/shared/execution-fragility.test.ts`
+    - 新增 3 组兼容提示回归，当前总计 `7` 条测试
+  - `apps/studio/electron/services.ts` / `apps/studio/src/studio-client.ts`
+    - 把 `stored.flowSnapshot` 透传到 `StudioExecution`
+  - `apps/studio/src/ExecutionCompatibilityNotice.tsx`
+    - 新增旧记录提示组件
+  - `apps/studio/src/App.tsx`
+    - 执行页在 `FragilityNotice` 前渲染兼容提示
+  - `apps/studio/src/styles.css`
+    - 新增兼容提示样式，延续现有 notice 视觉层级
+
+## 编码后声明 - 旧历史执行兼容提示
+
+- 时间：2026-06-06 19:39:07 CST
+- 复用了以下既有组件与模式：
+  - `resolveExecutionFlow()`：继续作为“快照优先 / 当前 Flow 回退”的唯一规则入口
+  - `FragilityNotice`：复用现有执行页提示层级，而不是新开 tab 或新弹窗
+  - `DiagnosticInspector` / `FlowEmptyGuide`：复用“解释能力边界”的文案风格
+- 遵循的项目约定：
+  - 共享判断逻辑留在 `apps/studio/src/shared/`
+  - 展示逻辑留在 `apps/studio/src/`
+  - 所有文案保持简体中文，标识符沿用英文
+- 未重复造轮子的证明：
+  - 已检查执行页、fragility 提示和诊断面板，仓库内此前没有专门解释旧执行兼容边界的提示实现。
+
+## 本轮验证结果 - 旧历史执行兼容提示
+
+- 时间：2026-06-06 19:39:07 CST
+- Node 基线：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH`
+- 定向验证：
+  - `pnpm --filter @flowweave/app-studio test -- execution-fragility`
+    - 结果：通过，`7/7`
+  - `pnpm --filter @flowweave/app-studio typecheck`
+    - 结果：通过
+  - `pnpm --filter @flowweave/app-studio build`
+    - 结果：通过
+- 仓库级统一验收：
+  - `pnpm smoke`
+    - 结果：通过
+    - 内含：
+      - `pnpm typecheck`
+      - `pnpm test`
+      - `pnpm build`
+      - `pnpm e2e:login`
+  - `e2e:login`
+    - 项目 ID：`a70cd21c-234e-4f6c-b67a-0521b52dda8d`
+    - 执行 ID：`9a8f8a6f-9ab2-4a1a-a441-3b9f753ad420`
+    - `4` 个步骤全部 `success`
+
+## 复核补修 - 旧历史执行兼容提示
+
+- 时间：2026-06-06 19:50:51 CST
+- 复核来源：
+  - 历史 reviewer 指出 1 个阻塞问题：
+    - `apps/studio/electron/services.ts` 中实时 `record` 未携带 `flowSnapshot`
+    - `getExecution()` 过早信任缓存，导致 Electron 新执行也可能被误判成“旧记录退化结果”
+  - 历史 reviewer 指出 1 个中风险问题：
+    - `RUN_CONTEXT_MISSING` 不能只按字段有无判断，必须结合 Flow 是否真实依赖 `baseUrl` / `variables`
+  - 本轮 reviewer 子代理 `019e9cba-18dd-7403-bf95-63d5fb3fe364` 又指出 1 个中风险问题：
+    - `apps/studio/src/shared/execution-fragility.ts` 通过 `JSON.stringify(flow)` 粗暴扫描 `{{...}}`，会把说明字段里的字面占位符也误判成变量依赖
+- 本轮补修动作：
+  - `apps/studio/electron/services.ts`
+    - `runFlow()` 返回并缓存的执行记录补齐 `flowSnapshot: flow`
+    - `getExecution()` 仅在缓存里已经具备 `flowSnapshot` 且运行上下文对当前 Flow 足够时才直接命中，否则继续从知识库重载
+  - `apps/studio/src/shared/execution-fragility.ts`
+    - `hasFragilityRelevantRunContext()` 改为先判断 Flow 是否真实需要环境 / 变量，再决定是否提示 `RUN_CONTEXT_MISSING`
+    - 进一步删除本地自研的 `JSON.stringify` 变量扫描，直接复用 `@flowweave/page-intelligence` 已验证的 `analyzeFlowFragility()` 规则判断：
+      - 是否真的需要 `baseUrl`
+      - 是否真的需要运行变量
+      - 是否应忽略说明字段中的字面 `{{...}}`
+      - 是否应尊重 Flow 变量默认值
+  - `apps/studio/src/shared/execution-fragility.test.ts`
+    - 兼容提示回归从 `7` 条补到 `13` 条
+    - 新增覆盖：
+      - 不依赖环境 / 变量的旧记录不应误报
+      - 说明字段中的字面 `{{...}}` 不应触发兼容提示
+      - 变量已有默认值时，缺少运行上下文不应误报
+- 本轮调试与回归记录：
+  - 红灯 1：
+    - `pnpm --filter @flowweave/app-studio test -- execution-fragility`
+    - 失败点：在“无快照且无上下文”场景下，新规则错误吞掉了 `RUN_CONTEXT_MISSING`
+    - 处理：保留“缺少 `flowSnapshot` 且完全没有 `runContext` 时双提示”的保守行为
+  - 红灯 2：
+    - `pnpm --filter @flowweave/app-studio test -- execution-fragility`
+    - 失败点：新增“默认变量不误报”用例仍带相对路径，实际还依赖 `baseUrl`
+    - 处理：把测试夹具改成绝对地址，只验证默认变量边界，不混入环境依赖
+- 复核后验证结果：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- execution-fragility`
+    - 结果：通过，`13/13`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio build`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+    - 结果：通过
+    - `e2e:login`
+      - 项目 ID：`4d452a02-1606-4ba3-888e-e126d0607367`
+      - 执行 ID：`3bcd83c9-b739-497b-a8dd-e81518ba8544`
+      - `4` 个步骤全部 `success`

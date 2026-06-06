@@ -28,6 +28,7 @@ import type {
 } from "../src/shared/studio-api-types.js";
 import {
   buildExecutionFragilityIssues,
+  hasFragilityRelevantRunContext,
   resolveExecutionFlow,
 } from "../src/shared/execution-fragility.js";
 import {
@@ -402,6 +403,7 @@ export async function runFlow(
     startedAt,
     finishedAt: new Date().toISOString(),
     environmentName: runContext.environmentName,
+    flowSnapshot: flow,
     runContext,
     fragilityIssues: buildExecutionFragilityIssues(flow, runContext),
   };
@@ -439,6 +441,7 @@ function fromKnowledgeExecution(
     startedAt,
     finishedAt: stored.finishedAt,
     environmentName: runContext?.environmentName,
+    flowSnapshot: stored.flowSnapshot,
     runContext,
     steps: stored.steps.map((step) => {
       const mappedStep: ExecutionStepLog = {
@@ -465,7 +468,11 @@ function fromKnowledgeExecution(
 
 export async function getExecution(executionId: string): Promise<StudioExecution | null> {
   const cached = executions.get(executionId);
-  if (cached) {
+  if (
+    cached &&
+    cached.flowSnapshot &&
+    hasFragilityRelevantRunContext(cached.runContext, cached.flowSnapshot)
+  ) {
     return cached;
   }
   const stored = await apiGetExecution(executionId);

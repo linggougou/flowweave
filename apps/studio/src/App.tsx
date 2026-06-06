@@ -9,8 +9,10 @@ import {
   type StepLogRow,
 } from "@flowweave/ui";
 import { DiagnosticInspector } from "./DiagnosticInspector.js";
+import { ExecutionCompatibilityNotice } from "./ExecutionCompatibilityNotice.js";
 import { FragilityNotice } from "./FragilityNotice.js";
 import { flowStepsToRows } from "./flow-step-format.js";
+import { buildExecutionCompatibilityWarnings } from "./shared/execution-fragility.js";
 import type {
   ExecutionStepLog,
   ExecutionSummary,
@@ -500,6 +502,12 @@ export function App() {
   const diagnosticSteps: ExecutionStepLog[] = (execution?.steps ?? []).filter(
     (step) => step.diagnosticPath || step.pageSnapshotPath || step.pageSnapshot,
   );
+  const executionCompatibilityWarnings = execution
+    ? buildExecutionCompatibilityWarnings({
+        flowSnapshot: execution.flowSnapshot,
+        runContext: execution.runContext,
+      })
+    : [];
 
   const openLocalPath = (filePath: string) => {
     void getStudioApi()
@@ -982,6 +990,7 @@ export function App() {
         ) : null}
         {tab === "executions" ? (
           <>
+            <ExecutionCompatibilityNotice warnings={executionCompatibilityWarnings} />
             {execution?.fragilityIssues && execution.fragilityIssues.length > 0 ? (
               <FragilityNotice warnings={execution.fragilityIssues} />
             ) : null}

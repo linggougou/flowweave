@@ -154,6 +154,138 @@
 - 综合评分：97
 - 建议：通过
 
+## 2026-06-06 旧历史执行兼容提示验收
+
+### 验证范围
+
+- Studio 执行页是否已经明确提示“旧记录缺少 `flowSnapshot` / `runContext` 时的退化行为”，避免用户把回退结果误解成完整历史复原。
+- Electron 与 HTTP fallback 两条读取链路是否都把 `flowSnapshot` 透传到 `StudioExecution`。
+- 新增共享判断逻辑是否已覆盖：
+  - 缺少 Flow 快照
+  - 缺少运行上下文
+  - 上下文完整时不误报
+- 当前主工作区是否在 `Node v20.19.6` 下通过定向验证与仓库级 `pnpm smoke`。
+
+### 验证结果
+
+1. 兼容提示能力已落地。
+   - `apps/studio/src/shared/studio-api-types.ts` 为 `StudioExecution` 增加 `flowSnapshot?: FlowDocument`，并新增 `StudioExecutionCompatibilityWarning`。
+   - `apps/studio/src/shared/execution-fragility.ts` 新增 `buildExecutionCompatibilityWarnings()`，统一解释旧记录边界：
+     - `FLOW_SNAPSHOT_MISSING`
+     - `RUN_CONTEXT_MISSING`
+   - `apps/studio/src/ExecutionCompatibilityNotice.tsx` 新增轻量提示组件。
+   - `apps/studio/src/App.tsx` 在执行页中先展示兼容提示，再展示 `FragilityNotice` 与步骤日志。
+2. Electron 与 HTTP fallback 链路一致性验证通过。
+   - `apps/studio/electron/services.ts` 与 `apps/studio/src/studio-client.ts` 都已把 `stored.flowSnapshot` 透传到 `StudioExecution`。
+   - 因此本地 Electron 模式与 HTTP fallback 都会基于同一兼容判断规则渲染提示。
+3. 定向回归验证通过。
+   - `apps/studio/src/shared/execution-fragility.test.ts`
+     - 总计 `7/7` 通过
+     - 新增覆盖：
+       - 缺少快照与上下文时提示两类边界
+       - 仅缺少上下文时只提示上下文不完整
+       - 快照与上下文完整时不再提示
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+     - 结果：通过
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio build`
+     - 结果：通过
+4. 仓库级统一验收通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+     - 结果：通过
+     - 内部已完整跑过：
+       - `pnpm typecheck`
+       - `pnpm test`
+       - `pnpm build`
+       - `pnpm e2e:login`
+   - `e2e:login`
+     - 项目 ID：`a70cd21c-234e-4f6c-b67a-0521b52dda8d`
+     - 执行 ID：`9a8f8a6f-9ab2-4a1a-a441-3b9f753ad420`
+     - 共 `4` 个步骤，全部 `success`
+
+### Findings
+
+1. 暂未发现本轮实现的阻塞级问题。
+2. 残余边界：升级前生成、且未保存 `flowSnapshot` 的旧执行记录，仍然只能回退到当前 Flow。
+   - 本轮已把这一点显式暴露给用户，不再隐性误导。
+3. 残余边界：`runContext` 缺失的旧记录仍无法补出真实环境与变量输入。
+   - 本轮同样通过 UI 提示说明这是“数据缺失”，而不是“诊断确认无风险”。
+
+### 综合结论
+
+- 代码质量评分：97
+- 测试覆盖评分：95
+- 规范遵循评分：98
+- 战略匹配评分：96
+- 风险评估评分：95
+- 综合评分：96
+- 建议：通过
+
+## 2026-06-06 旧历史执行兼容提示验收（复核补修）
+
+### 验证范围
+
+- 历史 reviewer 已指出的阻塞问题是否彻底修复：
+  - Electron 实时执行记录是否携带 `flowSnapshot`
+  - `getExecution()` 是否避免盲信不完整缓存
+- `RUN_CONTEXT_MISSING` 是否已经按 Flow 的真实依赖判断，而不是继续把无关记录误标成“上下文不完整”。
+- 兼容提示是否已经复用 `@flowweave/page-intelligence` 的 fragility 规则，避免：
+  - 说明字段里的字面 `{{...}}` 被误判成变量依赖
+  - 已有默认值的变量被误判成“缺失运行输入”
+- 当前主工作区是否在 `Node v20.19.6` 下通过最新定向验证与整仓 `pnpm smoke`。
+
+### 验证结果
+
+1. 历史阻塞问题已修复并复验通过。
+   - `apps/studio/electron/services.ts` 的 `runFlow()` 现在会把 `flowSnapshot: flow` 写入实时执行记录。
+   - 同文件的 `getExecution()` 只在缓存已具备 `flowSnapshot` 且运行上下文对该 Flow 足够时直接命中，否则回退到知识库重载。
+   - 这消除了“新执行也被误判成旧记录退化结果”的错误路径。
+2. 运行上下文充分性判断已收敛到真实 fragility 规则。
+   - `apps/studio/src/shared/execution-fragility.ts` 不再通过 `JSON.stringify(flow)` 粗扫变量占位符。
+   - 现在改为直接复用 `analyzeFlowFragility()` 判断：
+     - 是否真的需要 `baseUrl`
+     - 是否真的需要运行变量
+     - 是否应忽略说明字段中的字面 `{{...}}`
+     - 是否应尊重 Flow 变量默认值
+3. 新增回归覆盖通过。
+   - `apps/studio/src/shared/execution-fragility.test.ts`
+     - 最新共 `13/13` 通过
+     - 关键新增覆盖：
+       - 不依赖环境 / 变量的旧记录不应误报
+       - 说明字段与 `target.hints` 中的字面 `{{...}}` 不应触发兼容提示
+       - 变量已有默认值时，缺少运行上下文不应误报
+4. 最新 Node 20 验证通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- execution-fragility`
+     - 结果：通过，`13/13`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+     - 结果：通过
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio build`
+     - 结果：通过
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+     - 结果：通过
+     - `e2e:login`
+       - 项目 ID：`4d452a02-1606-4ba3-888e-e126d0607367`
+       - 执行 ID：`3bcd83c9-b739-497b-a8dd-e81518ba8544`
+       - 共 `4` 个步骤，全部 `success`
+
+### Findings
+
+1. 当前未发现阻塞级问题。
+   - 兼容提示已经覆盖 reviewer 指出的三类核心回归：实时记录缺快照、缓存误命中、变量依赖误扫过宽。
+2. 残余边界：升级前生成、且未保存 `flowSnapshot` 的旧执行记录，仍然只能回退到当前 Flow。
+   - 本轮已经通过显式 UI 提示把这一边界暴露出来，不再隐性误导。
+3. 残余风险：Electron 缓存命中与 HTTP fallback 的一致性目前主要由共享纯函数测试间接覆盖。
+   - 当前链路已通过最新整仓 `smoke`，但如果后续再改 DTO 透传，仍建议补一条更贴近服务层的回归测试。
+
+### 综合结论
+
+- 代码质量评分：98
+- 测试覆盖评分：97
+- 规范遵循评分：98
+- 战略匹配评分：97
+- 风险评估评分：95
+- 综合评分：97
+- 建议：通过
+
 1. 目录树检查通过。
    - 已确认存在 `apps/`、`packages/`、`docs/superpowers/specs/`、`docs/superpowers/plans/`、`examples/`、`scripts/` 与 `.codex/`。
 2. Git 初始化检查通过。

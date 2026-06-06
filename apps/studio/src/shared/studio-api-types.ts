@@ -11,6 +11,12 @@ export type StudioExecutionRunContext = {
   variables?: Record<string, RunFlowVariableValue>;
 };
 
+export type StudioExecutionCompatibilityWarning = {
+  code: "FLOW_SNAPSHOT_MISSING" | "RUN_CONTEXT_MISSING";
+  severity: "warning";
+  message: string;
+};
+
 export type StudioProjectEnvironment = {
   name: string;
   baseUrl: string;
@@ -77,6 +83,7 @@ export type StudioExecution = {
   startedAt: string;
   finishedAt?: string;
   environmentName?: string;
+  flowSnapshot?: FlowDocument;
   runContext?: StudioExecutionRunContext;
   fragilityIssues?: FragilityIssue[];
 };
