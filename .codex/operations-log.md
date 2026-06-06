@@ -2115,3 +2115,67 @@
 - 结论：
   - Studio 剩余中风险已收口，扩展 upload 占位符合同测试边界也已稳定。
   - 当前没有同一阻塞条件连续 3 次卡住的情况，无需标记为阻塞。
+
+## 2026-06-06 Wave 4 下一轮规划启动
+
+- 时间：2026-06-06 22:06:36 CST
+- 任务目标：在上一轮 5 轨并行已全部合并并推送后，继续推进真实页面稳定性增强的下一波自主规划与并行开发。
+- 当前现场：
+  - 协调分支：`codex/real-page-stability-program`
+  - 当前 HEAD：`9ab8388`
+  - 根工作树状态：干净
+  - 历史 worktree 仍保留，作为上一轮证据与可追溯现场，不在本轮开始时直接删除。
+- 工具与替代流程：
+  - `sequential-thinking`：当前环境不可用；继续采用结构化分解 + `.codex` 留痕替代。
+  - `desktop-commander` / `context7` / `github.search_code`：当前环境不可用；本轮继续使用 `rg`、`sed`、CodeGraph 与现有测试做等效分析。
+- 本轮已完成的上下文检索：
+  - `docs/superpowers/plans/2026-06-06-real-page-stability-next-wave-plan.md`
+  - `docs/superpowers/plans/2026-06-06-real-page-stability-autonomous-wave-orchestration.md`
+  - `.codex/context-summary-real-page-stability-program.md`
+  - `examples/real-page-smoke.ts`
+  - `examples/run-real-page-smoke.ts`
+  - `docs/guides/fixture-matrix.md`
+  - `apps/extension/entrypoints/content.ts`
+  - `packages/recorder/src/target-from-dom.ts`
+  - `apps/studio/src/DiagnosticInspector.tsx`
+- 新识别出的真实缺口：
+  1. **Recorder 真实录制缺口**
+     - `packages/recorder/src/target-from-dom.ts` 的 `shouldRecordFill()` 只接受 `input/textarea/select`。
+     - `apps/extension/entrypoints/content.ts` 的 `readFillValue()` 也不会读取 `contenteditable`。
+     - 结论：当前虽然已有 `contenteditable-editor.html` 的 hand-written 回放基准，但真实录制端仍录不出这类页面内容。
+  2. **Benchmarks P6 缺口**
+     - `docs/guides/fixture-matrix.md` 仍保留未落地的后续建议：
+       - 会话恢复失败后二次重试成功
+       - 跨页批量选择
+       - 抽屉二次保存校验
+       - 失败类型长期基线
+     - 结论：当前 `p5` 已稳定，但还没有覆盖更接近后台异常路径与复杂状态机的场景。
+  3. **Studio 修复建议层缺口**
+     - `apps/studio/src/DiagnosticInspector.tsx` 当前只有“优先排查”单条提示，没有结构化动作建议。
+     - 结论：用户仍需自己把诊断现象翻译成修复动作，排障路径还不够短。
+- 编码前检查 - Wave 4：
+  - 已补上下文摘要：`.codex/context-summary-real-page-stability-wave4.md`
+  - 已生成设计文档：`docs/superpowers/specs/2026-06-06-real-page-stability-wave4-design.md`
+  - 已生成实施计划：`docs/superpowers/plans/2026-06-06-real-page-stability-wave4-plan.md`
+  - 已生成并行编排板：`docs/superpowers/plans/2026-06-06-real-page-stability-wave4-orchestration.md`
+  - 计划沿用 worktree + 子代理方式推进，优先启动 3 条低耦合轨道：
+    - Recorder Contenteditable Contract
+    - Studio Repair Suggestions
+    - Benchmarks P6
+- 结论：
+  - 本轮已完成“下一轮规划 -> 文档落盘 -> 并行轨道定义”，接下来进入 worktree 创建与子代理分派阶段。
+
+## Wave 4 规划基线复验
+
+- 时间：2026-06-06 22:13:48 CST
+- 目的：在正式切出 Wave 4 三条新轨道前，用 Node 20 再确认协调分支当前基线可作为安全起跑点。
+- Node 20 定向验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test`
+    - 结果：通过，`38/38`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
+    - 结果：通过，`31/31`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- real-page-matrix.test.ts`
+    - 结果：通过，`1/1`
+- 结论：
+  - 协调分支当前状态适合作为 Wave 4 新 worktree 的共同基线。
+  - 当前没有新的阻塞；下一步进入“提交规划基线 -> 创建 worktree -> 派发子代理”。
