@@ -2134,3 +2134,68 @@
 - 风险评估评分：95
 - 综合评分：98
 - 建议：通过
+
+## 2026-06-07 Target Disambiguation 规划门禁验证
+
+### 验证范围
+
+- 下一轮“真实页面歧义目标消解”设计是否基于当前真实代码与测试基线，而不是凭空假设。
+- 相关核心链路在 `Node v20.19.6` 下是否仍保持通过：
+  - Recorder target 采集与 normalize
+  - Runtime playback 与真实页面矩阵
+  - Studio 诊断建议
+- 新设计是否聚焦真实使用中仍高频的剩余缺口，而不是重复建设已完成能力。
+
+### 验证结果
+
+1. 上下文证据充分。
+   - 已分析至少 5 处现有实现：
+     - `packages/recorder/src/target-from-dom.ts`
+     - `packages/recorder/src/normalize.ts`
+     - `packages/runtime/src/playwright-runner.ts`
+     - `packages/page-intelligence/src/fragility.ts`
+     - `apps/studio/src/shared/repair-suggestions.ts`
+   - 结论一致：
+     - Recorder 已采集 target hints
+     - normalize 已保真写入 Target
+     - runtime 成功路径尚未消费 hints 做歧义收窄
+     - Studio 目前主要在失败后解释，而不是帮助减少误命中
+2. Node 20 规划门禁验证通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test -- target-from-dom.test.ts normalize.test.ts step-filter.test.ts`
+     - 结果：通过，`45/45`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts real-page-matrix.test.ts`
+     - 结果：通过，`20/20`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- DiagnosticInspector.test.tsx src/shared/repair-suggestions.test.ts`
+     - 结果：通过，`5/5`
+3. 下一轮主题选择合理。
+   - 当前矩阵与 recorded replay 已覆盖：
+     - upload
+     - spa-route
+     - filterable-list
+     - contenteditable
+     - session-expired-retry
+     - bulk-cross-page-selection
+   - 但尚未明确覆盖：
+     - 重复按钮
+     - 重复文案
+     - 列表行作用域
+   - 因此把下一轮主目标定义为 `Target Disambiguation`，与用户“真实页面录制后执行不稳”的剩余风险最贴近。
+
+### Findings
+
+1. 未发现阻塞级问题。
+   - 当前主线足够稳定，可以安全进入新一轮并行设计与实施。
+2. 残余风险：runtime 候选打分若设计过重，可能拉高单步耗时。
+   - 需要在实施阶段保留 `matchedCount === 1` 快路径。
+3. 残余风险：若只改 runtime、不补 Recorder 作用域线索，收益会受限。
+   - 因此本轮采用 Foundation + Recorder + Runtime + Studio + Benchmarks 的联动方案是合理的。
+
+### 综合结论
+
+- 代码质量评分：97
+- 测试覆盖评分：96
+- 规范遵循评分：99
+- 战略匹配评分：98
+- 风险评估评分：95
+- 综合评分：97
+- 建议：通过

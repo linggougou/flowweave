@@ -3030,3 +3030,60 @@
   - 当前协调分支在最终审计后仍保持 `Node 20` 全量验收通过。
   - 未复现新的真实页面回归，也未触发连续三次同阻塞条件。
   - 下一步仅剩提交、推送与目标状态收口。
+
+## 2026-06-07 下一阶段问题聚焦：Target Disambiguation
+
+- 时间：2026-06-07 00:43:00 CST
+- 任务目标：在上一轮真实页面稳定性收口完成后，识别下一轮最值得投入的真实页面执行缺口，并产出新的设计 / 计划 / 编排输入。
+- 使用技能：
+  - `using-superpowers`
+  - `brainstorming`
+  - `writing-plans`
+- 工具与替代说明：
+  - 当前环境仍未提供 `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code`。
+  - 本轮继续使用仓库文档、CodeGraph、本地命令和结构化分析替代，并把替代流程留痕到 `.codex/`。
+- 本轮上下文依据：
+  - `.codex/context-summary-target-disambiguation-wave.md`
+  - `packages/recorder/src/target-from-dom.ts`
+  - `packages/recorder/src/normalize.ts`
+  - `packages/runtime/src/playwright-runner.ts`
+  - `packages/page-intelligence/src/fragility.ts`
+  - `apps/studio/src/shared/repair-suggestions.ts`
+  - `docs/guides/fixture-matrix.md`
+- 关键观察：
+  - Recorder 已经采集 `nameAttr / placeholder / labelText / textSample` 等 hints。
+  - normalize 已经把这些 hints 保真写入 Flow Target。
+  - runtime 目前仍按 strategy 顺序取 `locator.first()`，并不会在成功路径消费 hints。
+  - Studio 已能对“多命中 / 不可见 / 缺失”给出修复建议，但这发生在失败之后。
+  - 现有真实页面矩阵尚未明确覆盖“重复按钮 / 重复文案 / 列表行作用域”类歧义定位场景。
+- 初步结论：
+  - 下一轮最有价值的主问题不是继续横向扩步骤类型，而是解决“多命中目标时如何稳定选对元素”。
+  - 推荐方向是推进 `Target Disambiguation`：补作用域线索、runtime 候选打分、歧义诊断和重复元素 fixture 基线。
+- Node 20 基线验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test -- target-from-dom.test.ts normalize.test.ts step-filter.test.ts`
+    - 结果：通过，`45/45`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts real-page-matrix.test.ts`
+    - 结果：通过，`20/20`
+    - 关键时长：
+      - `playwright-runner.test.ts`：`47.20s`
+      - `real-page-matrix.test.ts`：`26.395s`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- DiagnosticInspector.test.tsx src/shared/repair-suggestions.test.ts`
+    - 结果：通过，`5/5`
+- 编码前检查：
+  - 已查阅上下文摘要文件：`.codex/context-summary-target-disambiguation-wave.md`
+  - 计划复用的既有组件：
+    - `target-from-dom.ts`：录制 hints / strategy 抽取
+    - `normalize.ts`：Target 协议保真
+    - `playwright-runner.ts`：定位、等待、诊断主链
+    - `repair-suggestions.ts`：歧义失败修复建议
+    - `fixture-matrix.md`：真实页面矩阵分层策略
+  - 将遵循命名约定：继续使用 `Target.hints` 风格承载说明性字段；文档与日志保持简体中文。
+  - 将遵循代码风格：先做协议与回归基线设计，再决定并行拆轨，不顺手扩大到 AI、自愈或远端真实站点 smoke。
+  - 确认不重复造轮子：本轮优先增强现有 target / diagnostic / fixture 体系，不新建平行定位框架。
+- 本轮新增规划文档：
+  - `docs/superpowers/specs/2026-06-07-real-page-target-disambiguation-design.md`
+  - `docs/superpowers/plans/2026-06-07-real-page-target-disambiguation-plan.md`
+  - `docs/superpowers/plans/2026-06-07-real-page-target-disambiguation-orchestration.md`
+- 规划结论：
+  - 推荐采用“Foundation + Recorder Scope Hints + Runtime Disambiguation + Studio Ambiguity Insight + Benchmarks P7”的并行方案。
+  - 用户此前已明确授权“无需指示、全权自主规划任务、持续开发”，因此本轮设计与计划按自治流程直接落盘，不等待额外人工审批。
