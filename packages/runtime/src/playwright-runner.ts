@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 import type { FlowDocument, NormalizedStep, Target } from "@flowweave/flow-dsl";
 import { buildPageSnapshotSummary } from "@flowweave/page-intelligence";
@@ -13,6 +13,7 @@ import type {
   ExecutionResult,
   ExecutionVariables,
   RuntimeErrorDiagnostic,
+  RuntimeCauseCategory,
   RuntimePageSnapshot,
   StepDiagnostic,
   StepLog,
@@ -62,6 +63,18 @@ type CandidateResolution =
 const MIN_DISAMBIGUATION_SCORE = 4;
 const SUGGEST_READY_TIMEOUT_MS = 1_200;
 const NAVIGATION_PRESS_KEYS = new Set(["ArrowDown", "ArrowUp"]);
+const ACTION_STATE_RESET_CAUSES = new Set([
+  "fill-value-reset",
+  "select-value-reset",
+  "checked-state-reset",
+  "upload-files-reset",
+]);
+
+type RuntimeRecoveryMetadata = {
+  runtimeCauseCategory?: RuntimeCauseCategory;
+  recoveryTried?: boolean;
+  recoveredAttemptCount?: number;
+};
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -99,6 +112,130 @@ function getErrorCause(error: unknown): string | undefined {
     return cause.message;
   }
   return cause == null ? undefined : String(cause);
+}
+
+function getErrorDetails(error: unknown): Record<string, unknown> | undefined {
+  if (!(error instanceof FlowWeaveError) || !error.details || typeof error.details !== "object") {
+    return undefined;
+  }
+
+  return error.details as Record<string, unknown>;
+}
+
+function isRuntimeCauseCategory(value: unknown): value is RuntimeCauseCategory {
+  return (
+    value === "detached" ||
+    value === "intercepted" ||
+    value === "not-ready" ||
+    value === "not-editable" ||
+    value === "unknown"
+  );
+}
+
+function getRuntimeCauseCategoryFromMessage(message: string): RuntimeCauseCategory {
+  const normalized = message.toLowerCase();
+
+  if (
+    normalized.includes("not attached") ||
+    normalized.includes("detached") ||
+    normalized.includes("elementhandle is disposed")
+  ) {
+    return "detached";
+  }
+
+  if (
+    normalized.includes("intercepts pointer events") ||
+    normalized.includes("another element") ||
+    normalized.includes("would receive the click") ||
+    normalized.includes("element is obscured")
+  ) {
+    return "intercepted";
+  }
+
+  if (
+    normalized.includes("not editable") ||
+    normalized.includes("not an <input") ||
+    normalized.includes("not a <input") ||
+    normalized.includes("input type=file") ||
+    normalized.includes("element is not an input")
+  ) {
+    return "not-editable";
+  }
+
+  if (
+    normalized.includes("not visible") ||
+    normalized.includes("not enabled") ||
+    normalized.includes("outside of the viewport") ||
+    normalized.includes("did not become stable")
+  ) {
+    return "not-ready";
+  }
+
+  return "unknown";
+}
+
+function getRuntimeRecoveryMetadata(error: unknown): RuntimeRecoveryMetadata {
+  const details = getErrorDetails(error);
+  const runtimeCauseCategory = isRuntimeCauseCategory(details?.runtimeCauseCategory)
+    ? details.runtimeCauseCategory
+    : undefined;
+  const recoveryTried =
+    typeof details?.recoveryTried === "boolean" ? details.recoveryTried : undefined;
+  const recoveredAttemptCount =
+    typeof details?.recoveredAttemptCount === "number" ? details.recoveredAttemptCount : undefined;
+
+  return {
+    runtimeCauseCategory,
+    recoveryTried,
+    recoveredAttemptCount,
+  };
+}
+
+function resolveRuntimeCauseCategory(error: unknown): RuntimeCauseCategory | undefined {
+  const metadata = getRuntimeRecoveryMetadata(error);
+  if (metadata.runtimeCauseCategory) {
+    return metadata.runtimeCauseCategory;
+  }
+
+  const cause = getErrorCause(error);
+  if (cause && ACTION_STATE_RESET_CAUSES.has(cause)) {
+    return undefined;
+  }
+
+  return getRuntimeCauseCategoryFromMessage(formatUnknownError(error));
+}
+
+function isRecoverableRuntimeCause(
+  runtimeCauseCategory: RuntimeCauseCategory | undefined,
+): runtimeCauseCategory is Exclude<RuntimeCauseCategory, "unknown"> {
+  return (
+    runtimeCauseCategory === "detached" ||
+    runtimeCauseCategory === "intercepted" ||
+    runtimeCauseCategory === "not-ready" ||
+    runtimeCauseCategory === "not-editable"
+  );
+}
+
+function buildRuntimeActionError(
+  error: unknown,
+  metadata: RuntimeRecoveryMetadata,
+): FlowWeaveError {
+  const details: Record<string, unknown> = {};
+  const cause = getErrorCause(error);
+  if (typeof cause === "string" && cause.length > 0) {
+    details.cause = cause;
+  }
+  if (metadata.runtimeCauseCategory) {
+    details.runtimeCauseCategory = metadata.runtimeCauseCategory;
+  }
+  details.recoveryTried = metadata.recoveryTried ?? false;
+  details.recoveredAttemptCount = metadata.recoveredAttemptCount ?? 0;
+
+  return new FlowWeaveError(
+    getErrorCode(error) ?? "RUNTIME_STEP_FAILED",
+    formatUnknownError(error),
+    details,
+  );
 }
 
 async function captureDiagnosticPageMeta(
@@ -1174,6 +1311,45 @@ async function verifyLocatorSelectedValues(
   );
 }
 
+async function verifyLocatorUploadedFiles(
+  locator: Locator,
+  expectedFiles: string[],
+): Promise<boolean> {
+  const expectedNames = expectedFiles.map((filePath) => basename(filePath));
+  const actualNames = await locator
+    .evaluate((element) => {
+      if (!(element instanceof HTMLInputElement) || element.type !== "file") {
+        return [];
+      }
+
+      return Array.from(element.files ?? []).map((file) => file.name);
+    })
+    .catch(() => []);
+
+  return (
+    actualNames.length === expectedNames.length &&
+    actualNames.every((value, index) => value === expectedNames[index])
+  );
+}
+
+async function prepareLocatorRecovery(
+  page: Page,
+  locator: Locator,
+  runtimeCauseCategory: Exclude<RuntimeCauseCategory, "unknown">,
+  timeoutMs: number,
+): Promise<void> {
+  await locator.scrollIntoViewIfNeeded().catch(() => undefined);
+  await waitForBrowserFrame(page);
+
+  if (
+    runtimeCauseCategory === "intercepted" ||
+    runtimeCauseCategory === "not-ready" ||
+    runtimeCauseCategory === "not-editable"
+  ) {
+    await waitForPageSettled(page, Math.min(timeoutMs, 1_500)).catch(() => undefined);
+  }
+}
+
 async function performRecoveredLocatorAction(
   page: Page,
   target: Target,
@@ -1181,17 +1357,37 @@ async function performRecoveredLocatorAction(
   options: {
     desiredState?: TargetWaitState;
     action: (locator: Locator, attemptIndex: number) => Promise<void>;
-    verify: (locator: Locator) => Promise<boolean>;
-    failureMessage: string;
-    failureCause: string;
+    verify?: (locator: Locator) => Promise<boolean>;
+    failureMessage?: string;
+    failureCause?: string;
   },
 ): Promise<Locator> {
   const desiredState = options.desiredState ?? "visible";
   let locator = await resolveTarget(page, target, timeoutMs, desiredState);
+  let recoveryTried = false;
+  let recoveredAttemptCount = 0;
 
   for (let attemptIndex = 0; attemptIndex < 2; attemptIndex += 1) {
-    await options.action(locator, attemptIndex);
-    if (await options.verify(locator)) {
+    try {
+      await options.action(locator, attemptIndex);
+    } catch (error) {
+      const runtimeCauseCategory = resolveRuntimeCauseCategory(error);
+      if (attemptIndex === 0 && isRecoverableRuntimeCause(runtimeCauseCategory)) {
+        recoveryTried = true;
+        recoveredAttemptCount += 1;
+        await prepareLocatorRecovery(page, locator, runtimeCauseCategory, timeoutMs);
+        locator = await resolveTarget(page, target, timeoutMs, desiredState);
+        continue;
+      }
+
+      throw buildRuntimeActionError(error, {
+        runtimeCauseCategory,
+        recoveryTried,
+        recoveredAttemptCount,
+      });
+    }
+
+    if (!options.verify || (await options.verify(locator))) {
       return locator;
     }
 
@@ -1199,11 +1395,15 @@ async function performRecoveredLocatorAction(
       break;
     }
 
+    recoveryTried = true;
+    recoveredAttemptCount += 1;
     locator = await resolveTarget(page, target, timeoutMs, desiredState);
   }
 
-  throw new FlowWeaveError("RUNTIME_STEP_FAILED", options.failureMessage, {
-    cause: options.failureCause,
+  throw new FlowWeaveError("RUNTIME_STEP_FAILED", options.failureMessage ?? "运行时动作恢复失败", {
+    ...(options.failureCause ? { cause: options.failureCause } : {}),
+    recoveryTried,
+    recoveredAttemptCount,
   });
 }
 
@@ -1414,6 +1614,7 @@ async function buildRuntimeErrorDiagnostic(
   error: unknown,
 ): Promise<RuntimeErrorDiagnostic> {
   const pageMeta = await captureDiagnosticPageMeta(page);
+  const runtimeRecoveryMetadata = getRuntimeRecoveryMetadata(error);
   return {
     kind: "runtime-error",
     stepId: step.id,
@@ -1422,6 +1623,10 @@ async function buildRuntimeErrorDiagnostic(
     message,
     errorCode: getErrorCode(error),
     cause: getErrorCause(error),
+    runtimeCauseCategory:
+      runtimeRecoveryMetadata.runtimeCauseCategory ?? resolveRuntimeCauseCategory(error),
+    recoveryTried: runtimeRecoveryMetadata.recoveryTried ?? false,
+    recoveredAttemptCount: runtimeRecoveryMetadata.recoveredAttemptCount ?? 0,
     ...pageMeta,
   };
 }
@@ -1454,11 +1659,14 @@ async function runStep(
         }
         break;
       case "click": {
-        const locator = await resolveTarget(page, resolvedStep.target, timeoutMs);
-        await locator.click({
-          button: resolvedStep.button ?? "left",
+        await performRecoveredLocatorAction(page, resolvedStep.target, timeoutMs, {
+          action: async (locator) => {
+            await locator.click({
+              button: resolvedStep.button ?? "left",
+            });
+            await waitForPageSettled(page, Math.min(timeoutMs, 15_000));
+          },
         });
-        await waitForPageSettled(page, Math.min(timeoutMs, 15_000));
         break;
       }
       case "fill": {
@@ -1509,21 +1717,19 @@ async function runStep(
       }
       case "press": {
         if (resolvedStep.target) {
-          const locator = await resolveTarget(page, resolvedStep.target, timeoutMs);
-          const suggestBaseline = NAVIGATION_PRESS_KEYS.has(resolvedStep.key)
-            ? await captureSuggestTargetSnapshot(locator)
-            : null;
-          await locator.press(resolvedStep.key);
-          await waitForBrowserFrame(page);
-          await waitForNavigationPressSettled(
-            page,
-            locator,
-            resolvedStep.key,
-            {
-              baseline: suggestBaseline,
-              timeoutMs: Math.min(timeoutMs, SUGGEST_READY_TIMEOUT_MS),
+          await performRecoveredLocatorAction(page, resolvedStep.target, timeoutMs, {
+            action: async (locator) => {
+              const suggestBaseline = NAVIGATION_PRESS_KEYS.has(resolvedStep.key)
+                ? await captureSuggestTargetSnapshot(locator)
+                : null;
+              await locator.press(resolvedStep.key);
+              await waitForBrowserFrame(page);
+              await waitForNavigationPressSettled(page, locator, resolvedStep.key, {
+                baseline: suggestBaseline,
+                timeoutMs: Math.min(timeoutMs, SUGGEST_READY_TIMEOUT_MS),
+              });
             },
-          );
+          });
         } else {
           await page.keyboard.press(resolvedStep.key);
         }
@@ -1531,9 +1737,41 @@ async function runStep(
         break;
       }
       case "upload": {
-        const locator = await resolveTarget(page, resolvedStep.target, timeoutMs, "attached");
-        await locator.setInputFiles(resolvedStep.files);
-        await waitForPageSettled(page, Math.min(timeoutMs, 8_000));
+        let uploadAttemptHandle: Awaited<ReturnType<Locator["elementHandle"]>> | null = null;
+        try {
+          await performRecoveredLocatorAction(page, resolvedStep.target, timeoutMs, {
+            desiredState: "attached",
+            action: async (locator, attemptIndex) => {
+              await uploadAttemptHandle?.dispose().catch(() => undefined);
+              uploadAttemptHandle = await locator.elementHandle().catch(() => null);
+              if (attemptIndex > 0) {
+                await locator.setInputFiles([]);
+                await waitForBrowserFrame(page);
+              }
+              await locator.setInputFiles(resolvedStep.files);
+              await waitForBrowserFrame(page);
+              await waitForPageSettled(page, Math.min(timeoutMs, 8_000));
+            },
+            verify: async (locator) => {
+              const filesRetained = await verifyLocatorUploadedFiles(locator, resolvedStep.files);
+              if (!filesRetained) {
+                return false;
+              }
+
+              if (!uploadAttemptHandle) {
+                return true;
+              }
+
+              return uploadAttemptHandle
+                .evaluate((element) => element.isConnected)
+                .catch(() => false);
+            },
+            failureMessage: "upload 后文件列表未稳定保留",
+            failureCause: "upload-files-reset",
+          });
+        } finally {
+          await uploadAttemptHandle?.dispose().catch(() => undefined);
+        }
         break;
       }
       case "wait":

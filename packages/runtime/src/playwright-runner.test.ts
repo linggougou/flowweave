@@ -402,6 +402,155 @@ function buildControlledCheckboxRetryFixtureHtml(): string {
 </html>`;
 }
 
+function buildDetachedClickRetryFixtureHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+  <body>
+    <button id="retry-click" type="button">重试点击</button>
+    <p id="click-result" hidden data-ready="false">未点击</p>
+
+    <script>
+      const clickResult = document.getElementById("click-result");
+      let replaced = false;
+
+      function bindButton(button) {
+        button.addEventListener("mouseover", () => {
+          if (replaced) {
+            return;
+          }
+
+          replaced = true;
+          const replacement = button.cloneNode(true);
+          window.setTimeout(() => {
+            button.replaceWith(replacement);
+            bindButton(replacement);
+          }, 0);
+        });
+
+        button.addEventListener("click", () => {
+          clickResult.hidden = false;
+          clickResult.dataset.ready = "true";
+          clickResult.textContent = "点击成功";
+        });
+      }
+
+      bindButton(document.getElementById("retry-click"));
+    </script>
+  </body>
+</html>`;
+}
+
+function buildDetachedPressRetryFixtureHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+  <body>
+    <label for="retry-keyword">关键字</label>
+    <input id="retry-keyword" type="text" autocomplete="off" />
+    <p id="press-status" hidden data-ready="false">未提交</p>
+
+    <script>
+      const pressStatus = document.getElementById("press-status");
+      let replaced = false;
+
+      function bindInput(input) {
+        input.addEventListener("focus", () => {
+          if (replaced) {
+            return;
+          }
+
+          replaced = true;
+          const replacement = input.cloneNode(true);
+          replacement.value = input.value;
+          window.setTimeout(() => {
+            input.replaceWith(replacement);
+            bindInput(replacement);
+          }, 0);
+        });
+
+        input.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter") {
+            return;
+          }
+
+          pressStatus.hidden = false;
+          pressStatus.dataset.ready = "true";
+          pressStatus.textContent = "已提交：" + input.value;
+        });
+      }
+
+      bindInput(document.getElementById("retry-keyword"));
+    </script>
+  </body>
+</html>`;
+}
+
+function buildUploadRetryFixtureHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+  <body>
+    <label for="retry-upload">上传附件</label>
+    <input id="retry-upload" type="file" multiple />
+    <p id="upload-status" hidden data-ready="false" data-count="0">未上传</p>
+
+    <script>
+      const uploadStatus = document.getElementById("upload-status");
+      let resetConsumed = false;
+
+      function bindInput(input) {
+        input.addEventListener("change", () => {
+          if (!resetConsumed) {
+            resetConsumed = true;
+            window.setTimeout(() => {
+              const replacement = input.cloneNode(true);
+              input.replaceWith(replacement);
+              bindInput(replacement);
+            }, 0);
+            return;
+          }
+
+          const count = input.files ? input.files.length : 0;
+          uploadStatus.hidden = false;
+          uploadStatus.dataset.ready = count > 0 ? "true" : "false";
+          uploadStatus.dataset.count = String(count);
+          uploadStatus.textContent = "已上传：" + count;
+        });
+      }
+
+      bindInput(document.getElementById("retry-upload"));
+    </script>
+  </body>
+</html>`;
+}
+
+function buildInterceptedClickFixtureHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+  <body style="margin: 0;">
+    <button
+      id="blocked-action"
+      type="button"
+      style="position: absolute; top: 72px; left: 72px; width: 160px; height: 44px;"
+    >
+      提交保存
+    </button>
+    <div
+      id="blocking-mask"
+      style="position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, 0.01);"
+    ></div>
+    <p id="blocked-result" hidden data-ready="false">未触发</p>
+
+    <script>
+      document.getElementById("blocked-action").addEventListener("click", () => {
+        const blockedResult = document.getElementById("blocked-result");
+        blockedResult.hidden = false;
+        blockedResult.dataset.ready = "true";
+        blockedResult.textContent = "提交完成";
+      });
+    </script>
+  </body>
+</html>`;
+}
+
 function buildSessionDashboardHtml(): string {
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -1890,6 +2039,187 @@ describe("executeFlow", () => {
     );
 
     expect(result.status).toBe("success");
+  });
+
+  it("click 首次因节点脱离失败时，会重新定位并补点一次", async () => {
+    const fixtureDir = mkdtempSync(join(tmpdir(), "fw-runtime-click-retry-"));
+    cleanupPaths.add(fixtureDir);
+    const fixturePath = join(fixtureDir, "detached-click-retry.html");
+    writeFileSync(fixturePath, buildDetachedClickRetryFixtureHtml(), "utf-8");
+    const fixtureUrl = pathToFileURL(fixturePath).href;
+
+    const result = await executeFlow(
+      buildFlow("flow_detached_click_retry", "节点脱离点击补点流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: fixtureUrl,
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#retry-click" }] },
+        },
+        {
+          id: "s3",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [{ kind: "css", selector: "#click-result[data-ready='true']" }],
+          },
+        },
+      ]),
+      {
+        headless: true,
+      },
+    );
+
+    expect(result.status).toBe("success");
+  });
+
+  it("press 首次因节点脱离失败时，会重新定位并补按一次", async () => {
+    const fixtureDir = mkdtempSync(join(tmpdir(), "fw-runtime-detached-press-"));
+    cleanupPaths.add(fixtureDir);
+    const fixturePath = join(fixtureDir, "detached-press-retry.html");
+    writeFileSync(fixturePath, buildDetachedPressRetryFixtureHtml(), "utf-8");
+    const fixtureUrl = pathToFileURL(fixturePath).href;
+
+    const result = await executeFlow(
+      buildFlow("flow_detached_press_retry", "节点脱离按键补按流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: fixtureUrl,
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "fill",
+          target: { strategies: [{ kind: "css", selector: "#retry-keyword" }] },
+          value: "恢复成功",
+        },
+        {
+          id: "s3",
+          type: "press",
+          target: { strategies: [{ kind: "css", selector: "#retry-keyword" }] },
+          key: "Enter",
+        },
+        {
+          id: "s4",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [{ kind: "css", selector: "#press-status[data-ready='true']" }],
+          },
+        },
+      ]),
+      {
+        headless: true,
+      },
+    );
+
+    expect(result.status).toBe("success");
+  });
+
+  it("upload 后若文件输入被重渲染清空，会重新定位并补传一次", async () => {
+    const fixtureDir = mkdtempSync(join(tmpdir(), "fw-runtime-upload-retry-"));
+    cleanupPaths.add(fixtureDir);
+    const fixturePath = join(fixtureDir, "upload-retry.html");
+    writeFileSync(fixturePath, buildUploadRetryFixtureHtml(), "utf-8");
+    const fixtureUrl = pathToFileURL(fixturePath).href;
+    const uploadDir = mkdtempSync(join(tmpdir(), "fw-runtime-upload-retry-files-"));
+    cleanupPaths.add(uploadDir);
+    const evidenceA = join(uploadDir, "evidence-a.txt");
+    const evidenceB = join(uploadDir, "evidence-b.txt");
+    writeFileSync(evidenceA, "evidence-a", "utf-8");
+    writeFileSync(evidenceB, "evidence-b", "utf-8");
+
+    const result = await executeFlow(
+      buildFlow("flow_upload_retry", "重渲染上传补传流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: fixtureUrl,
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "upload",
+          target: { strategies: [{ kind: "css", selector: "#retry-upload" }] },
+          files: [evidenceA, evidenceB],
+        },
+        {
+          id: "s3",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#upload-status[data-ready='true'][data-count='2']",
+              },
+            ],
+          },
+        },
+      ]),
+      {
+        headless: true,
+      },
+    );
+
+    expect(result.status).toBe("success");
+  });
+
+  it("click 被遮挡且恢复失败时，会写入结构化 runtime diagnostic", async () => {
+    artifactDir = mkdtempSync(join(tmpdir(), "fw-runtime-click-intercepted-"));
+    const fixtureDir = mkdtempSync(join(tmpdir(), "fw-runtime-click-intercepted-fixture-"));
+    cleanupPaths.add(fixtureDir);
+    const fixturePath = join(fixtureDir, "intercepted-click.html");
+    writeFileSync(fixturePath, buildInterceptedClickFixtureHtml(), "utf-8");
+    const fixtureUrl = pathToFileURL(fixturePath).href;
+
+    const result = await executeFlow(
+      buildFlow("flow_click_intercepted", "遮挡点击诊断流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: fixtureUrl,
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#blocked-action" }] },
+        },
+      ]),
+      { headless: true, timeoutMs: 4_000, artifactDir },
+    );
+
+    expect(result.status).toBe("failed");
+    const failedStep = result.steps.at(-1);
+    expect(failedStep?.status).toBe("failed");
+    expect(failedStep?.diagnosticPath).toBe(join(artifactDir, "step-1-diagnostic.json"));
+
+    const diagnostic = JSON.parse(
+      readFileSync(join(artifactDir, "step-1-diagnostic.json"), "utf-8"),
+    ) as {
+      kind: string;
+      stepId: string;
+      stepIndex: number;
+      stepType: string;
+      message: string;
+      runtimeCauseCategory?: string;
+      recoveryTried?: boolean;
+      recoveredAttemptCount?: number;
+    };
+
+    expect(diagnostic.kind).toBe("runtime-error");
+    expect(diagnostic.stepId).toBe("s2");
+    expect(diagnostic.stepType).toBe("click");
+    expect(diagnostic.runtimeCauseCategory).toBe("intercepted");
+    expect(diagnostic.recoveryTried).toBe(true);
+    expect(diagnostic.recoveredAttemptCount).toBe(1);
   });
 
   it("支持真实页面风格的命令面板键盘回放", async () => {

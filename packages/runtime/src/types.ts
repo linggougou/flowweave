@@ -37,6 +37,16 @@ export type StrategyAttempt = {
 
 export type StepDiagnosticKind = "target-resolution" | "runtime-error";
 
+export const runtimeCauseCategories = [
+  "detached",
+  "intercepted",
+  "not-ready",
+  "not-editable",
+  "unknown",
+] as const;
+
+export type RuntimeCauseCategory = (typeof runtimeCauseCategories)[number];
+
 export type BaseStepDiagnostic = {
   kind: StepDiagnosticKind;
   stepId: string;
@@ -57,6 +67,9 @@ export type TargetResolutionDiagnostic = BaseStepDiagnostic & {
 
 export type RuntimeErrorDiagnostic = BaseStepDiagnostic & {
   kind: "runtime-error";
+  runtimeCauseCategory?: RuntimeCauseCategory;
+  recoveryTried?: boolean;
+  recoveredAttemptCount?: number;
 };
 
 export type StepDiagnostic = TargetResolutionDiagnostic | RuntimeErrorDiagnostic;
