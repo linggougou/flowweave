@@ -270,6 +270,7 @@
           filteredCommands = allCommands.filter((command) =>
             normalizeText(command.name).includes(keyword),
           );
+          activeIndex = filteredCommands.length > 0 ? 0 : -1;
           setLoading(false);
           renderCommands();
         }, 220);

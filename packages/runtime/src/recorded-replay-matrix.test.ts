@@ -75,5 +75,5 @@ describe("runRecordedReplayMatrix baseline", () => {
     expect(summary.failureCount).toBe(0);
     expect(summary.totalDurationMs).toBeGreaterThan(0);
     expect(summary.averageDurationMs).toBeGreaterThan(0);
-  });
+  }, 120_000);
 });

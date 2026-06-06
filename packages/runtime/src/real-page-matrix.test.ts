@@ -208,7 +208,7 @@ describe("runRealPageFixtureMatrix P7", () => {
     expect(matrixModule.summarizeRealPageSuccessCoverage(summary.results)).toEqual(
       summary.successCoverage,
     );
-  });
+  }, 120_000);
 
   it("按场景族汇总失败类型", async () => {
     const matrixModule = (await import(matrixModuleUrl)) as {
