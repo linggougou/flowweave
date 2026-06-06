@@ -2356,3 +2356,56 @@
 - 残余风险：
   - 当前失败类型统计仍按“场景族”归类，适合看哪类后台路径回归；若后续要区分 `locator` / `timeout` / `disabled` 等技术根因，需要再补第二层分类。
   - `p6` 默认耗时比 `p5` 更长，但当前 `18` 个场景约 `26s`，尚未明显拖垮矩阵稳定性。
+
+## 2026-06-06 真实页面稳定性 Wave 5 规划修订启动
+
+- 时间：2026-06-06 23:07:42 CST
+- 任务目标：基于 Wave 4 集成结果与新一轮探索结论，修订 Wave 5 真实页面稳定性设计、实施计划和并行编排板，为下一批 worktree / 子代理开发建立准确边界。
+- 所用技能：
+  - `writing-plans`：修订 Wave 5 设计与实施计划。
+  - `using-git-worktrees`：为下一步 worktree 创建预先校准目录、分支命名与边界。
+  - `subagent-driven-development`：整理后续 4 条独立轨道的子代理交付边界与回收顺序。
+- 工具与环境说明：
+  - 当前环境未提供 `sequential-thinking`，改用结构化拆解、CodeGraph、定向代码阅读与子代理探索结论替代。
+  - 当前环境未提供 `desktop-commander`、`context7` 与 `github.search_code`，本轮继续用本地命令、现有测试和仓库内实现做依据。
+  - 当前阶段尚未创建新的 Wave 5 worktree；会在 planning baseline 提交后再统一创建，避免分支命名与文件边界反复变更。
+- 本轮已核对的当前状态：
+  - 协调分支：`codex/real-page-stability-program`
+  - 当前 `git status`：仅新增 4 个未提交规划文件，无业务代码脏改动。
+  - 已确认 Wave 4 本轮已回收的 Recorder / Runtime / Benchmarks / Diagnostics worktree 不再占用新规划所需分支名。
+- 子代理 / 探索结论回流：
+  - `Darwin / 019e9d6f-d6e8-7b30-b892-09b5c28d6fb0`
+    - 结论：下一轮不应继续盲目加 fixture，而应优先扩大 recorded replay 整链证明与矩阵观测性。
+    - 推荐优先 recorded replay 场景：`contenteditable-editor`、`session-expired-retry`；若再加 1 条，再补 `bulk-cross-page-selection`。
+  - `Harvey / 019e9d6f-abf1-7810-8796-4f2091d04e73`
+    - 结论：Studio 当前主要问题不是“缺 artifact”，而是“已有证据没有前移成一眼能懂的失败根因”。
+    - 方向：优先做失败技术根因分类与失败步骤证据卡前移；不优先扩 HAR、新 API 或扩大 page snapshot schema。
+  - `Archimedes / 019e9d6f-8436-7460-a405-1e0210f3b82c`
+    - 结论：Recorder 当前最值钱的最小能力包是“导出期 wait 推断 + `keypress` 前 flush 待提交 fill”。
+    - 证据：扩展侧 `input` 仍为 400ms debounce，`keydown` 立即发 `keypress`；normalize 仍不会主动产出 `wait`。
+- 规划修订决策：
+  - Recorder 轨从“纯 wait 推断”升级为“Recorder Async Stabilization”，授权范围明确跨 `apps/extension/**` 与 `packages/recorder/**`。
+  - Runtime 轨继续围绕 recorded replay 整链回归，优先补 `contenteditable-editor` 与 `session-expired-retry`。
+  - Benchmarks 轨继续只做矩阵观测性，不新增默认档位。
+  - Studio 轨从“Evidence Workbench”更名为“Failure Insight Workbench”，授权范围明确覆盖：
+    - `apps/studio/src/App.tsx`
+    - `apps/studio/src/DiagnosticInspector.tsx`
+    - `apps/studio/src/shared/failure-insights.ts`
+    - `packages/ui/src/StepLogTable.tsx`
+- 本轮更新 / 新增的规划文件：
+  - `.codex/context-summary-real-page-stability-wave5.md`
+  - `docs/superpowers/specs/2026-06-06-real-page-stability-wave5-design.md`
+  - `docs/superpowers/plans/2026-06-06-real-page-stability-wave5-plan.md`
+  - `docs/superpowers/plans/2026-06-06-real-page-stability-wave5-orchestration.md`
+- Node 20 基线验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH node -v`
+    - 结果：`v20.19.6`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension test -- lib/content-contract.test.ts`
+    - 结果：通过，`2/2`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- real-page-matrix.test.ts`
+    - 结果：通过，`2/2`
+    - 关键耗时：`runRealPageFixtureMatrix P6` 用例约 `26.09s`
+- 下一步：
+  1. 在 Node 20 下跑与规划相关的基线验证，确认当前协调分支可作为 Wave 5 起点。
+  2. 提交 planning baseline。
+  3. 创建 4 个 Wave 5 worktree，并按编排板分派子代理。
