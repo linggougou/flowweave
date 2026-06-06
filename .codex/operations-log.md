@@ -3241,4 +3241,4 @@
   - 未重复造轮子的证明：
     - 直接复用 `Target.hints`、`strategyAttempts`、`FlowWeaveError.details` 现有结构实现，不新增平行协议或独立诊断通道
   - 提交哈希：
-    - 待提交后补记
+    - 实现提交：`3271174 feat: 增强 runtime 歧义目标消解`
