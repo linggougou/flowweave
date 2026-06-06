@@ -2223,6 +2223,7 @@
      - 结果：通过，`2` 个测试文件、`8` 个测试全部通过
    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
      - 结果：通过
+   - 功能提交哈希：`aa6b08a70e641ff8c05f71755785e1cd52f2fcb8`
 3. 轨道边界保持干净。
    - 未改动 `packages/runtime/**`
    - 未改动 `packages/recorder/**`
