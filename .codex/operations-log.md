@@ -3568,3 +3568,36 @@
     - 创建 3 个隔离 worktree
     - 依据编排板派发子代理
     - 在 Node 20 下完成分层验收、合并与回收
+
+## 2026-06-07 Wave 7 worktree 基线与子代理派发
+
+- 时间：2026-06-07 02:36:10 CST
+- 已执行的编排动作：
+  - 提交规划文档：`47c1714 docs: 规划 Wave 7 真实录制回放稳定性`
+  - 创建 worktree：
+    - `.worktrees/codex-real-page-wave7-extension-export`
+    - `.worktrees/codex-real-page-wave7-recorded-replay`
+    - `.worktrees/codex-real-page-wave7-recorded-smoke`
+  - 创建分支：
+    - `codex/real-page-wave7-extension-export`
+    - `codex/real-page-wave7-recorded-replay`
+    - `codex/real-page-wave7-recorded-smoke`
+  - 子代理：
+    - Extension Export：`Rawls` / `019e9e3a-3887-7743-94a3-9fd064381b32`
+    - Recorded Replay：`Pascal` / `019e9e3a-38dd-7aa2-80cf-92f9366f7a53`
+    - Recorded Smoke：`Boyle` / `019e9e3a-3929-7be0-8bd5-3547a08a0d70`
+- worktree 基线处置：
+  - 三个新 worktree 首次直接跑测试均失败，根因不是代码，而是：
+    - `node_modules` 尚未安装，`vitest: command not found`
+    - 安装后仍缺 workspace 依赖包 `dist`，报 `Failed to resolve entry for package "@flowweave/recorder"` 或 `@flowweave/page-intelligence`
+  - 已补救：
+    - 三个 worktree 执行 `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm install`
+    - Extension Export worktree 执行 `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder... build`
+    - Recorded Replay / Recorded Smoke worktree 执行 `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime... build`
+  - 补救后基线：
+    - Extension Export：`pnpm --filter @flowweave/app-extension test -- content-contract.test.ts` 通过，`4/4`
+    - Recorded Replay：`pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts` 通过，`21/21`
+    - Recorded Smoke：`pnpm --filter @flowweave/runtime test -- real-page-matrix.test.ts` 通过，`4/4`
+- 当前状态：
+  - 3 条 Wave 7 子代理已获得可工作的干净基线。
+  - 主代理接下来等待实现结果，并按编排板顺序做复验、审查、合并与回收。
