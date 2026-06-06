@@ -1190,3 +1190,66 @@
 - 风险评估评分：93
 - 综合评分：95
 - 建议：通过
+
+## Node 24 CI 双基线验收
+
+时间：2026-06-06 21:12:00 CST
+
+### 验证范围
+
+- `.github/workflows/ci.yml` 是否已从单 Node 20 验收升级为 Node 20 / 24 双矩阵。
+- CI 是否继续保留现有 `lint` 门槛和 Playwright 浏览器安装步骤。
+- Node 24 本机是否已具备运行 `pnpm smoke` 的完整能力，而不是只停留在依赖安装层。
+- Node 20 主基线在本轮 workflow 调整后是否继续通过 `pnpm lint` 与 `pnpm smoke`。
+
+### 验证结果
+
+1. CI workflow 已升级为双基线。
+   - `ci.yml` 的 `verify` job 已新增：
+     - `strategy.fail-fast: false`
+     - `matrix.node-version: [20, 24]`
+   - `actions/setup-node` 已改为消费 `${{ matrix.node-version }}`。
+2. CI 验证链已收敛到仓库统一入口。
+   - workflow 继续保留：
+     - `pnpm install --frozen-lockfile`
+     - `pnpm --filter @flowweave/runtime exec playwright install --with-deps chromium`
+     - `pnpm lint`
+   - 原本分散的 `pnpm typecheck / pnpm test / pnpm build` 已收敛为 `pnpm smoke`，与本地推荐验证口径一致。
+3. Node 24 本机完整执行链路通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm install --force && pnpm e2e:login`
+     - 结果：通过
+     - 项目 ID：`db4f13b0-4c13-48b6-853b-98df4afa27f6`
+     - 执行 ID：`e0f787b1-5613-4dc6-b9b6-d53b3006c138`
+   - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm smoke`
+     - 结果：通过
+     - 项目 ID：`1f796183-2b06-4e6a-9c0d-8a3983081b16`
+     - 执行 ID：`82a88ee7-efe2-4843-9d75-16b5e22a27cb`
+4. Node 20 主基线回归通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm install --force`
+     - 结果：通过
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm lint`
+     - 结果：通过
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+     - 结果：通过
+     - 项目 ID：`1b94ef4f-3a8c-4394-9887-ce052f7905b9`
+     - 执行 ID：`756b8583-3841-4f27-ab63-b361e2b711d9`
+
+### Findings
+
+1. 当前未发现阻塞级问题。
+   - Node 24 已经从“本地可安装”提升到“本地可完整 smoke”，足以支撑把 CI 扩成双矩阵。
+2. 重要运行约束仍然成立。
+   - 本地切换 Node 20 / 24 时，仍应执行 `pnpm install --force`；CI 因为是全新环境，不受这一约束影响。
+3. 残余风险：本轮尚未直接跑远端 GitHub Actions。
+   - 目前证据来自本地等效命令与 workflow 静态检查。
+   - 若后续 push 后发现 Ubuntu 环境下存在 Node 24 特有波动，需要回到 Playwright / 原生模块安装链继续补证。
+
+### 综合结论
+
+- 代码质量评分：95
+- 测试覆盖评分：95
+- 规范遵循评分：97
+- 战略匹配评分：97
+- 风险评估评分：92
+- 综合评分：95
+- 建议：通过

@@ -1575,3 +1575,69 @@
   - 已尝试派发 reviewer 子代理 `Banach` / `019e9ce3-3de5-78b1-8997-536e7fbe6d19` 做只读审查
   - 两次等待均未在时限内返回有效结论，随后已主动回收该子代理
   - 补救措施：主代理改为基于 staged diff、双 Node 验证结果与锁文件差异做人工复核后再提交
+
+## 实施任务 - Node 24 CI 双基线
+
+- 时间：2026-06-06 21:05:00 CST
+- 目标：在已验证本地 Node 24 可执行 `pnpm smoke` 的前提下，把仓库 CI 从单 Node 20 验收升级到 Node 20 / 24 双基线。
+- 写入确认：
+  - `.codex/operations-log.md` 可写
+  - `.codex/verification-report.md` 可写
+- 上下文依据：
+  - `.codex/context-summary-node24-ci-matrix.md`
+  - `.github/workflows/ci.yml`
+  - `package.json`
+  - `docs/guides/quickstart.md`
+  - `docs/guides/manual-qa.md`
+- 编码前检查：
+  - 已查阅上下文摘要文件：`.codex/context-summary-node24-ci-matrix.md`
+  - 将使用以下可复用组件：
+    - `package.json` 的 `smoke` 脚本作为整仓验证入口
+    - `.github/workflows/ci.yml` 现有的 pnpm / Node / Playwright 安装步骤
+  - 将遵循命名约定：CI 仍保持单一 `verify` job，只通过 matrix 扩展 Node 版本
+  - 将遵循代码风格：做最小 YAML 改动，不新增额外脚本
+  - 确认不重复造轮子，证明：复用 `pnpm smoke`，不再手写一套与本地不同的 `typecheck/test/build` 链路
+
+### 实施内容
+
+- [ci.yml](/Users/ling/codeHome/A_Mine/flowweave/.github/workflows/ci.yml:1)
+  - `verify` job 增加 `strategy.matrix.node-version: [20, 24]`
+  - job 名称改为 `verify (node ${{ matrix.node-version }})`
+  - 继续保留：
+    - `pnpm install --frozen-lockfile`
+    - `pnpm --filter @flowweave/runtime exec playwright install --with-deps chromium`
+    - `pnpm lint`
+  - 将原来分散的 `typecheck / test / build` 三步收敛为 `pnpm smoke`
+
+### 本地验证
+
+- Node 24 先验可行性：
+  - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm install --force && pnpm e2e:login`
+    - 结果：通过
+    - 项目 ID：`db4f13b0-4c13-48b6-853b-98df4afa27f6`
+    - 执行 ID：`e0f787b1-5613-4dc6-b9b6-d53b3006c138`
+  - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm smoke`
+    - 结果：通过
+    - 项目 ID：`1f796183-2b06-4e6a-9c0d-8a3983081b16`
+    - 执行 ID：`82a88ee7-efe2-4843-9d75-16b5e22a27cb`
+- Node 20 回归验收：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm install --force`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm lint`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+    - 结果：通过
+    - 项目 ID：`1b94ef4f-3a8c-4394-9887-ce052f7905b9`
+    - 执行 ID：`756b8583-3841-4f27-ab63-b361e2b711d9`
+
+### 编码后声明 - node24-ci-matrix
+
+- 复用了以下既有组件与模式：
+  - 根 `smoke` 脚本作为 CI 的统一整仓验证入口
+  - `ci.yml` 现有 Playwright 安装链路，不新增单独浏览器安装逻辑
+- 遵循了以下项目约定：
+  - CI 仍以 Node 20 为默认推荐基线，但自动验证扩大到 Node 24
+  - workflow 只做单文件最小改动，没有引入额外脚本或重复 job
+- 未重复造轮子的证明：
+  - 没有单独发明 `ci:node24` 或第二套 verify 脚本
+  - 直接用 GitHub Actions matrix 复用现有 `verify` job
