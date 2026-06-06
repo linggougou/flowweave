@@ -1,3 +1,7 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FlowDocument } from "@flowweave/flow-dsl";
@@ -23,6 +27,10 @@ const mockRepoGetDefaultEnvironment = vi.fn();
 const mockRepoSaveEnvironment = vi.fn();
 const mockRepoGetLatestExecutionForFlow = vi.fn();
 
+type ServicesModule = {
+  getFlowRunInput?: (projectId: string, flowId: string) => Promise<unknown>;
+};
+
 vi.mock("./env-setup.js", () => ({
   isChromiumInstalled: () => true,
 }));
@@ -33,16 +41,16 @@ vi.mock("@flowweave/runtime", () => ({
 
 vi.mock("@flowweave/project-knowledge", () => ({
   ProjectKnowledgeRepository: class {
-    getDefaultEnvironment() {
-      return mockRepoGetDefaultEnvironment();
+    getDefaultEnvironment(...args: unknown[]) {
+      return mockRepoGetDefaultEnvironment(...args);
     }
 
-    saveEnvironment() {
-      return mockRepoSaveEnvironment();
+    saveEnvironment(...args: unknown[]) {
+      return mockRepoSaveEnvironment(...args);
     }
 
-    getLatestExecutionForFlow() {
-      return mockRepoGetLatestExecutionForFlow();
+    getLatestExecutionForFlow(...args: unknown[]) {
+      return mockRepoGetLatestExecutionForFlow(...args);
     }
   },
 }));
@@ -267,6 +275,9 @@ describe("getExecution 缓存命中策略", () => {
   });
 
   it("runFlow 会把完整运行上下文传给 executeFlow 并落库到 runContext", async () => {
+    const storageStateDir = mkdtempSync(join(tmpdir(), "flowweave-studio-run-context-"));
+    const storageStatePath = join(storageStateDir, "state.json");
+    writeFileSync(storageStatePath, JSON.stringify({ cookies: [], origins: [] }), "utf-8");
     mockApiGetFlow.mockResolvedValue(buildFlow({
       steps: [
         {
@@ -299,7 +310,7 @@ describe("getExecution 缓存命中策略", () => {
       showBrowser: false,
       environmentName: "预发已登录",
       baseUrl: "https://staging.example.com/app",
-      storageStatePath: "/tmp/flowweave/state.json",
+      storageStatePath,
       variables: {
         username: "alice",
         retryCount: 2,
@@ -311,7 +322,7 @@ describe("getExecution 缓存命中策略", () => {
       expect.objectContaining({ id: "flow_service_history" }),
       expect.objectContaining({
         baseUrl: "https://staging.example.com/app",
-        storageStatePath: "/tmp/flowweave/state.json",
+        storageStatePath,
         environmentName: "预发已登录",
         variables: {
           username: "alice",
@@ -326,7 +337,7 @@ describe("getExecution 缓存命中策略", () => {
         runContext: {
           environmentName: "预发已登录",
           baseUrl: "https://staging.example.com/app",
-          storageStatePath: "/tmp/flowweave/state.json",
+          storageStatePath,
           variables: {
             username: "alice",
             retryCount: 2,
@@ -355,12 +366,7 @@ describe("getExecution 缓存命中策略", () => {
       }),
     );
 
-    const services = (await loadServicesModule()) as typeof import("./services.js") & {
-      getFlowRunInput?: (
-        projectId: string,
-        flowId: string,
-      ) => Promise<unknown>;
-    };
+    const services = (await loadServicesModule()) as ServicesModule;
 
     expect(services.getFlowRunInput).toBeTypeOf("function");
 

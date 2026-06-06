@@ -4,8 +4,10 @@ import type { FlowDocument } from "@flowweave/flow-dsl";
 import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
 
 import {
+  buildVariableInputsForFlow,
   buildRunDraftState,
   collectRunPreflightIssues,
+  shouldRestoreRecentRunInput,
 } from "./run-input-state.js";
 
 function buildFlow(): FlowDocument {
@@ -71,6 +73,50 @@ describe("buildRunDraftState", () => {
         rememberMe: "true",
       },
     });
+  });
+});
+
+describe("buildVariableInputsForFlow", () => {
+  it("同一个 Flow 重新加载时保留当前草稿值", () => {
+    const inputs = buildVariableInputsForFlow(buildFlow(), {
+      previousFlowId: "flow_run_input_state",
+      previous: {
+        username: "alice",
+        retryCount: "5",
+        rememberMe: "true",
+      },
+    });
+
+    expect(inputs).toEqual({
+      username: "alice",
+      retryCount: "5",
+      rememberMe: "true",
+    });
+  });
+
+  it("切换到其他 Flow 时不继承上一个 Flow 的草稿值", () => {
+    const inputs = buildVariableInputsForFlow(buildFlow(), {
+      previousFlowId: "flow_previous",
+      previous: {
+        username: "alice",
+        retryCount: "5",
+        rememberMe: "true",
+      },
+    });
+
+    expect(inputs).toEqual({
+      username: "",
+      retryCount: "1",
+      rememberMe: "",
+    });
+  });
+});
+
+describe("shouldRestoreRecentRunInput", () => {
+  it("只有当前文档与选中的 Flow 一致时才允许恢复最近运行输入", () => {
+    expect(shouldRestoreRecentRunInput(buildFlow(), "flow_run_input_state")).toBe(true);
+    expect(shouldRestoreRecentRunInput(buildFlow(), "flow_other")).toBe(false);
+    expect(shouldRestoreRecentRunInput(null, "flow_run_input_state")).toBe(false);
   });
 });
 

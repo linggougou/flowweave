@@ -1360,3 +1360,43 @@
 - 风险评估评分：94
 - 综合评分：97
 - 建议：通过
+
+## Studio 运行草稿隔离与扩展合同边界验收
+
+时间：2026-06-06 22:03:56 CST
+
+### 审查范围
+
+- Studio 在快速切换 Flow 时，运行环境与变量草稿是否会跨 Flow 暂态污染。
+- 最近一次执行输入恢复，是否只会作用于当前真正加载完成的 Flow 文档。
+- 扩展端 upload 占位符合同测试，是否放在正确的包边界且不会破坏仓库级 `smoke`。
+- Node 20 下的 `lint`、定向包验证与仓库级 `smoke` 是否全部通过。
+
+### 审查结论
+
+1. Studio 剩余中风险已被实质性消解。
+   - `App.tsx` 现已在 `selectedFlowId` 与 `currentFlow.id` 不一致时先清空草稿，再等待新文档与最近执行输入恢复。
+   - 共享层新增“仅同 Flow 复用草稿”和“仅当前 Flow 允许恢复最近输入”的纯函数合同，并已用单测固定。
+2. 统一验收期间暴露的两个次级阻塞也已顺手修复。
+   - `services.test.ts` 的 lint 触发来自行内 `import()` 类型写法，已改为本地类型别名。
+   - upload 占位符合同测试此前挂在 `recorder` 包内，导致跨包 `typecheck` 失败；现已迁回 `app-extension`，并为扩展包补上本地 Vitest 配置与 monorepo 路径解析。
+3. Node 20 全链验证结果满足通过条件。
+   - 定向验证：`app-studio test/typecheck/lint`、`project-knowledge test`、`recorder typecheck`、`app-extension test/typecheck` 全部通过。
+   - 仓库级验证：`pnpm lint` 通过，`pnpm smoke` 通过，最终 `e2e:login` 4 个步骤全部成功。
+
+### 风险评估
+
+- 当前残余风险主要在“Studio 切换 Flow 时的 UI 体验细节”而不是正确性。
+  - 例如切换瞬间先清空再回填会带来轻微闪动，但这比把旧 Flow 草稿短暂提交给新 Flow 更安全，也更符合当前产品阶段。
+- `app-extension` 现已显式使用 workspace 源码路径做类型检查。
+  - 这降低了对 `dist` 产物顺序的耦合，但后续若继续增加跨包源码映射，应统一评估所有 app 的 tsconfig 约定，避免路径配置漂移。
+
+### 综合评分
+
+- 代码质量评分：96
+- 测试覆盖评分：97
+- 规范遵循评分：97
+- 战略匹配评分：96
+- 风险评估评分：95
+- 综合评分：96
+- 建议：通过

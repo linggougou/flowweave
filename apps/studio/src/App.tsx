@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent, type MouseEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import type { FlowDocument } from "@flowweave/flow-dsl";
 import { analyzeFlowFragility } from "@flowweave/page-intelligence";
 import {
@@ -16,10 +16,11 @@ import { flowStepsToRows } from "./flow-step-format.js";
 import { buildExecutionCompatibilityWarnings } from "./shared/execution-fragility.js";
 import {
   buildFragilityVariableContext,
-  buildInitialVariableInputs,
+  buildVariableInputsForFlow,
   buildRunDraftState,
   collectRunPreflightIssues,
   parseVariableInput,
+  shouldRestoreRecentRunInput,
   type VariableInputs,
 } from "./shared/run-input-state.js";
 import type {
@@ -109,6 +110,7 @@ export function App() {
   const [selectedDiagnosticStepIndex, setSelectedDiagnosticStepIndex] = useState<number | null>(
     null,
   );
+  const previousDraftFlowIdRef = useRef<string | null>(null);
 
   const selectedProject =
     projects.find((project) => project.id === selectedProjectId) ?? null;
@@ -244,11 +246,33 @@ export function App() {
   }, [availableEnvironments, selectedEnvironmentName]);
 
   useEffect(() => {
-    setVariableInputs((previous) => buildInitialVariableInputs(currentFlow, previous));
+    const previousFlowId = previousDraftFlowIdRef.current;
+    previousDraftFlowIdRef.current = currentFlow?.id ?? null;
+    setVariableInputs((previous) =>
+      buildVariableInputsForFlow(currentFlow, {
+        previous,
+        previousFlowId,
+      }),
+    );
   }, [currentFlow]);
 
   useEffect(() => {
-    if (!selectedProjectId || !selectedFlowId || !currentFlow) {
+    if (!selectedFlowId || !currentFlow || currentFlow.id === selectedFlowId) {
+      return;
+    }
+
+    setSelectedEnvironmentName("");
+    setBaseUrlDraft("");
+    setStorageStatePathDraft("");
+    setVariableInputs({});
+  }, [currentFlow, selectedFlowId]);
+
+  useEffect(() => {
+    if (
+      !selectedProjectId ||
+      !selectedFlowId ||
+      !shouldRestoreRecentRunInput(currentFlow, selectedFlowId)
+    ) {
       return;
     }
 

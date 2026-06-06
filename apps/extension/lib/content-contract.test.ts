@@ -24,7 +24,7 @@ async function loadContentModule(): Promise<ContentModule> {
     shouldRecordClick: vi.fn(),
     shouldRecordFill: vi.fn(),
   }));
-  return (await import("../../../apps/extension/entrypoints/content.ts")) as ContentModule;
+  return (await import("../entrypoints/content.js")) as ContentModule;
 }
 
 describe("content upload placeholder contract", () => {

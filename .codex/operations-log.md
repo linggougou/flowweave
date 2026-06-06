@@ -1991,3 +1991,127 @@
   - 结果：通过，`12 successful, 12 total`
 - 结论：
   - 当前已进入“等待结果回流 -> 逐条验收并回”的阶段。
+
+## 协调分支继续执行 - Studio 剩余风险收口
+
+- 时间：2026-06-06 21:55:21 CST
+- 当前分支与工作树：
+  - 分支：`codex/real-page-stability-program`
+  - 状态：相对 `origin/codex/real-page-stability-program` 领先 `8` 个提交
+  - 根工作树未提交改动：仅剩 `apps/studio/electron/services.test.ts`
+- 工具与替代流程：
+  - `sequential-thinking`：当前环境不可用；本次改用手工分阶段推演，并把结论写入本日志与上下文摘要。
+  - `desktop-commander` / `context7` / `github.search_code`：当前环境不可用；本次改用 `codegraph_context`、`codegraph_explore`、`rg`、`sed` 和现有测试作为等效流程。
+- 上下文检索结果：
+  - 已分析至少 3 处相关实现：
+    - `apps/studio/src/App.tsx`
+    - `apps/studio/src/shared/run-input-state.ts`
+    - `apps/studio/electron/services.ts`
+  - 已补充上下文摘要：`.codex/context-summary-studio-run-draft-isolation.md`
+- 当前判断：
+  - Studio 严重问题“显式清空 baseUrl / storageStatePath 被旧默认环境偷偷补回”已在主分支代码中修复。
+  - 当前剩余主要风险为评审代理 `Bacon` 指出的中风险：快速切换 Flow 时，最近执行输入恢复与变量草稿复用存在跨 Flow 暂态污染窗口。
+  - 根因定位：
+    - `App.tsx` 在 `selectedFlowId` 改变后，会先使用旧 `currentFlow` 触发最近执行输入恢复。
+    - `buildInitialVariableInputs(flow, previous)` 会按变量名复用旧值，若直接跨 Flow 复用，会把上一个 Flow 的同名变量带到新 Flow。
+- 编码前检查 - Studio 运行草稿隔离：
+  - 已查阅上下文摘要文件：`.codex/context-summary-studio-run-draft-isolation.md`
+  - 将使用以下可复用组件：
+    - `buildInitialVariableInputs`：保留同一 Flow 的本地草稿
+    - `buildRunDraftState`：恢复最近执行输入
+    - `getFlowRunInput`：从执行历史取最近运行上下文
+  - 将遵循命名约定：共享状态函数保持 `build*` / `should*` 风格，React 侧只负责编排，不堆复杂业务判断。
+  - 将遵循代码风格：早返回、纯函数优先、测试先覆盖边界。
+  - 确认不重复造轮子：已检查 `apps/studio/src/shared/` 与 `services.ts`，本次不新增独立状态容器，只扩展现有共享草稿工具。
+- 当前计划：
+  - 先修复 Studio 跨 Flow 草稿污染风险并补测试。
+  - 然后使用 Node 20 运行 `@flowweave/app-studio` 与 `@flowweave/project-knowledge` 验收。
+  - 验收通过后提交修复，继续更新验证报告并回收残留子代理。
+
+## Studio 剩余风险收口结果 - Node 20 验收与次级阻塞消解
+
+- 时间：2026-06-06 22:03:56 CST
+- 实施内容：
+  - `apps/studio/src/shared/run-input-state.ts`
+    - 新增 `buildVariableInputsForFlow()`，仅在同一 Flow 重新加载时复用草稿，跨 Flow 自动回到默认值。
+    - 新增 `shouldRestoreRecentRunInput()`，只有当前文档与 `selectedFlowId` 一致时才允许恢复最近执行输入。
+  - `apps/studio/src/App.tsx`
+    - 切换 Flow 时若 `currentFlow.id !== selectedFlowId`，先清空环境与变量草稿，避免旧草稿短暂污染新 Flow。
+    - 最近运行输入恢复 effect 改为显式校验“当前文档就是当前选中 Flow”。
+  - `apps/studio/src/shared/run-input-state.test.ts`
+    - 新增“同 Flow 保留草稿”“跨 Flow 不继承旧值”“只有当前 Flow 可恢复最近输入”三条回归。
+  - `apps/studio/electron/services.test.ts`
+    - 修补 `runContext` 回归夹具，并去掉会触发 lint 的 `typeof import()` 行内类型注解。
+  - `apps/extension/lib/content-contract.test.ts`
+    - 将 upload 占位符合同测试从 `packages/recorder` 迁回 `apps/extension` 自身边界。
+  - `apps/extension/vitest.config.ts`
+    - 新增扩展包本地 Vitest 配置，确保合同测试会被真正执行。
+  - `apps/extension/tsconfig.json`
+    - 增加 monorepo 源码路径映射，并移除会拦截 workspace 源文件的 `rootDir`，让 `typecheck` 不再依赖 `dist` 产物顺序。
+  - 删除：
+    - `packages/recorder/src/content-contract.test.ts`
+- 首轮验收中暴露的次级阻塞与处理：
+  1. `pnpm lint`
+     - 失败原因：`apps/studio/electron/services.test.ts` 使用 `typeof import("./services.js")` 行内类型注解，触发 `@typescript-eslint/consistent-type-imports`。
+     - 处理：提取为本地 `ServicesModule` 类型别名，复验通过。
+  2. `pnpm smoke`
+     - 首次失败原因：`packages/recorder/src/content-contract.test.ts` 跨包直接导入 `apps/extension/entrypoints/content.ts`，导致 `recorder typecheck` 命中 `TS6059 / TS5097`。
+     - 第二次局部复验时暴露补充问题：测试放在 `apps/extension/entrypoints/` 会被 WXT 误识别为重复入口；随后又发现 `app-extension typecheck` 依赖 `@flowweave/recorder` 的 `dist` 声明文件顺序不稳定。
+     - 处理：将测试迁到 `apps/extension/lib/`、新增本地 `vitest.config.ts`、为扩展包补上 workspace `paths` 并移除 `rootDir`，最终全部通过。
+- Node 20 定向验证结果：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
+    - 结果：通过，`31/31`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/project-knowledge test`
+    - 结果：通过，`13/13`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio lint`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder typecheck`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension test`
+    - 结果：通过，`1/1`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension typecheck`
+    - 结果：通过
+- Node 20 仓库级统一验收：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm lint`
+    - 结果：通过，`12 successful, 12 total`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+    - 结果：通过
+    - `typecheck`：`19 successful, 19 total`
+    - `test`：通过，其中关键结果包括：
+      - `@flowweave/app-studio`：`31/31`
+      - `@flowweave/app-extension`：`1/1`
+      - `@flowweave/runtime`：`14/14`
+      - `@flowweave/recorder`：`38/38`
+    - `build`：`12 successful, 12 total`
+    - `e2e:login`：
+      - 项目 ID：`0c83496d-454b-4d3b-b139-9432d9e17d92`
+      - 执行 ID：`c396a0cf-a898-435d-af88-2070efc4b87d`
+      - 状态：`success`
+      - 步骤：`4/4`
+- 子代理回收：
+  - 已关闭 `Hilbert / 019e9d17-8748-7f60-9d50-cf1b78943f0d`
+    - 关闭前状态：`completed`
+    - 其 Studio 实现结果已合并到协调分支
+  - 已关闭 `Bacon / 019e9d2a-e8b3-7270-8867-b63edea9759c`
+    - 关闭前状态：`completed`
+    - 其审查结论已用于修复严重问题、收口中风险并补强最终回归
+- 编码后声明 - Studio 运行草稿隔离：
+  - 复用了以下既有组件：
+    - `buildInitialVariableInputs`：沿用现有变量默认值与同名字段归并逻辑
+    - `buildRunDraftState`：沿用最近执行输入恢复合同
+    - `getFlowRunInput`：沿用执行历史回填来源
+  - 遵循的项目约定：
+    - 命名约定：新增共享函数保持 `build*` / `should*` 风格
+    - 代码风格：保持早返回与纯函数优先，不在 React effect 内堆复杂数据转换
+    - 文件组织：共享逻辑继续放在 `apps/studio/src/shared/`，扩展测试回归放回 `apps/extension`
+  - 对比相似实现：
+    - 与原 `buildInitialVariableInputs()` 相比，本次只增加“跨 Flow 不复用旧草稿”的边界，不改变其同 Flow 复用语义。
+    - 与原 `getFlowRunInput()` 恢复流程相比，本次不改变恢复数据结构，只增加恢复时机守卫。
+  - 未重复造轮子的证明：
+    - 已检查 `apps/studio/src/shared/`、`apps/studio/electron/services.ts` 与 `apps/extension` 现有逻辑。
+    - 本次没有引入新的状态容器、全局缓存或自定义测试框架，仅修正既有工具函数与包内测试边界。
+- 结论：
+  - Studio 剩余中风险已收口，扩展 upload 占位符合同测试边界也已稳定。
+  - 当前没有同一阻塞条件连续 3 次卡住的情况，无需标记为阻塞。

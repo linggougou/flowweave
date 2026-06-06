@@ -47,6 +47,31 @@ export function buildInitialVariableInputs(
   return next;
 }
 
+export function buildVariableInputsForFlow(
+  flow: FlowDocument | null,
+  options: {
+    previous?: VariableInputs;
+    previousFlowId?: string | null;
+  } = {},
+): VariableInputs {
+  if (!flow) {
+    return {};
+  }
+
+  if (options.previousFlowId === flow.id) {
+    return buildInitialVariableInputs(flow, options.previous);
+  }
+
+  return buildInitialVariableInputs(flow);
+}
+
+export function shouldRestoreRecentRunInput(
+  flow: FlowDocument | null,
+  selectedFlowId: string | null,
+): flow is FlowDocument {
+  return flow !== null && selectedFlowId !== null && flow.id === selectedFlowId;
+}
+
 export function parseVariableInput(
   variable: FlowVariableDefinition,
   rawValue: string,
