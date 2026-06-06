@@ -95,6 +95,14 @@ describe("buildDiagnosticRepairSuggestions", () => {
       actionFragment: "同组单选/复选",
       reasonFragment: "互斥",
     },
+    {
+      cause: "upload-files-reset",
+      stepType: "upload",
+      message: "upload 后文件未稳定保留",
+      title: "核对上传控件是否被页面重建",
+      actionFragment: "input[type=file]",
+      reasonFragment: "重渲染",
+    },
   ])("对 $cause cause 输出专用修复建议", (scenario) => {
     const suggestions = buildDiagnosticRepairSuggestions(
       buildStep({
@@ -123,6 +131,79 @@ describe("buildDiagnosticRepairSuggestions", () => {
     expect(suggestions[0]?.action).toContain(scenario.actionFragment);
     expect(suggestions[0]?.reason).toContain(scenario.reasonFragment);
     expect(suggestions[0]?.reason).toContain(scenario.message);
+  });
+
+  it.each([
+    {
+      runtimeCauseCategory: "detached",
+      message: "locator.click: Element is not attached to the DOM",
+      title: "重新对准最终渲染后的控件",
+      actionFragment: "最终渲染后的按钮",
+      reasonFragment: "重渲染了目标",
+      recoveryFragment: "已尝试恢复 1 次",
+    },
+    {
+      runtimeCauseCategory: "intercepted",
+      message: "locator.click: <div class=\"mask\">…</div> intercepts pointer events",
+      title: "先清掉遮挡层再操作最终控件",
+      actionFragment: "遮罩层",
+      reasonFragment: "遮罩",
+      recoveryFragment: "已尝试恢复 1 次",
+    },
+    {
+      runtimeCauseCategory: "not-ready",
+      message: "locator.click: element is not visible",
+      title: "补一条更明确的就绪等待",
+      actionFragment: "loading",
+      reasonFragment: "不可见",
+      recoveryFragment: "未触发恢复重试",
+    },
+    {
+      runtimeCauseCategory: "not-editable",
+      message: "locator.fill: element is not editable",
+      title: "重新对准真实可编辑控件",
+      actionFragment: "contenteditable",
+      reasonFragment: "只读壳层",
+      recoveryFragment: "已尝试恢复 1 次",
+    },
+    {
+      runtimeCauseCategory: "unknown",
+      message: "locator.click: unknown runtime failure",
+      title: "先打开诊断产物确认失败阶段",
+      actionFragment: "diagnostic JSON",
+      reasonFragment: "还不能把这次失败稳定归类",
+      recoveryFragment: "未触发恢复重试",
+    },
+  ])("对 $runtimeCauseCategory 输出广义 runtime 修复建议", (scenario) => {
+    const suggestions = buildDiagnosticRepairSuggestions(
+      buildStep({
+        label: "提交动作",
+        message: scenario.message,
+        stepType: "click",
+        diagnostic: {
+          kind: "runtime-error",
+          stepId: "s8",
+          stepIndex: 7,
+          stepType: "click",
+          message: scenario.message,
+          errorCode: "RUNTIME_STEP_FAILED",
+          runtimeCauseCategory: scenario.runtimeCauseCategory,
+          recoveryTried: scenario.recoveryFragment.includes("已尝试"),
+          recoveredAttemptCount: scenario.recoveryFragment.includes("已尝试") ? 1 : 0,
+          url: "https://staging.example.com/orders/edit",
+          title: "订单编辑页",
+        } as unknown as ExecutionStepLog["diagnostic"],
+      }),
+    );
+
+    expect(suggestions[0]).toMatchObject({
+      source: "runtime-cause",
+      severity: "error",
+      title: scenario.title,
+    });
+    expect(suggestions[0]?.action).toContain(scenario.actionFragment);
+    expect(suggestions[0]?.reason).toContain(scenario.reasonFragment);
+    expect(suggestions[0]?.reason).toContain(scenario.recoveryFragment);
   });
 
   it("把失败策略错误转成收窄范围和可见性修复动作", () => {

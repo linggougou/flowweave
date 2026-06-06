@@ -1,6 +1,8 @@
 import { buildDiagnosticRepairSuggestions } from "./repair-suggestions.js";
 import {
   getStudioActionStateResetDescriptor,
+  getStudioRuntimeCauseDescriptor,
+  formatStudioRuntimeRecoverySummary,
   isRuntimeErrorDiagnostic,
   isTargetResolutionDiagnostic,
   type ExecutionStepLog,
@@ -15,7 +17,8 @@ export type FailureInsightCategory =
   | "fallback-success"
   | "page-snapshot"
   | "execution-error"
-  | "action-state-reset";
+  | "action-state-reset"
+  | "runtime-cause";
 
 export type FailureInsightArtifact = {
   kind: "diagnostic" | "page-snapshot" | "screenshot";
@@ -112,19 +115,25 @@ function resolveRuntimeErrorSummary(step: ExecutionStepLog): string {
   }
 
   const resetDescriptor = getStudioActionStateResetDescriptor(diagnostic.cause);
+  const runtimeDescriptor = getStudioRuntimeCauseDescriptor(diagnostic.runtimeCauseCategory);
   const title = diagnostic.title?.trim();
   const pageLabel =
     title && diagnostic.url
       ? `${title}（${diagnostic.url}）`
       : title ?? diagnostic.url;
   const pageContext = pageLabel ? ` 当前页：${pageLabel}。` : "";
+  const recoveryContext = ` ${formatStudioRuntimeRecoverySummary(diagnostic)}`;
 
   if (resetDescriptor) {
-    return `${resetDescriptor.label}：${diagnostic.message}。${resetDescriptor.explanation}。${pageContext}`;
+    return `${resetDescriptor.label}：${diagnostic.message}。${resetDescriptor.explanation}。${recoveryContext}${pageContext}`;
+  }
+
+  if (runtimeDescriptor) {
+    return `${runtimeDescriptor.label}：${diagnostic.message}。${runtimeDescriptor.explanation}。${recoveryContext}${pageContext}`;
   }
 
   const errorCode = diagnostic.errorCode ? `（${diagnostic.errorCode}）` : "";
-  return `${diagnostic.stepType} 步骤执行失败${errorCode}：${diagnostic.message}。${pageContext}`;
+  return `${diagnostic.stepType} 步骤执行失败${errorCode}：${diagnostic.message}。${recoveryContext}${pageContext}`;
 }
 
 function resolveInsightCategory(step: ExecutionStepLog): {
@@ -191,6 +200,17 @@ function resolveInsightCategory(step: ExecutionStepLog): {
       };
     }
 
+    const runtimeDescriptor = getStudioRuntimeCauseDescriptor(
+      step.diagnostic.runtimeCauseCategory,
+    );
+    if (runtimeDescriptor) {
+      return {
+        category: "runtime-cause",
+        categoryLabel: runtimeDescriptor.label,
+        summary: resolveRuntimeErrorSummary(step),
+      };
+    }
+
     return {
       category: "execution-error",
       categoryLabel: "执行报错",
@@ -237,6 +257,13 @@ function resolveInsightTitle(
       return repairSuggestion.title;
     }
 
+    const runtimeDescriptor = getStudioRuntimeCauseDescriptor(
+      step.diagnostic.runtimeCauseCategory,
+    );
+    if (runtimeDescriptor && repairSuggestion) {
+      return repairSuggestion.title;
+    }
+
     return "先查看当前错误反馈";
   }
 
@@ -269,8 +296,11 @@ export function buildFailureInsight(step: ExecutionStepLog): FailureInsight | nu
   const resetDescriptor = isRuntimeErrorDiagnostic(step.diagnostic)
     ? getStudioActionStateResetDescriptor(step.diagnostic.cause)
     : undefined;
+  const runtimeDescriptor = isRuntimeErrorDiagnostic(step.diagnostic)
+    ? getStudioRuntimeCauseDescriptor(step.diagnostic.runtimeCauseCategory)
+    : undefined;
   const repairSuggestion =
-    isTargetResolutionDiagnostic(step.diagnostic) || resetDescriptor
+    isTargetResolutionDiagnostic(step.diagnostic) || resetDescriptor || runtimeDescriptor
     ? buildDiagnosticRepairSuggestions(step)[0]
     : undefined;
   const { category, categoryLabel, summary } = resolveInsightCategory(step);

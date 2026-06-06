@@ -132,6 +132,49 @@ describe("DiagnosticInspector", () => {
     expect(html).toContain("fill-value-reset");
   });
 
+  it("对广义 runtimeCauseCategory 展示根因分类与恢复次数", () => {
+    const html = renderToStaticMarkup(
+      <DiagnosticInspector
+        steps={[
+          buildStep({
+            stepIndex: 4,
+            stepId: "s5",
+            label: "确认发布动作",
+            message:
+              "locator.click: <div class=\"dialog-mask\">…</div> intercepts pointer events",
+            stepType: "click",
+            diagnostic: {
+              kind: "runtime-error",
+              stepId: "s5",
+              stepIndex: 4,
+              stepType: "click",
+              message:
+                "locator.click: <div class=\"dialog-mask\">…</div> intercepts pointer events",
+              errorCode: "RUNTIME_STEP_FAILED",
+              runtimeCauseCategory: "intercepted",
+              recoveryTried: true,
+              recoveredAttemptCount: 1,
+              url: "https://staging.example.com/orders/publish",
+              title: "订单发布页",
+            } as unknown as ExecutionStepLog["diagnostic"],
+          }),
+        ]}
+        selectedStepIndex={4}
+        onSelectStepIndex={() => {}}
+        onOpenPath={() => {}}
+      />,
+    );
+
+    expect(html).toContain("目标被遮挡或点击面被拦截");
+    expect(html).toContain("先清掉遮挡层再操作最终控件");
+    expect(html).toContain("根因分类");
+    expect(html).toContain("intercepted");
+    expect(html).toContain("恢复状态");
+    expect(html).toContain("已尝试恢复");
+    expect(html).toContain("恢复次数");
+    expect(html).toContain("runtime 已尝试恢复 1 次");
+  });
+
   it("把诊断信息提升为更适合排障的工作台视图", () => {
     const html = renderToStaticMarkup(
       <DiagnosticInspector

@@ -95,6 +95,15 @@ describe("buildFailureInsight", () => {
       actionFragment: "同组单选/复选",
       summaryFragment: "互斥",
     },
+    {
+      cause: "upload-files-reset",
+      stepType: "upload",
+      message: "upload 后文件列表未稳定保留",
+      categoryLabel: "上传文件被页面清空",
+      title: "核对上传控件是否被页面重建",
+      actionFragment: "input[type=file]",
+      summaryFragment: "重渲染",
+    },
   ])("对 $cause cause 输出更可行动的失败洞察", (scenario) => {
     const insight = buildFailureInsight(
       buildStep({
@@ -121,6 +130,83 @@ describe("buildFailureInsight", () => {
     });
     expect(insight?.summary).toContain(scenario.message);
     expect(insight?.summary).toContain(scenario.summaryFragment);
+    expect(insight?.recommendedAction).toContain(scenario.actionFragment);
+  });
+
+  it.each([
+    {
+      runtimeCauseCategory: "detached",
+      message: "locator.click: Element is not attached to the DOM",
+      categoryLabel: "目标节点已重挂载",
+      title: "重新对准最终渲染后的控件",
+      summaryFragment: "重渲染了目标",
+      actionFragment: "最终渲染后的按钮",
+      recoveryFragment: "已尝试恢复 1 次",
+    },
+    {
+      runtimeCauseCategory: "intercepted",
+      message: "locator.click: <div class=\"mask\">…</div> intercepts pointer events",
+      categoryLabel: "目标被遮挡或点击面被拦截",
+      title: "先清掉遮挡层再操作最终控件",
+      summaryFragment: "遮罩",
+      actionFragment: "遮罩层",
+      recoveryFragment: "已尝试恢复 1 次",
+    },
+    {
+      runtimeCauseCategory: "not-ready",
+      message: "locator.click: element is not visible",
+      categoryLabel: "目标还没进入可操作状态",
+      title: "补一条更明确的就绪等待",
+      summaryFragment: "不可见",
+      actionFragment: "loading",
+      recoveryFragment: "未触发恢复重试",
+    },
+    {
+      runtimeCauseCategory: "not-editable",
+      message: "locator.fill: element is not editable",
+      categoryLabel: "目标不是当前可编辑控件",
+      title: "重新对准真实可编辑控件",
+      summaryFragment: "只读壳层",
+      actionFragment: "contenteditable",
+      recoveryFragment: "已尝试恢复 1 次",
+    },
+    {
+      runtimeCauseCategory: "unknown",
+      message: "locator.click: unknown runtime failure",
+      categoryLabel: "运行时根因仍不明确",
+      title: "先打开诊断产物确认失败阶段",
+      summaryFragment: "还不能把这次失败稳定归类",
+      actionFragment: "diagnostic JSON",
+      recoveryFragment: "未触发恢复重试",
+    },
+  ])("对 $runtimeCauseCategory 根因输出更具体的 runtime 洞察", (scenario) => {
+    const insight = buildFailureInsight(
+      buildStep({
+        label: "提交动作",
+        message: scenario.message,
+        diagnostic: {
+          kind: "runtime-error",
+          stepId: "s5",
+          stepIndex: 4,
+          stepType: "click",
+          message: scenario.message,
+          errorCode: "RUNTIME_STEP_FAILED",
+          runtimeCauseCategory: scenario.runtimeCauseCategory,
+          recoveryTried: scenario.recoveryFragment.includes("已尝试"),
+          recoveredAttemptCount: scenario.recoveryFragment.includes("已尝试") ? 1 : 0,
+          url: "https://staging.example.com/orders/edit",
+          title: "订单编辑页",
+        } as unknown as ExecutionStepLog["diagnostic"],
+      }),
+    );
+
+    expect(insight).toMatchObject({
+      category: "runtime-cause",
+      categoryLabel: scenario.categoryLabel,
+      title: scenario.title,
+    });
+    expect(insight?.summary).toContain(scenario.summaryFragment);
+    expect(insight?.summary).toContain(scenario.recoveryFragment);
     expect(insight?.recommendedAction).toContain(scenario.actionFragment);
   });
 

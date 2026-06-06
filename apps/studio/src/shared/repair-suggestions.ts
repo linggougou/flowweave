@@ -7,6 +7,8 @@ import type {
 } from "./studio-api-types.js";
 import {
   getStudioActionStateResetDescriptor,
+  getStudioRuntimeCauseDescriptor,
+  formatStudioRuntimeRecoverySummary,
   isRuntimeErrorDiagnostic,
   isTargetResolutionDiagnostic,
 } from "./studio-api-types.js";
@@ -348,10 +350,12 @@ export function buildDiagnosticRepairSuggestions(
   const diagnostic = step.diagnostic;
 
   if (isRuntimeErrorDiagnostic(diagnostic)) {
-    const descriptor = getStudioActionStateResetDescriptor(diagnostic.cause);
+    const resetDescriptor = getStudioActionStateResetDescriptor(diagnostic.cause);
+    const runtimeDescriptor = getStudioRuntimeCauseDescriptor(diagnostic.runtimeCauseCategory);
+    const descriptor = resetDescriptor ?? runtimeDescriptor;
     if (descriptor) {
       ranked.push({
-        id: `runtime-cause:${diagnostic.cause}:${step.stepId}`,
+        id: `runtime-cause:${diagnostic.cause ?? diagnostic.runtimeCauseCategory ?? "unknown"}:${step.stepId}`,
         source: "runtime-cause",
         severity: "error",
         priority: 0,
@@ -360,6 +364,7 @@ export function buildDiagnosticRepairSuggestions(
         reason: joinSentences([
           diagnostic.message,
           descriptor.explanation,
+          formatStudioRuntimeRecoverySummary(diagnostic),
           buildRuntimeDiagnosticPageLabel(step)
             ? `当前页：${buildRuntimeDiagnosticPageLabel(step)}`
             : undefined,

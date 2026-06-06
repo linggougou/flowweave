@@ -7,8 +7,10 @@ import type {
   StudioDiagnosticTargetHints,
 } from "./shared/studio-api-types.js";
 import {
+  formatStudioRuntimeRecoverySummary,
   formatStudioDiagnosticCause,
   getStudioActionStateResetDescriptor,
+  getStudioRuntimeCauseDescriptor,
   isRuntimeErrorDiagnostic,
   isTargetResolutionDiagnostic,
 } from "./shared/studio-api-types.js";
@@ -192,9 +194,12 @@ export function DiagnosticInspector({
   const actionStateResetDescriptor = runtimeErrorDiagnostic
     ? getStudioActionStateResetDescriptor(runtimeErrorDiagnostic.cause)
     : undefined;
+  const runtimeCauseDescriptor = runtimeErrorDiagnostic
+    ? getStudioRuntimeCauseDescriptor(runtimeErrorDiagnostic.runtimeCauseCategory)
+    : undefined;
   const insight = buildFailureInsight(activeStep);
   const summary = targetDiagnostic ? countStrategyAttempts(activeStep) : null;
-  const repairSuggestions = targetDiagnostic || actionStateResetDescriptor
+  const repairSuggestions = targetDiagnostic || actionStateResetDescriptor || runtimeCauseDescriptor
     ? buildDiagnosticRepairSuggestions(activeStep)
     : [];
   const ambiguityClues = targetDiagnostic ? buildAmbiguityClues(activeStep) : [];
@@ -272,6 +277,41 @@ export function DiagnosticInspector({
             <p className="flow-content-meta" style={{ marginTop: 8 }}>
               {insight.pageSummary ?? "当前步骤没有页面快照摘要。"}
             </p>
+          </div>
+        </div>
+      ) : null}
+
+      {runtimeErrorDiagnostic ? (
+        <div
+          style={{
+            display: "grid",
+            gap: 12,
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+            marginBottom: 16,
+          }}
+        >
+          <div className="flow-preview" style={{ margin: 0 }}>
+            <strong>根因分类</strong>
+            <div style={{ marginTop: 8 }}>
+              {runtimeCauseDescriptor
+                ? `${runtimeCauseDescriptor.label}（${runtimeCauseDescriptor.category}）`
+                : runtimeErrorDiagnostic.runtimeCauseCategory ?? "—"}
+            </div>
+          </div>
+          <div className="flow-preview" style={{ margin: 0 }}>
+            <strong>恢复状态</strong>
+            <div style={{ marginTop: 8 }}>
+              {runtimeErrorDiagnostic.recoveryTried ? "已尝试恢复" : "未触发恢复"}
+            </div>
+            <p className="flow-content-meta" style={{ marginTop: 8 }}>
+              {formatStudioRuntimeRecoverySummary(runtimeErrorDiagnostic)}
+            </p>
+          </div>
+          <div className="flow-preview" style={{ margin: 0 }}>
+            <strong>恢复次数</strong>
+            <div style={{ marginTop: 8 }}>
+              {runtimeErrorDiagnostic.recoveredAttemptCount ?? 0}
+            </div>
           </div>
         </div>
       ) : null}
@@ -369,6 +409,28 @@ export function DiagnosticInspector({
                 <tr>
                   <th>原因</th>
                   <td>{formatStudioDiagnosticCause(diagnostic.cause) ?? "—"}</td>
+                </tr>
+              ) : null}
+              {runtimeErrorDiagnostic ? (
+                <tr>
+                  <th>根因分类</th>
+                  <td>
+                    {runtimeCauseDescriptor
+                      ? `${runtimeCauseDescriptor.label}（${runtimeCauseDescriptor.category}）`
+                      : runtimeErrorDiagnostic.runtimeCauseCategory ?? "—"}
+                  </td>
+                </tr>
+              ) : null}
+              {runtimeErrorDiagnostic ? (
+                <tr>
+                  <th>恢复状态</th>
+                  <td>{runtimeErrorDiagnostic.recoveryTried ? "已尝试恢复" : "未触发恢复"}</td>
+                </tr>
+              ) : null}
+              {runtimeErrorDiagnostic ? (
+                <tr>
+                  <th>恢复次数</th>
+                  <td>{runtimeErrorDiagnostic.recoveredAttemptCount ?? 0}</td>
                 </tr>
               ) : null}
               <tr>
