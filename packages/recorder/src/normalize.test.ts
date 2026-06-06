@@ -48,6 +48,43 @@ describe("normalizeRecordedEvent", () => {
     });
   });
 
+  it("将作用域 hints 保真写入 click 目标", () => {
+    const step = normalizeRecordedEvent(
+      event({
+        id: "evt_click_scope",
+        type: "click",
+        timestamp: 1010,
+        url: "https://example.com/orders",
+        payload: {
+          role: "button",
+          name: "编辑",
+          selector: 'tr:nth-of-type(2) button[type="button"]',
+          tagName: "button",
+          textSample: "编辑",
+          scopeText: "订单 B 已暂停",
+          scopeKind: "row",
+        },
+      }),
+    );
+
+    expect(step).toEqual({
+      id: "evt_click_scope",
+      type: "click",
+      target: {
+        strategies: [
+          { kind: "role", role: "button", name: "编辑" },
+          { kind: "css", selector: 'tr:nth-of-type(2) button[type="button"]' },
+        ],
+        hints: {
+          tagName: "button",
+          textSample: "编辑",
+          scopeText: "订单 B 已暂停",
+          scopeKind: "row",
+        },
+      },
+    });
+  });
+
   it("click 支持 payload 中的 button", () => {
     const step = normalizeRecordedEvent(
       event({

@@ -1,6 +1,7 @@
 import type { Target } from "@flowweave/flow-dsl";
 
 type LocatorStrategy = Target["strategies"][number];
+type ScopeKind = NonNullable<NonNullable<Target["hints"]>["scopeKind"]>;
 
 /** 录制事件 payload：与 normalize.buildTargetFromPayload 对齐 */
 export type InteractionRecordingPayload = {
@@ -21,10 +22,28 @@ export type InteractionRecordingPayload = {
   placeholder?: string;
   labelText?: string;
   textSample?: string;
+  scopeText?: string;
+  scopeKind?: ScopeKind;
 };
 
 const MAX_CSS_DEPTH = 6;
 const MAX_NAME_LENGTH = 80;
+const MAX_SCOPE_TEXT_LENGTH = 120;
+const MAX_SCOPE_TEXT_PARTS = 3;
+const SCOPE_HEADING_SELECTORS = [
+  ".el-dialog__title",
+  ".el-drawer__title",
+  ".el-card__header",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "legend",
+  '[role="heading"]',
+  "header",
+] as const;
 
 function escapeCss(value: string): string {
   if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
@@ -72,6 +91,10 @@ function isLabelElement(value: Element): value is HTMLLabelElement {
 
 function trimText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function sliceText(value: string, maxLength: number): string {
+  return trimText(value).slice(0, maxLength);
 }
 
 function readAssociatedControl(label: Element): Element | null {
@@ -354,6 +377,144 @@ function readTextSample(element: Element, labelText?: string): string | undefine
   return labelText?.slice(0, MAX_NAME_LENGTH);
 }
 
+function inferScopeKind(element: Element): ScopeKind | undefined {
+  const tagName = element.tagName.toLowerCase();
+  const role = element.getAttribute("role");
+  if (tagName === "tr" || role === "row") {
+    return "row";
+  }
+  if (tagName === "li" || role === "listitem") {
+    return "listitem";
+  }
+  if (role === "dialog" || element.classList.contains("el-dialog")) {
+    return "dialog";
+  }
+  if (role === "tabpanel") {
+    return "tabpanel";
+  }
+  if (tagName === "section" || tagName === "article" || tagName === "fieldset" || role === "region") {
+    return "section";
+  }
+  if (element.classList.contains("el-card") || element.classList.contains("card")) {
+    return "card";
+  }
+  return undefined;
+}
+
+function findScopeContainer(element: Element): { container: Element; kind: ScopeKind } | undefined {
+  let current = element.parentElement;
+  for (let depth = 0; depth < 10 && current; depth += 1) {
+    const kind = inferScopeKind(current);
+    if (kind) {
+      return { container: current, kind };
+    }
+    current = current.parentElement;
+  }
+  return undefined;
+}
+
+function isScopeNoiseElement(element: Element): boolean {
+  const tagName = element.tagName.toLowerCase();
+  if (tagName === "button" || tagName === "input" || tagName === "select" || tagName === "textarea") {
+    return true;
+  }
+  const role = element.getAttribute("role");
+  return role === "button" || role === "menuitem" || role === "tab";
+}
+
+function collectScopeText(element: Element, excluded: Element): string {
+  if (element === excluded || excluded.contains(element)) {
+    return "";
+  }
+  if (element.getAttribute("aria-hidden") === "true" || isScopeNoiseElement(element)) {
+    return "";
+  }
+
+  let buffer = "";
+  for (const child of Array.from(element.childNodes)) {
+    if (child.nodeType === Node.TEXT_NODE) {
+      buffer += ` ${child.textContent ?? ""}`;
+      continue;
+    }
+    if (isElement(child)) {
+      buffer += ` ${collectScopeText(child, excluded)}`;
+    }
+  }
+
+  return trimText(buffer);
+}
+
+function readScopeHeading(container: Element, excluded: Element): string | undefined {
+  for (const selector of SCOPE_HEADING_SELECTORS) {
+    const candidate = container.querySelector(selector);
+    if (!candidate || candidate === excluded || excluded.contains(candidate)) {
+      continue;
+    }
+    const text = sliceText(candidate.textContent ?? "", MAX_SCOPE_TEXT_LENGTH);
+    if (text) {
+      return text;
+    }
+  }
+  return undefined;
+}
+
+function collectScopeTextParts(container: Element, excluded: Element): string[] {
+  const parts: string[] = [];
+
+  for (const child of Array.from(container.children)) {
+    const text = sliceText(collectScopeText(child, excluded), MAX_SCOPE_TEXT_LENGTH);
+    if (!text || parts.some((part) => part === text || part.includes(text) || text.includes(part))) {
+      continue;
+    }
+    parts.push(text);
+    if (parts.length >= MAX_SCOPE_TEXT_PARTS || trimText(parts.join(" ")).length >= MAX_SCOPE_TEXT_LENGTH) {
+      break;
+    }
+  }
+
+  if (parts.length === 0) {
+    const fallback = sliceText(collectScopeText(container, excluded), MAX_SCOPE_TEXT_LENGTH);
+    if (fallback) {
+      parts.push(fallback);
+    }
+  }
+
+  return parts;
+}
+
+function readScopeHint(
+  element: Element,
+  labelText?: string,
+  textSample?: string,
+): { scopeText: string; scopeKind: ScopeKind } | undefined {
+  const scope = findScopeContainer(element);
+  if (!scope) {
+    return undefined;
+  }
+
+  let scopeText =
+    scope.kind === "row" || scope.kind === "listitem" ? undefined : readScopeHeading(scope.container, element);
+  if (!scopeText) {
+    scopeText = sliceText(collectScopeTextParts(scope.container, element).join(" "), MAX_SCOPE_TEXT_LENGTH);
+  }
+  if (!scopeText) {
+    return undefined;
+  }
+
+  const normalizedScopeText = trimText(scopeText);
+  const duplicateTexts = [readAccessibleName(element), labelText, textSample]
+    .filter((value): value is string => typeof value === "string" && value.length > 0)
+    .map((value) => trimText(value).toLowerCase());
+  if (duplicateTexts.includes(normalizedScopeText.toLowerCase())) {
+    return undefined;
+  }
+
+  return {
+    scopeText: normalizedScopeText,
+    scopeKind: scope.kind,
+  };
+}
+
 function buildStrategies(element: Element): LocatorStrategy[] {
   const strategies: LocatorStrategy[] = [];
 
@@ -401,6 +562,7 @@ export function buildInteractionPayload(
   const inputType =
     options.inputType ?? (isInputElement(element) ? (element.type || "text").toLowerCase() : undefined);
   const textSample = readTextSample(element, labelText);
+  const scopeHint = readScopeHint(element, labelText, textSample);
 
   const payload: InteractionRecordingPayload = {
     strategies,
@@ -438,6 +600,10 @@ export function buildInteractionPayload(
   }
   if (textSample) {
     payload.textSample = textSample;
+  }
+  if (scopeHint) {
+    payload.scopeText = scopeHint.scopeText;
+    payload.scopeKind = scopeHint.scopeKind;
   }
 
   if (kind === "fill" && typeof options.value === "string") {
