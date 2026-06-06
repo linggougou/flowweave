@@ -1244,6 +1244,15 @@
    - 目前证据来自本地等效命令与 workflow 静态检查。
    - 若后续 push 后发现 Ubuntu 环境下存在 Node 24 特有波动，需要回到 Playwright / 原生模块安装链继续补证。
 
+### 追加修正
+
+1. 已修复 `codex/*` 分支不会触发 CI 的问题。
+   - 原因：workflow 之前只监听 `push.branches: [main]`。
+   - 修正：`push.branches` 已扩为 `[main, 'codex/**']`，这样当前协调分支后续 push 会自动触发远端 CI。
+2. 追加本地回归验证通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm lint`
+     - 结果：通过
+
 ### 综合结论
 
 - 代码质量评分：95

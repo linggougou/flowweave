@@ -1641,3 +1641,24 @@
 - 未重复造轮子的证明：
   - 没有单独发明 `ci:node24` 或第二套 verify 脚本
   - 直接用 GitHub Actions matrix 复用现有 `verify` job
+
+## 补充修正 - CI 触发范围
+
+- 时间：2026-06-06 21:18:00 CST
+- 现象：
+  - 已推送 `codex/real-page-stability-program`
+  - GitHub Actions public API 查询 `branch=codex/real-page-stability-program` 返回 `total_count: 0`
+- 根因：
+  - [ci.yml](/Users/ling/codeHome/A_Mine/flowweave/.github/workflows/ci.yml:3) 当前只监听：
+    - `push.branches: [main]`
+    - `pull_request.branches: [main]`
+  - 因此 `codex/*` 协调分支推送不会触发远端 CI
+- 修正目标：
+  - 保持 `main` 与 PR 到 `main` 的现有行为
+  - 额外允许 `codex/*` 分支在 push 时自动触发 CI，便于自主开发阶段及时看到远端验证结果
+- 实际改动：
+  - [ci.yml](/Users/ling/codeHome/A_Mine/flowweave/.github/workflows/ci.yml:3)
+    - `push.branches` 从 `[main]` 扩为 `[main, 'codex/**']`
+- 本地快速验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm lint`
+    - 结果：通过
