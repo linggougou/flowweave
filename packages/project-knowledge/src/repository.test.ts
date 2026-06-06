@@ -129,6 +129,25 @@ describe("ProjectKnowledgeRepository", () => {
     expect(loaded?.id).toBe(env.id);
   });
 
+  it("saveEnvironment 支持持久化 storageStatePath", () => {
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-pk-"));
+    const repo = new ProjectKnowledgeRepository({ dataDir });
+    const project = repo.createProject("登录态环境");
+
+    const env = repo.saveEnvironment(
+      project.id,
+      "已登录环境",
+      "https://example.com/app",
+      true,
+      "/tmp/flowweave/state.json",
+    );
+
+    expect(env.storageStatePath).toBe("/tmp/flowweave/state.json");
+
+    const loaded = repo.getDefaultEnvironment(project.id);
+    expect(loaded?.storageStatePath).toBe("/tmp/flowweave/state.json");
+  });
+
   it("savePageSnapshot 与 listPageSnapshots", () => {
     dataDir = mkdtempSync(join(tmpdir(), "flowweave-pk-"));
     const repo = new ProjectKnowledgeRepository({ dataDir });

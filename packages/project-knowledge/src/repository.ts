@@ -27,6 +27,7 @@ import type {
 
 const EXECUTION_STATUSES = ["success", "failed", "cancelled"] as const;
 const STEP_STATUSES = ["passed", "failed", "skipped"] as const;
+const PROJECT_ENVIRONMENT_STORAGE_STATE_COLUMN = "storage_state_path";
 
 function parseExecutionStatus(status: string): ExecutionResult["status"] {
   return EXECUTION_STATUSES.includes(status as ExecutionResult["status"])
@@ -38,6 +39,19 @@ function parseStepStatus(status: string): StepLog["status"] {
   return STEP_STATUSES.includes(status as StepLog["status"])
     ? (status as StepLog["status"])
     : "failed";
+}
+
+function ensureProjectEnvironmentStorageStateColumn(
+  sqlite: Parameters<typeof closeProjectDatabase>[0],
+): void {
+  const columns = sqlite.pragma("table_info(project_environments)") as Array<{ name: string }>;
+  if (columns.some((column) => column.name === PROJECT_ENVIRONMENT_STORAGE_STATE_COLUMN)) {
+    return;
+  }
+  sqlite.exec(`
+    ALTER TABLE project_environments
+    ADD COLUMN storage_state_path TEXT
+  `);
 }
 
 export type ProjectKnowledgeRepositoryOptions = {
@@ -92,11 +106,13 @@ export class ProjectKnowledgeRepository {
     name: string,
     baseUrl: string,
     isDefault = false,
+    storageStatePath?: string,
   ): ProjectEnvironment {
     const id = randomUUID();
     const now = new Date().toISOString();
     const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
     try {
+      ensureProjectEnvironmentStorageStateColumn(sqlite);
       if (isDefault) {
         db.update(dbSchema.projectEnvironments)
           .set({ isDefault: 0 })
@@ -109,6 +125,7 @@ export class ProjectKnowledgeRepository {
           projectId,
           name,
           baseUrl,
+          storageStatePath: storageStatePath ?? null,
           isDefault: isDefault ? 1 : 0,
           createdAt: now,
         })
@@ -116,12 +133,20 @@ export class ProjectKnowledgeRepository {
     } finally {
       closeProjectDatabase(sqlite);
     }
-    return { id, projectId, name, baseUrl, isDefault };
+    return {
+      id,
+      projectId,
+      name,
+      baseUrl,
+      isDefault,
+      storageStatePath,
+    };
   }
 
   getDefaultEnvironment(projectId: string): ProjectEnvironment | null {
     const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
     try {
+      ensureProjectEnvironmentStorageStateColumn(sqlite);
       const row =
         db
           .select()
@@ -142,6 +167,7 @@ export class ProjectKnowledgeRepository {
         name: row.name,
         baseUrl: row.baseUrl,
         isDefault: row.isDefault === 1,
+        storageStatePath: row.storageStatePath ?? undefined,
       };
     } finally {
       closeProjectDatabase(sqlite);

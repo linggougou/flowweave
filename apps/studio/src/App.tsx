@@ -12,9 +12,11 @@ import { FragilityNotice } from "./FragilityNotice.js";
 import { flowStepsToRows } from "./flow-step-format.js";
 import type {
   ExecutionSummary,
+  RunFlowVariableValue,
   StudioExecution,
   StudioFlowRef,
   StudioFlowVersion,
+  StudioProjectEnvironment,
   StudioProject,
 } from "./shared/studio-api-types.js";
 
@@ -64,6 +66,63 @@ function formatExecutionTime(iso?: string): string {
 }
 
 type MainTab = "flow" | "executions" | "versions";
+type FlowVariableDefinition = FlowDocument["variables"][number];
+type VariableInputs = Record<string, string>;
+
+function stringifyDefaultVariableValue(
+  value: FlowVariableDefinition["defaultValue"],
+): string {
+  if (value === undefined) {
+    return "";
+  }
+  return String(value);
+}
+
+function buildInitialVariableInputs(
+  flow: FlowDocument | null,
+  previous: VariableInputs = {},
+): VariableInputs {
+  if (!flow) {
+    return {};
+  }
+
+  const next: VariableInputs = {};
+  for (const variable of flow.variables) {
+    next[variable.name] =
+      previous[variable.name] ?? stringifyDefaultVariableValue(variable.defaultValue);
+  }
+  return next;
+}
+
+function parseVariableInput(
+  variable: FlowVariableDefinition,
+  rawValue: string,
+): RunFlowVariableValue | undefined {
+  const trimmed = rawValue.trim();
+  if (!trimmed) {
+    if (variable.required) {
+      throw new Error(`变量 ${variable.name} 不能为空`);
+    }
+    return undefined;
+  }
+
+  switch (variable.type) {
+    case "string":
+      return rawValue;
+    case "number": {
+      const numericValue = Number(trimmed);
+      if (Number.isNaN(numericValue)) {
+        throw new Error(`变量 ${variable.name} 必须是数字`);
+      }
+      return numericValue;
+    }
+    case "boolean":
+      if (trimmed !== "true" && trimmed !== "false") {
+        throw new Error(`变量 ${variable.name} 必须是 true 或 false`);
+      }
+      return trimmed === "true";
+  }
+}
 
 export function App() {
   const [tab, setTab] = useState<MainTab>("flow");
@@ -89,6 +148,15 @@ export function App() {
   const [renamingFlowId, setRenamingFlowId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [renaming, setRenaming] = useState(false);
+  const [selectedEnvironmentName, setSelectedEnvironmentName] = useState("");
+  const [baseUrlDraft, setBaseUrlDraft] = useState("");
+  const [storageStatePathDraft, setStorageStatePathDraft] = useState("");
+  const [variableInputs, setVariableInputs] = useState<VariableInputs>({});
+
+  const selectedProject =
+    projects.find((project) => project.id === selectedProjectId) ?? null;
+  const selectedProjectName = selectedProject?.name;
+  const availableEnvironments = selectedProject?.environments ?? [];
 
   const refreshProjects = useCallback(async () => {
     const api = getStudioApi();
@@ -195,6 +263,29 @@ export function App() {
     void loadFlowDocument(selectedProjectId, selectedFlowId);
   }, [selectedProjectId, selectedFlowId, flows, refreshVersions, loadFlowDocument]);
 
+  useEffect(() => {
+    const environment =
+      availableEnvironments.find((item) => item.name === selectedEnvironmentName) ??
+      availableEnvironments.find((item) => item.isDefault) ??
+      availableEnvironments[0] ??
+      null;
+
+    if (!environment) {
+      setSelectedEnvironmentName("");
+      setBaseUrlDraft("");
+      setStorageStatePathDraft("");
+      return;
+    }
+
+    setSelectedEnvironmentName(environment.name);
+    setBaseUrlDraft(environment.baseUrl);
+    setStorageStatePathDraft(environment.storageStatePath ?? "");
+  }, [availableEnvironments, selectedEnvironmentName]);
+
+  useEffect(() => {
+    setVariableInputs((previous) => buildInitialVariableInputs(currentFlow, previous));
+  }, [currentFlow]);
+
   const loadExecution = async (executionId: string) => {
     const api = getStudioApi();
     const detail = await api.getExecution(executionId);
@@ -299,16 +390,35 @@ export function App() {
     }
   };
 
+  const handleSelectEnvironment = (environmentName: string) => {
+    const environment = availableEnvironments.find((item) => item.name === environmentName);
+    setSelectedEnvironmentName(environmentName);
+    setBaseUrlDraft(environment?.baseUrl ?? "");
+    setStorageStatePathDraft(environment?.storageStatePath ?? "");
+  };
+
   const handleRun = async () => {
-    if (!selectedProjectId || !selectedFlowId) {
+    if (!selectedProjectId || !selectedFlowId || !currentFlow) {
       return;
     }
     setLoading(true);
     setError(null);
     try {
+      const variables: Record<string, RunFlowVariableValue> = {};
+      for (const variable of currentFlow.variables) {
+        const value = parseVariableInput(variable, variableInputs[variable.name] ?? "");
+        if (value !== undefined) {
+          variables[variable.name] = value;
+        }
+      }
+
       const api = getStudioApi();
       const result = await api.runFlow(selectedProjectId, selectedFlowId, {
         showBrowser,
+        environmentName: selectedEnvironmentName || "默认环境",
+        baseUrl: baseUrlDraft.trim() || undefined,
+        storageStatePath: storageStatePathDraft.trim() || undefined,
+        variables,
       });
       const detail = await api.getExecution(result.executionId);
       setExecution(detail);
@@ -327,9 +437,6 @@ export function App() {
     currentFlow !== null ? analyzeFlowFragility(currentFlow) : [];
 
   const flowStepRows = currentFlow ? flowStepsToRows(currentFlow.steps) : [];
-
-  const selectedProjectName =
-    projects.find((p) => p.id === selectedProjectId)?.name ?? undefined;
 
   const hasFlowsInProject = flows.length > 0;
   const projectHasNoFlows = Boolean(selectedProjectId) && !hasFlowsInProject;
@@ -379,6 +486,9 @@ export function App() {
       setRestoringId(null);
     }
   };
+
+  const selectedEnvironment =
+    availableEnvironments.find((item) => item.name === selectedEnvironmentName) ?? null;
 
   return (
     <div className="app">
@@ -677,6 +787,110 @@ export function App() {
           </span>
         </div>
         {error ? <p className="error" role="alert">{error}</p> : null}
+        {selectedProjectId ? (
+          <section className="flow-content-panel">
+            <header className="flow-content-header">
+              <h2>运行环境</h2>
+              <p className="flow-content-meta">
+                当前项目环境与运行时变量会在执行时注入到 Studio Runtime
+              </p>
+            </header>
+            <div className="new-project-form" style={{ maxWidth: "100%" }}>
+              <label>
+                环境
+                <select
+                  value={selectedEnvironmentName}
+                  disabled={loading || availableEnvironments.length === 0}
+                  onChange={(event) => handleSelectEnvironment(event.target.value)}
+                >
+                  {availableEnvironments.length === 0 ? (
+                    <option value="">未配置默认环境</option>
+                  ) : (
+                    availableEnvironments.map((environment) => (
+                      <option key={environment.name} value={environment.name}>
+                        {environment.name}
+                        {environment.isDefault ? "（默认）" : ""}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </label>
+              <label>
+                Base URL
+                <input
+                  type="text"
+                  value={baseUrlDraft}
+                  placeholder="https://example.com"
+                  disabled={loading}
+                  onChange={(event) => setBaseUrlDraft(event.target.value)}
+                />
+              </label>
+              <label>
+                Storage State 路径
+                <input
+                  type="text"
+                  value={storageStatePathDraft}
+                  placeholder="/path/to/storage-state.json"
+                  disabled={loading}
+                  onChange={(event) => setStorageStatePathDraft(event.target.value)}
+                />
+              </label>
+              <p className="execution-history-meta">
+                {selectedEnvironment
+                  ? `当前环境：${selectedEnvironment.name}`
+                  : "当前项目还没有默认环境，运行时将只使用 Flow 自身的绝对地址。"}
+              </p>
+            </div>
+            <section className="flow-preview">
+              <h3>变量注入</h3>
+              {currentFlow && currentFlow.variables.length > 0 ? (
+                <div className="new-project-form" style={{ maxWidth: "100%" }}>
+                  {currentFlow.variables.map((variable) => (
+                    <label key={variable.name}>
+                      {variable.name}（{variable.type}
+                      {variable.required ? "，必填" : "，可选"}）
+                      {variable.type === "boolean" ? (
+                        <select
+                          value={variableInputs[variable.name] ?? ""}
+                          disabled={loading}
+                          onChange={(event) =>
+                            setVariableInputs((previous) => ({
+                              ...previous,
+                              [variable.name]: event.target.value,
+                            }))
+                          }
+                        >
+                          {!variable.required ? <option value="">未设置</option> : null}
+                          <option value="true">true</option>
+                          <option value="false">false</option>
+                        </select>
+                      ) : (
+                        <input
+                          type={variable.type === "number" ? "number" : "text"}
+                          value={variableInputs[variable.name] ?? ""}
+                          placeholder={
+                            variable.defaultValue === undefined
+                              ? "请输入运行值"
+                              : `默认值：${String(variable.defaultValue)}`
+                          }
+                          disabled={loading}
+                          onChange={(event) =>
+                            setVariableInputs((previous) => ({
+                              ...previous,
+                              [variable.name]: event.target.value,
+                            }))
+                          }
+                        />
+                      )}
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                <p className="execution-history-empty">当前 Flow 未声明运行变量</p>
+              )}
+            </section>
+          </section>
+        ) : null}
         {tab === "flow" ? (
           <section className="flow-content-panel">
             {projectHasNoFlows ? (
@@ -759,8 +973,8 @@ export function App() {
                   }))}
                   selectedVersionId={selectedVersionId}
                   restoringId={restoringId}
-                  onSelect={(id) => void loadVersion(id)}
-                  onRestore={(id) => void handleRestore(id)}
+                  onSelect={(id: string) => void loadVersion(id)}
+                  onRestore={(id: string) => void handleRestore(id)}
                   emptyMessage="暂无历史版本，修改并保存 Flow 后会自动生成"
                 />
                 {previewVersion ? (

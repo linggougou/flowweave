@@ -53,6 +53,7 @@ export const projectEnvironments = sqliteTable("project_environments", {
     .references(() => projects.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   baseUrl: text("base_url").notNull(),
+  storageStatePath: text("storage_state_path"),
   isDefault: integer("is_default").notNull().default(0),
   createdAt: text("created_at").notNull(),
 });

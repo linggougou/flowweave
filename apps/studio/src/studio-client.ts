@@ -9,6 +9,7 @@ import type {
   StudioFlowRef,
   StudioFlowVersion,
   StudioProject,
+  StudioProjectEnvironment,
 } from "./shared/studio-api-types.js";
 
 const KNOWLEDGE_API =
@@ -100,6 +101,19 @@ function toStudioFlowVersion(record: FlowVersionRecord): StudioFlowVersion {
   };
 }
 
+function buildFallbackEnvironments(baseUrl?: string): StudioProjectEnvironment[] {
+  if (!baseUrl) {
+    return [];
+  }
+  return [
+    {
+      name: "默认环境",
+      baseUrl,
+      isDefault: true,
+    },
+  ];
+}
+
 const knowledgeHttpClient: Pick<StudioApi, HttpFallbackMethod> = {
   listProjects: async (): Promise<StudioProject[]> => {
     const projects = await knowledgeRequest<Array<StudioProject & { baseUrl?: string }>>(
@@ -110,6 +124,7 @@ const knowledgeHttpClient: Pick<StudioApi, HttpFallbackMethod> = {
       name: project.name,
       createdAt: project.createdAt,
       baseUrl: project.baseUrl,
+      environments: project.environments ?? buildFallbackEnvironments(project.baseUrl),
     }));
   },
 
@@ -121,7 +136,10 @@ const knowledgeHttpClient: Pick<StudioApi, HttpFallbackMethod> = {
     return knowledgeRequest<StudioProject>("/api/projects", {
       method: "POST",
       body: JSON.stringify({ name: trimmed }),
-    });
+    }).then((project) => ({
+      ...project,
+      environments: project.environments ?? buildFallbackEnvironments(project.baseUrl),
+    }));
   },
 
   listFlows: (projectId: string): Promise<StudioFlowRef[]> =>

@@ -1,11 +1,21 @@
 /** 渲染进程与 preload 共享的 Studio API 类型 */
 import type { FlowDocument } from "@flowweave/flow-dsl";
 
+export type RunFlowVariableValue = string | number | boolean;
+
+export type StudioProjectEnvironment = {
+  name: string;
+  baseUrl: string;
+  isDefault: boolean;
+  storageStatePath?: string;
+};
+
 export type StudioProject = {
   id: string;
   name: string;
   createdAt: string;
   baseUrl?: string;
+  environments: StudioProjectEnvironment[];
 };
 
 export type ExecutionStepLog = {
@@ -33,6 +43,7 @@ export type StudioExecution = {
   steps: ExecutionStepLog[];
   startedAt: string;
   finishedAt?: string;
+  environmentName?: string;
   fragilityWarnings?: FragilityWarning[];
 };
 
@@ -44,6 +55,10 @@ export type RunFlowResult = {
 /** 运行流程时的选项；showBrowser 为 true 时弹出 Playwright 浏览器窗口 */
 export type RunFlowOptions = {
   showBrowser?: boolean;
+  environmentName?: string;
+  baseUrl?: string;
+  storageStatePath?: string;
+  variables?: Record<string, RunFlowVariableValue>;
 };
 
 export type ExecutionSummary = {

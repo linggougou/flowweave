@@ -4,7 +4,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import type { FlowDocument } from "@flowweave/flow-dsl";
-import type { ExecutionResult as KnowledgeExecutionResult } from "@flowweave/project-knowledge";
+import {
+  ProjectKnowledgeRepository,
+  type ExecutionResult as KnowledgeExecutionResult,
+  type ProjectEnvironment,
+} from "@flowweave/project-knowledge";
 import { analyzeFlowFragility } from "@flowweave/page-intelligence";
 import { executeFlow, type ExecutionResult as RuntimeExecutionResult } from "@flowweave/runtime";
 import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
@@ -12,9 +16,11 @@ import { isChromiumInstalled } from "./env-setup.js";
 import type {
   ExecutionStepLog,
   ExecutionSummary,
+  RunFlowOptions,
   StudioExecution,
   StudioFlowVersion,
   StudioProject,
+  StudioProjectEnvironment,
 } from "../src/shared/studio-api-types.js";
 import {
   apiAllocateRunDirectory,
@@ -34,6 +40,7 @@ import {
 } from "./knowledge-client.js";
 
 const executions = new Map<string, StudioExecution>();
+const projectKnowledgeRepository = new ProjectKnowledgeRepository();
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const loginFixtureUrl = pathToFileURL(
@@ -42,6 +49,99 @@ const loginFixtureUrl = pathToFileURL(
 
 const SEED_PROJECT_NAME = "登录演示";
 const SEED_FLOW_ID = "flow_login_fixture";
+
+function toStudioProjectEnvironment(
+  environment: ProjectEnvironment,
+): StudioProjectEnvironment {
+  return {
+    name: environment.name,
+    baseUrl: environment.baseUrl,
+    isDefault: environment.isDefault,
+    storageStatePath: environment.storageStatePath,
+  };
+}
+
+function buildFallbackEnvironments(baseUrl?: string): StudioProjectEnvironment[] {
+  if (!baseUrl) {
+    return [];
+  }
+  return [
+    {
+      name: "默认环境",
+      baseUrl,
+      isDefault: true,
+    },
+  ];
+}
+
+function loadProjectEnvironments(
+  projectId: string,
+  fallbackBaseUrl?: string,
+): StudioProjectEnvironment[] {
+  const environment = projectKnowledgeRepository.getDefaultEnvironment(projectId);
+  if (environment) {
+    return [toStudioProjectEnvironment(environment)];
+  }
+  return buildFallbackEnvironments(fallbackBaseUrl);
+}
+
+function mapProject(project: {
+  id: string;
+  name: string;
+  createdAt: string;
+  baseUrl?: string;
+}): StudioProject {
+  const environments = loadProjectEnvironments(project.id, project.baseUrl);
+  return {
+    id: project.id,
+    name: project.name,
+    createdAt: project.createdAt,
+    baseUrl: environments[0]?.baseUrl ?? project.baseUrl,
+    environments,
+  };
+}
+
+function normalizeOptionalString(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+type ResolvedRunEnvironment = {
+  name: string;
+  baseUrl?: string;
+  storageStatePath?: string;
+};
+
+function resolveRunEnvironment(
+  projectId: string,
+  options: RunFlowServiceOptions,
+): ResolvedRunEnvironment {
+  const stored = projectKnowledgeRepository.getDefaultEnvironment(projectId);
+  const name = normalizeOptionalString(options.environmentName) ?? stored?.name ?? "默认环境";
+  const baseUrl = normalizeOptionalString(options.baseUrl) ?? stored?.baseUrl;
+  const storageStatePath =
+    normalizeOptionalString(options.storageStatePath) ?? stored?.storageStatePath;
+  const shouldPersist =
+    options.environmentName !== undefined ||
+    options.baseUrl !== undefined ||
+    options.storageStatePath !== undefined;
+
+  if (shouldPersist && baseUrl) {
+    projectKnowledgeRepository.saveEnvironment(
+      projectId,
+      name,
+      baseUrl,
+      true,
+      storageStatePath,
+    );
+  }
+
+  return {
+    name,
+    baseUrl,
+    storageStatePath,
+  };
+}
 
 function buildLoginFixtureFlow(projectId: string): FlowDocument {
   const now = new Date().toISOString();
@@ -92,32 +192,18 @@ async function ensureSeedProject(): Promise<StudioProject> {
     if (flows.length === 0) {
       await apiSaveFlow(first.id, buildLoginFixtureFlow(first.id));
     }
-    return {
-      id: first.id,
-      name: first.name,
-      createdAt: first.createdAt,
-      baseUrl: first.baseUrl,
-    };
+    return mapProject(first);
   }
   const project = await apiCreateProject(SEED_PROJECT_NAME);
+  projectKnowledgeRepository.saveEnvironment(project.id, "默认环境", loginFixtureUrl, true);
   await apiSaveFlow(project.id, buildLoginFixtureFlow(project.id));
-  return {
-    id: project.id,
-    name: project.name,
-    createdAt: project.createdAt,
-    baseUrl: loginFixtureUrl,
-  };
+  return mapProject({ ...project, baseUrl: loginFixtureUrl });
 }
 
 export async function listProjects(): Promise<StudioProject[]> {
   await ensureSeedProject();
   const projects = await apiListProjects();
-  return projects.map((p) => ({
-    id: p.id,
-    name: p.name,
-    createdAt: p.createdAt,
-    baseUrl: p.baseUrl,
-  }));
+  return projects.map((project) => mapProject(project));
 }
 
 export async function createProject(name: string): Promise<StudioProject> {
@@ -126,11 +212,7 @@ export async function createProject(name: string): Promise<StudioProject> {
     throw new Error("项目名称不能为空");
   }
   const project = await apiCreateProject(trimmed);
-  return {
-    id: project.id,
-    name: project.name,
-    createdAt: project.createdAt,
-  };
+  return mapProject(project);
 }
 
 async function resolveFlowForRun(projectId: string, flowId?: string): Promise<FlowDocument> {
@@ -184,10 +266,7 @@ function toKnowledgeExecution(
   };
 }
 
-export type RunFlowServiceOptions = {
-  /** 为 true 时显示 Playwright 浏览器窗口（headless: false） */
-  showBrowser?: boolean;
-};
+export type RunFlowServiceOptions = RunFlowOptions;
 
 export async function runFlow(
   projectId: string,
@@ -199,6 +278,7 @@ export async function runFlow(
   const executionId = randomUUID();
   const artifactDir = await apiAllocateRunDirectory(projectId, executionId);
   const showBrowser = options.showBrowser ?? true;
+  const environment = resolveRunEnvironment(projectId, options);
 
   if (!isChromiumInstalled()) {
     throw new Error(
@@ -210,6 +290,10 @@ export async function runFlow(
     headless: !showBrowser,
     executionId,
     artifactDir,
+    baseUrl: environment.baseUrl,
+    storageStatePath: environment.storageStatePath,
+    variables: options.variables,
+    environmentName: environment.name,
   });
   await apiSaveExecution(projectId, toKnowledgeExecution(runtimeResult, flow.id));
 
@@ -225,6 +309,7 @@ export async function runFlow(
     steps: mapRuntimeSteps(runtimeResult),
     startedAt,
     finishedAt: new Date().toISOString(),
+    environmentName: environment.name,
     fragilityWarnings: analyzeFlowFragility(flow)
       .filter((i) => i.severity === "warning")
       .map((i) => ({ stepId: i.stepId, message: i.message })),
@@ -274,6 +359,10 @@ function fromKnowledgeExecution(
 }
 
 export async function getExecution(executionId: string): Promise<StudioExecution | null> {
+  const cached = executions.get(executionId);
+  if (cached) {
+    return cached;
+  }
   const stored = await apiGetExecution(executionId);
   if (stored) {
     const record = fromKnowledgeExecution(stored);

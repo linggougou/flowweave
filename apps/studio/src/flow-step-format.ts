@@ -1,13 +1,9 @@
-import type { NormalizedStep } from "@flowweave/flow-dsl";
+import type { NormalizedStep, Target } from "@flowweave/flow-dsl";
 import type { FlowStepRow } from "@flowweave/ui";
 
-function formatTarget(step: NormalizedStep): string | undefined {
-  if (step.type !== "click" && step.type !== "fill") {
-    return undefined;
-  }
-
+function formatTargetStrategies(target: Target): string | undefined {
   const parts: string[] = [];
-  for (const strategy of step.target.strategies) {
+  for (const strategy of target.strategies) {
     switch (strategy.kind) {
       case "testId":
         parts.push(`testId=${strategy.testId}`);
@@ -36,6 +32,23 @@ function formatTarget(step: NormalizedStep): string | undefined {
   return parts.length > 0 ? parts.join(" → ") : undefined;
 }
 
+function formatTarget(step: NormalizedStep): string | undefined {
+  switch (step.type) {
+    case "click":
+    case "fill":
+    case "select":
+    case "setChecked":
+    case "upload":
+      return formatTargetStrategies(step.target);
+    case "press":
+      return step.target ? formatTargetStrategies(step.target) : undefined;
+    case "wait":
+      return step.target ? formatTargetStrategies(step.target) : undefined;
+    case "navigate":
+      return undefined;
+  }
+}
+
 function formatSummary(step: NormalizedStep): string {
   switch (step.type) {
     case "navigate":
@@ -43,20 +56,32 @@ function formatSummary(step: NormalizedStep): string {
     case "fill":
       return `填写「${step.value}」`;
     case "click": {
-      if (step.type === "click") {
-        const role = step.target.strategies.find((s) => s.kind === "role");
-        if (role?.kind === "role" && role.name) {
-          return `点击「${role.name}」`;
-        }
-        const text = step.target.strategies.find((s) => s.kind === "text");
-        if (text?.kind === "text") {
-          return `点击「${text.text}」`;
-        }
+      const role = step.target.strategies.find((s) => s.kind === "role");
+      if (role?.kind === "role" && role.name) {
+        return `点击「${role.name}」`;
+      }
+      const text = step.target.strategies.find((s) => s.kind === "text");
+      if (text?.kind === "text") {
+        return `点击「${text.text}」`;
       }
       return "点击";
     }
+    case "select":
+      return `选择「${step.values.join("、")}」`;
+    case "setChecked":
+      return step.checked ? "勾选" : "取消勾选";
+    case "press":
+      return `按键「${step.key}」`;
+    case "upload":
+      return `上传 ${step.files.length} 个文件`;
     case "wait":
-      return step.ms !== undefined ? `等待 ${step.ms}ms` : `等待条件 ${step.condition}`;
+      if (step.ms !== undefined) {
+        return `等待 ${step.ms}ms`;
+      }
+      if (step.condition) {
+        return `等待条件 ${step.condition}`;
+      }
+      return "等待";
   }
 }
 
