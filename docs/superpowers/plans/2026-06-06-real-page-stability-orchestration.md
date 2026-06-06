@@ -1,6 +1,6 @@
 # 真实页面稳定性增强并行编排板
 
-更新时间：2026-06-06 14:55 CST
+更新时间：2026-06-06 15:01 CST
 
 ## 1. 主目标
 
@@ -31,7 +31,7 @@
 |------|--------|----------|------|------|
 | Foundation | `Kepler` | `019e9bb4-15c4-7d61-bd88-c9632921efc7` | running | 负责冻结 DSL / ExecutionOptions / 环境类型与说明文档 |
 | Benchmarks（第一阶段） | `Halley` | `019e9bb4-4cd4-7931-a911-c2f8c7521167` | running | 先创建本地 fixture 页面与覆盖说明文档，不碰 runtime 代码 |
-| Diagnostics（第一阶段） | `Kuhn` | `019e9bb4-8113-7092-b538-a6e7ef66d76c` | running | 先增强 `page-intelligence` 的静态脆弱性规则与测试 |
+| Diagnostics（第一阶段） | `Kuhn` | `019e9bb4-8113-7092-b538-a6e7ef66d76c` | completed | 已提交 `adf388e`，主代理审查后已并入协调分支 |
 
 ## 4. 执行顺序
 
@@ -50,8 +50,9 @@
 当前状态：
 
 1. Foundation 已启动，等待接口冻结完成。
-2. Benchmarks 与 Diagnostics 先行处理不依赖 Foundation 的子任务，减少空转。
-3. Recorder / Runtime / Environment 的正式编码在 Foundation 回收后统一拉起。
+2. Benchmarks 先行处理不依赖 Foundation 的 fixture 页面与说明文档，减少空转。
+3. Diagnostics 第一阶段已完成并通过主代理复验：`pnpm --filter @flowweave/page-intelligence test`。
+4. Recorder / Runtime / Environment 的正式编码在 Foundation 回收后统一拉起。
 
 ### 阶段 C：统一集成
 
