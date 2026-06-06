@@ -3601,3 +3601,23 @@
 - 当前状态：
   - 3 条 Wave 7 子代理已获得可工作的干净基线。
   - 主代理接下来等待实现结果，并按编排板顺序做复验、审查、合并与回收。
+
+## 2026-06-07 Wave 7 轨道回收 - Extension Session Export Contract
+
+- 时间：2026-06-07 02:46:29 CST
+- 子代理结果：
+  - 子代理：`Rawls` / `019e9e3a-3887-7743-94a3-9fd064381b32`
+  - 分支提交：`172d168 测试: 补充扩展会话导出背景合同`
+  - 改动范围：
+    - `apps/extension/entrypoints/background.ts`
+    - `apps/extension/lib/background-contract.test.ts`
+- 主代理集成：
+  - 已并回协调分支提交：`merge: 合并 Wave 7 扩展导出合同轨道`
+- Node 20 复验：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension test -- background-contract.test.ts content-contract.test.ts`
+    - 结果：通过，`8/8`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension typecheck`
+    - 结果：通过
+- 当前结论：
+  - 扩展 background 主链现在有了 `record / export / sync` 三类消息的合同测试。
+  - 轻微非阻塞顾虑：导出文件名仍沿用 `sessionId.slice(0, 8)` 规则；已被测试锁定，后续若想提升可读性，可单独开轨调整。
