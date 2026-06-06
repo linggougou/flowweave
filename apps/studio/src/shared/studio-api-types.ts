@@ -1,5 +1,6 @@
 /** 渲染进程与 preload 共享的 Studio API 类型 */
 import type { FlowDocument } from "@flowweave/flow-dsl";
+import type { FragilityIssue, PageSnapshotSummary } from "@flowweave/page-intelligence";
 
 export type RunFlowVariableValue = string | number | boolean;
 
@@ -29,11 +30,35 @@ export type ExecutionStepLog = {
   finishedAt?: string;
   screenshotPath?: string;
   diagnosticPath?: string;
+  diagnostic?: StudioStepDiagnostic;
+  pageSnapshotPath?: string;
+  pageSnapshot?: PageSnapshotSummary;
 };
 
-export type FragilityWarning = {
+export type StudioDiagnosticTargetHints = {
+  tagName?: string;
+  inputType?: string;
+  nameAttr?: string;
+  placeholder?: string;
+  labelText?: string;
+  textSample?: string;
+};
+
+export type StudioDiagnosticStrategyAttempt = {
+  label: string;
+  matchedCount: number;
+  visibleCount?: number;
+  success: boolean;
+  error?: string;
+};
+
+export type StudioStepDiagnostic = {
   stepId: string;
-  message: string;
+  stepIndex: number;
+  url: string;
+  title: string;
+  strategyAttempts: StudioDiagnosticStrategyAttempt[];
+  targetHints?: StudioDiagnosticTargetHints;
 };
 
 export type StudioExecution = {
@@ -45,7 +70,7 @@ export type StudioExecution = {
   startedAt: string;
   finishedAt?: string;
   environmentName?: string;
-  fragilityWarnings?: FragilityWarning[];
+  fragilityIssues?: FragilityIssue[];
 };
 
 export type RunFlowResult = {

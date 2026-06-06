@@ -1,9 +1,11 @@
 import "./env-setup.js";
 import { randomUUID } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import type { FlowDocument } from "@flowweave/flow-dsl";
+import type { FragilityIssue, PageSnapshotSummary } from "@flowweave/page-intelligence";
 import {
   ProjectKnowledgeRepository,
   type ExecutionResult as KnowledgeExecutionResult,
@@ -17,6 +19,7 @@ import type {
   ExecutionStepLog,
   ExecutionSummary,
   RunFlowOptions,
+  StudioStepDiagnostic,
   StudioExecution,
   StudioFlowVersion,
   StudioProject,
@@ -230,19 +233,84 @@ async function resolveFlowForRun(projectId: string, flowId?: string): Promise<Fl
   return flow;
 }
 
-function mapRuntimeSteps(result: RuntimeExecutionResult): ExecutionStepLog[] {
-  return result.steps.map((step) => ({
-    stepIndex: step.stepIndex,
-    stepId: step.stepId,
-    label: step.type,
-    status: step.status === "success" ? "passed" : "failed",
-    message: step.message,
-    startedAt: step.startedAt,
-    finishedAt: step.endedAt,
-    durationMs: step.durationMs,
-    screenshotPath: step.screenshotPath,
-    diagnosticPath: step.diagnosticPath,
-  }));
+function readJsonArtifact<T>(filePath?: string): T | undefined {
+  if (!filePath || !existsSync(filePath)) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(readFileSync(filePath, "utf-8")) as T;
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveStepLabel(
+  flow: FlowDocument | undefined,
+  stepIndex: number,
+  fallback: string,
+): string {
+  const step = flow?.steps[stepIndex];
+  return step?.label ?? step?.type ?? fallback;
+}
+
+function inferPageSnapshotPath(step: {
+  stepIndex: number;
+  screenshotPath?: string;
+  diagnosticPath?: string;
+}): string | undefined {
+  const artifactPath = step.diagnosticPath ?? step.screenshotPath;
+  if (!artifactPath) {
+    return undefined;
+  }
+  const candidate = join(dirname(artifactPath), `page-${step.stepIndex}.json`);
+  return existsSync(candidate) ? candidate : undefined;
+}
+
+function readStepArtifacts(
+  step: Pick<ExecutionStepLog, "stepIndex" | "screenshotPath" | "diagnosticPath">,
+  pageSnapshots = new Map<number, { filePath: string; summary: PageSnapshotSummary }>(),
+): Pick<ExecutionStepLog, "diagnostic" | "pageSnapshot" | "pageSnapshotPath"> {
+  const pageSnapshot = pageSnapshots.get(step.stepIndex);
+  const pageSnapshotPath = pageSnapshot?.filePath ?? inferPageSnapshotPath(step);
+
+  return {
+    diagnostic: readJsonArtifact<StudioStepDiagnostic>(step.diagnosticPath),
+    pageSnapshotPath,
+    pageSnapshot:
+      pageSnapshot?.summary ?? readJsonArtifact<PageSnapshotSummary>(pageSnapshotPath),
+  };
+}
+
+function mapRuntimeSteps(
+  result: RuntimeExecutionResult,
+  flow?: FlowDocument,
+): ExecutionStepLog[] {
+  const pageSnapshots = new Map(
+    (result.pageSnapshots ?? []).map((snapshot) => [
+      snapshot.stepIndex,
+      { filePath: snapshot.filePath, summary: snapshot.summary },
+    ]),
+  );
+
+  return result.steps.map((step) => {
+    const mappedStep: ExecutionStepLog = {
+      stepIndex: step.stepIndex,
+      stepId: step.stepId,
+      label: resolveStepLabel(flow, step.stepIndex, step.type),
+      status: step.status === "success" ? "passed" : "failed",
+      message: step.message,
+      startedAt: step.startedAt,
+      finishedAt: step.endedAt,
+      durationMs: step.durationMs,
+      screenshotPath: step.screenshotPath,
+      diagnosticPath: step.diagnosticPath,
+    };
+
+    return {
+      ...mappedStep,
+      ...readStepArtifacts(mappedStep, pageSnapshots),
+    };
+  });
 }
 
 function toKnowledgeExecution(
@@ -266,6 +334,13 @@ function toKnowledgeExecution(
       diagnosticPath: step.diagnosticPath,
     })),
   };
+}
+
+function buildFragilityIssues(flow?: FlowDocument): FragilityIssue[] | undefined {
+  if (!flow) {
+    return undefined;
+  }
+  return analyzeFlowFragility(flow);
 }
 
 export type RunFlowServiceOptions = RunFlowOptions;
@@ -308,13 +383,11 @@ export async function runFlow(
     projectId,
     flowId: flow.id,
     status: runtimeResult.status === "success" ? "passed" : "failed",
-    steps: mapRuntimeSteps(runtimeResult),
+    steps: mapRuntimeSteps(runtimeResult, flow),
     startedAt,
     finishedAt: new Date().toISOString(),
     environmentName: environment.name,
-    fragilityWarnings: analyzeFlowFragility(flow)
-      .filter((i) => i.severity === "warning")
-      .map((i) => ({ stepId: i.stepId, message: i.message })),
+    fragilityIssues: buildFragilityIssues(flow),
   };
 
   if (runtimeResult.error) {
@@ -337,6 +410,7 @@ function mapKnowledgeStatus(status: KnowledgeExecutionResult["status"]): StudioE
 
 function fromKnowledgeExecution(
   stored: Awaited<ReturnType<typeof apiGetExecution>> & object,
+  flow?: FlowDocument,
 ): StudioExecution {
   const startedAt = stored.startedAt ?? new Date(0).toISOString();
   return {
@@ -346,18 +420,26 @@ function fromKnowledgeExecution(
     status: mapKnowledgeStatus(stored.status),
     startedAt,
     finishedAt: stored.finishedAt,
-    steps: stored.steps.map((step) => ({
-      stepIndex: step.stepIndex,
-      stepId: step.stepId,
-      label: step.stepId,
-      status: step.status,
-      message: step.errorMessage,
-      durationMs: step.durationMs,
-      startedAt,
-      finishedAt: stored.finishedAt,
-      screenshotPath: step.screenshotPath,
-      diagnosticPath: step.diagnosticPath,
-    })),
+    steps: stored.steps.map((step) => {
+      const mappedStep: ExecutionStepLog = {
+        stepIndex: step.stepIndex,
+        stepId: step.stepId,
+        label: resolveStepLabel(flow, step.stepIndex, step.stepId),
+        status: step.status,
+        message: step.errorMessage,
+        durationMs: step.durationMs,
+        startedAt,
+        finishedAt: stored.finishedAt,
+        screenshotPath: step.screenshotPath,
+        diagnosticPath: step.diagnosticPath,
+      };
+
+      return {
+        ...mappedStep,
+        ...readStepArtifacts(mappedStep),
+      };
+    }),
+    fragilityIssues: buildFragilityIssues(flow),
   };
 }
 
@@ -368,7 +450,14 @@ export async function getExecution(executionId: string): Promise<StudioExecution
   }
   const stored = await apiGetExecution(executionId);
   if (stored) {
-    const record = fromKnowledgeExecution(stored);
+    let flow: FlowDocument | undefined;
+    try {
+      flow = await apiGetFlow(stored.projectId, stored.flowId);
+    } catch {
+      flow = undefined;
+    }
+
+    const record = fromKnowledgeExecution(stored, flow);
     executions.set(executionId, record);
     return record;
   }

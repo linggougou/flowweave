@@ -1,7 +1,9 @@
 import type { FlowDocument } from "@flowweave/flow-dsl";
+import { analyzeFlowFragility } from "@flowweave/page-intelligence";
 import type { ExecutionResult, ExecutionWithProject, FlowVersionRecord } from "@flowweave/project-knowledge";
 
 import type {
+  ExecutionStepLog,
   ExecutionSummary,
   RunFlowResult,
   StudioApi,
@@ -56,7 +58,10 @@ function mapExecutionStatus(status: ExecutionResult["status"]): StudioExecution[
   return "failed";
 }
 
-function toStudioExecution(stored: ExecutionWithProject): StudioExecution {
+function toStudioExecution(
+  stored: ExecutionWithProject,
+  flow?: FlowDocument,
+): StudioExecution {
   const startedAt = stored.startedAt ?? new Date(0).toISOString();
   return {
     executionId: stored.executionId,
@@ -65,18 +70,25 @@ function toStudioExecution(stored: ExecutionWithProject): StudioExecution {
     status: mapExecutionStatus(stored.status),
     startedAt,
     finishedAt: stored.finishedAt,
-    steps: stored.steps.map((step) => ({
-      stepIndex: step.stepIndex,
-      stepId: step.stepId,
-      label: step.stepId,
-      status: step.status,
-      message: step.errorMessage,
-      durationMs: step.durationMs,
-      startedAt,
-      finishedAt: stored.finishedAt,
-      screenshotPath: step.screenshotPath,
-      diagnosticPath: step.diagnosticPath,
-    })),
+    steps: stored.steps.map((step) => {
+      const storedStep = step as ExecutionWithProject["steps"][number] & Partial<ExecutionStepLog>;
+      return {
+        stepIndex: step.stepIndex,
+        stepId: step.stepId,
+        label: flow?.steps[step.stepIndex]?.label ?? flow?.steps[step.stepIndex]?.type ?? step.stepId,
+        status: step.status,
+        message: step.errorMessage,
+        durationMs: step.durationMs,
+        startedAt,
+        finishedAt: stored.finishedAt,
+        screenshotPath: step.screenshotPath,
+        diagnosticPath: step.diagnosticPath,
+        diagnostic: storedStep.diagnostic,
+        pageSnapshotPath: storedStep.pageSnapshotPath,
+        pageSnapshot: storedStep.pageSnapshot,
+      };
+    }),
+    fragilityIssues: flow ? analyzeFlowFragility(flow) : undefined,
   };
 }
 
@@ -180,7 +192,15 @@ const knowledgeHttpClient: Pick<StudioApi, HttpFallbackMethod> = {
       const stored = await knowledgeRequest<ExecutionWithProject>(
         `/api/executions/${executionId}`,
       );
-      return toStudioExecution(stored);
+      let flow: FlowDocument | undefined;
+      try {
+        flow = await knowledgeRequest<FlowDocument>(
+          `/api/projects/${stored.projectId}/flows/${stored.flowId}`,
+        );
+      } catch {
+        flow = undefined;
+      }
+      return toStudioExecution(stored, flow);
     } catch {
       return null;
     }

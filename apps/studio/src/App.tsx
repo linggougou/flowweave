@@ -8,9 +8,11 @@ import {
   StepLogTable,
   type StepLogRow,
 } from "@flowweave/ui";
+import { DiagnosticInspector } from "./DiagnosticInspector.js";
 import { FragilityNotice } from "./FragilityNotice.js";
 import { flowStepsToRows } from "./flow-step-format.js";
 import type {
+  ExecutionStepLog,
   ExecutionSummary,
   RunFlowVariableValue,
   StudioExecution,
@@ -151,6 +153,9 @@ export function App() {
   const [baseUrlDraft, setBaseUrlDraft] = useState("");
   const [storageStatePathDraft, setStorageStatePathDraft] = useState("");
   const [variableInputs, setVariableInputs] = useState<VariableInputs>({});
+  const [selectedDiagnosticStepIndex, setSelectedDiagnosticStepIndex] = useState<number | null>(
+    null,
+  );
 
   const selectedProject =
     projects.find((project) => project.id === selectedProjectId) ?? null;
@@ -284,6 +289,17 @@ export function App() {
   useEffect(() => {
     setVariableInputs((previous) => buildInitialVariableInputs(currentFlow, previous));
   }, [currentFlow]);
+
+  useEffect(() => {
+    if (!execution) {
+      setSelectedDiagnosticStepIndex(null);
+      return;
+    }
+    const firstDiagnosticStep =
+      execution.steps.find((step) => step.diagnosticPath) ??
+      execution.steps.find((step) => step.pageSnapshotPath);
+    setSelectedDiagnosticStepIndex(firstDiagnosticStep?.stepIndex ?? null);
+  }, [execution?.executionId, execution]);
 
   const loadExecution = async (executionId: string) => {
     const api = getStudioApi();
@@ -432,7 +448,7 @@ export function App() {
     }
   };
 
-  const flowFragilityWarnings =
+  const flowFragilityIssues =
     currentFlow !== null ? analyzeFlowFragility(currentFlow) : [];
 
   const flowStepRows = currentFlow ? flowStepsToRows(currentFlow.steps) : [];
@@ -454,7 +470,12 @@ export function App() {
     finishedAt: step.finishedAt,
     screenshotPath: step.screenshotPath,
     diagnosticPath: step.diagnosticPath,
+    pageSnapshotPath: step.pageSnapshotPath,
   }));
+
+  const diagnosticSteps: ExecutionStepLog[] = (execution?.steps ?? []).filter(
+    (step) => step.diagnosticPath || step.pageSnapshotPath || step.pageSnapshot,
+  );
 
   const openLocalPath = (filePath: string) => {
     void getStudioApi()
@@ -462,6 +483,10 @@ export function App() {
       .catch((err: unknown) => {
         setError(formatStudioError(err));
       });
+  };
+
+  const inspectDiagnostic = (step: StepLogRow) => {
+    setSelectedDiagnosticStepIndex(step.stepIndex);
   };
 
   const loadVersion = async (versionId: string) => {
@@ -914,7 +939,7 @@ export function App() {
                     该 Flow 已同步但<strong>没有录制步骤</strong>。请在扩展中重新录制页面操作后再同步。
                   </p>
                 ) : null}
-                <FragilityNotice warnings={flowFragilityWarnings} />
+                <FragilityNotice warnings={flowFragilityIssues} />
                 <FlowStepsTable
                   steps={flowStepRows}
                   emptyMessage="该 Flow 没有步骤，请在扩展中录制后重新同步"
@@ -933,19 +958,8 @@ export function App() {
         ) : null}
         {tab === "executions" ? (
           <>
-            {execution?.fragilityWarnings && execution.fragilityWarnings.length > 0 ? (
-              <FragilityNotice
-                warnings={execution.fragilityWarnings.map((w) => {
-                  const stepIndex = execution.steps.findIndex((s) => s.stepId === w.stepId);
-                  return {
-                    stepId: w.stepId,
-                    stepIndex: stepIndex >= 0 ? stepIndex : 0,
-                    code: "CSS_ONLY" as const,
-                    message: w.message,
-                    severity: "warning" as const,
-                  };
-                })}
-              />
+            {execution?.fragilityIssues && execution.fragilityIssues.length > 0 ? (
+              <FragilityNotice warnings={execution.fragilityIssues} />
             ) : null}
             <StepLogTable
               steps={steps}
@@ -956,7 +970,16 @@ export function App() {
               }
               onOpenScreenshot={openLocalPath}
               onOpenDiagnostic={openLocalPath}
+              onInspectDiagnostic={inspectDiagnostic}
             />
+            {execution && diagnosticSteps.length > 0 ? (
+              <DiagnosticInspector
+                steps={execution.steps}
+                selectedStepIndex={selectedDiagnosticStepIndex}
+                onSelectStepIndex={setSelectedDiagnosticStepIndex}
+                onOpenPath={openLocalPath}
+              />
+            ) : null}
           </>
         ) : null}
         {tab === "versions" ? (
