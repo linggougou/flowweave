@@ -73,6 +73,8 @@ export type StudioDiagnosticTargetHints = {
   placeholder?: string;
   labelText?: string;
   textSample?: string;
+  scopeText?: string;
+  scopeKind?: "row" | "listitem" | "dialog" | "tabpanel" | "section" | "card";
 };
 
 export type StudioDiagnosticStrategyAttempt = {

@@ -16,6 +16,8 @@ export const targetHintsSchema = z.object({
   placeholder: z.string().optional(),
   labelText: z.string().optional(),
   textSample: z.string().optional(),
+  scopeText: z.string().optional(),
+  scopeKind: z.enum(["row", "listitem", "dialog", "tabpanel", "section", "card"]).optional(),
 });
 
 export const targetSchema = z.object({
