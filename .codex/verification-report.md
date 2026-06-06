@@ -1960,3 +1960,177 @@
 - 风险评估评分：94
 - 综合评分：97
 - 建议：通过
+
+## 2026-06-07 autonomous-wave 旧轨道吸收审计
+
+### 验证范围
+
+- 2026-06-06 落盘的下一轮 autonomous-wave 计划与 worktree 编排，是否已经完成“分轨开发 + 逐步验收回收”。
+- 仍保留的 5 个旧 worktree 中：
+  - 哪些已经被当前协调分支等价吸收
+  - 哪些虽然 `git cherry` 不等价，但功能已经被当前主分支超集覆盖
+- 当前协调分支是否具备 `Recorder Placeholder Contract` 与 `Studio Experience` 两条旧轨道的核心能力，并且在 `Node v20.19.6` 下通过现行测试。
+
+### 验证结果
+
+1. 三条旧轨道已经被当前协调分支等价吸收。
+   - `git cherry -v codex/real-page-stability-program codex/ci-runtime-refresh`
+     - 结果：`- 72c01aa`
+   - `git cherry -v codex/real-page-stability-program codex/real-page-benchmarks-p5`
+     - 结果：`- dc69e74`
+   - `git cherry -v codex/real-page-stability-program codex/real-page-runtime-contract`
+     - 结果：`- 19889d0`
+   - 结论：`CI Runtime Refresh`、`Benchmarks P5`、`Runtime Replay Contract` 均无需再额外并回。
+2. `Recorder Placeholder Contract` 已被当前主分支功能级吸收。
+   - 旧 worktree 复验：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test`
+     - 结果：通过，`39/39`
+   - 当前协调分支复验：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension test -- lib/content-contract.test.ts`
+       - 结果：通过，`4/4`
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test`
+       - 结果：通过，`45/45`
+   - 当前主分支已具备并验证：
+     - upload token 去碰撞
+     - contenteditable 文本采集
+     - 提交型 keypress 先 flush 待提交 fill
+     - 宽字符 upload 占位符
+     - `fileNames` 保留与数量校验
+     - upload 变量声明
+   - 结论：虽然 `git cherry` 仍显示 `+ d0fc337`，但旧分支目标已被主分支等价或超集覆盖。
+3. `Studio Experience` 已被当前主分支功能级吸收。
+   - 旧 worktree 复验：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/project-knowledge test`
+       - 结果：通过，`13/13`
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
+       - 结果：通过，`26/26`
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+       - 结果：通过
+   - 当前协调分支复验：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/project-knowledge test`
+       - 结果：通过，`13/13`
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
+       - 结果：通过，`40/40`
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+       - 结果：通过
+   - 当前主分支已具备并验证：
+     - `getFlowRunInput()`
+     - 最近一次运行输入恢复
+     - `baseUrl / 变量 / storageStatePath` preflight
+     - `ExecutionRunContextPanel`
+     - `ProjectKnowledgeRepository.getLatestExecutionForFlow()`
+     - 运行上下文透传与落库
+   - 结论：虽然 `git cherry` 仍显示 `+ f504577`，但旧分支能力已被主分支超集覆盖，直接并回旧分支反而会回退部分后续增强。
+4. 旧 autonomous-wave 轨道已满足“验收合格即可回收”条件。
+   - 5 条轨道均已满足以下至少一种状态：
+     - 已并回
+     - 已等价吸收
+     - 已被更晚主分支实现超集替代
+   - 因此可以回收对应 worktree，保留主工作区作为唯一后续开发基线。
+5. worktree 回收动作已执行完成。
+   - `git worktree remove .worktrees/codex-ci-runtime-refresh`
+   - `git worktree remove .worktrees/codex-real-page-benchmarks-p5`
+   - `git worktree remove .worktrees/codex-real-page-recorder-contract`
+   - `git worktree remove .worktrees/codex-real-page-runtime-contract`
+   - `git worktree remove --force .worktrees/codex-real-page-studio-experience`
+   - `git worktree list`
+     - 结果：仅剩主工作区 `/Users/ling/codeHome/A_Mine/flowweave`
+
+### Findings
+
+1. 未发现阻塞级问题。
+   - 当前协调分支已经用功能级证据完成了对 5 条 autonomous-wave 轨道的回收审计。
+2. 残余风险：`git cherry` 与“功能级吸收”不是同一概念。
+   - `Recorder Contract` 与 `Studio Experience` 仍显示 `+`，说明 patch-id 不完全等价。
+   - 本轮已经通过代码搜索与 Node 20 测试补足功能级证据，因此不构成阻塞。
+3. 残余风险：保留 worktree 若不及时回收，后续容易再次被误判为“未并回开发中”。
+   - 建议本轮直接清理 5 个保留 worktree，并在编排板中显式标记状态。
+
+### 综合结论
+
+- 代码质量评分：96
+- 测试覆盖评分：96
+- 规范遵循评分：99
+- 战略匹配评分：98
+- 风险评估评分：95
+- 综合评分：97
+- 建议：通过
+
+## 2026-06-07 autonomous-wave 最终统一验收
+
+### 验证范围
+
+- 在 `autonomous-wave` 旧轨道吸收审计与 worktree 全回收完成后，当前协调分支 `codex/real-page-stability-program` 是否仍能在 `Node v20.19.6` 基线下通过最终统一验收。
+- 最终统一验收是否同时覆盖：
+  - `pnpm smoke`
+  - `pnpm e2e:real-pages`
+- 编排板与操作日志中记录的“5 条旧轨道已吸收 / 已回收”状态，是否与当前仓库状态一致。
+
+### 验证结果
+
+1. 仓库级烟测最终复验通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+     - 结果：通过
+   - 内含关键结果：
+     - `pnpm typecheck`：`19 successful, 19 total`
+     - `pnpm test`：通过
+     - `pnpm build`：`12 successful, 12 total`
+     - `pnpm e2e:login`：通过
+   - `e2e:login` 运行记录：
+     - 项目 ID：`5c0c8271-186e-49e9-900f-1afec89debe0`
+     - 执行 ID：`6574e190-ac24-4fbd-9f7f-0448143dae46`
+     - 状态：`success`
+     - 步骤：`4/4`
+2. 真实页面矩阵最终复验通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+     - 结果：通过
+     - 档位：`p6`
+     - 基准数量：`18`
+     - 成功 / 失败：`18 / 0`
+     - 总耗时：`26080ms`
+     - 平均耗时：`1449ms`
+     - 失败类型统计：`无`
+   - 成功态摘要覆盖完整，包含：
+     - 基础交互：`4/4`
+     - 上传提交流程：`1/1`
+     - 会话恢复：`3/3`
+     - 筛选联动：`2/2`
+     - 确认提交流程：`2/2`
+     - 分页切换：`1/1`
+     - 抽屉保存：`2/2`
+     - 富文本编辑：`1/1`
+     - 结果重试恢复：`1/1`
+     - 跨页批量选择：`1/1`
+   - Wave 5 / Wave 6 重点场景均成功：
+     - `contenteditable-editor`
+     - `session-expired-retry`
+     - `bulk-cross-page-selection`
+     - `drawer-double-save`
+3. 旧轨道回收状态与当前仓库一致。
+   - `git worktree list`
+     - 结果：仅剩主工作区 `/Users/ling/codeHome/A_Mine/flowweave`
+   - 因此：
+     - `CI Runtime Refresh`、`Benchmarks P5`、`Runtime Replay Contract` 已等价吸收并回收
+     - `Recorder Placeholder Contract`、`Studio Experience` 已功能级吸收并回收
+4. 最终收口没有发现新的阻塞条件。
+   - 本轮复验没有出现录制占位符、运行回放、Studio 运行上下文或真实页面矩阵相关的新失败。
+   - 也没有触发“同一阻塞条件连续三次”升级场景。
+
+### Findings
+
+1. 未发现阻塞级问题。
+   - 当前协调分支已同时通过 `smoke` 与真实页面矩阵最终复验，足以支撑本轮自主开发阶段的收尾提交。
+2. 残余风险：真实页面矩阵时间成本仍需持续关注。
+   - 当前 `18` 个场景总耗时 `26.080s`，仍在可接受范围，但后续继续扩容时要防止验收时间线性膨胀。
+3. 残余风险：Node 24 仍不是当前已验证基线。
+   - 本轮所有最终证据继续基于 `Node v20.19.6`；若后续切换运行时，需要单独建立兼容性迁移轨道。
+
+### 综合结论
+
+- 代码质量评分：98
+- 测试覆盖评分：98
+- 规范遵循评分：99
+- 战略匹配评分：98
+- 风险评估评分：95
+- 综合评分：98
+- 建议：通过

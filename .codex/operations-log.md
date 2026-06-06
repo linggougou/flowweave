@@ -2894,3 +2894,139 @@
   - 已创建提交：`2b19905 chore: 完成 Wave 5 统一验收`
   - 已删除 heartbeat 自动化：`flowweave`
   - 删除原因：Wave 5“真实页面稳定录制与执行增强”阶段性目标已完成，继续保留会造成过期自动触发。
+
+## 2026-06-07 下一轮自主并行开发续跑
+
+- 时间：2026-06-07 00:18:50 CST
+- 任务目标：承接已落盘的 autonomous wave 设计 / 计划 / 编排板，继续推进仍未回收的真实页面稳定性增强轨道。
+- 使用技能：
+  - `using-superpowers`
+  - `brainstorming`
+  - `writing-plans`
+  - `using-git-worktrees`
+  - `dispatching-parallel-agents`
+  - `subagent-driven-development`
+- 工具与替代说明：
+  - `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code` 当前环境仍不可用。
+  - 本轮继续以仓库现状、既有计划文档、CodeGraph、本地命令与 Node 20 验证替代。
+- 当前状态核对：
+  - 当前分支：`codex/real-page-stability-program`
+  - 工作区：干净
+  - 现存 worktree：
+    - `.worktrees/codex-ci-runtime-refresh`
+    - `.worktrees/codex-real-page-benchmarks-p5`
+    - `.worktrees/codex-real-page-recorder-contract`
+    - `.worktrees/codex-real-page-runtime-contract`
+    - `.worktrees/codex-real-page-studio-experience`
+  - `.worktrees/` 仍被 `.gitignore` 忽略，`git check-ignore -v .worktrees` 结果正常。
+- 现有计划与编排文档：
+  - `docs/superpowers/specs/2026-06-06-real-page-stability-autonomous-wave-design.md`
+  - `docs/superpowers/plans/2026-06-06-real-page-stability-autonomous-wave-plan.md`
+  - `docs/superpowers/plans/2026-06-06-real-page-stability-autonomous-wave-orchestration.md`
+- 轨道状态判断：
+  - `git cherry -v codex/real-page-stability-program codex/ci-runtime-refresh`
+    - 结果：`- 72c01aa`，说明 CI Runtime Refresh 已被当前协调分支等价吸收。
+  - `git cherry -v codex/real-page-stability-program codex/real-page-benchmarks-p5`
+    - 结果：`- dc69e74`，说明 Benchmarks P5 已被当前协调分支等价吸收。
+  - `git cherry -v codex/real-page-stability-program codex/real-page-runtime-contract`
+    - 结果：`- 19889d0`，说明 Runtime Replay Contract 已被当前协调分支等价吸收。
+  - `git cherry -v codex/real-page-stability-program codex/real-page-recorder-contract`
+    - 结果：`+ d0fc337`，说明 Recorder Placeholder Contract 仍未并回。
+  - `git cherry -v codex/real-page-stability-program codex/real-page-studio-experience`
+    - 结果：`+ f504577`，说明 Studio Experience 仍未并回。
+- 下一步决策：
+  - 优先在保留 worktree 中对 `Recorder Contract` 与 `Studio Experience` 做 Node 20 局部复验。
+  - 若局部复验通过，再评估 cherry-pick / 合并到当前协调分支并做统一验收。
+- 局部复验结果：
+  - `Recorder Contract` worktree
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test`
+    - 结果：通过，`39/39`
+  - `Studio Experience` worktree
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/project-knowledge test`
+      - 结果：通过，`13/13`
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
+      - 结果：通过，`26/26`
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+      - 结果：通过
+- 当前协调分支吸收审计：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension test -- lib/content-contract.test.ts`
+    - 结果：通过，`4/4`
+    - 结论：当前主分支已具备 upload token 去碰撞、contenteditable 文本采集、提交型 keypress flush 合同
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test`
+    - 结果：通过，`45/45`
+    - 结论：当前主分支已覆盖宽字符 upload 占位符、`fileNames`、upload 变量声明等 Recorder Contract 目标
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/project-knowledge test`
+    - 结果：通过，`13/13`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
+    - 结果：通过，`40/40`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+    - 结果：通过
+    - 结论：当前主分支已具备 `getFlowRunInput()`、最近一次运行输入恢复、preflight、运行上下文面板与知识库存取能力，且实现比旧 `Studio Experience` 分支更新
+- 功能级结论：
+  - `Recorder Placeholder Contract`：
+    - 虽然 `git cherry` 仍为 `+ d0fc337`，但其目标能力已被当前主分支等价或超集吸收
+    - 不再直接 cherry-pick 旧分支，避免回退 contenteditable / flush / wait 推断后续修复
+  - `Studio Experience`：
+    - 虽然 `git cherry` 仍为 `+ f504577`，但其目标能力已被当前主分支等价或超集吸收
+    - 不再直接 cherry-pick 旧分支，避免回退 failure insight、repair suggestions 与显式环境清空语义
+- 下一步决策：
+  - 更新 autonomous-wave 编排板与验证报告，把 5 条轨道标记为“已并回 / 已吸收 / 已 supersede”
+  - 回收保留的 5 个 autonomous-wave worktree，仅保留主工作区作为后续开发基线
+- 实际回收结果：
+  - 已执行：
+    - `git worktree remove .worktrees/codex-ci-runtime-refresh`
+    - `git worktree remove .worktrees/codex-real-page-benchmarks-p5`
+    - `git worktree remove .worktrees/codex-real-page-recorder-contract`
+    - `git worktree remove .worktrees/codex-real-page-runtime-contract`
+    - `git worktree remove --force .worktrees/codex-real-page-studio-experience`
+  - `git worktree list`
+    - 结果：仅剩 `/Users/ling/codeHome/A_Mine/flowweave`
+  - 结论：autonomous-wave 保留 worktree 已全部回收完成，当前仓库重新回到“单主工作区 + 文档留痕”状态。
+
+## 2026-06-07 autonomous-wave 最终统一验收与收尾
+
+- 时间：2026-06-07 00:31:54 CST
+- 任务目标：在旧轨道吸收审计与 worktree 全回收完成后，用 `Node v20.19.6` 对当前协调分支做最终统一验收，并为提交 / 推送准备最终留痕。
+- 使用技能：
+  - `verification-before-completion`
+  - `finishing-a-development-branch`
+- 工具与替代说明：
+  - 当前环境仍未提供 `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code`。
+  - 本轮继续以既有计划文档、本地命令、CodeGraph 与项目测试替代，并把替代过程留痕在仓库 `.codex/`。
+- 最终验收命令：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+    - 结果：通过
+    - 内含验证：
+      - `pnpm typecheck`：`19 successful, 19 total`
+      - `pnpm test`：通过
+      - `pnpm build`：`12 successful, 12 total`
+      - `pnpm e2e:login`：通过
+    - `e2e:login` 运行记录：
+      - 项目 ID：`5c0c8271-186e-49e9-900f-1afec89debe0`
+      - 执行 ID：`6574e190-ac24-4fbd-9f7f-0448143dae46`
+      - 步骤：`4`
+      - 状态：`success`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+    - 结果：通过
+    - 档位：`p6`
+    - 基准数量：`18`
+    - 成功 / 失败：`18 / 0`
+    - 总耗时：`26080ms`
+    - 平均耗时：`1449ms`
+    - 失败类型统计：`无`
+    - 最慢 Top 5：
+      - `drawer-double-save`：`2508ms`
+      - `bulk-cross-page-selection`：`2378ms`
+      - `session-expired-retry`：`1957ms`
+      - `empty-results-retry`：`1910ms`
+      - `linked-filters`：`1834ms`
+- 最终状态确认：
+  - 当前分支：`codex/real-page-stability-program`
+  - `git worktree list`：仅剩主工作区 `/Users/ling/codeHome/A_Mine/flowweave`
+  - 旧 autonomous-wave 五条轨道状态已全部落盘为：
+    - 已等价吸收：`CI Runtime Refresh`、`Benchmarks P5`、`Runtime Replay Contract`
+    - 功能级吸收完成：`Recorder Placeholder Contract`、`Studio Experience`
+- 收口结论：
+  - 当前协调分支在最终审计后仍保持 `Node 20` 全量验收通过。
+  - 未复现新的真实页面回归，也未触发连续三次同阻塞条件。
+  - 下一步仅剩提交、推送与目标状态收口。

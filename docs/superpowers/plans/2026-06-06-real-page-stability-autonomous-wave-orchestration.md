@@ -1,6 +1,8 @@
 # 真实页面稳定性下一轮自主并行编排板
 
-更新时间：2026-06-06 23:48 CST
+状态：已收口（2026-06-07 最终统一验收通过）
+
+更新时间：2026-06-07 00:31 CST
 
 ## 1. 主目标
 
@@ -13,6 +15,39 @@
 - Node 基线：`v20.19.6`
 - 当前主门槛：`pnpm lint`、`pnpm smoke`
 - `.worktrees/`：已存在且已被 `.gitignore` 忽略
+
+## 2.1 当前回收状态
+
+| 轨道 | 当前状态 | 证据 |
+|------|----------|------|
+| Foundation | 已并回 | `bc6e191 feat: 提供共享占位符协议基线` |
+| Recorder Placeholder Contract | 功能级吸收完成 | 当前主分支 `app-extension` 合同测试 `4/4`、`recorder` 测试 `45/45` 均通过 |
+| Runtime Replay Contract | 已等价吸收 | `git cherry` 结果 `- 19889d0` |
+| Studio Experience | 功能级吸收完成 | 当前主分支 `project-knowledge` `13/13`、`app-studio` `40/40`、`typecheck` 通过 |
+| Benchmarks P5 | 已等价吸收 | `git cherry` 结果 `- dc69e74`，且 Wave 5 / Wave 6 矩阵已统一验收通过 |
+| CI Runtime Refresh | 已等价吸收 | `git cherry` 结果 `- 72c01aa` |
+
+说明：
+
+- `Recorder Placeholder Contract` 与 `Studio Experience` 虽然 `git cherry` 仍显示 `+`，但其核心能力已被当前协调分支等价或超集覆盖。
+- 这两条旧分支不再直接 cherry-pick，避免把旧基线实现倒回主线。
+
+## 2.2 最终统一验收状态
+
+- `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+  - 结果：通过
+  - `e2e:login`：`4/4 success`
+- `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+  - 结果：通过
+  - 档位：`p6`
+  - 基准数量：`18`
+  - 成功 / 失败：`18 / 0`
+  - 总耗时：`26080ms`
+- `git worktree list`
+  - 结果：仅剩主工作区 `/Users/ling/codeHome/A_Mine/flowweave`
+- 结论：
+  - 本编排板所述 5 条 autonomous-wave 旧轨道已全部完成“验收合格即可回收”
+  - 当前协调分支保留为唯一后续开发基线
 
 ## 3. Foundation（主代理先行）
 
@@ -127,6 +162,19 @@ PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke:full
 2. 合并 worktree 分支
 3. 关闭子代理
 4. 删除对应 worktree
+
+## 8.1 本轮回收决议
+
+- `codex/ci-runtime-refresh`
+  - 结论：已等价吸收，worktree 已回收
+- `codex/real-page-benchmarks-p5`
+  - 结论：已等价吸收，worktree 已回收
+- `codex/real-page-runtime-contract`
+  - 结论：已等价吸收，worktree 已回收
+- `codex/real-page-recorder-contract`
+  - 结论：当前主分支已有更晚且更完整实现，worktree 已回收
+- `codex/real-page-studio-experience`
+  - 结论：当前主分支已有更晚且更完整实现，worktree 已回收
 
 ## 9. 风险与注意事项
 
