@@ -78,6 +78,8 @@ pnpm dev:extension   # 浏览器扩展（WXT 热更新）
 
 如需在 Node 20 / 24 之间切换，请在切换主版本后执行一次 `pnpm install --force`，让 `better-sqlite3` 等原生模块按当前 Node ABI 重新落盘。
 
+GitHub Actions 当前保持 `Node 20 / 24` 双基线矩阵；本地开发、排障和交付前自验仍以 `.nvmrc` 的 Node 20 作为稳定口径。
+
 ## 交付阶段
 
 | 阶段 | 目标 |
