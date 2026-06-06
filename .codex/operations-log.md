@@ -3135,3 +3135,68 @@
 - 下一步执行策略：
   - 先用 Node 20 复跑 Foundation 相关验证，确认基线仍然稳定。
   - 随后创建四个独立 worktree，并按修正后的文件边界派发 Recorder / Runtime / Studio / Benchmarks 四条并行轨道。
+
+## 2026-06-07 Target Disambiguation 并行派发启动
+
+- 时间：2026-06-07 00:53:48 CST
+- Node 20 基线复跑：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/flow-dsl test`
+    - 结果：通过，`4/4`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+    - 结果：通过
+- 已提交并行边界修正：
+  - 提交：`ab0a6ed docs: 收窄目标消歧并行轨道边界`
+- worktree 创建结果：
+  - `/Users/ling/codeHome/A_Mine/flowweave/.worktrees/codex-target-recorder-scope`
+    - 分支：`codex/target-recorder-scope`
+  - `/Users/ling/codeHome/A_Mine/flowweave/.worktrees/codex-target-runtime-disambiguation`
+    - 分支：`codex/target-runtime-disambiguation`
+  - `/Users/ling/codeHome/A_Mine/flowweave/.worktrees/codex-target-studio-ambiguity`
+    - 分支：`codex/target-studio-ambiguity`
+  - `/Users/ling/codeHome/A_Mine/flowweave/.worktrees/codex-target-benchmarks-p7`
+    - 分支：`codex/target-benchmarks-p7`
+- `git worktree list` 结果：
+  - 主工作区与 4 个新 worktree 均已挂载到提交 `ab0a6ed`，满足同一基线起跑要求。
+- 子代理派发：
+  - Recorder Scope Hints
+    - agent：`Herschel`
+    - id：`019e9dda-b0b9-7630-8d8b-ba2336bad1b8`
+    - 授权范围：`packages/recorder/src/target-from-dom.ts`、`packages/recorder/src/target-from-dom.test.ts`、`packages/recorder/src/normalize.ts`、`packages/recorder/src/normalize.test.ts`
+  - Runtime Disambiguation
+    - agent：`Hilbert`
+    - id：`019e9dda-b11f-7f81-8fec-ea54ec84183a`
+    - 授权范围：`packages/runtime/src/playwright-runner.ts`、`packages/runtime/src/playwright-runner.test.ts`
+  - Studio Ambiguity Insight
+    - agent：`Anscombe`
+    - id：`019e9dda-b186-7692-8cb5-647317f94a6d`
+    - 授权范围：`apps/studio/src/DiagnosticInspector.tsx`、`apps/studio/src/DiagnosticInspector.test.tsx`、`apps/studio/src/shared/repair-suggestions.ts`、`apps/studio/src/shared/repair-suggestions.test.ts`
+  - Benchmarks P7
+    - agent：`Nash`
+    - id：`019e9dda-b1e4-70d0-9795-74304d6b46b1`
+    - 授权范围：`examples/fixtures/repeated-row-actions.html`、`examples/real-page-smoke.ts`、`docs/guides/fixture-matrix.md`、`packages/runtime/src/real-page-matrix.test.ts`
+- 审查计划：
+  - 每条实现轨完成后，先做规格符合性审查，再做代码质量审查。
+  - 通过审查后再并回协调分支，并立即以 Node 20 做局部验收。
+
+## 2026-06-07 worktree 依赖阻塞处置
+
+- 时间：2026-06-07 01:00:04 CST
+- 现象：
+  - `Studio Ambiguity Insight` 轨在 worktree 内执行
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- DiagnosticInspector.test.tsx src/shared/repair-suggestions.test.ts`
+  - 反馈：`vitest: command not found`
+  - 判断：新建 worktree 缺少 `node_modules`，属于环境初始化问题，不是代码阻塞。
+- 处置：
+  - 已在以下 worktree 执行 `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm install`
+    - `.worktrees/codex-target-recorder-scope`
+    - `.worktrees/codex-target-runtime-disambiguation`
+    - `.worktrees/codex-target-studio-ambiguity`
+    - `.worktrees/codex-target-benchmarks-p7`
+  - 结果：
+    - Recorder：`Done in 1.4s`
+    - Runtime：`Done in 2.7s`
+    - Studio：`Done in 1.3s`
+    - Benchmarks：`Done in 1.3s`
+- 后续动作：
+  - 已向四个子代理补发“依赖已安装，可继续 Node 20 红绿验证”的通知。
+  - 若后续再出现同类阻塞，优先先查 worktree 依赖，再判断是否为真实代码问题。
