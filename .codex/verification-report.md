@@ -1,5 +1,80 @@
 # 验证报告
 
+## 2026-06-07 Wave 11 真实页面执行韧性扩展验收
+
+### 验证范围
+
+- runtime 是否已把动作恢复能力从 `fill / select / setChecked` 扩展到 `click / press / upload`，并为运行失败落结构化根因与恢复尝试信息。
+- Benchmarks 是否已建立 `p8`，并让 recorded replay baseline 与 real-page 最新默认矩阵覆盖新增动作韧性 fixture。
+- Studio 是否已消费 `runtimeCauseCategory / recoveryTried / recoveredAttemptCount`，并输出更可执行的中文洞察与修复建议。
+- 全部结论是否均基于 `Node v20.19.6` 的本地新鲜验证，而不是子代理自报成功。
+
+### 验证结果
+
+1. runtime 执行韧性扩展通过。
+   - `packages/runtime/src/playwright-runner.ts` 已让 `click / press / upload` 共享一次恢复能力，并新增：
+     - `detached`
+     - `intercepted`
+     - `not-ready`
+     - `not-editable`
+     - `unknown`
+   - `packages/runtime/src/types.ts` 的 `RuntimeErrorDiagnostic` 已增加：
+     - `runtimeCauseCategory`
+     - `recoveryTried`
+     - `recoveredAttemptCount`
+   - `upload` 已补上“原 file input 被重挂载时，先清空再补传”的闭环，避免只看到 `files` 还在却没有重新触发业务 `change`。
+   - `packages/runtime/src/playwright-runner.test.ts` 新增 4 条 deterministic 回归，主线本地验证为 `36/36` 通过。
+2. Benchmarks P8 扩展通过。
+   - 新增 fixture：
+     - `examples/fixtures/rerender-action-panel.html`
+     - `examples/fixtures/dialog-save-surface.html`
+   - `examples/real-page-smoke.ts` 已引入 `p8`，并把最新默认档位升到 `p8`；`p7` 调用仍兼容，但会映射到最新矩阵。
+   - `examples/recorded-replay-smoke.ts` baseline 已扩到 `23` 个真实 fixture + `1` 个运行期临时页，共 `24` 条。
+   - `packages/runtime/src/real-page-matrix.test.ts` 与 `recorded-replay-matrix.test.ts` 主线本地验证共 `5/5` 通过。
+3. Studio runtime 根因消费通过。
+   - `apps/studio/src/shared/studio-api-types.ts` 已补齐 runtime 根因 descriptor，并额外补齐 `upload-files-reset` 的动作状态回弹解释。
+   - `apps/studio/src/shared/failure-insights.ts` 已新增 `runtime-cause` 洞察类别。
+   - `apps/studio/src/shared/repair-suggestions.ts` 已为广义 runtime 根因产出明确修复动作。
+   - `apps/studio/src/DiagnosticInspector.tsx` 已展示：
+     - 根因分类
+     - 恢复状态
+     - 恢复次数
+   - 主线本地验证：
+     - `pnpm --filter @flowweave/app-studio test`：`65/65` 通过
+     - `pnpm --filter @flowweave/app-studio typecheck`：通过
+4. Node 20 统一验收通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+     - 结果：通过，`36/36`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- recorded-replay-matrix.test.ts real-page-matrix.test.ts`
+     - 结果：通过，`5/5`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
+     - 结果：通过，`65/65`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+     - 结果：通过
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:recorded-pages`
+     - 结果：通过，`24/24`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+     - 结果：通过，`23/23`
+
+### Findings
+
+1. 未发现阻塞级问题。
+   - Wave 11 已把“真实页面执行更容易失败的动作类型”“基准矩阵验证”“Studio 排障解释”三段统一到同一套结构化诊断链路上。
+2. 残余风险：`runtimeCauseCategory` 仍部分依赖 Playwright 报错文案分类。
+   - 如果上游错误措辞明显变化，局部场景可能回落为 `unknown`，但不会阻断执行，也不会影响已有 `action-state-reset` 洞察。
+3. 残余风险：`p8` 现已成为最新默认档位，真实页面矩阵耗时高于 `p7`。
+   - 当前主线已验证通过，但如果后续继续扩容动作韧性场景，可能需要再拆新档位控制默认回归时长。
+
+### 综合结论
+
+- 代码质量评分：97
+- 测试覆盖评分：96
+- 规范遵循评分：98
+- 战略匹配评分：97
+- 风险评估评分：93
+- 综合评分：96
+- 建议：通过
+
 ## 2026-05-25 仓库初始化验证
 
 ### 验证范围

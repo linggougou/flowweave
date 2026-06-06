@@ -4676,3 +4676,211 @@
   - 按 `Wave 11` 计划创建三条新 worktree
   - 先并行启动 Runtime Cause Expansion 与 Benchmarks P8 Expansion
   - Studio Runtime Category Expansion 等 runtime 新字段方案明确后同步推进
+
+## 2026-06-07 Wave 11 实施启动
+
+- 时间：2026-06-07 08:00:00 CST
+- 当前主线：
+  - 分支：`codex/real-page-stability-program`
+  - 相对 `origin/codex/real-page-stability-program`：`ahead 26`
+  - 当前 worktree：仅主工作区
+- 当前工作区状态：
+  - 存在未跟踪目录：`.idea/`
+  - 结论：视为无关本轮任务的本地 IDE 产物，不纳入本轮改动与提交
+- 执行策略：
+  - 创建三条 Wave 11 轨道：
+    - `codex/real-page-wave11-runtime-cause-expansion`
+    - `codex/real-page-wave11-benchmarks-p8`
+    - `codex/real-page-wave11-studio-runtime-categories`
+  - 使用 worktree + 子代理并行推进
+  - 主代理只负责：
+    - 建轨
+    - 统一 Node 20 验收
+    - 并回
+    - 更新 `.codex` 留痕与验收报告
+
+## 2026-06-07 Wave 11 轨道创建与子代理分派
+
+- 时间：2026-06-07 08:08:00 CST
+- 已创建 worktree：
+  - `.worktrees/codex-real-page-wave11-runtime-cause-expansion`
+  - `.worktrees/codex-real-page-wave11-benchmarks-p8`
+  - `.worktrees/codex-real-page-wave11-studio-runtime-categories`
+- 已分派子代理：
+  - `Bacon`
+    - 轨道：Runtime Cause Expansion
+    - 写入范围：
+      - `packages/runtime/src/playwright-runner.ts`
+      - `packages/runtime/src/types.ts`
+      - `packages/runtime/src/playwright-runner.test.ts`
+  - `Kant`
+    - 轨道：Benchmarks P8 Expansion
+    - 写入范围：
+      - `examples/*`
+      - `packages/runtime/src/real-page-matrix.test.ts`
+      - `packages/runtime/src/recorded-replay-matrix.test.ts`
+      - `docs/guides/fixture-matrix.md`
+  - `Carson`
+    - 轨道：Studio Runtime Category Expansion
+    - 写入范围：
+      - `apps/studio/src/shared/*`
+      - `apps/studio/src/DiagnosticInspector*`
+      - 如有必要 `apps/studio/vitest.config.ts`
+- 主代理当前并行工作：
+  - 主线基线 Node 20 复核
+  - 后续负责轨道审阅、并回与统一验收
+
+## 2026-06-07 Wave 11 主线基线 Node 20 复核
+
+- 时间：2026-06-07 08:12:00 CST
+- 验证命令：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+    - 结果：通过，`32/32`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
+    - 结果：通过，`52/52`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:recorded-pages`
+    - 结果：通过，`22/22`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+    - 结果：通过，`21/21`
+- 关键观察：
+  - 当前 recorded replay baseline 仍为 `21` 个真实 fixture + `1` 个运行期临时页
+  - 当前 real-page 默认档位仍是 `p7`
+  - `upload-form` 仍是 recorded replay 中明显最慢的场景之一，但功能层面通过
+
+## 2026-06-07 Wave 11 主代理接管与编码前检查
+
+- 时间：2026-06-07 10:55:00 CST
+- 子轨审阅结论：
+  - `runtime` 轨当前只补了 `packages/runtime/src/playwright-runner.test.ts` 的红灯测试，还未落 `playwright-runner.ts / types.ts` 实现。
+  - `benchmarks` 轨当前只补了矩阵测试断言，还未落 `examples/*` 与 `fixture-matrix.md` 实现。
+  - `studio` 轨当前停在上下文收集，没有真实文件改动。
+- 主代理决策：
+  - 不再继续空等子代理，改由主代理直接接管 `runtime -> benchmarks -> studio` 三段实现。
+  - 保留现有 worktree 作为参考，不让子代理继续修改 `.codex`。
+- 编码前检查 - Wave 11 执行韧性扩展：
+  - 已查阅上下文摘要文件：`.codex/context-summary-wave11-execution-resilience.md`
+  - 将使用以下可复用组件：
+    - `packages/runtime/src/playwright-runner.ts` 的 `performRecoveredLocatorAction()`、`resolveTarget()`、`waitForPageSettled()`
+    - `examples/real-page-smoke.ts` 的 `buildRealPageCaseSets()`、`getRealPageFixtureCatalog()`
+    - `examples/recorded-replay-smoke.ts` 的 `RECORDED_REPLAY_CASE_ORDER`、`getRecordedReplayCaseCatalog()`
+    - `apps/studio/src/shared/studio-api-types.ts` 的 descriptor map 与 diagnostic 格式化链路
+  - 将遵循命名约定：
+    - 新 profile 命名为 `p8`
+    - 新 runtime 诊断字段使用结构化英文键名，中文解释仍落在 Studio descriptor 中
+  - 将遵循代码风格：
+    - TypeScript strict
+    - 注释与留痕使用简体中文
+    - 不新增绕开现有矩阵构造与诊断链路的平行实现
+  - 确认不重复造轮子，证明：
+    - 已检查 `packages/runtime/src/playwright-runner.ts` 中现有恢复封装
+    - 已检查 `examples/real-page-smoke.ts` / `examples/recorded-replay-smoke.ts` 的 profile 与 catalog 组织
+    - 已检查 `apps/studio/src/shared/*` 的现有失败洞察与修复建议入口
+
+## 2026-06-07 Wave 11 Runtime Cause Expansion 完成
+
+- 时间：2026-06-07 16:02:00 CST
+- 主线实现：
+  - `packages/runtime/src/types.ts`
+    - 新增 `RuntimeCauseCategory`
+    - `RuntimeErrorDiagnostic` 新增：
+      - `runtimeCauseCategory`
+      - `recoveryTried`
+      - `recoveredAttemptCount`
+  - `packages/runtime/src/playwright-runner.ts`
+    - 扩展 `performRecoveredLocatorAction()`，让 `click / press / upload` 也能共享“一次恢复”能力
+    - 新增 runtime 根因分类：
+      - `detached`
+      - `intercepted`
+      - `not-ready`
+      - `not-editable`
+      - `unknown`
+    - `upload` 新增更严格的稳定性校验：
+      - 不只校验 `files`
+      - 还会识别原始 file input 是否已被重挂载
+      - 重试时先清空再补传，强制页面重新触发 `change`
+  - `packages/runtime/src/playwright-runner.test.ts`
+    - 新增 deterministic 回归：
+      - `click` 节点脱离补点
+      - `press` 节点脱离补按
+      - `upload` 重挂载补传
+      - `click` 遮挡失败结构化诊断
+- 中途关键排障：
+  - 初版 `upload` 逻辑出现“步骤假阳性成功”：file input 的 `files` 仍保留，但页面重渲染后的业务结果未更新。
+  - 通过单例脚本复现后确认：重试时必须先 `setInputFiles([])` 再重新补传，才能强制新 input 再次触发 `change`。
+- Node 20 验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+    - 结果：通过，`36/36`
+- 主线提交：
+  - `962b71e feat: 扩展运行时动作恢复与根因诊断`
+
+## 2026-06-07 Wave 11 Benchmarks P8 并回与验收
+
+- 时间：2026-06-07 16:12:00 CST
+- 并轨来源：
+  - `Kant` 子轨提交：`5a3505b54588a2c2a8bb478f4e4ccd44844d6f81`
+  - 主线并回提交：`392a7e6 feat: 扩展 P8 动作韧性基准矩阵`
+- 并回内容：
+  - 新增 fixture：
+    - `examples/fixtures/rerender-action-panel.html`
+    - `examples/fixtures/dialog-save-surface.html`
+  - `examples/real-page-smoke.ts`
+    - 新增 `p8`
+    - `LATEST_REAL_PAGE_PROFILE` 升到 `p8`
+    - 保留旧 `p7` 调用兼容，并在运行时映射到最新矩阵
+  - `examples/recorded-replay-smoke.ts`
+    - baseline 扩到 `23` 个真实 fixture + `1` 个运行期临时页，共 `24`
+  - `packages/runtime/src/real-page-matrix.test.ts`
+    - 更新为 `P8`
+    - 断言 `p7 -> p8` 兼容行为
+  - `packages/runtime/src/recorded-replay-matrix.test.ts`
+    - 更新 recorded replay baseline 总数与新 fixture 覆盖
+  - `docs/guides/fixture-matrix.md`
+    - 同步为 Wave 11 / P8 单一真相
+- Node 20 验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- recorded-replay-matrix.test.ts real-page-matrix.test.ts`
+    - 结果：通过，`5/5`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:recorded-pages`
+    - 结果：通过，`24/24`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+    - 结果：通过，`23/23`
+- 关键观察：
+  - `dialog-save-surface` 与 `rerender-action-panel` 已进入真实页面最慢 Top 5，但功能全部通过
+  - `p8` 已成为最新默认档位；仍保留 `p7` 调用兼容，但结果口径已对齐到 `p8`
+
+## 2026-06-07 Wave 11 Studio Runtime Category Expansion 完成
+
+- 时间：2026-06-07 16:18:00 CST
+- 主线实现：
+  - `apps/studio/src/shared/studio-api-types.ts`
+    - `StudioRuntimeErrorDiagnostic` 新增：
+      - `runtimeCauseCategory`
+      - `recoveryTried`
+      - `recoveredAttemptCount`
+    - 新增广义 runtime 根因 descriptor：
+      - `detached`
+      - `intercepted`
+      - `not-ready`
+      - `not-editable`
+      - `unknown`
+    - 同步补齐 `upload-files-reset` 的动作状态回弹 descriptor
+  - `apps/studio/src/shared/failure-insights.ts`
+    - 新增 `runtime-cause` 洞察类别
+    - 失败摘要中纳入根因中文解释与恢复尝试说明
+  - `apps/studio/src/shared/repair-suggestions.ts`
+    - 广义 runtime 根因统一产出更具体的修复建议
+  - `apps/studio/src/DiagnosticInspector.tsx`
+    - 新增：
+      - 根因分类卡片
+      - 恢复状态
+      - 恢复次数
+      - 诊断表格中的结构化 runtime 字段展示
+  - 测试：
+    - `failure-insights.test.ts`
+    - `repair-suggestions.test.ts`
+    - `DiagnosticInspector.test.tsx`
+    - 均补齐 `detached / intercepted / not-ready / not-editable / unknown`
+- Node 20 验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
+    - 结果：通过，`65/65`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+    - 结果：通过
