@@ -256,3 +256,68 @@
 - 风险评估评分：93
 - 综合评分：96
 - 建议：通过
+
+## 2026-06-06 Benchmarks 第三阶段验收
+
+### 验证范围
+
+- 真实页面矩阵是否已扩展到 `filterable-list` 与 `modal-bulk-action` 两个新场景。
+- runtime 集成测试是否已明确断言 `7` 个 case 数量与名称顺序。
+- `pnpm e2e:real-pages` 与 `pnpm smoke:full` 是否都已把这两个新增场景真正跑通。
+- 仓库最终工作树是否在 `Node 20` 基线下继续通过 `pnpm lint` 与 `pnpm smoke:full`。
+
+### 验证结果
+
+1. TDD 红绿验证通过。
+   - 前序红灯已证明 runtime 矩阵当时仍只看到 `5` 个 case，失败信息为 `expected ... to have a length of 7 but got 5`。
+   - 完成实现后重新执行 `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test`，`9/9` 通过。
+   - 其中“真实页面 fixture 矩阵全部成功”已稳定断言 `7` 个 case 名称顺序：
+     - `checkbox-select`
+     - `delayed-panel`
+     - `upload-form`
+     - `spa-route`
+     - `session-dashboard`
+     - `filterable-list`
+     - `modal-bulk-action`
+2. 真实页面矩阵脚本验证通过。
+   - 重新执行 `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`，输出 `基准数量: 7`。
+   - `filterable-list`：成功，`6` 步，`1602ms`。
+   - `modal-bulk-action`：成功，`8` 步，`1774ms`。
+   - 其余五个既有 case 也全部成功，证明新场景没有破坏原有矩阵稳定性。
+3. CLI 静态检查验证通过。
+   - 重新执行 `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm lint`，通过。
+   - 输出为 `12 successful, 12 total`，说明本轮新增 fixture、矩阵脚本与测试断言没有引入新的 lint 阻塞。
+4. 仓库级完整烟测验证通过。
+   - 重新执行 `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke:full`，通过。
+   - `smoke:full` 内部已完整跑过：
+     - `pnpm typecheck`
+     - `pnpm test`
+     - `pnpm build`
+     - `pnpm e2e:login`
+     - `pnpm e2e:real-pages`
+5. `smoke:full` 内部明细验证通过。
+   - `e2e:login`：
+     - 项目 ID：`e1159e5d-6c5c-415f-b68b-81e1e03866c2`
+     - 执行 ID：`43c945db-839a-4d6b-a17b-22c8c974b54b`
+     - `4` 个步骤全部 `success`
+   - `e2e:real-pages`：
+     - `checkbox-select`：成功，`5` 步，`916ms`
+     - `delayed-panel`：成功，`4` 步，`1583ms`
+     - `upload-form`：成功，`5` 步，`783ms`
+     - `spa-route`：成功，`4` 步，`809ms`
+     - `session-dashboard`：成功，`3` 步，`688ms`
+     - `filterable-list`：成功，`6` 步，`1617ms`
+     - `modal-bulk-action`：成功，`8` 步，`1783ms`
+6. 残余风险已识别。
+   - 当前矩阵已覆盖更接近后台业务的筛选和 Modal 交互，但仍未覆盖分页、Tab、抽屉侧栏、toast 二次确认等更复杂页面结构。
+   - `Node 24` 与 `better-sqlite3` 的 ABI 风险仍存在，因此本轮统一验收继续以 `Node 20` 为准。
+
+### 综合结论
+
+- 代码质量评分：98
+- 测试覆盖评分：97
+- 规范遵循评分：97
+- 战略匹配评分：97
+- 风险评估评分：94
+- 综合评分：97
+- 建议：通过

@@ -349,3 +349,110 @@
   - `storageStatePath` 已从 Studio / 环境配置语义真正落到 Playwright context 级别，登录态页面不再只是“界面上填了字段”，而是可以进入可执行验证。
   - 真实页面基准现已形成 `5` case 矩阵，并纳入 `smoke:full`。
   - `Node 24` 与 `better-sqlite3` 的 ABI 风险仍存在，本轮验收继续以 `Node 20` 为准。
+
+## 2026-06-06 Benchmarks 第三阶段验收
+
+- 时间：2026-06-06 16:22:49 CST
+- 任务目标：把真实页面矩阵扩展到更贴近后台业务的“列表筛选”和“Modal 覆盖层批量操作”场景，并确认这两个场景已稳定纳入统一回归入口。
+- 所用技能：
+  - `using-superpowers`：确认本轮继续按 Superpowers 工作流执行，而不是跳过技能检查直接改代码。
+  - `test-driven-development`：沿用上一轮已建立的红灯，先确保测试真能抓到缺口，再补实现并转绿。
+  - `verification-before-completion`：在提交前重新执行 `runtime test`、`e2e:real-pages`、`lint`、`smoke:full`，只用新鲜结果作为结论依据。
+- 工具可用性说明：
+  - `sequential-thinking`、`desktop-commander`、`context7` 当前环境仍不可用。
+  - 本轮继续使用 `codegraph_context`、本地 `sed`/`git diff` 与仓库测试命令替代，并把替代流程留痕到仓库 `.codex/`。
+- 单 agent 串行执行说明：
+  - 本轮改动高度集中在 `examples/real-page-smoke.ts`、`examples/fixtures/*.html`、`packages/runtime/src/playwright-runner.test.ts` 与配套文档。
+  - 若再拆分子代理并行写入，会在同一矩阵定义、同一测试断言和同一文档章节上形成高概率冲突。
+  - 因此本轮由主代理串行闭环，补偿措施是严格执行红绿验证和仓库级 `smoke:full` 终验。
+- 红灯测试：
+  - 前序红灯命令：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test`
+  - 前序失败信息：
+    - `expected [ …(5) ] to have a length of 7 but got 5`
+    - 位置：`packages/runtime/src/playwright-runner.test.ts:541`
+  - 该红灯证明：新增 `filterable-list` 与 `modal-bulk-action` 在当时尚未被 runtime 矩阵测试真正接入。
+- 编码前检查：
+  - 已查阅上下文摘要文件：`.codex/context-summary-benchmarks-third-stage.md`
+  - 将复用以下既有组件：
+    - `examples/real-page-smoke.ts`：继续作为真实页面矩阵的唯一入口
+    - `buildFlow()`：继续统一构造 FlowDocument，不新建平行脚本结构
+    - `packages/runtime/src/playwright-runner.test.ts`：继续通过动态 import 验证 live matrix，而非复制一套测试入口
+    - `examples/fixtures/delayed-panel.html`：复用 loading/hidden 等待模式
+    - `examples/fixtures/session-dashboard.html`：复用结果面板 `data-ready` 成功态约定
+  - 将遵循命名约定：fixture 文案使用简体中文，标识符使用英文；矩阵 case 名与 flow id 使用 kebab/snake 现有模式。
+  - 将遵循代码风格：继续使用稳定 `id`/`data-testid`/`data-ready` 作为断言锚点，避免引入脆弱选择器。
+  - 确认不重复造轮子：检查了 `examples/fixtures/`、`examples/real-page-smoke.ts`、`packages/runtime/src/playwright-runner.test.ts`，确认不存在现成的列表筛选或 Modal 批量操作基准。
+- 实现范围：
+  - `examples/fixtures/filterable-list.html`
+    - 新增列表筛选 fixture，覆盖关键字输入、状态筛选、局部 loading、结果摘要与命中数量断言。
+  - `examples/fixtures/modal-bulk-action.html`
+    - 新增覆盖层弹窗 fixture，覆盖勾选、打开 modal、填写原因、确认归档、弹窗关闭与结果区展示。
+  - `examples/real-page-smoke.ts`
+    - 在 `buildMatrixCases()` 中新增 `filterable-list` 与 `modal-bulk-action` 两个 case。
+    - 真实页面矩阵总数从 `5` 提升到 `7`。
+  - `packages/runtime/src/playwright-runner.test.ts`
+    - 将“真实页面 fixture 矩阵全部成功”测试提升为断言 `7` 个 case 数量和名称顺序。
+  - `docs/guides/fixture-matrix.md`
+    - 同步第三阶段矩阵总览、两类新 fixture 细节与扩展建议。
+  - `docs/superpowers/plans/2026-06-06-real-page-stability-orchestration.md`
+    - 同步 Benchmarks 第三阶段已完成并通过统一验收。
+- 编码中监控：
+  - 是否使用了上下文摘要中列出的可复用组件？
+    - ✅ 是：继续复用了 `buildFlow()`、统一矩阵入口、既有 `data-ready` 成功态模式与 loading/hidden 等待模式。
+  - 命名是否符合项目约定？
+    - ✅ 是：case 名使用 `filterable-list` / `modal-bulk-action`，flow id 使用 `flow_filterable_list` / `flow_modal_bulk_action`。
+  - 代码风格是否一致？
+    - ✅ 是：fixture 继续使用单文件自包含 HTML、中文说明文案、英文标识符和稳定 DOM 锚点。
+- 编码后声明：
+  - 复用了以下既有组件：
+    - `executeFlow` 与 `runRealPageFixtureMatrix()`：继续走 runtime 主执行链路，不增加旁路执行器。
+    - 既有 fixture 的 `data-ready="true"` 成功态协议：避免每个页面另造新的完成判定方式。
+    - runtime 集成测试中的动态 import 模式：继续直接消费 live implementation，避免吃到旧 `dist`。
+  - 遵循了以下项目约定：
+    - 文档和留痕保持简体中文，标识符沿用英文。
+    - 不改 runtime 核心接口，只扩矩阵 case 与 fixture。
+    - 验收继续以 `Node v20.19.6` 为准，不把 `Node 24` 的 `better-sqlite3` ABI 风险误判成业务失败。
+  - 对比了以下相似实现：
+    - `examples/fixtures/delayed-panel.html`：本轮新增 `filterable-list` 复用了 loading 消失后再断言结果区的模式，差异是增加了筛选摘要与命中数量。
+    - `examples/fixtures/session-dashboard.html`：本轮新增 `modal-bulk-action` 同样使用结果区 `data-ready` 成功态，差异是前面多了一层覆盖层弹窗确认流程。
+    - `examples/fixtures/checkbox-select.html`：本轮仍沿用稳定表单控件与提交结果回填模式，差异是把静态表单提升成更像后台业务链路的筛选与批量操作。
+  - 未重复造轮子的证明：
+    - 已检查 `examples/fixtures/` 现有页面，确认此前没有覆盖“列表筛选”或“Modal 批量操作”的真实页面基准。
+    - 本轮差异化价值是把矩阵从“基础交互控件”扩展到“后台业务交互链路”。
+- 绿灯验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test`
+    - 结果：`9/9` 通过。
+    - 关键新证据：
+      - “真实页面 fixture 矩阵全部成功”已转绿。
+      - `summary.results` 已稳定包含 `7` 个 case。
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+    - 结果：通过。
+    - 明细：
+      - `checkbox-select`：成功，`5` 步，`1422ms`
+      - `delayed-panel`：成功，`4` 步，`1583ms`
+      - `upload-form`：成功，`5` 步，`783ms`
+      - `spa-route`：成功，`4` 步，`806ms`
+      - `session-dashboard`：成功，`3` 步，`692ms`
+      - `filterable-list`：成功，`6` 步，`1602ms`
+      - `modal-bulk-action`：成功，`8` 步，`1774ms`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm lint`
+    - 结果：通过，`12` 个包全部成功。
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke:full`
+    - 结果：通过，完整覆盖 `typecheck / test / build / e2e:login / e2e:real-pages`。
+    - `e2e:login`
+      - 项目 ID：`e1159e5d-6c5c-415f-b68b-81e1e03866c2`
+      - 执行 ID：`43c945db-839a-4d6b-a17b-22c8c974b54b`
+      - `4` 个步骤全部 `success`
+    - `e2e:real-pages`
+      - `checkbox-select`：成功，`5` 步，`916ms`
+      - `delayed-panel`：成功，`4` 步，`1583ms`
+      - `upload-form`：成功，`5` 步，`783ms`
+      - `spa-route`：成功，`4` 步，`809ms`
+      - `session-dashboard`：成功，`3` 步，`688ms`
+      - `filterable-list`：成功，`6` 步，`1617ms`
+      - `modal-bulk-action`：成功，`8` 步，`1783ms`
+- 当前结论：
+  - 真实页面矩阵已从 `5` 个 case 扩展到 `7` 个 case，并正式覆盖“列表筛选”和“覆盖层弹窗批量操作”两类更贴近后台页面的交互。
+  - 新场景已经在 runtime 局部测试、独立矩阵脚本和仓库级 `smoke:full` 三层全部转绿，不存在“文档写了但主链路没接入”的假完成。
+  - `Node 24` 与 `better-sqlite3` 的 ABI 风险仍存在，本轮最终验收继续以 `Node 20` 为准。
