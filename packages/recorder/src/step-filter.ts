@@ -1,10 +1,20 @@
 import type { NormalizedStep } from "@flowweave/flow-dsl";
 
-function cssOf(step: NormalizedStep): string | undefined {
-  if (step.type !== "click" && step.type !== "fill") {
-    return undefined;
+function targetOf(step: NormalizedStep) {
+  switch (step.type) {
+    case "click":
+    case "fill":
+    case "select":
+    case "setChecked":
+    case "upload":
+      return step.target;
+    default:
+      return undefined;
   }
-  return step.target.strategies.find((s) => s.kind === "css")?.selector;
+}
+
+function cssOf(step: NormalizedStep): string | undefined {
+  return targetOf(step)?.strategies.find((s) => s.kind === "css")?.selector;
 }
 
 function isLayoutNoiseClick(step: NormalizedStep): boolean {
@@ -25,10 +35,51 @@ function isLayoutNoiseClick(step: NormalizedStep): boolean {
 }
 
 function targetSignature(step: NormalizedStep): string | undefined {
-  if (step.type !== "fill" && step.type !== "click") {
+  return targetOf(step)?.strategies.map((s) => JSON.stringify(s)).join("|");
+}
+
+function labelSignature(step: NormalizedStep): string | undefined {
+  const hints = targetOf(step)?.hints;
+  return hints?.labelText ?? hints?.textSample ?? undefined;
+}
+
+function roleNameSignature(step: NormalizedStep): string | undefined {
+  const roleStrategy = targetOf(step)?.strategies.find((strategy) => strategy.kind === "role");
+  if (!roleStrategy || roleStrategy.kind !== "role") {
     return undefined;
   }
-  return step.target.strategies.map((s) => JSON.stringify(s)).join("|");
+  return `${roleStrategy.role}:${roleStrategy.name ?? ""}`;
+}
+
+function isLabelForControlClick(clickStep: NormalizedStep, targetStep: NormalizedStep): boolean {
+  const clickCss = cssOf(clickStep);
+  const targetCss = cssOf(targetStep);
+  if (!clickCss || !targetCss) {
+    return false;
+  }
+
+  const match = clickCss.match(/^label\[for="([^"]+)"\]$/);
+  return Boolean(match && targetCss === `#${match[1]}`);
+}
+
+function pointsToSameTarget(clickStep: NormalizedStep, nextStep: NormalizedStep): boolean {
+  if (targetSignature(clickStep) && targetSignature(clickStep) === targetSignature(nextStep)) {
+    return true;
+  }
+
+  if (isLabelForControlClick(clickStep, nextStep)) {
+    return true;
+  }
+
+  const clickLabel = labelSignature(clickStep);
+  const nextLabel = labelSignature(nextStep);
+  if (clickLabel && nextLabel && clickLabel === nextLabel) {
+    return true;
+  }
+
+  const clickRoleName = roleNameSignature(clickStep);
+  const nextRoleName = roleNameSignature(nextStep);
+  return Boolean(clickRoleName && nextRoleName && clickRoleName === nextRoleName);
 }
 
 /** 合并同一输入框的连续 fill，保留最后一次输入值 */
@@ -63,9 +114,9 @@ export function filterNoisyInteractionSteps(steps: NormalizedStep[]): Normalized
 
     if (
       current?.type === "click" &&
-      next?.type === "fill" &&
-      cssOf(current) &&
-      cssOf(current) === cssOf(next)
+      next &&
+      (next.type === "fill" || next.type === "select" || next.type === "setChecked") &&
+      pointsToSameTarget(current, next)
     ) {
       continue;
     }

@@ -34,21 +34,75 @@ function recordNavigate(url: string): void {
 }
 
 function readFillValue(element: Element): string {
-  if (element instanceof HTMLSelectElement) {
-    return element.value;
-  }
   if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
     return element.value;
   }
   return "";
 }
 
+function readSelectValues(element: HTMLSelectElement): string[] {
+  return Array.from(element.selectedOptions).map((option) => option.value);
+}
+
+function readUploadFiles(element: HTMLInputElement): string[] {
+  return Array.from(element.files ?? []).map((file) => file.name).filter((name) => name.length > 0);
+}
+
 let lastFillSignature = "";
 
-function recordFillFromElement(element: Element): void {
+function recordInteractionFromElement(element: Element): void {
+  if (element instanceof HTMLInputElement) {
+    const inputType = (element.type || "text").toLowerCase();
+
+    if (inputType === "checkbox" || inputType === "radio") {
+      const payload = buildInteractionPayload(element, "setChecked", {
+        inputType,
+        checked: element.checked,
+      });
+      sendEvent({
+        type: "click",
+        timestamp: Date.now(),
+        url: window.location.href,
+        payload,
+      });
+      return;
+    }
+
+    if (inputType === "file") {
+      const files = readUploadFiles(element);
+      if (files.length === 0) {
+        return;
+      }
+      const payload = buildInteractionPayload(element, "upload", {
+        inputType,
+        files,
+      });
+      sendEvent({
+        type: "fill",
+        timestamp: Date.now(),
+        url: window.location.href,
+        payload,
+      });
+      return;
+    }
+  }
+
+  if (element instanceof HTMLSelectElement) {
+    const values = readSelectValues(element);
+    const payload = buildInteractionPayload(element, "select", { values });
+    sendEvent({
+      type: "select",
+      timestamp: Date.now(),
+      url: window.location.href,
+      payload,
+    });
+    return;
+  }
+
   if (!shouldRecordFill(element)) {
     return;
   }
+
   const value = readFillValue(element);
   const payload = buildInteractionPayload(element, "fill", {
     value,
@@ -108,7 +162,7 @@ export default defineContentScript({
       (ev) => {
         const target = ev.target;
         if (!(target instanceof Element)) return;
-        recordFillFromElement(target);
+        recordInteractionFromElement(target);
       },
       true,
     );
@@ -118,7 +172,7 @@ export default defineContentScript({
       (ev) => {
         const target = ev.target;
         if (!(target instanceof Element)) return;
-        recordFillFromElement(target);
+        recordInteractionFromElement(target);
       },
       true,
     );
@@ -131,7 +185,7 @@ export default defineContentScript({
         if (!(target instanceof Element) || !shouldRecordFill(target)) return;
         clearTimeout(inputDebounce);
         inputDebounce = setTimeout(() => {
-          recordFillFromElement(target);
+          recordInteractionFromElement(target);
         }, 400);
       },
       true,

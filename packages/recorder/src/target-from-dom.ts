@@ -12,8 +12,15 @@ export type InteractionRecordingPayload = {
   text?: string;
   exact?: boolean;
   value?: string;
+  values?: string[];
+  files?: string[];
+  checked?: boolean;
   inputType?: string;
   tagName?: string;
+  nameAttr?: string;
+  placeholder?: string;
+  labelText?: string;
+  textSample?: string;
 };
 
 const MAX_CSS_DEPTH = 6;
@@ -46,8 +53,32 @@ function isSelectElement(value: Element): value is HTMLSelectElement {
   return typeof HTMLSelectElement !== "undefined" && value instanceof HTMLSelectElement;
 }
 
+function isLabelElement(value: Element): value is HTMLLabelElement {
+  return typeof HTMLLabelElement !== "undefined" && value instanceof HTMLLabelElement;
+}
+
 function trimText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function readAssociatedControl(label: Element): Element | null {
+  if (!isLabelElement(label)) {
+    return null;
+  }
+
+  if (label.control instanceof Element) {
+    return label.control;
+  }
+
+  const htmlFor = label.getAttribute("for");
+  if (htmlFor && typeof document !== "undefined") {
+    const control = document.getElementById(htmlFor);
+    if (control instanceof Element) {
+      return control;
+    }
+  }
+
+  return label.querySelector("input, select, textarea");
 }
 
 /** 元素是否可见（跳过 hidden checkbox、display:none 等） */
@@ -94,6 +125,10 @@ function isClickableElement(element: Element): boolean {
 export function resolveClickTarget(element: Element): Element {
   let current: Element | null = element;
   for (let depth = 0; depth < 6 && current; depth += 1) {
+    const control = readAssociatedControl(current);
+    if (control) {
+      return control;
+    }
     if (isClickableElement(current)) {
       return current;
     }
@@ -202,7 +237,7 @@ function inferRole(element: Element): string | undefined {
     return "link";
   }
   if (tag === "textarea" || tag === "select") {
-    return "textbox";
+    return tag === "select" ? "combobox" : "textbox";
   }
   if (isInputElement(element)) {
     const type = (element.type || "text").toLowerCase();
@@ -211,6 +246,9 @@ function inferRole(element: Element): string | undefined {
     }
     if (type === "checkbox") {
       return "checkbox";
+    }
+    if (type === "radio") {
+      return "radio";
     }
     return "textbox";
   }
@@ -274,6 +312,28 @@ function buildCssSelector(element: Element): string {
   return parts.join(" > ") || element.tagName.toLowerCase();
 }
 
+function readTextSample(element: Element, labelText?: string): string | undefined {
+  if (isSelectElement(element)) {
+    const sample = trimText(
+      Array.from(element.selectedOptions)
+        .map((option) => option.textContent ?? "")
+        .join(" "),
+    );
+    if (sample) {
+      return sample.slice(0, MAX_NAME_LENGTH);
+    }
+  }
+
+  if (isHtmlElement(element)) {
+    const text = trimText(element.innerText || element.textContent || "");
+    if (text.length > 0) {
+      return text.slice(0, MAX_NAME_LENGTH);
+    }
+  }
+
+  return labelText?.slice(0, MAX_NAME_LENGTH);
+}
+
 function buildStrategies(element: Element): LocatorStrategy[] {
   const strategies: LocatorStrategy[] = [];
 
@@ -301,14 +361,26 @@ function buildStrategies(element: Element): LocatorStrategy[] {
 /** 从 DOM 节点生成录制 payload（多策略 Target，执行时按优先级回退） */
 export function buildInteractionPayload(
   element: Element,
-  kind: "click" | "fill",
-  options: { value?: string; inputType?: string } = {},
+  kind: "click" | "fill" | "select" | "setChecked" | "upload",
+  options: {
+    value?: string;
+    values?: string[];
+    files?: string[];
+    checked?: boolean;
+    inputType?: string;
+  } = {},
 ): InteractionRecordingPayload {
   const strategies = buildStrategies(element);
   const css = strategies.find((s) => s.kind === "css");
   const roleStrategy = strategies.find((s) => s.kind === "role");
   const testIdStrategy = strategies.find((s) => s.kind === "testId");
   const textStrategy = strategies.find((s) => s.kind === "text");
+  const labelText = readLabelText(element);
+  const placeholder = trimText(element.getAttribute("placeholder") ?? "") || undefined;
+  const nameAttr = trimText(element.getAttribute("name") ?? "") || undefined;
+  const inputType =
+    options.inputType ?? (isInputElement(element) ? (element.type || "text").toLowerCase() : undefined);
+  const textSample = readTextSample(element, labelText);
 
   const payload: InteractionRecordingPayload = {
     strategies,
@@ -332,13 +404,33 @@ export function buildInteractionPayload(
     payload.exact = textStrategy.exact;
   }
 
-  if (kind === "fill") {
-    if (typeof options.value === "string") {
-      payload.value = options.value;
-    }
-    if (options.inputType) {
-      payload.inputType = options.inputType;
-    }
+  if (inputType) {
+    payload.inputType = inputType;
+  }
+  if (nameAttr) {
+    payload.nameAttr = nameAttr;
+  }
+  if (placeholder) {
+    payload.placeholder = placeholder;
+  }
+  if (labelText) {
+    payload.labelText = labelText;
+  }
+  if (textSample) {
+    payload.textSample = textSample;
+  }
+
+  if (kind === "fill" && typeof options.value === "string") {
+    payload.value = options.value;
+  }
+  if (kind === "select" && options.values && options.values.length > 0) {
+    payload.values = options.values;
+  }
+  if (kind === "setChecked" && typeof options.checked === "boolean") {
+    payload.checked = options.checked;
+  }
+  if (kind === "upload" && options.files && options.files.length > 0) {
+    payload.files = options.files;
   }
 
   return payload;

@@ -32,7 +32,16 @@ type InteractionPayload = {
   exact?: boolean;
   button?: "left" | "right" | "middle";
   value?: string;
+  values?: string[];
+  files?: string[];
+  checked?: boolean;
   clear?: boolean;
+  inputType?: string;
+  tagName?: string;
+  nameAttr?: string;
+  placeholder?: string;
+  labelText?: string;
+  textSample?: string;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -69,12 +78,53 @@ function isLocatorStrategy(value: unknown): value is LocatorStrategy {
   }
 }
 
+function readStringArray(payload: Record<string, unknown>, key: string): string[] | undefined {
+  const value = payload[key];
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const items = value.filter((item): item is string => typeof item === "string" && item.length > 0);
+  return items.length > 0 ? items : undefined;
+}
+
+function buildTargetHints(payload: Record<string, unknown>): Target["hints"] | undefined {
+  const hints: NonNullable<Target["hints"]> = {};
+  const tagName = readString(payload, "tagName");
+  const inputType = readString(payload, "inputType");
+  const nameAttr = readString(payload, "nameAttr");
+  const placeholder = readString(payload, "placeholder");
+  const labelText = readString(payload, "labelText");
+  const textSample = readString(payload, "textSample");
+
+  if (tagName) {
+    hints.tagName = tagName;
+  }
+  if (inputType) {
+    hints.inputType = inputType;
+  }
+  if (nameAttr) {
+    hints.nameAttr = nameAttr;
+  }
+  if (placeholder) {
+    hints.placeholder = placeholder;
+  }
+  if (labelText) {
+    hints.labelText = labelText;
+  }
+  if (textSample) {
+    hints.textSample = textSample;
+  }
+
+  return Object.keys(hints).length > 0 ? hints : undefined;
+}
+
 function buildTargetFromPayload(payload: Record<string, unknown>): Target | null {
+  const hints = buildTargetHints(payload);
   const rawStrategies = payload.strategies;
   if (Array.isArray(rawStrategies) && rawStrategies.length > 0) {
     const strategies = rawStrategies.filter(isLocatorStrategy);
     if (strategies.length > 0) {
-      return { strategies };
+      return hints ? { strategies, hints } : { strategies };
     }
   }
 
@@ -106,7 +156,11 @@ function buildTargetFromPayload(payload: Record<string, unknown>): Target | null
     strategies.push(exact === undefined ? { kind: "text", text } : { kind: "text", text, exact });
   }
 
-  return strategies.length > 0 ? { strategies } : null;
+  if (strategies.length === 0) {
+    return null;
+  }
+
+  return hints ? { strategies, hints } : { strategies };
 }
 
 function normalizeNavigate(event: RecordedEvent): NormalizedStep | null {
@@ -136,6 +190,18 @@ function normalizeClick(event: RecordedEvent): NormalizedStep | null {
     return null;
   }
 
+  if (
+    (payload.inputType === "checkbox" || payload.inputType === "radio") &&
+    typeof payload.checked === "boolean"
+  ) {
+    return {
+      id: event.id,
+      type: "setChecked",
+      target,
+      checked: payload.checked,
+    };
+  }
+
   const step: NormalizedStep = {
     id: event.id,
     type: "click",
@@ -152,6 +218,16 @@ function normalizeClick(event: RecordedEvent): NormalizedStep | null {
 function normalizeFill(event: RecordedEvent): NormalizedStep | null {
   const payload = event.payload as InteractionPayload;
   const target = buildTargetFromPayload(event.payload);
+  const files = readStringArray(event.payload, "files");
+  if (target && payload.inputType === "file" && files) {
+    return {
+      id: event.id,
+      type: "upload",
+      target,
+      files,
+    };
+  }
+
   const value = payload.value;
   if (!target || typeof value !== "string") {
     return null;
@@ -171,6 +247,21 @@ function normalizeFill(event: RecordedEvent): NormalizedStep | null {
   return step;
 }
 
+function normalizeSelect(event: RecordedEvent): NormalizedStep | null {
+  const target = buildTargetFromPayload(event.payload);
+  const values = readStringArray(event.payload, "values");
+  if (!target || !values) {
+    return null;
+  }
+
+  return {
+    id: event.id,
+    type: "select",
+    target,
+    values,
+  };
+}
+
 /** 将单条录制事件转为标准步骤；不支持或信息不足时返回 null */
 export function normalizeRecordedEvent(event: RecordedEvent): NormalizedStep | null {
   switch (event.type) {
@@ -180,6 +271,8 @@ export function normalizeRecordedEvent(event: RecordedEvent): NormalizedStep | n
       return normalizeClick(event);
     case "fill":
       return normalizeFill(event);
+    case "select":
+      return normalizeSelect(event);
     default:
       return null;
   }

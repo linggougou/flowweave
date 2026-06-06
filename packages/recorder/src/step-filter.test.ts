@@ -46,6 +46,59 @@ describe("filterNoisyInteractionSteps", () => {
     expect(steps).toHaveLength(1);
     expect(steps[0]?.type).toBe("click");
   });
+
+  it("移除 checkbox 标签点击与 setChecked 的重复噪声", () => {
+    const steps = filterNoisyInteractionSteps([
+      {
+        id: "1",
+        type: "click",
+        target: {
+          strategies: [{ kind: "css", selector: 'label[for="agree"]' }],
+          hints: { tagName: "label", labelText: "同意协议", textSample: "同意协议" },
+        },
+      },
+      {
+        id: "2",
+        type: "setChecked",
+        target: {
+          strategies: [{ kind: "css", selector: "#agree" }],
+          hints: {
+            tagName: "input",
+            inputType: "checkbox",
+            nameAttr: "agree",
+            labelText: "同意协议",
+          },
+        },
+        checked: true,
+      },
+    ]);
+
+    expect(steps.map((step) => step.type)).toEqual(["setChecked"]);
+  });
+
+  it("移除紧邻 select 前指向同一控件的 click", () => {
+    const steps = filterNoisyInteractionSteps([
+      {
+        id: "1",
+        type: "click",
+        target: {
+          strategies: [{ kind: "css", selector: "#city" }],
+          hints: { tagName: "select", nameAttr: "city", labelText: "城市" },
+        },
+      },
+      {
+        id: "2",
+        type: "select",
+        target: {
+          strategies: [{ kind: "css", selector: "#city" }],
+          hints: { tagName: "select", nameAttr: "city", labelText: "城市" },
+        },
+        values: ["shanghai"],
+      },
+    ]);
+
+    expect(steps.map((step) => step.type)).toEqual(["select"]);
+  });
 });
 
 describe("mergeConsecutiveFillSteps", () => {

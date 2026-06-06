@@ -88,6 +88,161 @@ describe("normalizeRecordedEvent", () => {
     });
   });
 
+  it("将 checkbox 语义归一化为 setChecked 步骤并保留 hints", () => {
+    const step = normalizeRecordedEvent(
+      event({
+        id: "evt_toggle",
+        type: "click",
+        timestamp: 2100,
+        url: "https://example.com/settings",
+        payload: {
+          role: "checkbox",
+          name: "同意协议",
+          selector: "#agree",
+          inputType: "checkbox",
+          checked: true,
+          tagName: "input",
+          nameAttr: "agree",
+          labelText: "同意协议",
+          textSample: "同意协议",
+        },
+      }),
+    );
+
+    expect(step).toEqual({
+      id: "evt_toggle",
+      type: "setChecked",
+      target: {
+        strategies: [
+          { kind: "role", role: "checkbox", name: "同意协议" },
+          { kind: "css", selector: "#agree" },
+        ],
+        hints: {
+          tagName: "input",
+          inputType: "checkbox",
+          nameAttr: "agree",
+          labelText: "同意协议",
+          textSample: "同意协议",
+        },
+      },
+      checked: true,
+    });
+  });
+
+  it("将 radio 语义归一化为 setChecked 步骤", () => {
+    const step = normalizeRecordedEvent(
+      event({
+        id: "evt_radio",
+        type: "click",
+        timestamp: 2150,
+        url: "https://example.com/settings",
+        payload: {
+          role: "radio",
+          name: "企业版",
+          selector: "#plan-enterprise",
+          inputType: "radio",
+          checked: true,
+          tagName: "input",
+          nameAttr: "plan",
+          labelText: "企业版",
+          textSample: "企业版",
+        },
+      }),
+    );
+
+    expect(step).toEqual({
+      id: "evt_radio",
+      type: "setChecked",
+      target: {
+        strategies: [
+          { kind: "role", role: "radio", name: "企业版" },
+          { kind: "css", selector: "#plan-enterprise" },
+        ],
+        hints: {
+          tagName: "input",
+          inputType: "radio",
+          nameAttr: "plan",
+          labelText: "企业版",
+          textSample: "企业版",
+        },
+      },
+      checked: true,
+    });
+  });
+
+  it("将 select 事件转为 select 步骤并保留 hints", () => {
+    const step = normalizeRecordedEvent(
+      event({
+        id: "evt_select",
+        type: "select",
+        timestamp: 2200,
+        url: "https://example.com/settings",
+        payload: {
+          role: "combobox",
+          name: "所在城市",
+          selector: "#city",
+          values: ["shanghai"],
+          tagName: "select",
+          nameAttr: "city",
+          labelText: "所在城市",
+          textSample: "上海",
+        },
+      }),
+    );
+
+    expect(step).toEqual({
+      id: "evt_select",
+      type: "select",
+      target: {
+        strategies: [
+          { kind: "role", role: "combobox", name: "所在城市" },
+          { kind: "css", selector: "#city" },
+        ],
+        hints: {
+          tagName: "select",
+          nameAttr: "city",
+          labelText: "所在城市",
+          textSample: "上海",
+        },
+      },
+      values: ["shanghai"],
+    });
+  });
+
+  it("将 file input 事件转为 upload 步骤", () => {
+    const step = normalizeRecordedEvent(
+      event({
+        id: "evt_upload",
+        type: "fill",
+        timestamp: 2300,
+        url: "https://example.com/upload",
+        payload: {
+          selector: "#resume",
+          inputType: "file",
+          files: ["/tmp/resume.pdf"],
+          tagName: "input",
+          nameAttr: "resume",
+          labelText: "上传简历",
+        },
+      }),
+    );
+
+    expect(step).toEqual({
+      id: "evt_upload",
+      type: "upload",
+      target: {
+        strategies: [{ kind: "css", selector: "#resume" }],
+        hints: {
+          tagName: "input",
+          inputType: "file",
+          nameAttr: "resume",
+          labelText: "上传简历",
+        },
+      },
+      files: ["/tmp/resume.pdf"],
+    });
+  });
+
   it("将 navigate 事件转为 navigate 步骤", () => {
     const step = normalizeRecordedEvent(
       event({
@@ -225,5 +380,43 @@ describe("buildFlowFromEvents", () => {
         baseMeta,
       ),
     ).toThrow(/至少一个可归一化步骤/);
+  });
+
+  it("构建 Flow 时移除 checkbox 标签点击噪声，仅保留 setChecked", () => {
+    const events: RecordedEvent[] = [
+      event({
+        id: "c1",
+        type: "click",
+        timestamp: 100,
+        url: "https://app.example.com/settings",
+        payload: {
+          selector: 'label[for="agree"]',
+          tagName: "label",
+          labelText: "同意协议",
+          textSample: "同意协议",
+        },
+      }),
+      event({
+        id: "c2",
+        type: "click",
+        timestamp: 150,
+        url: "https://app.example.com/settings",
+        payload: {
+          selector: "#agree",
+          role: "checkbox",
+          name: "同意协议",
+          inputType: "checkbox",
+          checked: true,
+          tagName: "input",
+          nameAttr: "agree",
+          labelText: "同意协议",
+        },
+      }),
+    ];
+
+    const flow = buildFlowFromEvents(events, baseMeta);
+
+    expect(flow.steps).toHaveLength(2);
+    expect(flow.steps.map((step) => step.type)).toEqual(["navigate", "setChecked"]);
   });
 });
