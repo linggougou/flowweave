@@ -1,5 +1,10 @@
 import { buildDiagnosticRepairSuggestions } from "./repair-suggestions.js";
-import type { ExecutionStepLog } from "./studio-api-types.js";
+import {
+  isRuntimeErrorDiagnostic,
+  isTargetResolutionDiagnostic,
+  type ExecutionStepLog,
+  type StudioDiagnosticStrategyAttempt,
+} from "./studio-api-types.js";
 
 export type FailureInsightCategory =
   | "ambiguous-target"
@@ -33,8 +38,13 @@ function includesKeyword(value: string | undefined, keywords: string[]): boolean
 
 function resolveFallbackSuccess(
   step: ExecutionStepLog,
-): { failedAttempts: NonNullable<ExecutionStepLog["diagnostic"]>["strategyAttempts"]; successLabel: string } | null {
-  const attempts = step.diagnostic?.strategyAttempts ?? [];
+): { failedAttempts: StudioDiagnosticStrategyAttempt[]; successLabel: string } | null {
+  const diagnostic = step.diagnostic;
+  if (!isTargetResolutionDiagnostic(diagnostic)) {
+    return null;
+  }
+
+  const attempts = diagnostic.strategyAttempts;
   const failedAttempts = attempts.filter((attempt) => !attempt.success);
   const successAttempt = attempts.find((attempt) => attempt.success);
 
@@ -90,12 +100,35 @@ export function formatPageSnapshotSummary(
   return undefined;
 }
 
+function resolveRuntimeErrorSummary(step: ExecutionStepLog): string {
+  const diagnostic = step.diagnostic;
+  if (!isRuntimeErrorDiagnostic(diagnostic)) {
+    return (
+      step.message ??
+      "当前步骤失败，但没有更具体的策略诊断，建议先结合页面快照和 artifact 缩小范围。"
+    );
+  }
+
+  const title = diagnostic.title?.trim();
+  const pageLabel =
+    title && diagnostic.url
+      ? `${title}（${diagnostic.url}）`
+      : title ?? diagnostic.url;
+  const errorCode = diagnostic.errorCode ? `（${diagnostic.errorCode}）` : "";
+  const pageContext = pageLabel ? ` 当前页：${pageLabel}。` : "";
+
+  return `${diagnostic.stepType} 步骤执行失败${errorCode}：${diagnostic.message}。${pageContext}`;
+}
+
 function resolveInsightCategory(step: ExecutionStepLog): {
   category: FailureInsightCategory;
   categoryLabel: string;
   summary: string;
 } {
-  const attempts = step.diagnostic?.strategyAttempts ?? [];
+  const targetDiagnostic = isTargetResolutionDiagnostic(step.diagnostic)
+    ? step.diagnostic
+    : undefined;
+  const attempts = targetDiagnostic?.strategyAttempts ?? [];
   const failedAttempts = attempts.filter((attempt) => !attempt.success);
   const fallbackSuccess = resolveFallbackSuccess(step);
 
@@ -141,6 +174,14 @@ function resolveInsightCategory(step: ExecutionStepLog): {
     };
   }
 
+  if (isRuntimeErrorDiagnostic(step.diagnostic)) {
+    return {
+      category: "execution-error",
+      categoryLabel: "执行报错",
+      summary: resolveRuntimeErrorSummary(step),
+    };
+  }
+
   if (!step.diagnostic && step.pageSnapshot) {
     return {
       category: "page-snapshot",
@@ -171,14 +212,20 @@ function resolveInsightTitle(step: ExecutionStepLog): string {
     return "备用策略兜底成功";
   }
 
-  const topSuggestion = buildDiagnosticRepairSuggestions(step)[0];
-  if (topSuggestion) {
-    return topSuggestion.title;
+  if (isRuntimeErrorDiagnostic(step.diagnostic)) {
+    return "先查看当前错误反馈";
+  }
+
+  if (isTargetResolutionDiagnostic(step.diagnostic)) {
+    const topSuggestion = buildDiagnosticRepairSuggestions(step)[0];
+    if (topSuggestion) {
+      return topSuggestion.title;
+    }
   }
   if (step.pageSnapshot) {
     return "先核对页面当前状态";
   }
-  if (step.message) {
+  if (step.message || step.diagnostic?.message) {
     return "先查看当前错误反馈";
   }
   return "先对照当前诊断产物";
@@ -196,7 +243,9 @@ export function buildFailureInsight(step: ExecutionStepLog): FailureInsight | nu
     return null;
   }
 
-  const repairSuggestion = buildDiagnosticRepairSuggestions(step)[0];
+  const repairSuggestion = isTargetResolutionDiagnostic(step.diagnostic)
+    ? buildDiagnosticRepairSuggestions(step)[0]
+    : undefined;
   const { category, categoryLabel, summary } = resolveInsightCategory(step);
 
   return {

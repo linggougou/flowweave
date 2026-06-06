@@ -35,6 +35,38 @@ function buildStep(overrides?: Partial<ExecutionStepLog>): ExecutionStepLog {
 }
 
 describe("buildFailureInsight", () => {
+  it("对 runtime-error 诊断输出可读的执行失败摘要", () => {
+    const insight = buildFailureInsight(
+      buildStep({
+        stepIndex: 2,
+        stepId: "s3",
+        label: "等待支付弹层",
+        message: "wait 条件 visible 需要 target",
+        diagnostic: {
+          kind: "runtime-error",
+          stepId: "s3",
+          stepIndex: 2,
+          stepType: "wait",
+          message: "wait 条件 visible 需要 target",
+          errorCode: "WAIT_TARGET_REQUIRED",
+          cause: "缺少 target",
+          url: "https://staging.example.com/orders",
+          title: "订单页",
+        } as unknown as ExecutionStepLog["diagnostic"],
+      }),
+    );
+
+    expect(insight).toMatchObject({
+      category: "execution-error",
+      categoryLabel: "执行报错",
+      title: "先查看当前错误反馈",
+    });
+    expect(insight?.summary).toContain("wait");
+    expect(insight?.summary).toContain("WAIT_TARGET_REQUIRED");
+    expect(insight?.summary).toContain("wait 条件 visible 需要 target");
+    expect(insight?.recommendedAction).toBeUndefined();
+  });
+
   it("对先失败后成功的通过步骤降级为备用策略告警语义", () => {
     const insight = buildFailureInsight(
       buildStep({

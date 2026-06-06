@@ -19,7 +19,9 @@ import type {
   ExecutionSummary,
   RunFlowOptions,
   RunFlowVariableValue,
+  StudioDiagnosticTargetHints,
   StudioStepDiagnostic,
+  StudioDiagnosticStrategyAttempt,
   StudioExecution,
   StudioExecutionRunContext,
   StudioFlowVersion,
@@ -292,15 +294,110 @@ function inferPageSnapshotPath(step: {
   return existsSync(candidate) ? candidate : undefined;
 }
 
+function isStepType(value: unknown): value is NonNullable<ExecutionStepLog["stepType"]> {
+  return typeof value === "string";
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function readNumber(value: unknown): number | undefined {
+  return typeof value === "number" ? value : undefined;
+}
+
+function normalizeStrategyAttempts(value: unknown): StudioDiagnosticStrategyAttempt[] {
+  return Array.isArray(value) ? (value as StudioDiagnosticStrategyAttempt[]) : [];
+}
+
+function normalizeTargetHints(value: unknown): StudioDiagnosticTargetHints | undefined {
+  return value && typeof value === "object"
+    ? (value as StudioDiagnosticTargetHints)
+    : undefined;
+}
+
+function normalizeStepDiagnostic(
+  diagnostic: unknown,
+  step: Pick<
+    ExecutionStepLog,
+    "stepId" | "stepIndex" | "stepType" | "message" | "diagnosticPath"
+  >,
+): StudioStepDiagnostic | undefined {
+  if (!diagnostic || typeof diagnostic !== "object") {
+    return undefined;
+  }
+
+  const record = diagnostic as {
+    kind?: string;
+    stepId?: unknown;
+    stepIndex?: unknown;
+    stepType?: unknown;
+    message?: unknown;
+    errorCode?: unknown;
+    cause?: unknown;
+    url?: unknown;
+    title?: unknown;
+    strategyAttempts?: unknown;
+    targetHints?: unknown;
+  };
+  const stepId = readString(record.stepId) ?? step.stepId;
+  const stepIndex = readNumber(record.stepIndex) ?? step.stepIndex;
+  const stepType = isStepType(record.stepType) ? record.stepType : step.stepType;
+  const message = readString(record.message) ?? step.message;
+  const errorCode = readString(record.errorCode);
+  const cause = readString(record.cause);
+  const url = readString(record.url);
+  const title = readString(record.title);
+
+  if (record.kind === "runtime-error") {
+    if (!stepType || !message) {
+      return undefined;
+    }
+
+    return {
+      kind: "runtime-error",
+      stepId,
+      stepIndex,
+      stepType,
+      message,
+      errorCode,
+      cause,
+      url,
+      title,
+    };
+  }
+
+  if (!Array.isArray(record.strategyAttempts)) {
+    return undefined;
+  }
+
+  return {
+    kind: "target-resolution",
+    stepId,
+    stepIndex,
+    stepType,
+    message,
+    errorCode,
+    cause,
+    url,
+    title,
+    strategyAttempts: normalizeStrategyAttempts(record.strategyAttempts),
+    targetHints: normalizeTargetHints(record.targetHints),
+  };
+}
+
 function readStepArtifacts(
-  step: Pick<ExecutionStepLog, "stepIndex" | "screenshotPath" | "diagnosticPath">,
+  step: Pick<
+    ExecutionStepLog,
+    "stepId" | "stepIndex" | "stepType" | "message" | "screenshotPath" | "diagnosticPath"
+  >,
   pageSnapshots = new Map<number, { filePath: string; summary: PageSnapshotSummary }>(),
 ): Pick<ExecutionStepLog, "diagnostic" | "pageSnapshot" | "pageSnapshotPath"> {
   const pageSnapshot = pageSnapshots.get(step.stepIndex);
   const pageSnapshotPath = pageSnapshot?.filePath ?? inferPageSnapshotPath(step);
 
   return {
-    diagnostic: readJsonArtifact<StudioStepDiagnostic>(step.diagnosticPath),
+    diagnostic: normalizeStepDiagnostic(readJsonArtifact(step.diagnosticPath), step),
     pageSnapshotPath,
     pageSnapshot:
       pageSnapshot?.summary ?? readJsonArtifact<PageSnapshotSummary>(pageSnapshotPath),
@@ -323,6 +420,7 @@ function mapRuntimeSteps(
       stepIndex: step.stepIndex,
       stepId: step.stepId,
       label: resolveStepLabel(flow, step.stepIndex, step.type),
+      stepType: step.type,
       status: step.status === "success" ? "passed" : "failed",
       message: step.message,
       startedAt: step.startedAt,
