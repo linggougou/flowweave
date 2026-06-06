@@ -18,6 +18,12 @@ type MatrixResultShape = {
 describe("runRecordedReplayMatrix baseline", () => {
   it("执行 recorded replay 基线矩阵并返回汇总", async () => {
     const matrixModule = (await import(matrixModuleUrl)) as {
+      getRecordedReplayCaseCatalog: () => Array<{
+        name: string;
+        stepCount: number;
+        sourceKind: "fixture" | "runtime-generated";
+        fixtureFile?: string;
+      }>;
       runRecordedReplayMatrix: (options?: { headless?: boolean }) => Promise<{
         profile: string;
         baseUrl: string;
@@ -32,46 +38,33 @@ describe("runRecordedReplayMatrix baseline", () => {
     };
 
     const summary = await matrixModule.runRecordedReplayMatrix({ headless: true });
+    const caseCatalog = matrixModule.getRecordedReplayCaseCatalog();
+    const fixtureCases = caseCatalog.filter((item) => item.sourceKind === "fixture");
+    const runtimeOnlyCases = caseCatalog.filter((item) => item.sourceKind === "runtime-generated");
 
     expect(summary.profile).toBe("baseline");
     expect(summary.baseUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/$/);
-    expect(summary.results.map((item) => item.name)).toEqual([
-      "upload-form",
-      "spa-route",
-      "filterable-list",
-      "contenteditable-editor",
-      "session-expired-retry",
-      "bulk-cross-page-selection",
-      "repeated-row-actions",
-      "linked-filters",
-      "keyboard-command-palette",
-      "async-command-palette",
-      "session-dashboard",
-      "drawer-double-save",
-      "placeholder-disambiguation",
+    expect(caseCatalog).toHaveLength(22);
+    expect(fixtureCases).toHaveLength(21);
+    expect(runtimeOnlyCases).toEqual([
+      {
+        name: "placeholder-disambiguation",
+        stepCount: 4,
+        sourceKind: "runtime-generated",
+      },
     ]);
-    expect(summary.results.map((item) => [item.name, item.stepCount])).toEqual([
-      ["upload-form", 4],
-      ["spa-route", 3],
-      ["filterable-list", 5],
-      ["contenteditable-editor", 4],
-      ["session-expired-retry", 4],
-      ["bulk-cross-page-selection", 6],
-      ["repeated-row-actions", 3],
-      ["linked-filters", 8],
-      ["keyboard-command-palette", 5],
-      ["async-command-palette", 5],
-      ["session-dashboard", 3],
-      ["drawer-double-save", 9],
-      ["placeholder-disambiguation", 4],
-    ]);
+    expect(fixtureCases.every((item) => item.fixtureFile === `${item.name}.html`)).toBe(true);
+    expect(summary.results.map((item) => item.name)).toEqual(caseCatalog.map((item) => item.name));
+    expect(summary.results.map((item) => [item.name, item.stepCount])).toEqual(
+      caseCatalog.map((item) => [item.name, item.stepCount]),
+    );
     expect(summary.results.every((item) => item.status === "success")).toBe(true);
     expect(summary.results.every((item) => item.durationMs > 0)).toBe(true);
     expect(summary.results.every((item) => item.artifactDir.startsWith(summary.workspaceDir))).toBe(
       true,
     );
     expect(summary.failed).toHaveLength(0);
-    expect(summary.successCount).toBe(13);
+    expect(summary.successCount).toBe(22);
     expect(summary.failureCount).toBe(0);
     expect(summary.totalDurationMs).toBeGreaterThan(0);
     expect(summary.averageDurationMs).toBeGreaterThan(0);

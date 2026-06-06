@@ -36,6 +36,9 @@ type MatrixSuccessCoverageShape = {
 describe("runRealPageFixtureMatrix P7", () => {
   it("执行 P7 增强矩阵并返回汇总统计", async () => {
     const matrixModule = (await import(matrixModuleUrl)) as {
+      getRealPageFixtureCatalog: (
+        profile?: string,
+      ) => Array<{ name: string; stepCount: number; fixtureFile: string }>;
       summarizeRealPageFailureTypes: (results: MatrixResultShape[]) => Record<string, number>;
       summarizeRealPageSlowestCases: (
         results: MatrixResultShape[],
@@ -63,30 +66,18 @@ describe("runRealPageFixtureMatrix P7", () => {
       profile: "p7",
     });
 
+    const p7Catalog = matrixModule.getRealPageFixtureCatalog("p7");
+
     expect(summary.profile).toBe("p7");
-    expect(summary.results.map((item) => item.name)).toEqual([
-      "checkbox-select",
-      "delayed-panel",
-      "upload-form",
-      "spa-route",
-      "session-dashboard",
-      "keyboard-command-palette",
-      "async-command-palette",
-      "filterable-list",
-      "modal-bulk-action",
-      "session-expired-dashboard",
-      "paginated-list",
-      "drawer-edit-form",
-      "toast-popconfirm",
-      "tabbed-workspace",
-      "contenteditable-editor",
-      "empty-results-retry",
-      "linked-filters",
-      "session-expired-retry",
-      "bulk-cross-page-selection",
-      "drawer-double-save",
-      "repeated-row-actions",
-    ]);
+    expect(matrixModule.getRealPageFixtureCatalog("baseline")).toHaveLength(13);
+    expect(matrixModule.getRealPageFixtureCatalog("p5")).toHaveLength(17);
+    expect(matrixModule.getRealPageFixtureCatalog("p6")).toHaveLength(20);
+    expect(p7Catalog).toHaveLength(21);
+    expect(p7Catalog.every((item) => item.fixtureFile === `${item.name}.html`)).toBe(true);
+    expect(summary.results.map((item) => item.name)).toEqual(p7Catalog.map((item) => item.name));
+    expect(summary.results.map((item) => [item.name, item.stepCount])).toEqual(
+      p7Catalog.map((item) => [item.name, item.stepCount]),
+    );
     expect(summary.totalDurationMs).toBeGreaterThan(0);
     expect(summary.averageDurationMs).toBeGreaterThan(0);
     expect(summary.slowestCases).toHaveLength(5);
