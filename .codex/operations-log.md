@@ -2537,3 +2537,40 @@
   - 持续等待各轨道首轮实现回流
   - 准备按 `Recorder -> Runtime -> Benchmarks -> Studio` 顺序回收合并
   - 在协调分支统一维护 `.codex/verification-report.md` 与最终 Node 20 集成验收
+
+## 2026-06-06 Wave 5 轨道回收 - Recorder Async Stabilization
+
+- 时间：2026-06-06 23:40:20 CST
+- 轨道信息：
+  - worktree：`.worktrees/codex-real-page-recorder-async-stability`
+  - 分支：`codex/real-page-recorder-async-stability`
+  - 子代理：`Aristotle / 019e9d84-1bc4-78b0-9d9e-857661360b83`
+  - 子代理提交：`ed7a78dd7087eef8d80c72e1c35041eec4a19c3b`
+- 主代理边界复核：
+  - 实际集成文件仅保留：
+    - `apps/extension/entrypoints/content.ts`
+    - `apps/extension/lib/content-contract.test.ts`
+    - `packages/recorder/src/normalize.ts`
+    - `packages/recorder/src/normalize.test.ts`
+  - 未带入 worktree 私有 `.codex` 文件，协调分支继续统一维护主留痕。
+  - 未改动 `packages/runtime/**`、`examples/**`、`apps/studio/**`，符合 Recorder 轨道边界。
+- 关键实现结论：
+  - 扩展录制侧新增待提交 `fill` 收口：提交型 `keypress` 前先 flush，`change` / `blur` 也会优先消费待提交输入。
+  - Recorder 导出侧新增保守 `wait` 推断：
+    - 跨 URL 相邻动作插入 `wait urlIncludes`
+    - 同页、目标变化且时间间隔至少 `500ms` 时插入 `wait visible(next.target)`
+  - 保持 `ensureLeadingNavigate()`、`filterNoisyInteractionSteps()`、`mergeConsecutiveFillSteps()` 既有顺序不变。
+- Node 20 主代理复验：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension test -- lib/content-contract.test.ts`
+    - 结果：通过，`4/4`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test -- src/normalize.test.ts src/step-filter.test.ts`
+    - 结果：通过，`37/37`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension typecheck`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder typecheck`
+    - 结果：通过
+- 主代理结论：
+  - 无阻塞问题，允许并回协调分支。
+  - 残余风险：
+    - `wait visible` 仍是启发式规则，极少数“用户自己停顿后再操作”的同页场景可能插入保守 wait。
+    - 如果最后一次提交后没有后继事件，导出侧仍无法自动补尾部 wait，后续需要 recorded replay 继续兜底。

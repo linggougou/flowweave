@@ -102,6 +102,10 @@ export function buildUploadReplayInputs(
 
 const PRESS_KEYS = new Set(["Enter", "Tab", "Escape"]);
 const MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta"]);
+const FILL_DEBOUNCE_MS = 400;
+
+let pendingFillElement: Element | null = null;
+let pendingFillTimer: ReturnType<typeof setTimeout> | undefined;
 
 function normalizePressKey(key: string): string {
   if (key === "Esc") {
@@ -143,6 +147,71 @@ function buildRecordedPressKey(event: KeyboardEvent): string | null {
   }
   parts.push(key);
   return parts.join("+");
+}
+
+export function isSubmitLikePressKey(key: string): boolean {
+  const parts = key.split("+").filter((part) => part.length > 0);
+  const baseKey = parts.at(-1);
+  if (!baseKey) {
+    return false;
+  }
+
+  if (PRESS_KEYS.has(baseKey)) {
+    return true;
+  }
+
+  const hasControlLikeModifier = parts.includes("Control") || parts.includes("Meta");
+  return hasControlLikeModifier && baseKey.toLowerCase() === "s";
+}
+
+function resolveFillTarget(target: EventTarget | null): Element | null {
+  if (!(target instanceof Element)) {
+    return null;
+  }
+
+  let current: Element | null = target;
+  for (let depth = 0; depth < 6 && current; depth += 1) {
+    if (shouldRecordFill(current)) {
+      return current;
+    }
+    current = current.parentElement;
+  }
+
+  return null;
+}
+
+function clearPendingFillTimer(): void {
+  if (pendingFillTimer) {
+    clearTimeout(pendingFillTimer);
+    pendingFillTimer = undefined;
+  }
+}
+
+function flushPendingFill(target?: EventTarget | null): boolean {
+  const element = pendingFillElement;
+  if (!element) {
+    return false;
+  }
+
+  if (target !== undefined) {
+    const resolvedTarget = resolveFillTarget(target);
+    if (resolvedTarget !== element) {
+      return false;
+    }
+  }
+
+  clearPendingFillTimer();
+  pendingFillElement = null;
+  recordInteractionFromElement(element);
+  return true;
+}
+
+function schedulePendingFill(element: Element): void {
+  pendingFillElement = element;
+  clearPendingFillTimer();
+  pendingFillTimer = setTimeout(() => {
+    flushPendingFill();
+  }, FILL_DEBOUNCE_MS);
 }
 
 function resolvePressTarget(target: EventTarget | null): Element | null {
@@ -251,6 +320,10 @@ function recordPress(event: KeyboardEvent): void {
     return;
   }
 
+  if (isSubmitLikePressKey(key)) {
+    flushPendingFill(event.target);
+  }
+
   const target = resolvePressTarget(event.target);
   const payload = target
     ? {
@@ -308,7 +381,9 @@ export default defineContentScript({
       (ev) => {
         const target = ev.target;
         if (!(target instanceof Element)) return;
-        recordInteractionFromElement(target);
+        if (!flushPendingFill(target)) {
+          recordInteractionFromElement(target);
+        }
       },
       true,
     );
@@ -318,21 +393,19 @@ export default defineContentScript({
       (ev) => {
         const target = ev.target;
         if (!(target instanceof Element)) return;
-        recordInteractionFromElement(target);
+        if (!flushPendingFill(target)) {
+          recordInteractionFromElement(target);
+        }
       },
       true,
     );
 
-    let inputDebounce: ReturnType<typeof setTimeout> | undefined;
     document.addEventListener(
       "input",
       (ev) => {
-        const target = ev.target;
-        if (!(target instanceof Element) || !shouldRecordFill(target)) return;
-        clearTimeout(inputDebounce);
-        inputDebounce = setTimeout(() => {
-          recordInteractionFromElement(target);
-        }, 400);
+        const target = resolveFillTarget(ev.target);
+        if (!target) return;
+        schedulePendingFill(target);
       },
       true,
     );

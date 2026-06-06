@@ -14,6 +14,7 @@ type FlowVariableDefinition = FlowDocument["variables"][number];
 type UploadStepWithMetadata = Extract<NormalizedStep, { type: "upload" }> & {
   fileNames?: string[];
 };
+const INFERRED_VISIBLE_WAIT_MIN_GAP_MS = 500;
 
 /** 构建 Flow 时除会话元数据外需要的字段 */
 export interface BuildFlowFromEventsMeta extends RecorderSessionMeta {
@@ -388,6 +389,151 @@ function normalizeKeypress(event: RecordedEvent): NormalizedStep | null {
   };
 }
 
+function targetOf(step: NormalizedStep): Target | undefined {
+  switch (step.type) {
+    case "click":
+    case "fill":
+    case "select":
+    case "setChecked":
+    case "press":
+    case "upload":
+      return step.target;
+    default:
+      return undefined;
+  }
+}
+
+function targetSignature(target: Target | undefined): string | undefined {
+  return target?.strategies.map((strategy) => JSON.stringify(strategy)).join("|");
+}
+
+function isSubmitLikePressKey(key: string): boolean {
+  const parts = key.split("+").filter((part) => part.length > 0);
+  const baseKey = parts.at(-1);
+  if (!baseKey) {
+    return false;
+  }
+
+  if (baseKey === "Enter" || baseKey === "Tab" || baseKey === "Escape") {
+    return true;
+  }
+
+  const hasControlLikeModifier = parts.includes("Control") || parts.includes("Meta");
+  return hasControlLikeModifier && baseKey.toLowerCase() === "s";
+}
+
+function isAsyncWaitTriggerStep(step: NormalizedStep): boolean {
+  switch (step.type) {
+    case "click":
+    case "select":
+    case "setChecked":
+      return true;
+    case "press":
+      return isSubmitLikePressKey(step.key);
+    default:
+      return false;
+  }
+}
+
+function buildUrlIncludesFragment(previousUrl: string, nextUrl: string): string | null {
+  if (previousUrl === nextUrl) {
+    return null;
+  }
+
+  try {
+    const previous = new URL(previousUrl);
+    const next = new URL(nextUrl);
+    if (previous.origin === next.origin) {
+      return `${next.pathname}${next.search}${next.hash}` || next.pathname || next.href;
+    }
+    return next.href;
+  } catch {
+    return nextUrl;
+  }
+}
+
+function inferWaitStep(
+  current: NormalizedStep,
+  next: NormalizedStep,
+  currentEvent: RecordedEvent | undefined,
+  nextEvent: RecordedEvent | undefined,
+): NormalizedStep | null {
+  if (!currentEvent || !nextEvent || next.type === "navigate" || !isAsyncWaitTriggerStep(current)) {
+    return null;
+  }
+
+  if (nextEvent.timestamp <= currentEvent.timestamp) {
+    return null;
+  }
+
+  if (currentEvent.url !== nextEvent.url) {
+    const urlIncludes = buildUrlIncludesFragment(currentEvent.url, nextEvent.url);
+    if (!urlIncludes) {
+      return null;
+    }
+    return {
+      id: `wait-auto-${current.id}-${next.id}`,
+      type: "wait",
+      condition: "urlIncludes",
+      urlIncludes,
+    };
+  }
+
+  const nextTarget = targetOf(next);
+  if (!nextTarget) {
+    return null;
+  }
+
+  if (targetSignature(targetOf(current)) === targetSignature(nextTarget)) {
+    return null;
+  }
+
+  if (nextEvent.timestamp - currentEvent.timestamp < INFERRED_VISIBLE_WAIT_MIN_GAP_MS) {
+    return null;
+  }
+
+  return {
+    id: `wait-auto-${current.id}-${next.id}`,
+    type: "wait",
+    condition: "visible",
+    target: nextTarget,
+  };
+}
+
+function insertInferredWaitSteps(steps: NormalizedStep[], events: RecordedEvent[]): NormalizedStep[] {
+  if (steps.length < 2) {
+    return steps;
+  }
+
+  const eventById = new Map(events.map((event) => [event.id, event]));
+  const result: NormalizedStep[] = [];
+
+  for (let index = 0; index < steps.length; index += 1) {
+    const current = steps[index];
+    if (!current) {
+      continue;
+    }
+    result.push(current);
+
+    const next = steps[index + 1];
+    if (!next) {
+      continue;
+    }
+
+    const inferredWait = inferWaitStep(
+      current,
+      next,
+      eventById.get(current.id),
+      eventById.get(next.id),
+    );
+    if (inferredWait) {
+      result.push(inferredWait);
+    }
+  }
+
+  return result;
+}
+
 /** 将单条录制事件转为标准步骤；不支持或信息不足时返回 null */
 export function normalizeRecordedEvent(event: RecordedEvent): NormalizedStep | null {
   switch (event.type) {
@@ -435,15 +581,18 @@ export function buildFlowFromEvents(
   events: RecordedEvent[],
   meta: BuildFlowFromEventsMeta,
 ): FlowDocument {
-  const steps = mergeConsecutiveFillSteps(
-    filterNoisyInteractionSteps(
-      ensureLeadingNavigate(
-        events
-          .map((event) => normalizeRecordedEvent(event))
-          .filter((step): step is NormalizedStep => step !== null),
-        events,
+  const steps = insertInferredWaitSteps(
+    mergeConsecutiveFillSteps(
+      filterNoisyInteractionSteps(
+        ensureLeadingNavigate(
+          events
+            .map((event) => normalizeRecordedEvent(event))
+            .filter((step): step is NormalizedStep => step !== null),
+          events,
+        ),
       ),
     ),
+    events,
   );
 
   if (steps.length === 0) {

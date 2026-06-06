@@ -768,4 +768,149 @@ describe("buildFlowFromEvents", () => {
       },
     ]);
   });
+
+  it("构建 Flow 时在跨 URL 的提交动作后插入 urlIncludes wait", () => {
+    const flow = buildFlowFromEvents(
+      [
+        event({
+          id: "n1",
+          type: "navigate",
+          timestamp: 0,
+          url: "https://app.example.com/search",
+        }),
+        event({
+          id: "f1",
+          type: "fill",
+          timestamp: 100,
+          url: "https://app.example.com/search",
+          payload: {
+            selector: "#keyword",
+            role: "textbox",
+            name: "搜索词",
+            value: "flowweave",
+          },
+        }),
+        event({
+          id: "p1",
+          type: "keypress",
+          timestamp: 150,
+          url: "https://app.example.com/search",
+          payload: {
+            selector: "#keyword",
+            role: "textbox",
+            name: "搜索词",
+            key: "Enter",
+          },
+        }),
+        event({
+          id: "c1",
+          type: "click",
+          timestamp: 900,
+          url: "https://app.example.com/results?keyword=flowweave",
+          payload: {
+            selector: "#detail-link",
+            role: "link",
+            name: "查看详情",
+          },
+        }),
+      ],
+      baseMeta,
+    );
+
+    expect(flow.steps.map((step) => step.type)).toEqual(["navigate", "fill", "press", "wait", "click"]);
+    expect(flow.steps[3]).toEqual({
+      id: "wait-auto-p1-c1",
+      type: "wait",
+      condition: "urlIncludes",
+      urlIncludes: "/results?keyword=flowweave",
+    });
+  });
+
+  it("构建 Flow 时在同页异步切换到新目标前插入 visible wait", () => {
+    const flow = buildFlowFromEvents(
+      [
+        event({
+          id: "n1",
+          type: "navigate",
+          timestamp: 0,
+          url: "https://app.example.com/workbench",
+        }),
+        event({
+          id: "c1",
+          type: "click",
+          timestamp: 100,
+          url: "https://app.example.com/workbench",
+          payload: {
+            selector: "#open-panel",
+            role: "button",
+            name: "展开详情",
+          },
+        }),
+        event({
+          id: "f1",
+          type: "fill",
+          timestamp: 1100,
+          url: "https://app.example.com/workbench",
+          payload: {
+            selector: "#panel-title",
+            role: "textbox",
+            name: "详情标题",
+            value: "异步出现的输入框",
+          },
+        }),
+      ],
+      baseMeta,
+    );
+
+    expect(flow.steps.map((step) => step.type)).toEqual(["navigate", "click", "wait", "fill"]);
+    expect(flow.steps[2]).toEqual({
+      id: "wait-auto-c1-f1",
+      type: "wait",
+      condition: "visible",
+      target: {
+        strategies: [
+          { kind: "role", role: "textbox", name: "详情标题" },
+          { kind: "css", selector: "#panel-title" },
+        ],
+      },
+    });
+  });
+
+  it("构建 Flow 时不会为普通连续交互宽泛插入 wait", () => {
+    const flow = buildFlowFromEvents(
+      [
+        event({
+          id: "n1",
+          type: "navigate",
+          timestamp: 0,
+          url: "https://app.example.com/workbench",
+        }),
+        event({
+          id: "c1",
+          type: "click",
+          timestamp: 100,
+          url: "https://app.example.com/workbench",
+          payload: {
+            selector: "#open-panel",
+            role: "button",
+            name: "展开详情",
+          },
+        }),
+        event({
+          id: "c2",
+          type: "click",
+          timestamp: 220,
+          url: "https://app.example.com/workbench",
+          payload: {
+            selector: "#confirm",
+            role: "button",
+            name: "确认",
+          },
+        }),
+      ],
+      baseMeta,
+    );
+
+    expect(flow.steps.map((step) => step.type)).toEqual(["navigate", "click", "click"]);
+  });
 });

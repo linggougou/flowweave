@@ -284,6 +284,54 @@
 - 风险评估评分：90
 - 综合评分：93
 - 建议：通过
+
+## 2026-06-06 Recorder Async Stabilization 集成验收
+
+### 验证范围
+
+- 验证 `ed7a78dd7087eef8d80c72e1c35041eec4a19c3b` 的 Recorder 轨道实现是否符合 Wave 5 规划边界。
+- 验证扩展录制侧的待提交 `fill` flush 与 recorder 导出侧的 `wait` 推断是否在 Node 20 下通过主代理复测。
+- 验证此次集成未破坏既有 `normalize` / `step-filter` 录制稳定化链路。
+
+### 验证结果
+
+1. 轨道边界符合预期。
+   - 实际并入的文件只包含：
+     - `apps/extension/entrypoints/content.ts`
+     - `apps/extension/lib/content-contract.test.ts`
+     - `packages/recorder/src/normalize.ts`
+     - `packages/recorder/src/normalize.test.ts`
+   - 未改动 Runtime、Benchmarks、Studio 轨道文件。
+
+2. Node 20 主代理复测通过。
+   - `pnpm --filter @flowweave/app-extension test -- lib/content-contract.test.ts`：通过，`4/4`
+   - `pnpm --filter @flowweave/recorder test -- src/normalize.test.ts src/step-filter.test.ts`：通过，`37/37`
+   - `pnpm --filter @flowweave/app-extension typecheck`：通过
+   - `pnpm --filter @flowweave/recorder typecheck`：通过
+
+3. 关键能力符合目标。
+   - 提交型按键前先 flush 待提交 `fill`，覆盖 `Enter / Tab / Escape` 与明显提交快捷键。
+   - 导出侧已具备窄范围 `wait urlIncludes / wait visible(next.target)` 推断能力。
+   - `step-filter` 未被额外扩大，原有去噪边界保持稳定。
+
+### Findings
+
+1. 无阻塞问题。
+   - 当前实现满足 Wave 5 Recorder 轨道的最小能力包要求，且主代理复测全部通过。
+2. 残余风险：`wait visible` 仍是启发式规则。
+   - 当前使用“目标变化 + 500ms 阈值”收窄范围，仍可能在极少数用户主动停顿的同页场景插入保守 wait。
+3. 残余风险：末尾等待仍无法自动补全。
+   - 如果最后一次提交后没有后继事件，当前导出侧仍无法凭相邻关系自动补尾部 wait，需要后续 recorded replay 继续兜底。
+
+### 综合结论
+
+- 代码质量评分：94
+- 测试覆盖评分：92
+- 规范遵循评分：97
+- 战略匹配评分：95
+- 风险评估评分：90
+- 综合评分：94
+- 建议：通过
 - 建议：通过
 
 ## 2026-06-06 旧历史执行兼容提示验收（复核补修）
