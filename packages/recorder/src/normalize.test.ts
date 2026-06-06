@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
+import { FLOW_SCHEMA_VERSION, parseRecordedEvent } from "@flowweave/shared";
 import type { RecordedEvent } from "@flowweave/shared";
 import { flowDocumentSchema } from "@flowweave/flow-dsl";
-import { parseRecordedEvent } from "../../shared/src/recording-protocol.js";
 import {
   buildFlowFromEvents,
   normalizeRecordedEvent,
