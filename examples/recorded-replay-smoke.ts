@@ -31,6 +31,7 @@ type MatrixRuntimeAssets = {
 };
 
 export type RecordedReplayMatrixProfile = "baseline";
+export type RecordedReplayCaseSourceKind = "fixture" | "runtime-generated";
 
 export type RecordedReplayCaseResult = {
   name: string;
@@ -51,6 +52,47 @@ export type RecordedReplayMatrixSummary = {
   failureCount: number;
   totalDurationMs: number;
   averageDurationMs: number;
+};
+
+export type RecordedReplayCaseCatalogItem = {
+  name: string;
+  stepCount: number;
+  sourceKind: RecordedReplayCaseSourceKind;
+  fixtureFile?: string;
+};
+
+const RECORDED_REPLAY_RUNTIME_ONLY_CASE_NAMES = new Set(["placeholder-disambiguation"]);
+const RECORDED_REPLAY_CASE_ORDER = [
+  "checkbox-select",
+  "delayed-panel",
+  "upload-form",
+  "spa-route",
+  "session-dashboard",
+  "keyboard-command-palette",
+  "async-command-palette",
+  "filterable-list",
+  "modal-bulk-action",
+  "session-expired-dashboard",
+  "paginated-list",
+  "drawer-edit-form",
+  "toast-popconfirm",
+  "tabbed-workspace",
+  "contenteditable-editor",
+  "empty-results-retry",
+  "linked-filters",
+  "session-expired-retry",
+  "bulk-cross-page-selection",
+  "drawer-double-save",
+  "repeated-row-actions",
+  "placeholder-disambiguation",
+] as const satisfies readonly string[];
+
+const RECORDED_REPLAY_CATALOG_STUB_ASSETS: MatrixRuntimeAssets = {
+  uploadFileA: "/tmp/flowweave-recorded-catalog-evidence-a.txt",
+  uploadFileB: "/tmp/flowweave-recorded-catalog-evidence-b.txt",
+  storageStatePath: "/tmp/flowweave-recorded-catalog-session.json",
+  expiredStorageStatePath: "/tmp/flowweave-recorded-catalog-session-expired.json",
+  placeholderFixtureUrl: "file:///tmp/placeholder-disambiguation.html",
 };
 
 function buildRecordedFlowMeta(flowId: string, name: string): BuildFlowFromEventsMeta {
@@ -208,13 +250,25 @@ function buildMatrixRuntimeAssets(baseUrl: string, workspaceDir: string): Matrix
 }
 
 function buildBaselineMatrixCases(baseUrl: string, assets: MatrixRuntimeAssets): MatrixCase[] {
+  const checkboxSelectFixtureUrl = new URL("checkbox-select.html", baseUrl).toString();
+  const delayedPanelFixtureUrl = new URL("delayed-panel.html", baseUrl).toString();
   const uploadFormFixtureUrl = new URL("upload-form.html", baseUrl).toString();
   const spaRouteFixtureUrl = new URL("spa-route.html", baseUrl).toString();
+  const modalBulkActionFixtureUrl = new URL("modal-bulk-action.html", baseUrl).toString();
+  const sessionExpiredDashboardFixtureUrl = new URL(
+    "session-expired-dashboard.html",
+    baseUrl,
+  ).toString();
+  const paginatedListFixtureUrl = new URL("paginated-list.html", baseUrl).toString();
+  const drawerEditFormFixtureUrl = new URL("drawer-edit-form.html", baseUrl).toString();
+  const toastPopconfirmFixtureUrl = new URL("toast-popconfirm.html", baseUrl).toString();
+  const tabbedWorkspaceFixtureUrl = new URL("tabbed-workspace.html", baseUrl).toString();
   const filterableListFixtureUrl = new URL("filterable-list.html", baseUrl).toString();
   const contenteditableEditorFixtureUrl = new URL(
     "contenteditable-editor.html",
     baseUrl,
   ).toString();
+  const emptyResultsRetryFixtureUrl = new URL("empty-results-retry.html", baseUrl).toString();
   const sessionExpiredRetryFixtureUrl = new URL("session-expired-retry.html", baseUrl).toString();
   const sessionDashboardFixtureUrl = new URL("session-dashboard.html", baseUrl).toString();
   const bulkCrossPageSelectionFixtureUrl = new URL(
@@ -231,6 +285,111 @@ function buildBaselineMatrixCases(baseUrl: string, assets: MatrixRuntimeAssets):
   const repeatedRowActionsFixtureUrl = new URL("repeated-row-actions.html", baseUrl).toString();
 
   return [
+    {
+      name: "checkbox-select",
+      flow: buildFlowFromEvents(
+        [
+          parseRecordedEvent({
+            id: "evt_nav_checkbox_select",
+            type: "navigate",
+            timestamp: 0,
+            url: checkboxSelectFixtureUrl,
+            payload: {
+              url: "checkbox-select.html",
+              waitUntil: "domcontentloaded",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_select_city",
+            type: "select",
+            timestamp: 100,
+            url: checkboxSelectFixtureUrl,
+            payload: {
+              selector: "#city",
+              testId: "city-select",
+              values: ["hangzhou"],
+              tagName: "select",
+              nameAttr: "city",
+              labelText: "配送城市",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_check_agree",
+            type: "click",
+            timestamp: 200,
+            url: checkboxSelectFixtureUrl,
+            payload: {
+              selector: "#agree",
+              testId: "agree-checkbox",
+              inputType: "checkbox",
+              checked: true,
+              tagName: "input",
+              nameAttr: "agree",
+              labelText: "我已确认允许工作流修改当前配送偏好",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_save_preferences",
+            type: "click",
+            timestamp: 300,
+            url: checkboxSelectFixtureUrl,
+            payload: {
+              selector: "#save-preferences",
+              role: "button",
+              name: "保存配置",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_checkbox_result",
+            type: "click",
+            timestamp: 400,
+            url: checkboxSelectFixtureUrl,
+            payload: {
+              selector: "#result-panel[data-ready='true']",
+            },
+          }),
+        ],
+        buildRecordedFlowMeta("flow_recorded_checkbox_select", "录制 checkbox 与下拉流程"),
+      ),
+    },
+    {
+      name: "delayed-panel",
+      flow: buildFlowFromEvents(
+        [
+          parseRecordedEvent({
+            id: "evt_nav_delayed_panel",
+            type: "navigate",
+            timestamp: 0,
+            url: delayedPanelFixtureUrl,
+            payload: {
+              url: "delayed-panel.html",
+              waitUntil: "domcontentloaded",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_load_panel",
+            type: "click",
+            timestamp: 100,
+            url: delayedPanelFixtureUrl,
+            payload: {
+              selector: "#load-panel",
+              role: "button",
+              name: "加载运行概览",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_ready_report_panel",
+            type: "click",
+            timestamp: 1400,
+            url: delayedPanelFixtureUrl,
+            payload: {
+              selector: "#report-panel[data-ready='true']",
+            },
+          }),
+        ],
+        buildRecordedFlowMeta("flow_recorded_delayed_panel", "录制延迟面板流程"),
+      ),
+    },
     {
       name: "upload-form",
       flow: buildFlowFromEvents(
@@ -482,6 +641,328 @@ function buildBaselineMatrixCases(baseUrl: string, assets: MatrixRuntimeAssets):
       },
     },
     {
+      name: "modal-bulk-action",
+      flow: buildFlowFromEvents(
+        [
+          parseRecordedEvent({
+            id: "evt_nav_modal_bulk_action",
+            type: "navigate",
+            timestamp: 0,
+            url: modalBulkActionFixtureUrl,
+            payload: {
+              url: "modal-bulk-action.html",
+              waitUntil: "domcontentloaded",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_check_bulk_row",
+            type: "click",
+            timestamp: 100,
+            url: modalBulkActionFixtureUrl,
+            payload: {
+              selector: "#select-bulk-row-401",
+              testId: "bulk-row-checkbox",
+              inputType: "checkbox",
+              checked: true,
+              tagName: "input",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_open_archive_modal",
+            type: "click",
+            timestamp: 200,
+            url: modalBulkActionFixtureUrl,
+            payload: {
+              selector: "#open-archive-modal",
+              role: "button",
+              name: "批量归档",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_fill_archive_reason",
+            type: "fill",
+            timestamp: 300,
+            url: modalBulkActionFixtureUrl,
+            payload: {
+              selector: "#archive-reason",
+              role: "textbox",
+              name: "归档原因",
+              value: "已完成补件并同步知识库",
+              tagName: "textarea",
+              placeholder: "例如：已完成补件并同步知识库",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_confirm_archive",
+            type: "click",
+            timestamp: 400,
+            url: modalBulkActionFixtureUrl,
+            payload: {
+              selector: "#confirm-archive",
+              role: "button",
+              name: "确认归档",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_archive_result",
+            type: "click",
+            timestamp: 1200,
+            url: modalBulkActionFixtureUrl,
+            payload: {
+              selector: "#archive-result[data-ready='true']",
+            },
+          }),
+        ],
+        buildRecordedFlowMeta("flow_recorded_modal_bulk_action", "录制批量归档弹窗流程"),
+      ),
+    },
+    {
+      name: "session-expired-dashboard",
+      flow: buildFlowFromEvents(
+        [
+          parseRecordedEvent({
+            id: "evt_nav_session_expired_dashboard",
+            type: "navigate",
+            timestamp: 0,
+            url: sessionExpiredDashboardFixtureUrl,
+            payload: {
+              url: "session-expired-dashboard.html",
+              waitUntil: "domcontentloaded",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_refresh_expired_session",
+            type: "click",
+            timestamp: 100,
+            url: sessionExpiredDashboardFixtureUrl,
+            payload: {
+              selector: "#refresh-session",
+              role: "button",
+              name: "恢复会话",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_recovered_dashboard",
+            type: "click",
+            timestamp: 1000,
+            url: sessionExpiredDashboardFixtureUrl,
+            payload: {
+              selector: "#dashboard-panel[data-ready='true']",
+            },
+          }),
+        ],
+        buildRecordedFlowMeta(
+          "flow_recorded_session_expired_dashboard",
+          "录制失效会话仪表盘恢复流程",
+        ),
+      ),
+      options: {
+        storageStatePath: assets.expiredStorageStatePath,
+      },
+    },
+    {
+      name: "paginated-list",
+      flow: buildFlowFromEvents(
+        [
+          parseRecordedEvent({
+            id: "evt_nav_paginated_list",
+            type: "navigate",
+            timestamp: 0,
+            url: paginatedListFixtureUrl,
+            payload: {
+              url: "paginated-list.html",
+              waitUntil: "domcontentloaded",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_next_page",
+            type: "click",
+            timestamp: 100,
+            url: paginatedListFixtureUrl,
+            payload: {
+              selector: "#next-page",
+              role: "button",
+              name: "下一页",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_page_summary",
+            type: "click",
+            timestamp: 900,
+            url: paginatedListFixtureUrl,
+            payload: {
+              selector: "#page-summary[data-ready='true'][data-page='2']",
+            },
+          }),
+        ],
+        buildRecordedFlowMeta("flow_recorded_paginated_list", "录制分页切换流程"),
+      ),
+    },
+    {
+      name: "drawer-edit-form",
+      flow: buildFlowFromEvents(
+        [
+          parseRecordedEvent({
+            id: "evt_nav_drawer_edit_form",
+            type: "navigate",
+            timestamp: 0,
+            url: drawerEditFormFixtureUrl,
+            payload: {
+              url: "drawer-edit-form.html",
+              waitUntil: "domcontentloaded",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_edit_rule",
+            type: "click",
+            timestamp: 100,
+            url: drawerEditFormFixtureUrl,
+            payload: {
+              selector: "#edit-rule-512",
+              role: "button",
+              name: "编辑规则",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_fill_drawer_owner",
+            type: "fill",
+            timestamp: 200,
+            url: drawerEditFormFixtureUrl,
+            payload: {
+              selector: "#drawer-owner",
+              role: "textbox",
+              name: "负责人",
+              value: "陆鸣",
+              tagName: "input",
+              inputType: "text",
+              placeholder: "请输入负责人",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_select_drawer_priority",
+            type: "select",
+            timestamp: 300,
+            url: drawerEditFormFixtureUrl,
+            payload: {
+              selector: "#drawer-priority",
+              values: ["p1"],
+              tagName: "select",
+              labelText: "优先级",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_save_drawer",
+            type: "click",
+            timestamp: 400,
+            url: drawerEditFormFixtureUrl,
+            payload: {
+              selector: "#save-drawer",
+              role: "button",
+              name: "保存修改",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_drawer_result",
+            type: "click",
+            timestamp: 1200,
+            url: drawerEditFormFixtureUrl,
+            payload: {
+              selector: "#drawer-result[data-ready='true']",
+            },
+          }),
+        ],
+        buildRecordedFlowMeta("flow_recorded_drawer_edit_form", "录制 Drawer 编辑保存流程"),
+      ),
+    },
+    {
+      name: "toast-popconfirm",
+      flow: buildFlowFromEvents(
+        [
+          parseRecordedEvent({
+            id: "evt_nav_toast_popconfirm",
+            type: "navigate",
+            timestamp: 0,
+            url: toastPopconfirmFixtureUrl,
+            payload: {
+              url: "toast-popconfirm.html",
+              waitUntil: "domcontentloaded",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_open_popconfirm",
+            type: "click",
+            timestamp: 100,
+            url: toastPopconfirmFixtureUrl,
+            payload: {
+              selector: "#open-popconfirm",
+              role: "button",
+              name: "提交审核",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_confirm_popconfirm",
+            type: "click",
+            timestamp: 200,
+            url: toastPopconfirmFixtureUrl,
+            payload: {
+              selector: "#toast-confirm",
+              role: "button",
+              name: "确认提交",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_toast_result",
+            type: "click",
+            timestamp: 1000,
+            url: toastPopconfirmFixtureUrl,
+            payload: {
+              selector: "#toast-result[data-ready='true']",
+            },
+          }),
+        ],
+        buildRecordedFlowMeta("flow_recorded_toast_popconfirm", "录制轻量确认提交流程"),
+      ),
+    },
+    {
+      name: "tabbed-workspace",
+      flow: buildFlowFromEvents(
+        [
+          parseRecordedEvent({
+            id: "evt_nav_tabbed_workspace",
+            type: "navigate",
+            timestamp: 0,
+            url: tabbedWorkspaceFixtureUrl,
+            payload: {
+              url: "tabbed-workspace.html",
+              waitUntil: "domcontentloaded",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_tab_approvals",
+            type: "click",
+            timestamp: 100,
+            url: tabbedWorkspaceFixtureUrl,
+            payload: {
+              selector: "#tab-approvals",
+              role: "tab",
+              name: "审批记录",
+              tagName: "button",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_approvals_panel",
+            type: "click",
+            timestamp: 900,
+            url: tabbedWorkspaceFixtureUrl,
+            payload: {
+              selector: "#panel-approvals[data-ready='true']",
+            },
+          }),
+        ],
+        buildRecordedFlowMeta("flow_recorded_tabbed_workspace", "录制同页 Tab 切换流程"),
+      ),
+    },
+    {
       name: "session-expired-retry",
       flow: buildFlowFromEvents(
         [
@@ -533,6 +1014,55 @@ function buildBaselineMatrixCases(baseUrl: string, assets: MatrixRuntimeAssets):
       options: {
         storageStatePath: assets.expiredStorageStatePath,
       },
+    },
+    {
+      name: "empty-results-retry",
+      flow: buildFlowFromEvents(
+        [
+          parseRecordedEvent({
+            id: "evt_nav_empty_results_retry",
+            type: "navigate",
+            timestamp: 0,
+            url: emptyResultsRetryFixtureUrl,
+            payload: {
+              url: "empty-results-retry.html",
+              waitUntil: "domcontentloaded",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_run_query",
+            type: "click",
+            timestamp: 100,
+            url: emptyResultsRetryFixtureUrl,
+            payload: {
+              selector: "#run-query",
+              role: "button",
+              name: "执行查询",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_retry_query",
+            type: "click",
+            timestamp: 1000,
+            url: emptyResultsRetryFixtureUrl,
+            payload: {
+              selector: "#retry-query",
+              role: "button",
+              name: "重试查询",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_retry_result",
+            type: "click",
+            timestamp: 1900,
+            url: emptyResultsRetryFixtureUrl,
+            payload: {
+              selector: "#result-panel[data-ready='true'][data-count='3']",
+            },
+          }),
+        ],
+        buildRecordedFlowMeta("flow_recorded_empty_results_retry", "录制空结果重试恢复流程"),
+      ),
     },
     {
       name: "bulk-cross-page-selection",
@@ -1053,6 +1583,44 @@ function buildBaselineMatrixCases(baseUrl: string, assets: MatrixRuntimeAssets):
   ];
 }
 
+function orderRecordedReplayCases(cases: MatrixCase[]): MatrixCase[] {
+  const byName = new Map(cases.map((item) => [item.name, item] as const));
+
+  return RECORDED_REPLAY_CASE_ORDER.map((name) => {
+    const item = byName.get(name);
+    if (!item) {
+      throw new Error(`recorded replay 场景缺失: ${name}`);
+    }
+
+    return item;
+  });
+}
+
+export function getRecordedReplayCaseCatalog(): RecordedReplayCaseCatalogItem[] {
+  return orderRecordedReplayCases(
+    buildBaselineMatrixCases("http://127.0.0.1:4173/", RECORDED_REPLAY_CATALOG_STUB_ASSETS),
+  ).map((item) => {
+    const sourceKind: RecordedReplayCaseSourceKind = RECORDED_REPLAY_RUNTIME_ONLY_CASE_NAMES.has(
+      item.name,
+    )
+      ? "runtime-generated"
+      : "fixture";
+
+    return sourceKind === "fixture"
+      ? {
+          name: item.name,
+          stepCount: item.flow.steps.length,
+          sourceKind,
+          fixtureFile: `${item.name}.html`,
+        }
+      : {
+          name: item.name,
+          stepCount: item.flow.steps.length,
+          sourceKind,
+        };
+  });
+}
+
 function summarizeMatrixResults(
   profile: RecordedReplayMatrixProfile,
   baseUrl: string,
@@ -1084,7 +1652,7 @@ export async function runRecordedReplayMatrix(
   const workspaceDir = mkdtempSync(join(tmpdir(), "flowweave-recorded-replay-smoke-"));
   const { server, baseUrl } = await startStaticServer(fixturesDir);
   const assets = buildMatrixRuntimeAssets(baseUrl, workspaceDir);
-  const cases = buildBaselineMatrixCases(baseUrl, assets);
+  const cases = orderRecordedReplayCases(buildBaselineMatrixCases(baseUrl, assets));
   const results: RecordedReplayCaseResult[] = [];
 
   try {
@@ -1116,10 +1684,16 @@ export async function runRecordedReplayMatrix(
 }
 
 function printSummary(summary: RecordedReplayMatrixSummary) {
+  const caseCatalog = getRecordedReplayCaseCatalog();
+  const fixtureCount = caseCatalog.filter((item) => item.sourceKind === "fixture").length;
+  const runtimeOnlyCount = caseCatalog.length - fixtureCount;
+
   console.log(`矩阵档位: ${summary.profile}`);
   console.log(`录制回放 Base URL: ${summary.baseUrl}`);
   console.log(`临时工作目录: ${summary.workspaceDir}`);
-  console.log(`基准数量: ${summary.results.length}`);
+  console.log(
+    `基准数量: ${summary.results.length}（真实 fixture ${fixtureCount}，运行期临时页 ${runtimeOnlyCount}）`,
+  );
   console.log(`成功 / 失败: ${summary.successCount} / ${summary.failureCount}`);
   console.log(`总耗时: ${summary.totalDurationMs}ms`);
   console.log(`平均耗时: ${summary.averageDurationMs}ms`);

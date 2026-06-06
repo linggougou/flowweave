@@ -26,6 +26,7 @@ type MatrixRuntimeAssets = {
 };
 
 export type RealPageMatrixProfile = "baseline" | "p5" | "p6" | "p7";
+export const LATEST_REAL_PAGE_PROFILE: RealPageMatrixProfile = "p7";
 
 export type RealPageFailureType =
   | "core-interaction"
@@ -120,6 +121,19 @@ export type RealPageFixtureMatrixSummary = {
   failureTypeCounts: RealPageFailureTypeCounts;
   slowestCases: RealPageSlowCase[];
   successCoverage: RealPageSuccessCoverageSummary[];
+};
+
+export type RealPageFixtureCatalogItem = {
+  name: string;
+  stepCount: number;
+  fixtureFile: string;
+};
+
+const REAL_PAGE_CATALOG_STUB_ASSETS: MatrixRuntimeAssets = {
+  uploadFileA: "/tmp/flowweave-catalog-evidence-a.txt",
+  uploadFileB: "/tmp/flowweave-catalog-evidence-b.txt",
+  storageStatePath: "/tmp/flowweave-catalog-session.json",
+  expiredStorageStatePath: "/tmp/flowweave-catalog-session-expired.json",
 };
 
 function buildFlow(id: string, name: string, steps: FlowDocument["steps"]): FlowDocument {
@@ -254,10 +268,7 @@ export function summarizeRealPageFailureTypes(
 
 export function summarizeRealPageSlowestCases(
   results: Array<
-    Pick<
-      RealPageFixtureCaseResult,
-      "name" | "status" | "stepCount" | "durationMs" | "failureType"
-    >
+    Pick<RealPageFixtureCaseResult, "name" | "status" | "stepCount" | "durationMs" | "failureType">
   >,
   limit = 5,
 ): RealPageSlowCase[] {
@@ -1249,12 +1260,45 @@ function buildP7MatrixCases(): MatrixCase[] {
   ];
 }
 
-function normalizeRealPageMatrixProfile(
-  profile?: RealPageMatrixProfile,
-): RealPageMatrixProfile {
+function buildRealPageCaseSets(
+  assets: MatrixRuntimeAssets,
+): Record<RealPageMatrixProfile, MatrixCase[]> {
+  const baseline = buildBaselineMatrixCases(assets);
+  const p5 = [...baseline, ...buildP5MatrixCases()];
+  const p6 = [...p5, ...buildP6MatrixCases(assets)];
+  const p7 = [...p6, ...buildP7MatrixCases()];
+
+  return {
+    baseline,
+    p5,
+    p6,
+    p7,
+  };
+}
+
+function selectRealPageCases(
+  caseSets: Record<RealPageMatrixProfile, MatrixCase[]>,
+  profile: RealPageMatrixProfile,
+): MatrixCase[] {
+  return caseSets[profile];
+}
+
+export function getRealPageFixtureCatalog(
+  profile: RealPageMatrixProfile = LATEST_REAL_PAGE_PROFILE,
+): RealPageFixtureCatalogItem[] {
+  return selectRealPageCases(buildRealPageCaseSets(REAL_PAGE_CATALOG_STUB_ASSETS), profile).map(
+    (item) => ({
+      name: item.name,
+      stepCount: item.flow.steps.length,
+      fixtureFile: `${item.name}.html`,
+    }),
+  );
+}
+
+function normalizeRealPageMatrixProfile(profile?: RealPageMatrixProfile): RealPageMatrixProfile {
   // 兼容现有 CLI 仍传入 p6；Benchmarks P7 起这里统一执行最新矩阵。
   if (profile === "p6") {
-    return "p7";
+    return LATEST_REAL_PAGE_PROFILE;
   }
 
   return profile ?? "baseline";
@@ -1267,18 +1311,7 @@ export async function runRealPageFixtureMatrix(
   const workspaceDir = mkdtempSync(join(tmpdir(), "flowweave-real-page-smoke-"));
   const { server, baseUrl } = await startStaticServer(fixturesDir);
   const assets = buildMatrixRuntimeAssets(baseUrl, workspaceDir);
-  const baselineCases = buildBaselineMatrixCases(assets);
-  const p5Cases = [...baselineCases, ...buildP5MatrixCases()];
-  const p6Cases = [...p5Cases, ...buildP6MatrixCases(assets)];
-  const p7Cases = [...p6Cases, ...buildP7MatrixCases()];
-  const cases =
-    profile === "p7"
-      ? p7Cases
-      : profile === "p6"
-        ? p6Cases
-        : profile === "p5"
-          ? p5Cases
-          : baselineCases;
+  const cases = selectRealPageCases(buildRealPageCaseSets(assets), profile);
   const results: RealPageFixtureCaseResult[] = [];
 
   try {
