@@ -141,6 +141,156 @@ function buildPressFixtureHtml(): string {
 </html>`;
 }
 
+function buildAsyncComboboxFixtureHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+  <body>
+    <label for="city-search">城市搜索</label>
+    <input
+      id="city-search"
+      type="text"
+      role="combobox"
+      aria-autocomplete="list"
+      aria-controls="city-options"
+      aria-expanded="false"
+      autocomplete="off"
+    />
+    <ul id="city-options" role="listbox" hidden></ul>
+    <p id="selection-status" hidden data-selected="">未选择</p>
+
+    <script>
+      const citySearch = document.getElementById("city-search");
+      const cityOptions = document.getElementById("city-options");
+      const selectionStatus = document.getElementById("selection-status");
+      const allOptions = [
+        { id: "city-option-shanghai", label: "上海" },
+        { id: "city-option-shenzhen", label: "深圳" },
+        { id: "city-option-hangzhou", label: "杭州" },
+      ];
+
+      let filteredOptions = [];
+      let activeIndex = -1;
+      let filterTimer = 0;
+      let highlightTimer = 0;
+
+      function normalizeText(value) {
+        return value.trim().toLowerCase();
+      }
+
+      function renderOptions() {
+        cityOptions.innerHTML = "";
+
+        if (filteredOptions.length === 0) {
+          cityOptions.hidden = true;
+          citySearch.setAttribute("aria-expanded", "false");
+          citySearch.removeAttribute("aria-activedescendant");
+          return;
+        }
+
+        cityOptions.hidden = false;
+        citySearch.setAttribute("aria-expanded", "true");
+
+        filteredOptions.forEach((option, index) => {
+          const item = document.createElement("li");
+          item.id = option.id;
+          item.setAttribute("role", "option");
+          item.dataset.active = index === activeIndex ? "true" : "false";
+          item.setAttribute("aria-selected", index === activeIndex ? "true" : "false");
+          item.textContent = option.label;
+          cityOptions.appendChild(item);
+        });
+
+        if (activeIndex >= 0) {
+          citySearch.setAttribute("aria-activedescendant", filteredOptions[activeIndex].id);
+        } else {
+          citySearch.removeAttribute("aria-activedescendant");
+        }
+      }
+
+      function scheduleFilter() {
+        window.clearTimeout(filterTimer);
+        filterTimer = window.setTimeout(() => {
+          const keyword = normalizeText(citySearch.value);
+          filteredOptions = allOptions.filter((option) =>
+            normalizeText(option.label).includes(keyword),
+          );
+          activeIndex = -1;
+          renderOptions();
+        }, 160);
+      }
+
+      function scheduleHighlight(step) {
+        if (filteredOptions.length === 0) {
+          return;
+        }
+
+        window.clearTimeout(highlightTimer);
+        highlightTimer = window.setTimeout(() => {
+          if (activeIndex < 0) {
+            activeIndex = step > 0 ? 0 : filteredOptions.length - 1;
+          } else {
+            activeIndex = (activeIndex + step + filteredOptions.length) % filteredOptions.length;
+          }
+          renderOptions();
+        }, 160);
+      }
+
+      citySearch.addEventListener("input", () => {
+        selectionStatus.hidden = true;
+        selectionStatus.dataset.selected = "";
+        scheduleFilter();
+      });
+
+      citySearch.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          if (cityOptions.hidden) {
+            return;
+          }
+
+          scheduleHighlight(1);
+          return;
+        }
+
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          if (cityOptions.hidden) {
+            return;
+          }
+
+          scheduleHighlight(-1);
+          return;
+        }
+
+        if (event.key !== "Enter") {
+          return;
+        }
+
+        event.preventDefault();
+        if (activeIndex < 0 || !filteredOptions[activeIndex]) {
+          return;
+        }
+
+        const activeOption = filteredOptions[activeIndex];
+        selectionStatus.hidden = false;
+        selectionStatus.dataset.selected = activeOption.id;
+        selectionStatus.textContent = "已选择：" + activeOption.label;
+      });
+    </script>
+  </body>
+</html>`;
+}
+
+function buildPlainArrowInputFixtureHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+  <body>
+    <label for="plain-keyword">普通输入框</label>
+    <input id="plain-keyword" type="text" autocomplete="off" />
+  </body>
+</html>`;
+}
+
 function buildSessionDashboardHtml(): string {
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -1439,6 +1589,100 @@ describe("executeFlow", () => {
     );
 
     expect(result.status).toBe("success");
+  });
+
+  it("在 suggest / combobox 上会等待 fill 后列表就绪与 ArrowDown 选中状态生效", async () => {
+    const fixtureDir = mkdtempSync(join(tmpdir(), "fw-runtime-combobox-"));
+    cleanupPaths.add(fixtureDir);
+    const fixturePath = join(fixtureDir, "async-combobox.html");
+    writeFileSync(fixturePath, buildAsyncComboboxFixtureHtml(), "utf-8");
+    const fixtureUrl = pathToFileURL(fixturePath).href;
+
+    const result = await executeFlow(
+      buildFlow("flow_async_combobox", "异步建议框键盘选择流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: fixtureUrl,
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "fill",
+          target: {
+            strategies: [{ kind: "css", selector: "#city-search" }],
+          },
+          value: "上",
+        },
+        {
+          id: "s3",
+          type: "press",
+          target: {
+            strategies: [{ kind: "css", selector: "#city-search" }],
+          },
+          key: "ArrowDown",
+        },
+        {
+          id: "s4",
+          type: "press",
+          target: {
+            strategies: [{ kind: "css", selector: "#city-search" }],
+          },
+          key: "Enter",
+        },
+        {
+          id: "s5",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#selection-status[data-selected='city-option-shanghai']",
+              },
+            ],
+          },
+        },
+      ]),
+      {
+        headless: true,
+      },
+    );
+
+    expect(result.status).toBe("success");
+  });
+
+  it("普通非 suggest 输入上的 ArrowDown 不会被额外稳定等待阻塞", async () => {
+    const fixtureDir = mkdtempSync(join(tmpdir(), "fw-runtime-plain-arrow-"));
+    cleanupPaths.add(fixtureDir);
+    const fixturePath = join(fixtureDir, "plain-arrow-input.html");
+    writeFileSync(fixturePath, buildPlainArrowInputFixtureHtml(), "utf-8");
+    const fixtureUrl = pathToFileURL(fixturePath).href;
+
+    const result = await executeFlow(
+      buildFlow("flow_plain_arrow_input", "普通输入框方向键流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: fixtureUrl,
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "press",
+          target: {
+            strategies: [{ kind: "css", selector: "#plain-keyword" }],
+          },
+          key: "ArrowDown",
+        },
+      ]),
+      {
+        headless: true,
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.steps[1]?.durationMs ?? 0).toBeLessThan(1_100);
   });
 
   it("支持真实页面风格的命令面板键盘回放", async () => {
