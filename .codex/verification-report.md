@@ -218,6 +218,72 @@
 - 战略匹配评分：96
 - 风险评估评分：95
 - 综合评分：96
+
+## 2026-06-06 Runtime Wave 5 提交 `384db3a` 只读代码审查
+
+### 验证范围
+
+- 提交 `384db3a26af3231a13440247ecf13f8c16938fbb` 是否严格停留在 Wave 5 Runtime 轨道边界，只扩展 recorded replay 整链回归。
+- 新增 `packages/runtime/src/playwright-runner.test.ts` 用例是否引入行为回归、测试脆弱性或缺少必要断言。
+- 相关 recorded replay 场景是否与既有矩阵/归一化测试形成合理分层，而不是越界修改生产实现。
+
+### 验证结果
+
+1. 轨道边界符合预期。
+   - 提交只修改了 `packages/runtime/src/playwright-runner.test.ts` 与 `.codex` 留痕文件。
+   - 没有改动 `packages/runtime/src/playwright-runner.ts`、`packages/recorder`、`examples/real-page-smoke.ts` 等生产或主线执行实现。
+   - 结论：满足“只扩展 recorded replay 整链回归”的 Wave 5 Runtime 轨道边界。
+
+2. 新增回归场景与现有分层关系合理。
+   - 新增 3 个 recorded replay 场景：
+     - `contenteditable-editor`
+     - `session-expired-retry`
+     - `bulk-cross-page-selection`
+   - 它们补的是 `buildFlowFromEvents(...) -> executeFlow(...)` 的整链回放闭环。
+   - 现有 `packages/recorder/src/normalize.test.ts` 已覆盖结构归一化，`packages/runtime/src/real-page-matrix.test.ts` 已覆盖人工 Flow 的真实页面矩阵；本提交位于两者之间的缺口层，方向正确。
+
+3. 本次新增 3 个用例在已构建环境下通过。
+   - 验证前置：
+     - `pnpm install --frozen-lockfile`
+     - `pnpm build`
+   - 定向执行：
+     - `pnpm exec vitest run packages/runtime/src/playwright-runner.test.ts`
+   - 结果：
+     - `支持将录制事件构建出的 contenteditable-editor Flow 直接回放`：通过
+     - `支持将录制事件构建出的 session-expired-retry Flow 直接回放`：通过
+     - `支持将录制事件构建出的 bulk-cross-page-selection Flow 直接回放`：通过
+
+4. 套件级残余脆弱性存在，但非本提交引入。
+   - `packages/runtime/src/playwright-runner.test.ts` 的既有用例：
+     - `支持将录制事件构建出的 upload Flow 直接回放`
+     - `真实页面 fixture 矩阵全部成功`
+     在默认 5 秒超时下失败。
+   - `packages/runtime/src/real-page-matrix.test.ts` 的 `执行 P6 增强矩阵并返回汇总统计` 也在默认 5 秒超时下失败。
+   - 这些失败说明 runtime 真实页面测试整体仍偏时间敏感，但它们都不是 `384db3a` 新增内容。
+
+### Findings
+
+1. 无阻塞问题。
+   - 从提交边界、静态 diff、与已构建环境下的定向执行结果看，本提交符合 Runtime Wave 5 的限定目标，没有引入可证实的行为回归。
+2. 低风险断言不足：`contenteditable-editor` 只验证“流程成功到达可点击状态”，未验证保存内容与变量值一致。
+   - 位置：提交 `384db3a` 的 `packages/runtime/src/playwright-runner.test.ts:735-761`
+   - 影响：若未来 runtime 在 contenteditable 填充中出现“文本被截断/归一化异常，但仍能保存成功”的问题，该用例可能漏报。
+3. 低风险断言不足：`session-expired-retry` 未验证 `storageStatePath` 注入是否真的被场景消费。
+   - 位置：提交 `384db3a` 的 `packages/runtime/src/playwright-runner.test.ts:769-870`
+   - 影响：若某次改动使 storage state 没有正确装载，而 fixture 仍使用默认用户回退文案，这个场景可能继续通过。
+4. 低风险断言不足：`bulk-cross-page-selection` 只验证最终计数与描述文案，未验证跨页保留的具体批次集合。
+   - 位置：提交 `384db3a` 的 `packages/runtime/src/playwright-runner.test.ts:873-975`
+   - 影响：若未来出现“数量正确但选中项错误”的问题，这个用例不一定能拦住。
+
+### 综合结论
+
+- 代码质量评分：94
+- 测试覆盖评分：88
+- 规范遵循评分：97
+- 战略匹配评分：96
+- 风险评估评分：90
+- 综合评分：93
+- 建议：通过
 - 建议：通过
 
 ## 2026-06-06 旧历史执行兼容提示验收（复核补修）

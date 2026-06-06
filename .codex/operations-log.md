@@ -218,6 +218,72 @@
 - 统一验收结果：
   - 分层验证通过：
     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/flow-dsl test`
+
+## 2026-06-06 Runtime Wave 5 提交 `384db3a` 只读代码审查
+
+- 时间：2026-06-06 23:35:18 CST
+- 任务目标：只读审查 Runtime 轨道提交 `384db3a26af3231a13440247ecf13f8c16938fbb`，重点检查：
+  - 是否符合 Wave 5 Runtime 轨道边界，只扩展 recorded replay 整链回归。
+  - 是否存在行为回归或测试脆弱性。
+  - 是否缺少必要断言。
+- 上下文依据：
+  - `.codex/context-summary-runtime-wave5-review-384db3a.md`
+  - `docs/architecture/overview.md`
+  - `docs/adr/README.md`
+  - `docs/superpowers/specs/2026-05-25-web-automation-platform-design.md`
+  - `docs/superpowers/plans/2026-05-26-run-first-roadmap.md`
+  - 提交 `384db3a26af3231a13440247ecf13f8c16938fbb`
+  - `packages/runtime/src/playwright-runner.test.ts`
+  - `packages/runtime/src/real-page-matrix.test.ts`
+  - `packages/recorder/src/normalize.test.ts`
+  - `examples/real-page-smoke.ts`
+- 工具与环境说明：
+  - 当前环境未提供 `sequential-thinking`，改用结构化审查步骤、CodeGraph 与逐项证据比对替代。
+  - 当前环境未提供 `desktop-commander`，改用本地命令、CodeGraph 与 `git show` 读取提交内容。
+  - 已读取 `using-superpowers` 与 `requesting-code-review` 技能文件，按其约束组织审查流程；当前环境无专用 `Skill` 工具，因此采用“读取技能文件 + 显式执行”替代。
+- 审查前检查：
+  - 已确认仓库 `.codex/` 可写。
+  - 已确认 CodeGraph 索引健康：`101` 个文件、`892` 个节点、`1816` 条边。
+  - 已确认目标提交存在。
+  - 已确认当前工作树文件不等于待审提交版本，因此所有行号均以 `git show 384db3a:...` 为准。
+- 结构化结论：
+  - 提交文件范围仅包括：
+    - `packages/runtime/src/playwright-runner.test.ts`
+    - `.codex/context-summary-real-page-runtime-recorded-replay.md`
+    - `.codex/operations-log.md`
+    - `.codex/verification-report.md`
+  - 未改动 Runtime 生产实现与其他包源码，符合“Wave 5 Runtime 轨道只扩展 recorded replay 整链回归”的边界要求。
+- 关键比对：
+  - 与 `packages/runtime/src/real-page-matrix.test.ts` 对比，新增 3 个用例覆盖的是 recorded replay 版本的：
+    - `contenteditable-editor`
+    - `session-expired-retry`
+    - `bulk-cross-page-selection`
+  - 与 `packages/recorder/src/normalize.test.ts` 对比，新增用例补上了“归一化后真实执行”这一层，但仍复用既有噪声消除语义（contenteditable click 去噪、checkbox -> setChecked）。
+- 验证过程：
+  - 使用临时 worktree：
+    - `git worktree add --detach /tmp/flowweave-review-41tcfS 384db3a26af3231a13440247ecf13f8c16938fbb`
+  - 初次直接执行 `pnpm exec vitest run ...` 失败：
+    - 原因：工作区包 `exports` 指向 `dist/`，临时 worktree 未先构建，Vite 无法解析 `@flowweave/recorder` / `@flowweave/page-intelligence`。
+    - 处理：执行 `pnpm install --frozen-lockfile` + `pnpm build` 后重跑。
+  - 二次验证结果：
+    - `pnpm exec vitest run packages/runtime/src/playwright-runner.test.ts`
+      - 新增 3 个 recorded replay 用例均通过：
+        - `contenteditable-editor`
+        - `session-expired-retry`
+        - `bulk-cross-page-selection`
+      - 文件内另有两个既有用例超时失败：
+        - `支持将录制事件构建出的 upload Flow 直接回放`
+        - `真实页面 fixture 矩阵全部成功`
+      - 结论：这是该提交之前已存在的套件级时间敏感性，不是本次新增 3 个用例引入的失败。
+    - `pnpm exec vitest run packages/runtime/src/real-page-matrix.test.ts`
+      - `执行 P6 增强矩阵并返回汇总统计` 因 5 秒默认超时失败。
+      - 结论：矩阵测试仍然存在既有超时脆弱性，本次提交未触碰该文件。
+- 审查发现：
+  - 阻塞级问题：未发现。
+  - 非阻塞问题：
+    - `contenteditable-editor` 用例仅断言变量声明、步骤类型与最终成功，没有校验保存后的内容值、字符数或摘要是否与 `noteContent` 一致。
+    - `session-expired-retry` 用例设置了 `storageStatePath`，但未断言注入的同源存储值是否实际生效；若 runtime 某天不再正确载入 storage state，而 fixture 继续走默认用户回退，该用例仍可能通过。
+    - `bulk-cross-page-selection` 用例断言最终文案“跨 2 页提交 2 条归档”，但未断言最终提交的批次编号集合，覆盖范围更偏数量闭环而非精确内容闭环。
     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test`
     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test`
     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/page-intelligence test`
