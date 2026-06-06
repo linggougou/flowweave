@@ -235,3 +235,51 @@
 - 当前结论：
   - 真实页面稳定性第一轮主线已完成基础接口冻结、录制增强、执行增强、环境注入贯通、脆弱性静态分析增强与真实页面基准夹具落盘。
   - 当前协调分支与 Environment worktree 均已恢复干净状态，可继续进入 Diagnostics 第二阶段或 Benchmarks 第二阶段。
+
+## 2026-06-06 失败诊断产物与 Studio 调试入口增强
+
+- 时间：2026-06-06 15:46:56 CST
+- 任务目标：补齐失败步骤 `diagnostic.json` 产物、知识库持久化、Studio 打开诊断入口，降低真实页面失败时的排查成本。
+- 所用技能：
+  - `brainstorming`：本轮不重新拉起用户问答，直接复用已批准的设计文档 `docs/superpowers/specs/2026-06-06-real-page-stability-design.md` 作为设计依据。
+  - `test-driven-development`：先补失败测试，再做最小实现，最后跑回归。
+  - `verification-before-completion`：提交前执行新鲜的局部验证与 `pnpm smoke`。
+- 单 agent 串行执行说明：
+  - 本轮改动同时穿过 `packages/runtime`、`packages/project-knowledge`、`packages/ui`、`apps/studio` 四层共享执行 DTO。
+  - 若再次派发并行子代理，会在 `diagnosticPath` 字段、SQLite schema 迁移和 UI 展示列上形成高概率写冲突。
+  - 因此本轮由主代理串行闭环，补偿措施是严格执行 TDD 和全仓 `smoke` 验收。
+- 红灯测试：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test`
+    - 失败点：`failedStep?.diagnosticPath` 为 `undefined`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/project-knowledge test`
+    - 失败点：`diagnosticPath` 无法从执行记录中读回
+- 实现范围：
+  - `packages/runtime`
+    - 失败步骤写入 `step-<n>-diagnostic.json`
+    - 失败步骤额外写入 `page-<n>.json`
+    - `StepLog` 新增 `diagnosticPath`
+  - `packages/project-knowledge`
+    - `execution_steps` 新增 `diagnostic_path`
+    - 兼容旧库自动 `ALTER TABLE`
+    - `saveExecution / listExecutions / getExecution` 全链路透传
+  - `packages/ui`
+    - `StepLogTable` 新增“诊断”列与打开按钮
+  - `apps/studio`
+    - Electron 服务、HTTP fallback、共享类型与主界面透传 `diagnosticPath`
+    - 执行日志页支持直接打开诊断 JSON
+- 绿灯验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test`
+    - 结果：`7/7` 通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/project-knowledge test`
+    - 结果：`10/10` 通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/ui build`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/project-knowledge build`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime build`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+    - 结果：通过，`e2e:login` 成功
+- 提交结果：
+  - 代码提交：`76851c9 feat: 增强失败步骤诊断产物与入口`
+- 当前结论：
+  - 真实页面失败时，现在会同时保留截图、失败页摘要和诊断 JSON。
+  - Studio 执行日志页已具备“打开截图 / 打开诊断”双入口。

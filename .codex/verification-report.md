@@ -140,7 +140,7 @@
    - 结果为 `status: success`，共 `4` 个步骤全部成功。
 6. 残余风险已识别。
    - `Node 24` 仍有 `better-sqlite3` ABI 漂移风险，本轮不作为验收阻塞，继续以仓库既定 `Node 20` 作为真实运行基线。
-   - Diagnostics 第二阶段与 Benchmarks 第二阶段尚未展开，当前验收范围不覆盖更深入的调试 UI 与更大规模真实站点基准。
+   - Benchmarks 第二阶段尚未展开，当前验收范围不覆盖更大规模真实站点基准。
 
 ### 综合结论
 
@@ -148,6 +148,54 @@
 - 测试覆盖评分：95
 - 规范遵循评分：97
 - 战略匹配评分：96
+- 风险评估评分：93
+- 综合评分：95
+- 建议：通过
+
+## 2026-06-06 Diagnostics 第二阶段验收
+
+### 验证范围
+
+- 失败步骤是否新增 `step-<n>-diagnostic.json` 与 `page-<n>.json` 产物。
+- `diagnosticPath` 是否能从 runtime 持久化到 project-knowledge，再被 Studio 消费。
+- `StepLogTable` 是否具备“打开诊断”入口，且不会破坏既有 `smoke` 主链路。
+
+### 验证结果
+
+1. TDD 红灯验证通过。
+   - `pnpm --filter @flowweave/runtime test` 初次失败，缺少 `failedStep.diagnosticPath`。
+   - `pnpm --filter @flowweave/project-knowledge test` 初次失败，`diagnosticPath` 无法从执行历史读回。
+2. runtime 诊断产物验证通过。
+   - 重新执行 `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test`，`7/7` 通过。
+   - 新增断言已确认：
+     - 失败步骤存在 `step-1-diagnostic.json`
+     - 失败步骤存在 `page-1.json`
+     - 诊断 JSON 含 `stepId`、`stepIndex`、`url`、`title` 与 `strategyAttempts`
+3. knowledge 持久化验证通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/project-knowledge test`，`10/10` 通过。
+   - 已验证 `diagnosticPath` 在 `saveExecution / listExecutions / getExecution` 间正确透传。
+4. Studio 消费侧验证通过。
+   - 执行依赖构建：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/ui build`
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/project-knowledge build`
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime build`
+   - 再执行 `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`，退出码为 `0`。
+5. 仓库级回归验证通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`，通过。
+   - `e2e:login` 输出：
+     - 项目 ID：`ce45a702-a1a3-4d15-9f79-516011d84df7`
+     - 执行 ID：`265b0306-9d19-4df2-9160-5b68374631f5`
+     - `4` 个步骤全部成功
+6. 残余风险已识别。
+   - 本轮只补齐了“诊断文件入口”，尚未在 Studio 内部直接渲染诊断 JSON 内容。
+   - `Node 24` 与 `better-sqlite3` 的 ABI 风险仍存在，验收继续以 `Node 20` 为准。
+
+### 综合结论
+
+- 代码质量评分：96
+- 测试覆盖评分：95
+- 规范遵循评分：97
+- 战略匹配评分：95
 - 风险评估评分：93
 - 综合评分：95
 - 建议：通过

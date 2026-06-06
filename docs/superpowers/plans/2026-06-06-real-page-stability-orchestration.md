@@ -1,6 +1,6 @@
 # 真实页面稳定性增强并行编排板
 
-更新时间：2026-06-06 15:35 CST
+更新时间：2026-06-06 15:46 CST
 
 ## 1. 主目标
 
@@ -74,6 +74,17 @@
    - `pnpm test`
    - `pnpm build`
    - `pnpm smoke`
+8. Diagnostics 第二阶段已由主代理直接完成并通过回归：
+   - 代码提交：`76851c9 feat: 增强失败步骤诊断产物与入口`
+   - 新能力：
+     - 失败步骤生成 `step-<n>-diagnostic.json`
+     - 失败步骤生成 `page-<n>.json`
+     - Studio 执行日志支持“打开诊断”
+   - 验证：
+     - `pnpm --filter @flowweave/runtime test`
+     - `pnpm --filter @flowweave/project-knowledge test`
+     - `pnpm --filter @flowweave/app-studio typecheck`
+     - `pnpm smoke`
 
 ### 阶段 C：统一集成
 
@@ -91,6 +102,7 @@
     - `25eef55 fix: 修正 Flow DSL 步骤类型导出`
     - `07d4d02 增强真实页面 runtime 稳定执行能力`
     - `1051e10 feat: 打通 Studio 运行环境与变量注入`
+    - `76851c9 feat: 增强失败步骤诊断产物与入口`
   - Node 20 统一验收结果：全部通过。
 
 ## 5. 验收门槛
@@ -130,6 +142,6 @@
 
 ## 8. 下一轮候选
 
-1. Diagnostics 第二阶段：把 fragility 与定位诊断结果在 Studio 中做更可读的调试展示。
-2. Benchmarks 第二阶段：补更多异步加载、列表筛选、登录态页面基准，并形成更细的成功率矩阵。
+1. Benchmarks 第二阶段：补更多异步加载、列表筛选、登录态页面基准，并形成更细的成功率矩阵。
+2. Diagnostics 第三阶段：在 Studio 内直接渲染诊断 JSON 内容，并补 warning / error 分组与修复建议。
 3. Node 24 兼容排查：单独评估 `better-sqlite3` ABI 与安装策略，决定是否支持双 Node 基线。
