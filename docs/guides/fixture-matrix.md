@@ -12,13 +12,13 @@
 当前矩阵分成四个档位：
 
 - `baseline`
-  - 保持既有 `11` 个 fixture，不改变 `packages/runtime/src/playwright-runner.test.ts` 的稳定基线。
+  - 当前主线的基础真实页面夹具已扩到 `13` 个核心交互场景，其中 Wave 8 纳入了 `keyboard-command-palette`，Wave 9 再补 `async-command-palette`。
 - `p5`
   - 在 `baseline` 之上新增 `4` 个更贴近后台站点的 fixture，由 `examples/run-real-page-smoke.ts` 和 `pnpm e2e:real-pages` 默认执行。
 - `p6`
   - 在 `p5` 之上继续新增 `3` 个后台异常路径 / 复杂状态切换 fixture，并输出失败类型统计、最慢场景排行与成功态覆盖摘要；当前默认由 `examples/run-real-page-smoke.ts` 和 `pnpm e2e:real-pages` 执行。
 - `p7`
-  - 在 `p6` 之上新增 `1` 个“重复行同文案按钮” fixture，用于验证目标消歧；当前通过 `examples/real-page-smoke.ts` 兼容接管历史 `p6` 调用，因此 `pnpm e2e:real-pages` 会直接执行最新 `p7` 矩阵。
+  - 在 `p6` 之上新增 `1` 个“重复行同文案按钮” fixture，用于验证目标消歧；随后又通过 `examples/real-page-smoke.ts` 兼容接入 `keyboard-command-palette` 与 `async-command-palette` 两条键盘基线，因此 `pnpm e2e:real-pages` 当前会直接执行 `21` 个场景的最新兼容矩阵。
 
 所有页面都满足以下约束：
 
@@ -50,6 +50,7 @@
 | `examples/fixtures/bulk-cross-page-selection.html` | 跨页保留勾选、换页后继续选择、最终批量提交       | 第 1 页勾选一条 -> 下一页 -> 第 2 页再勾选一条 -> 提交批量归档                             | `#selection-loading`、`#selection-summary[data-count]`、`#submit-selection`、`#bulk-result[data-ready="true"][data-count]`     | 跨页状态保持、分页与批量选择复合流程、最终批量提交                    |
 | `examples/fixtures/drawer-double-save.html`        | Drawer 第一次保存失败、修正备注后二次保存成功    | 打开 Drawer -> 直接保存触发失败提醒 -> 补备注 -> 再次保存 -> 等待结果区 ready              | `#edit-drawer[data-ready="true"]`、`#save-alert[data-state="error"]`、`#drawer-review-note`、`#save-result[data-ready="true"]` | 抽屉内失败后修正、二次保存、错误态与成功态切换                        |
 | `examples/fixtures/repeated-row-actions.html`      | 重复行共享同文案按钮、命中正确行后结果区 ready  | 直接点击同文案“编辑”按钮 -> 仅目标行成功后才等待 `#result-panel[data-ready="true"]` 可见   | `#result-panel[data-ready="true"][data-target-row="campaign-204"]`、`#result-row-title`、`#result-owner`、`#result-anchor`     | 重复按钮歧义、列表行作用域、错误命中第一条记录                        |
+| `examples/fixtures/async-command-palette.html`     | 异步 suggestions、`aria-activedescendant`、命令执行 | 输入“账单” -> 等待 suggestions 准备 -> `ArrowDown` -> `Enter` -> 断言命令执行结果          | `#command-shell[data-loading="false"]`、`#async-command-options`、`#async-command-search[aria-activedescendant]`、`#async-command-toast[data-ready="true"][data-command-id="sync-billing"]` | 输入后 debounce、异步候选加载、键盘高亮更新、active-descendant 稳定性 |
 
 ## 页面细节
 

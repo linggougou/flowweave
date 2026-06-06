@@ -225,6 +225,7 @@ function buildBaselineMatrixCases(baseUrl: string, assets: MatrixRuntimeAssets):
     "keyboard-command-palette.html",
     baseUrl,
   ).toString();
+  const asyncCommandPaletteFixtureUrl = new URL("async-command-palette.html", baseUrl).toString();
   const linkedFiltersFixtureUrl = new URL("linked-filters.html", baseUrl).toString();
   const drawerDoubleSaveFixtureUrl = new URL("drawer-double-save.html", baseUrl).toString();
   const repeatedRowActionsFixtureUrl = new URL("repeated-row-actions.html", baseUrl).toString();
@@ -796,6 +797,82 @@ function buildBaselineMatrixCases(baseUrl: string, assets: MatrixRuntimeAssets):
           }),
         ],
         buildRecordedFlowMeta("flow_recorded_keyboard_command_palette", "录制命令面板键盘流程"),
+      ),
+    },
+    {
+      name: "async-command-palette",
+      flow: buildFlowFromEvents(
+        [
+          parseRecordedEvent({
+            id: "evt_nav_async_command_palette",
+            type: "navigate",
+            timestamp: 0,
+            url: asyncCommandPaletteFixtureUrl,
+            payload: {
+              url: "async-command-palette.html",
+              waitUntil: "domcontentloaded",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_fill_async_command_palette",
+            type: "fill",
+            timestamp: 100,
+            url: asyncCommandPaletteFixtureUrl,
+            payload: {
+              selector: "#async-command-search",
+              role: "combobox",
+              name: "搜索命令",
+              value: "账单",
+              tagName: "input",
+              inputType: "text",
+              placeholder: "例如：账单异常",
+              labelText: "搜索命令",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_press_async_command_palette_next",
+            type: "keypress",
+            timestamp: 500,
+            url: asyncCommandPaletteFixtureUrl,
+            payload: {
+              selector: "#async-command-search",
+              role: "combobox",
+              name: "搜索命令",
+              key: "ArrowDown",
+              tagName: "input",
+              inputType: "text",
+              placeholder: "例如：账单异常",
+              labelText: "搜索命令",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_press_async_command_palette_confirm",
+            type: "keypress",
+            timestamp: 760,
+            url: asyncCommandPaletteFixtureUrl,
+            payload: {
+              selector: "#async-command-search",
+              role: "combobox",
+              name: "搜索命令",
+              key: "Enter",
+              tagName: "input",
+              inputType: "text",
+              placeholder: "例如：账单异常",
+              labelText: "搜索命令",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_async_command_palette_result",
+            type: "click",
+            timestamp: 980,
+            url: asyncCommandPaletteFixtureUrl,
+            payload: {
+              selector: "#async-command-toast[data-ready='true'][data-command-id='sync-billing']",
+              text: "已执行命令：同步账单明细",
+            },
+          }),
+        ],
+        buildRecordedFlowMeta("flow_recorded_async_command_palette", "录制异步命令面板键盘流程"),
       ),
     },
     {
