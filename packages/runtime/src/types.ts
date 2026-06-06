@@ -1,10 +1,65 @@
 import type { BrowserContext } from "playwright";
-import type { NormalizedStep } from "@flowweave/flow-dsl";
+import type { FlowWeaveErrorCode } from "@flowweave/shared";
+import type { NormalizedStep, Target } from "@flowweave/flow-dsl";
 import type { PageSnapshotSummary } from "@flowweave/page-intelligence";
 
 export type ExecutionStatus = "success" | "failed";
 
 export type StepLogStatus = "success" | "failed";
+
+type ScopeKind = NonNullable<NonNullable<Target["hints"]>["scopeKind"]>;
+
+export type DiagnosticCandidateSummary = {
+  index: number;
+  visible: boolean;
+  tagName?: string;
+  inputType?: string;
+  nameAttr?: string;
+  placeholder?: string;
+  labelText?: string;
+  textSample?: string;
+  scopeKind?: ScopeKind;
+  scopeText?: string;
+  score: number;
+  matchedHints: string[];
+};
+
+export type StrategyAttempt = {
+  label: string;
+  matchedCount: number;
+  visibleCount?: number;
+  success: boolean;
+  error?: string;
+  selectedIndex?: number;
+  ambiguityReason?: string;
+  candidateSummaries?: DiagnosticCandidateSummary[];
+};
+
+export type StepDiagnosticKind = "target-resolution" | "runtime-error";
+
+export type BaseStepDiagnostic = {
+  kind: StepDiagnosticKind;
+  stepId: string;
+  stepIndex: number;
+  stepType: NormalizedStep["type"];
+  message: string;
+  errorCode?: FlowWeaveErrorCode;
+  cause?: string;
+  url?: string;
+  title?: string;
+};
+
+export type TargetResolutionDiagnostic = BaseStepDiagnostic & {
+  kind: "target-resolution";
+  strategyAttempts: StrategyAttempt[];
+  targetHints?: Target["hints"];
+};
+
+export type RuntimeErrorDiagnostic = BaseStepDiagnostic & {
+  kind: "runtime-error";
+};
+
+export type StepDiagnostic = TargetResolutionDiagnostic | RuntimeErrorDiagnostic;
 
 export interface StepLog {
   stepIndex: number;
@@ -17,7 +72,7 @@ export interface StepLog {
   message?: string;
   /** 步骤截图本地路径（仅当 artifactDir 启用时） */
   screenshotPath?: string;
-  /** 失败步骤诊断 JSON 路径（仅在可生成诊断时写入） */
+  /** 失败步骤诊断 JSON 路径（target 定位失败与通用运行失败均可写入） */
   diagnosticPath?: string;
 }
 
