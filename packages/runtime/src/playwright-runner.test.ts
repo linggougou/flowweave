@@ -1393,6 +1393,12 @@ describe("executeFlow", () => {
     const diagnostic = JSON.parse(
       readFileSync(join(artifactDir, "step-1-diagnostic.json"), "utf-8"),
     ) as {
+      kind: string;
+      stepId: string;
+      stepIndex: number;
+      stepType: string;
+      message: string;
+      errorCode?: string;
       strategyAttempts: Array<{
         label: string;
         matchedCount: number;
@@ -1410,6 +1416,12 @@ describe("executeFlow", () => {
       }>;
     };
 
+    expect(diagnostic.kind).toBe("target-resolution");
+    expect(diagnostic.stepId).toBe("s2");
+    expect(diagnostic.stepIndex).toBe(1);
+    expect(diagnostic.stepType).toBe("click");
+    expect(diagnostic.message).toContain("歧义");
+    expect(diagnostic.errorCode).toBe("RUNTIME_STEP_FAILED");
     expect(diagnostic.strategyAttempts).toHaveLength(1);
     expect(diagnostic.strategyAttempts[0]?.ambiguityReason).toContain("并列");
     expect(diagnostic.strategyAttempts[0]?.candidateSummaries).toHaveLength(2);
@@ -1441,6 +1453,55 @@ describe("executeFlow", () => {
       "toast-popconfirm",
     ]);
     expect(summary.failed).toHaveLength(0);
+  });
+
+  it("非定位类步骤失败时也会写入通用 diagnostic JSON", async () => {
+    artifactDir = mkdtempSync(join(tmpdir(), "fw-runtime-generic-diagnostic-"));
+    const result = await executeFlow(
+      buildFlow("flow_wait_missing_target", "等待步骤缺少 target", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: checkboxSelectFixtureUrl,
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "wait",
+          condition: "visible",
+        },
+      ]),
+      { headless: true, timeoutMs: 4_000, artifactDir },
+    );
+
+    expect(result.status).toBe("failed");
+    const failedStep = result.steps.at(-1);
+    expect(failedStep?.status).toBe("failed");
+    expect(failedStep?.message).toContain("缺少 target");
+    expect(failedStep?.diagnosticPath).toBe(join(artifactDir, "step-1-diagnostic.json"));
+    expect(existsSync(join(artifactDir, "step-1-diagnostic.json"))).toBe(true);
+
+    const diagnostic = JSON.parse(
+      readFileSync(join(artifactDir, "step-1-diagnostic.json"), "utf-8"),
+    ) as {
+      kind: string;
+      stepId: string;
+      stepIndex: number;
+      stepType: string;
+      message: string;
+      errorCode?: string;
+      url?: string;
+      title?: string;
+    };
+
+    expect(diagnostic.kind).toBe("runtime-error");
+    expect(diagnostic.stepId).toBe("s2");
+    expect(diagnostic.stepIndex).toBe(1);
+    expect(diagnostic.stepType).toBe("wait");
+    expect(diagnostic.message).toContain("缺少 target");
+    expect(diagnostic.errorCode).toBe("RUNTIME_STEP_FAILED");
+    expect(diagnostic.url).toContain("checkbox-select.html");
+    expect(diagnostic.title).toBeTruthy();
   });
 
   it("定位失败时在 message 中包含更清晰的策略诊断", async () => {
@@ -1480,8 +1541,12 @@ describe("executeFlow", () => {
     const diagnostic = JSON.parse(
       readFileSync(join(artifactDir, "step-1-diagnostic.json"), "utf-8"),
     ) as {
+      kind: string;
       stepId: string;
       stepIndex: number;
+      stepType: string;
+      message: string;
+      errorCode?: string;
       url: string;
       title: string;
       strategyAttempts: Array<{
@@ -1492,8 +1557,12 @@ describe("executeFlow", () => {
         error?: string;
       }>;
     };
+    expect(diagnostic.kind).toBe("target-resolution");
     expect(diagnostic.stepId).toBe("s2");
     expect(diagnostic.stepIndex).toBe(1);
+    expect(diagnostic.stepType).toBe("click");
+    expect(diagnostic.message).toContain("#missing-action");
+    expect(diagnostic.errorCode).toBe("RUNTIME_STEP_FAILED");
     expect(diagnostic.url).toContain("checkbox-select.html");
     expect(diagnostic.title).toBeTruthy();
     expect(diagnostic.strategyAttempts).toHaveLength(2);

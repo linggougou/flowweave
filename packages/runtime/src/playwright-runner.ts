@@ -8,34 +8,26 @@ import { FlowWeaveError, interpolateTemplateString } from "@flowweave/shared";
 type LocatorStrategy = Target["strategies"][number];
 import { chromium, type Locator, type Page } from "playwright";
 import type {
+  DiagnosticCandidateSummary,
   ExecutionOptions,
   ExecutionResult,
   ExecutionVariables,
+  RuntimeErrorDiagnostic,
   RuntimePageSnapshot,
+  StepDiagnostic,
   StepLog,
+  StrategyAttempt,
+  TargetResolutionDiagnostic,
 } from "./types.js";
 
 export type { ExecutionOptions };
 
 type TargetWaitState = "visible" | "hidden" | "attached" | "detached";
 
-type StrategyAttempt = {
-  label: string;
-  matchedCount: number;
-  visibleCount?: number;
-  success: boolean;
-  error?: string;
-  selectedIndex?: number;
-  ambiguityReason?: string;
-  candidateSummaries?: CandidateSummary[];
-};
-
-type TargetDiagnosticContext = {
-  url: string;
-  title: string;
-  strategyAttempts: StrategyAttempt[];
-  targetHints?: Target["hints"];
-};
+type TargetDiagnosticContext = Pick<
+  TargetResolutionDiagnostic,
+  "url" | "title" | "strategyAttempts" | "targetHints" | "cause"
+>;
 
 type ScopeKind = NonNullable<NonNullable<Target["hints"]>["scopeKind"]>;
 
@@ -52,10 +44,7 @@ type CandidateSnapshot = {
   scopeText?: string;
 };
 
-type CandidateSummary = CandidateSnapshot & {
-  score: number;
-  matchedHints: string[];
-};
+type CandidateSummary = DiagnosticCandidateSummary;
 
 type CandidateResolution =
   | {
@@ -82,6 +71,53 @@ function formatUnknownError(error: unknown): string {
   }
 
   return String(error);
+}
+
+function getErrorCode(error: unknown): FlowWeaveError["code"] | undefined {
+  return error instanceof FlowWeaveError ? error.code : undefined;
+}
+
+function getErrorCause(error: unknown): string | undefined {
+  if (error instanceof FlowWeaveError && error.details && typeof error.details === "object") {
+    const details = error.details as { cause?: unknown };
+    if (typeof details.cause === "string" && details.cause.length > 0) {
+      return details.cause;
+    }
+  }
+
+  if (!(error instanceof Error) || !("cause" in error)) {
+    return undefined;
+  }
+
+  const cause = (error as Error & { cause?: unknown }).cause;
+  if (typeof cause === "string" && cause.length > 0) {
+    return cause;
+  }
+  if (cause instanceof Error) {
+    return cause.message;
+  }
+  return cause == null ? undefined : String(cause);
+}
+
+async function captureDiagnosticPageMeta(
+  page: Page,
+): Promise<Pick<RuntimeErrorDiagnostic, "url" | "title">> {
+  let url: string | undefined;
+  let title: string | undefined;
+
+  try {
+    url = page.url();
+  } catch {
+    url = undefined;
+  }
+
+  try {
+    title = await page.title();
+  } catch {
+    title = undefined;
+  }
+
+  return { url, title };
 }
 
 function interpolateString(
@@ -667,7 +703,7 @@ async function buildTargetDiagnosticError(
       strategyAttempts: attempts,
       targetHints: target.hints,
       cause: formatUnknownError(cause),
-    } satisfies TargetDiagnosticContext & { cause: string },
+    } satisfies TargetDiagnosticContext,
   );
 }
 
@@ -690,6 +726,7 @@ function getTargetDiagnosticContext(error: unknown): TargetDiagnosticContext | n
     title: details.title,
     strategyAttempts: details.strategyAttempts,
     targetHints: details.targetHints,
+    cause: typeof details.cause === "string" ? details.cause : undefined,
   };
 }
 
@@ -912,30 +949,52 @@ async function capturePageSummary(
   return { stepIndex, filePath, summary };
 }
 
-function writeStepDiagnostic(
-  artifactDir: string,
+function writeStepDiagnostic(artifactDir: string, diagnostic: StepDiagnostic): string {
+  const filePath = join(artifactDir, `step-${diagnostic.stepIndex}-diagnostic.json`);
+  writeFileSync(filePath, JSON.stringify(diagnostic, null, 2), "utf-8");
+  return filePath;
+}
+
+function buildTargetResolutionDiagnostic(
   step: NormalizedStep,
   stepIndex: number,
+  message: string,
+  error: unknown,
   diagnostic: TargetDiagnosticContext,
-): string {
-  const filePath = join(artifactDir, `step-${stepIndex}-diagnostic.json`);
-  writeFileSync(
-    filePath,
-    JSON.stringify(
-      {
-        stepId: step.id,
-        stepIndex,
-        url: diagnostic.url,
-        title: diagnostic.title,
-        strategyAttempts: diagnostic.strategyAttempts,
-        targetHints: diagnostic.targetHints,
-      },
-      null,
-      2,
-    ),
-    "utf-8",
-  );
-  return filePath;
+): TargetResolutionDiagnostic {
+  return {
+    kind: "target-resolution",
+    stepId: step.id,
+    stepIndex,
+    stepType: step.type,
+    message,
+    errorCode: getErrorCode(error),
+    cause: diagnostic.cause ?? getErrorCause(error),
+    url: diagnostic.url,
+    title: diagnostic.title,
+    strategyAttempts: diagnostic.strategyAttempts,
+    targetHints: diagnostic.targetHints,
+  };
+}
+
+async function buildRuntimeErrorDiagnostic(
+  page: Page,
+  step: NormalizedStep,
+  stepIndex: number,
+  message: string,
+  error: unknown,
+): Promise<RuntimeErrorDiagnostic> {
+  const pageMeta = await captureDiagnosticPageMeta(page);
+  return {
+    kind: "runtime-error",
+    stepId: step.id,
+    stepIndex,
+    stepType: step.type,
+    message,
+    errorCode: getErrorCode(error),
+    cause: getErrorCause(error),
+    ...pageMeta,
+  };
 }
 
 async function runStep(
@@ -1087,13 +1146,20 @@ async function runStep(
       } catch {
         // 页面已失效时允许跳过失败页摘要
       }
-      const diagnostic = getTargetDiagnosticContext(error);
-      if (diagnostic) {
-        try {
-          diagnosticPath = writeStepDiagnostic(artifactDir, resolvedStep, stepIndex, diagnostic);
-        } catch {
-          diagnosticPath = undefined;
-        }
+      try {
+        const targetDiagnostic = getTargetDiagnosticContext(error);
+        const diagnostic = targetDiagnostic
+          ? buildTargetResolutionDiagnostic(
+              resolvedStep,
+              stepIndex,
+              message,
+              error,
+              targetDiagnostic,
+            )
+          : await buildRuntimeErrorDiagnostic(page, resolvedStep, stepIndex, message, error);
+        diagnosticPath = writeStepDiagnostic(artifactDir, diagnostic);
+      } catch {
+        diagnosticPath = undefined;
       }
     }
     return {
