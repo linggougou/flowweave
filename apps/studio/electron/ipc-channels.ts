@@ -2,6 +2,7 @@ export const IPC_CHANNELS = {
   listProjects: "studio:list-projects",
   listFlows: "studio:list-flows",
   getFlow: "studio:get-flow",
+  getFlowRunInput: "studio:get-flow-run-input",
   renameFlow: "studio:rename-flow",
   runFlow: "studio:run-flow",
   getExecution: "studio:get-execution",

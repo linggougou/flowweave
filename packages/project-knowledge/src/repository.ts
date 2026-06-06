@@ -719,6 +719,29 @@ export class ProjectKnowledgeRepository {
     }
   }
 
+  getLatestExecutionForFlow(projectId: string, flowId: string): ExecutionResult | null {
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    try {
+      ensureExecutionRunContextColumns(sqlite);
+      ensureExecutionStepDiagnosticPathColumn(sqlite);
+      const row = db
+        .select()
+        .from(dbSchema.executions)
+        .where(
+          and(
+            eq(dbSchema.executions.projectId, projectId),
+            eq(dbSchema.executions.flowId, flowId),
+          ),
+        )
+        .orderBy(desc(dbSchema.executions.startedAt), desc(dbSchema.executions.finishedAt))
+        .limit(1)
+        .get();
+      return row ? this.assembleExecution(db, row) : null;
+    } finally {
+      closeProjectDatabase(sqlite);
+    }
+  }
+
   getExecution(executionId: string): ExecutionWithProject | null {
     let entries: string[];
     try {

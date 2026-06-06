@@ -27,6 +27,37 @@ function formatStatus(status: ExecutionStepLog["status"]): string {
   }
 }
 
+function countStrategyAttempts(
+  step: ExecutionStepLog,
+): {
+  successCount: number;
+  failureCount: number;
+  visibleCandidateCount: number;
+} {
+  const attempts = step.diagnostic?.strategyAttempts ?? [];
+  return {
+    successCount: attempts.filter((attempt) => attempt.success).length,
+    failureCount: attempts.filter((attempt) => !attempt.success).length,
+    visibleCandidateCount: attempts.reduce(
+      (total, attempt) => total + (attempt.visibleCount ?? 0),
+      0,
+    ),
+  };
+}
+
+function resolvePrimaryDiagnosticHint(step: ExecutionStepLog): string {
+  const failedAttempt = step.diagnostic?.strategyAttempts.find(
+    (attempt) => !attempt.success && attempt.error,
+  );
+  if (failedAttempt) {
+    return `${failedAttempt.label}：${failedAttempt.error}`;
+  }
+  if (step.message) {
+    return step.message;
+  }
+  return "当前步骤未提供额外失败信息，建议先打开 diagnostic JSON 查看完整原始产物。";
+}
+
 export function DiagnosticInspector({
   steps,
   selectedStepIndex,
@@ -46,6 +77,7 @@ export function DiagnosticInspector({
     diagnosticSteps.find((step) => step.diagnosticPath) ??
     diagnosticSteps[0]!;
   const diagnostic = activeStep.diagnostic;
+  const summary = countStrategyAttempts(activeStep);
 
   return (
     <section className="flow-preview">
@@ -57,11 +89,11 @@ export function DiagnosticInspector({
           flexWrap: "wrap",
           alignItems: "flex-start",
         }}
-      >
+        >
         <div>
-          <h3 style={{ marginBottom: 4 }}>诊断面板</h3>
+          <h3 style={{ marginBottom: 4 }}>诊断工作台</h3>
           <p className="flow-content-meta">
-            直接读取运行产物中的 `step-&lt;n&gt;-diagnostic.json` 与 `page-&lt;n&gt;.json`
+            聚焦命中策略、失败原因与页面快照，帮助快速定位回放异常
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -87,6 +119,35 @@ export function DiagnosticInspector({
           {activeStep.message}
         </p>
       ) : null}
+
+      <div
+        style={{
+          display: "grid",
+          gap: 12,
+          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+          marginBottom: 16,
+        }}
+      >
+        <div className="flow-preview" style={{ margin: 0 }}>
+          <strong>成功策略</strong>
+          <div>{summary.successCount}</div>
+        </div>
+        <div className="flow-preview" style={{ margin: 0 }}>
+          <strong>失败策略</strong>
+          <div>{summary.failureCount}</div>
+        </div>
+        <div className="flow-preview" style={{ margin: 0 }}>
+          <strong>可见候选</strong>
+          <div>{summary.visibleCandidateCount}</div>
+        </div>
+      </div>
+
+      <div className="flow-preview" style={{ margin: "0 0 16px" }}>
+        <strong>优先排查</strong>
+        <p className="flow-content-meta" style={{ marginTop: 8 }}>
+          {resolvePrimaryDiagnosticHint(activeStep)}
+        </p>
+      </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
         {activeStep.diagnosticPath ? (
@@ -150,10 +211,37 @@ export function DiagnosticInspector({
           </table>
 
           {diagnostic.targetHints ? (
-            <details style={{ marginTop: 12 }}>
-              <summary>目标提示</summary>
-              <pre>{JSON.stringify(diagnostic.targetHints, null, 2)}</pre>
-            </details>
+            <>
+              <h4 style={{ margin: "16px 0 8px" }}>目标提示</h4>
+              <table className="fw-step-log-table">
+                <tbody>
+                  <tr>
+                    <th>标签</th>
+                    <td>{diagnostic.targetHints.tagName ?? "—"}</td>
+                  </tr>
+                  <tr>
+                    <th>输入类型</th>
+                    <td>{diagnostic.targetHints.inputType ?? "—"}</td>
+                  </tr>
+                  <tr>
+                    <th>name 属性</th>
+                    <td>{diagnostic.targetHints.nameAttr ?? "—"}</td>
+                  </tr>
+                  <tr>
+                    <th>占位提示</th>
+                    <td>{diagnostic.targetHints.placeholder ?? "—"}</td>
+                  </tr>
+                  <tr>
+                    <th>关联文案</th>
+                    <td>{diagnostic.targetHints.labelText ?? "—"}</td>
+                  </tr>
+                  <tr>
+                    <th>文本样本</th>
+                    <td>{diagnostic.targetHints.textSample ?? "—"}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </>
           ) : null}
         </>
       ) : activeStep.diagnosticPath ? (

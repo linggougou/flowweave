@@ -11,6 +11,24 @@ export type StudioExecutionRunContext = {
   variables?: Record<string, RunFlowVariableValue>;
 };
 
+export type StudioFlowRunInput = {
+  executionId: string;
+  finishedAt?: string;
+  environmentName?: string;
+  baseUrl?: string;
+  storageStatePath?: string;
+  variables?: Record<string, string>;
+};
+
+export type StudioRunPreflightIssue = {
+  code:
+    | "MISSING_BASE_URL"
+    | "MISSING_REQUIRED_VARIABLE"
+    | "STORAGE_STATE_PATH_NOT_FOUND";
+  field: string;
+  message: string;
+};
+
 export type StudioExecutionCompatibilityWarning = {
   code: "FLOW_SNAPSHOT_MISSING" | "RUN_CONTEXT_MISSING";
   severity: "warning";
@@ -137,6 +155,7 @@ export type StudioApi = {
     name: string,
   ) => Promise<StudioFlowRef>;
   getFlow: (projectId: string, flowId: string) => Promise<FlowDocument>;
+  getFlowRunInput: (projectId: string, flowId: string) => Promise<StudioFlowRunInput | null>;
   runFlow: (
     projectId: string,
     flowId?: string,

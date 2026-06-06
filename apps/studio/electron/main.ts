@@ -1,11 +1,13 @@
 import "./env-setup.js";
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import path from "node:path";
+import type { RunFlowOptions } from "../src/shared/studio-api-types.js";
 import { IPC_CHANNELS } from "./ipc-channels.js";
 import {
   createProject,
   getExecution,
   getFlow,
+  getFlowRunInput,
   getFlowVersion,
   listExecutions,
   listFlows,
@@ -58,29 +60,47 @@ function registerIpcHandlers(): void {
     return getFlow(projectId, flowId);
   });
 
+  ipcMain.handle(IPC_CHANNELS.getFlowRunInput, (_event, projectId: string, flowId: string) => {
+    if (typeof projectId !== "string" || projectId.length === 0) {
+      throw new Error("projectId 无效");
+    }
+    if (typeof flowId !== "string" || flowId.length === 0) {
+      throw new Error("flowId 无效");
+    }
+    return getFlowRunInput(projectId, flowId);
+  });
+
   ipcMain.handle(
     IPC_CHANNELS.runFlow,
     async (
       _event,
       projectId: string,
       flowId?: string,
-      options?: { showBrowser?: boolean },
+      options?: RunFlowOptions,
     ) => {
-    if (typeof projectId !== "string" || projectId.length === 0) {
-      throw new Error("projectId 无效");
-    }
-    if (flowId !== undefined && (typeof flowId !== "string" || flowId.length === 0)) {
-      throw new Error("flowId 无效");
-    }
-    const showBrowser =
-      options && typeof options === "object" && options.showBrowser === false
-        ? false
-        : true;
-    const record = await runFlow(projectId, flowId, { showBrowser });
-    return {
-      executionId: record.executionId,
-      status: record.status,
-    };
+      if (typeof projectId !== "string" || projectId.length === 0) {
+        throw new Error("projectId 无效");
+      }
+      if (flowId !== undefined && (typeof flowId !== "string" || flowId.length === 0)) {
+        throw new Error("flowId 无效");
+      }
+      const normalizedOptions: RunFlowOptions = {
+        showBrowser:
+          options && typeof options === "object" && options.showBrowser === false
+            ? false
+            : true,
+        environmentName:
+          options && typeof options === "object" ? options.environmentName : undefined,
+        baseUrl: options && typeof options === "object" ? options.baseUrl : undefined,
+        storageStatePath:
+          options && typeof options === "object" ? options.storageStatePath : undefined,
+        variables: options && typeof options === "object" ? options.variables : undefined,
+      };
+      const record = await runFlow(projectId, flowId, normalizedOptions);
+      return {
+        executionId: record.executionId,
+        status: record.status,
+      };
     },
   );
 

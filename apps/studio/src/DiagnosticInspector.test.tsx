@@ -1,0 +1,74 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+
+import type { ExecutionStepLog } from "./shared/studio-api-types.js";
+import { DiagnosticInspector } from "./DiagnosticInspector.js";
+
+function buildStep(overrides?: Partial<ExecutionStepLog>): ExecutionStepLog {
+  return {
+    stepIndex: 0,
+    stepId: "s1",
+    label: "点击登录按钮",
+    status: "failed",
+    message: "定位失败",
+    startedAt: "2026-06-07T00:01:00.000Z",
+    finishedAt: "2026-06-07T00:01:01.000Z",
+    diagnosticPath: "/tmp/step-0-diagnostic.json",
+    screenshotPath: "/tmp/step-0.png",
+    pageSnapshotPath: "/tmp/page-0.json",
+    diagnostic: {
+      stepId: "s1",
+      stepIndex: 0,
+      url: "https://staging.example.com/login",
+      title: "登录页",
+      strategyAttempts: [
+        {
+          label: "role=button[name=登录]",
+          matchedCount: 0,
+          visibleCount: 0,
+          success: false,
+          error: "未找到元素",
+        },
+        {
+          label: "css=#submit",
+          matchedCount: 1,
+          visibleCount: 1,
+          success: true,
+        },
+      ],
+      targetHints: {
+        tagName: "button",
+        textSample: "登录",
+        labelText: "提交登录",
+      },
+    },
+    pageSnapshot: {
+      url: "https://staging.example.com/login",
+      title: "登录页",
+      formCount: 1,
+      buttonCount: 2,
+      linkCount: 1,
+      capturedAt: "2026-06-07T00:01:01.000Z",
+    },
+    ...overrides,
+  };
+}
+
+describe("DiagnosticInspector", () => {
+  it("把诊断信息提升为更适合排障的工作台视图", () => {
+    const html = renderToStaticMarkup(
+      <DiagnosticInspector
+        steps={[buildStep()]}
+        selectedStepIndex={0}
+        onSelectStepIndex={() => {}}
+        onOpenPath={() => {}}
+      />,
+    );
+
+    expect(html).toContain("诊断工作台");
+    expect(html).toContain("成功策略");
+    expect(html).toContain("失败策略");
+    expect(html).toContain("优先排查");
+    expect(html).toContain("提交登录");
+  });
+});

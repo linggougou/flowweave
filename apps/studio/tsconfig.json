@@ -3,6 +3,14 @@
   "compilerOptions": {
     "lib": ["ES2022", "DOM"],
     "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@flowweave/ui": ["../../packages/ui/src/index.ts"],
+      "@flowweave/shared": ["../../packages/shared/src/index.ts"],
+      "@flowweave/flow-dsl": ["../../packages/flow-dsl/src/index.ts"],
+      "@flowweave/project-knowledge": ["../../packages/project-knowledge/src/index.ts"],
+      "@flowweave/page-intelligence": ["../../packages/page-intelligence/src/index.ts"]
+    },
     "noEmit": true
   },
   "include": ["src/**/*"]

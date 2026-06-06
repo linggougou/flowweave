@@ -431,6 +431,66 @@ VALUES (?, ?, ?, ?, ?)
     expect(repo.getExecution("missing_exec")).toBeNull();
   });
 
+  it("可以按 Flow 读取最近一次执行记录用于恢复运行输入", () => {
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-pk-"));
+    const repo = new ProjectKnowledgeRepository({ dataDir });
+
+    const project = repo.createProject("最近输入恢复项目");
+    const flowId = "flow_recent_input";
+    repo.saveFlow(project.id, sampleFlow(project.id, flowId));
+
+    repo.saveExecution(project.id, {
+      executionId: "exec_recent_old",
+      flowId,
+      status: "failed",
+      startedAt: "2026-05-25T09:00:00.000Z",
+      finishedAt: "2026-05-25T09:00:01.000Z",
+      runContext: {
+        environmentName: "旧环境",
+        baseUrl: "https://old.example.com",
+        variables: {
+          username: "old-user",
+        },
+      },
+      steps: [],
+    });
+
+    repo.saveExecution(project.id, {
+      executionId: "exec_recent_new",
+      flowId,
+      status: "success",
+      startedAt: "2026-05-25T10:00:00.000Z",
+      finishedAt: "2026-05-25T10:00:02.000Z",
+      runContext: {
+        environmentName: "新环境",
+        baseUrl: "https://new.example.com",
+        storageStatePath: "/tmp/flowweave/state.json",
+        variables: {
+          username: "alice",
+          retryCount: 2,
+        },
+      },
+      steps: [],
+    });
+
+    const maybeMethod = repo as ProjectKnowledgeRepository & {
+      getLatestExecutionForFlow?: (
+        projectId: string,
+        flowId: string,
+      ) => ReturnType<ProjectKnowledgeRepository["getExecution"]>;
+    };
+
+    expect(maybeMethod.getLatestExecutionForFlow).toBeTypeOf("function");
+
+    const latest = maybeMethod.getLatestExecutionForFlow?.(project.id, flowId);
+    expect(latest?.executionId).toBe("exec_recent_new");
+    expect(latest?.runContext?.environmentName).toBe("新环境");
+    expect(latest?.runContext?.variables).toEqual({
+      username: "alice",
+      retryCount: 2,
+    });
+  });
+
   it("saveFlow 更新时写入版本历史并可恢复", () => {
     dataDir = mkdtempSync(join(tmpdir(), "flowweave-pk-"));
     const repo = new ProjectKnowledgeRepository({ dataDir });

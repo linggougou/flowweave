@@ -4,6 +4,7 @@ import type { FlowDocument } from "@flowweave/flow-dsl";
 import type { ExecutionWithProject } from "@flowweave/project-knowledge";
 import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
 
+const mockExecuteFlow = vi.fn();
 const mockApiAllocateRunDirectory = vi.fn();
 const mockApiCreateProject = vi.fn();
 const mockApiGetExecution = vi.fn();
@@ -18,23 +19,30 @@ const mockApiRestoreFlowVersion = vi.fn();
 const mockApiSaveExecution = vi.fn();
 const mockApiSaveFlow = vi.fn();
 const mockApiSavePageSnapshot = vi.fn();
+const mockRepoGetDefaultEnvironment = vi.fn();
+const mockRepoSaveEnvironment = vi.fn();
+const mockRepoGetLatestExecutionForFlow = vi.fn();
 
 vi.mock("./env-setup.js", () => ({
   isChromiumInstalled: () => true,
 }));
 
 vi.mock("@flowweave/runtime", () => ({
-  executeFlow: vi.fn(),
+  executeFlow: mockExecuteFlow,
 }));
 
 vi.mock("@flowweave/project-knowledge", () => ({
   ProjectKnowledgeRepository: class {
     getDefaultEnvironment() {
-      return undefined;
+      return mockRepoGetDefaultEnvironment();
     }
 
     saveEnvironment() {
-      return undefined;
+      return mockRepoSaveEnvironment();
+    }
+
+    getLatestExecutionForFlow() {
+      return mockRepoGetLatestExecutionForFlow();
     }
   },
 }));
@@ -119,6 +127,10 @@ describe("getExecution 缓存命中策略", () => {
     mockApiSaveExecution.mockReset();
     mockApiSaveFlow.mockReset();
     mockApiSavePageSnapshot.mockReset();
+    mockExecuteFlow.mockReset();
+    mockRepoGetDefaultEnvironment.mockReset();
+    mockRepoSaveEnvironment.mockReset();
+    mockRepoGetLatestExecutionForFlow.mockReset();
   });
 
   it("缓存里缺少 flowSnapshot 时，会继续回源知识库", async () => {
@@ -163,5 +175,208 @@ describe("getExecution 缓存命中策略", () => {
 
     expect(mockApiGetExecution).toHaveBeenCalledTimes(1);
     expect(mockApiGetFlow).not.toHaveBeenCalled();
+  });
+
+  it("runFlow 在 storageStatePath 文件不存在时提前阻断", async () => {
+    mockApiGetFlow.mockResolvedValue(buildFlow());
+    mockApiAllocateRunDirectory.mockResolvedValue("/tmp/flowweave/run-exec");
+
+    const { runFlow } = await loadServicesModule();
+
+    await expect(
+      runFlow("project_service_history", "flow_service_history", {
+        showBrowser: false,
+        environmentName: "预发环境",
+        baseUrl: "https://staging.example.com/app",
+        storageStatePath: "/tmp/flowweave/missing-state.json",
+        variables: {
+          username: "alice",
+        },
+      }),
+    ).rejects.toThrow("Storage State 文件不存在");
+
+    expect(mockExecuteFlow).not.toHaveBeenCalled();
+    expect(mockApiSaveExecution).not.toHaveBeenCalled();
+  });
+
+  it("显式清空 baseUrl 与 storageStatePath 时，不再回退到旧默认环境", async () => {
+    mockApiGetFlow.mockResolvedValue(buildFlow({
+      steps: [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "https://example.com/orders",
+        },
+      ],
+    }));
+    mockApiAllocateRunDirectory.mockResolvedValue("/tmp/flowweave/run-exec");
+    mockRepoGetDefaultEnvironment.mockReturnValue({
+      id: "env_default",
+      projectId: "project_service_history",
+      name: "默认环境",
+      baseUrl: "https://staging.example.com/app",
+      storageStatePath: "/tmp/flowweave/legacy-state.json",
+      isDefault: true,
+    });
+    mockExecuteFlow.mockResolvedValue({
+      executionId: "exec_cleared_env",
+      status: "success",
+      steps: [
+        {
+          stepIndex: 0,
+          stepId: "s1",
+          type: "navigate",
+          status: "success",
+          startedAt: "2026-06-06T00:00:00.000Z",
+          endedAt: "2026-06-06T00:00:01.000Z",
+          durationMs: 1000,
+        },
+      ],
+    });
+
+    const { runFlow } = await loadServicesModule();
+
+    await runFlow("project_service_history", "flow_service_history", {
+      showBrowser: false,
+      environmentName: "手动覆盖环境",
+      baseUrl: "",
+      storageStatePath: "",
+      variables: {
+        username: "alice",
+      },
+    });
+
+    expect(mockExecuteFlow).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "flow_service_history" }),
+      expect.objectContaining({
+        baseUrl: undefined,
+        storageStatePath: undefined,
+        environmentName: "手动覆盖环境",
+        variables: {
+          username: "alice",
+        },
+      }),
+    );
+    expect(mockRepoSaveEnvironment).toHaveBeenCalledWith(
+      "project_service_history",
+      "手动覆盖环境",
+      "",
+      true,
+      undefined,
+    );
+  });
+
+  it("runFlow 会把完整运行上下文传给 executeFlow 并落库到 runContext", async () => {
+    mockApiGetFlow.mockResolvedValue(buildFlow({
+      steps: [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "https://example.com/orders",
+        },
+      ],
+    }));
+    mockApiAllocateRunDirectory.mockResolvedValue("/tmp/flowweave/run-exec");
+    mockExecuteFlow.mockResolvedValue({
+      executionId: "exec_run_context",
+      status: "success",
+      steps: [
+        {
+          stepIndex: 0,
+          stepId: "s1",
+          type: "navigate",
+          status: "success",
+          startedAt: "2026-06-06T00:00:00.000Z",
+          endedAt: "2026-06-06T00:00:01.000Z",
+          durationMs: 1000,
+        },
+      ],
+    });
+
+    const { runFlow } = await loadServicesModule();
+
+    await runFlow("project_service_history", "flow_service_history", {
+      showBrowser: false,
+      environmentName: "预发已登录",
+      baseUrl: "https://staging.example.com/app",
+      storageStatePath: "/tmp/flowweave/state.json",
+      variables: {
+        username: "alice",
+        retryCount: 2,
+        rememberMe: true,
+      },
+    });
+
+    expect(mockExecuteFlow).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "flow_service_history" }),
+      expect.objectContaining({
+        baseUrl: "https://staging.example.com/app",
+        storageStatePath: "/tmp/flowweave/state.json",
+        environmentName: "预发已登录",
+        variables: {
+          username: "alice",
+          retryCount: 2,
+          rememberMe: true,
+        },
+      }),
+    );
+    expect(mockApiSaveExecution).toHaveBeenCalledWith(
+      "project_service_history",
+      expect.objectContaining({
+        runContext: {
+          environmentName: "预发已登录",
+          baseUrl: "https://staging.example.com/app",
+          storageStatePath: "/tmp/flowweave/state.json",
+          variables: {
+            username: "alice",
+            retryCount: 2,
+            rememberMe: true,
+          },
+        },
+      }),
+    );
+  });
+
+  it("返回指定 Flow 最近一次执行输入并把变量转成表单字符串", async () => {
+    mockRepoGetLatestExecutionForFlow.mockReturnValue(
+      buildExecution({
+        executionId: "exec_latest_input",
+        finishedAt: "2026-06-06T00:02:00.000Z",
+        runContext: {
+          environmentName: "预发已登录",
+          baseUrl: "https://staging.example.com/app",
+          storageStatePath: "/tmp/flowweave/state.json",
+          variables: {
+            username: "alice",
+            retryCount: 2,
+            rememberMe: true,
+          },
+        },
+      }),
+    );
+
+    const services = (await loadServicesModule()) as typeof import("./services.js") & {
+      getFlowRunInput?: (
+        projectId: string,
+        flowId: string,
+      ) => Promise<unknown>;
+    };
+
+    expect(services.getFlowRunInput).toBeTypeOf("function");
+
+    await expect(
+      services.getFlowRunInput?.("project_service_history", "flow_service_history"),
+    ).resolves.toEqual({
+      executionId: "exec_latest_input",
+      finishedAt: "2026-06-06T00:02:00.000Z",
+      environmentName: "预发已登录",
+      baseUrl: "https://staging.example.com/app",
+      storageStatePath: "/tmp/flowweave/state.json",
+      variables: {
+        username: "alice",
+        retryCount: "2",
+        rememberMe: "true",
+      },
+    });
   });
 });

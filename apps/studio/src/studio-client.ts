@@ -9,6 +9,7 @@ import type {
   StudioExecution,
   StudioFlowRef,
   StudioFlowVersion,
+  StudioFlowRunInput,
   StudioProject,
   StudioProjectEnvironment,
 } from "./shared/studio-api-types.js";
@@ -25,6 +26,7 @@ const HTTP_FALLBACK_METHODS = [
   "listFlows",
   "renameFlow",
   "getFlow",
+  "getFlowRunInput",
   "listExecutions",
   "getExecution",
   "listFlowVersions",
@@ -68,6 +70,27 @@ function toExecutionSummary(item: ExecutionResult): ExecutionSummary {
     startedAt: item.startedAt,
     finishedAt: item.finishedAt,
     environmentName: item.runContext?.environmentName,
+  };
+}
+
+function toStudioFlowRunInput(item: ExecutionResult): StudioFlowRunInput | null {
+  if (!item.runContext) {
+    return null;
+  }
+  return {
+    executionId: item.executionId,
+    finishedAt: item.finishedAt,
+    environmentName: item.runContext.environmentName,
+    baseUrl: item.runContext.baseUrl,
+    storageStatePath: item.runContext.storageStatePath,
+    variables: item.runContext.variables
+      ? Object.fromEntries(
+          Object.entries(item.runContext.variables).map(([name, value]) => [
+            name,
+            String(value),
+          ]),
+        )
+      : undefined,
   };
 }
 
@@ -149,6 +172,17 @@ const knowledgeHttpClient: Pick<StudioApi, HttpFallbackMethod> = {
   getFlow: (projectId: string, flowId: string): Promise<FlowDocument> =>
     knowledgeRequest(`/api/projects/${projectId}/flows/${flowId}`),
 
+  getFlowRunInput: async (
+    projectId: string,
+    flowId: string,
+  ): Promise<StudioFlowRunInput | null> => {
+    const items = await knowledgeRequest<ExecutionResult[]>(
+      `/api/projects/${projectId}/executions`,
+    );
+    const recent = items.find((item) => item.flowId === flowId && item.runContext);
+    return recent ? toStudioFlowRunInput(recent) : null;
+  },
+
   listExecutions: async (projectId: string): Promise<ExecutionSummary[]> => {
     const items = await knowledgeRequest<ExecutionResult[]>(
       `/api/projects/${projectId}/executions`,
@@ -221,6 +255,7 @@ function isHttpFallbackMethod(prop: string): prop is HttpFallbackMethod {
 function createBrowserStudioApi(): StudioApi {
   return {
     ...knowledgeHttpClient,
+    getFlowRunInput: knowledgeHttpClient.getFlowRunInput,
     runFlow: async (): Promise<RunFlowResult> => {
       throw new Error("流程运行需在 Electron Studio 中执行，请先运行 pnpm dev:studio");
     },

@@ -9,14 +9,22 @@ import {
   type StepLogRow,
 } from "@flowweave/ui";
 import { DiagnosticInspector } from "./DiagnosticInspector.js";
+import { ExecutionRunContextPanel } from "./ExecutionRunContextPanel.js";
 import { ExecutionCompatibilityNotice } from "./ExecutionCompatibilityNotice.js";
 import { FragilityNotice } from "./FragilityNotice.js";
 import { flowStepsToRows } from "./flow-step-format.js";
 import { buildExecutionCompatibilityWarnings } from "./shared/execution-fragility.js";
+import {
+  buildFragilityVariableContext,
+  buildInitialVariableInputs,
+  buildRunDraftState,
+  collectRunPreflightIssues,
+  parseVariableInput,
+  type VariableInputs,
+} from "./shared/run-input-state.js";
 import type {
   ExecutionStepLog,
   ExecutionSummary,
-  RunFlowVariableValue,
   StudioExecution,
   StudioFlowRef,
   StudioFlowVersion,
@@ -69,82 +77,6 @@ function formatExecutionTime(iso?: string): string {
 }
 
 type MainTab = "flow" | "executions" | "versions";
-type FlowVariableDefinition = FlowDocument["variables"][number];
-type VariableInputs = Record<string, string>;
-
-function stringifyDefaultVariableValue(
-  value: FlowVariableDefinition["defaultValue"],
-): string {
-  if (value === undefined) {
-    return "";
-  }
-  return String(value);
-}
-
-function buildInitialVariableInputs(
-  flow: FlowDocument | null,
-  previous: VariableInputs = {},
-): VariableInputs {
-  if (!flow) {
-    return {};
-  }
-
-  const next: VariableInputs = {};
-  for (const variable of flow.variables) {
-    next[variable.name] =
-      previous[variable.name] ?? stringifyDefaultVariableValue(variable.defaultValue);
-  }
-  return next;
-}
-
-function parseVariableInput(
-  variable: FlowVariableDefinition,
-  rawValue: string,
-): RunFlowVariableValue | undefined {
-  const trimmed = rawValue.trim();
-  if (!trimmed) {
-    if (variable.required) {
-      throw new Error(`变量 ${variable.name} 不能为空`);
-    }
-    return undefined;
-  }
-
-  switch (variable.type) {
-    case "string":
-      return rawValue;
-    case "number": {
-      const numericValue = Number(trimmed);
-      if (Number.isNaN(numericValue)) {
-        throw new Error(`变量 ${variable.name} 必须是数字`);
-      }
-      return numericValue;
-    }
-    case "boolean":
-      if (trimmed !== "true" && trimmed !== "false") {
-        throw new Error(`变量 ${variable.name} 必须是 true 或 false`);
-      }
-      return trimmed === "true";
-  }
-}
-
-function buildFragilityVariableContext(
-  flow: FlowDocument | null,
-  variableInputs: VariableInputs,
-): Record<string, string> | undefined {
-  if (!flow) {
-    return undefined;
-  }
-
-  const entries = flow.variables.flatMap((variable) => {
-    const rawValue = variableInputs[variable.name];
-    if (!rawValue || rawValue.trim().length === 0) {
-      return [];
-    }
-    return [[variable.name, rawValue] as const];
-  });
-
-  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
-}
 
 export function App() {
   const [tab, setTab] = useState<MainTab>("flow");
@@ -290,26 +222,59 @@ export function App() {
 
   useEffect(() => {
     const environment =
-      availableEnvironments.find((item) => item.name === selectedEnvironmentName) ??
-      availableEnvironments.find((item) => item.isDefault) ??
-      availableEnvironments[0] ??
-      null;
+      availableEnvironments.find((item) => item.name === selectedEnvironmentName) ?? null;
 
-    if (!environment) {
+    if (environment) {
+      return;
+    }
+
+    const fallback =
+      availableEnvironments.find((item) => item.isDefault) ?? availableEnvironments[0] ?? null;
+
+    if (!fallback) {
       setSelectedEnvironmentName("");
       setBaseUrlDraft("");
       setStorageStatePathDraft("");
       return;
     }
 
-    setSelectedEnvironmentName(environment.name);
-    setBaseUrlDraft(environment.baseUrl);
-    setStorageStatePathDraft(environment.storageStatePath ?? "");
+    setSelectedEnvironmentName(fallback.name);
+    setBaseUrlDraft(fallback.baseUrl);
+    setStorageStatePathDraft(fallback.storageStatePath ?? "");
   }, [availableEnvironments, selectedEnvironmentName]);
 
   useEffect(() => {
     setVariableInputs((previous) => buildInitialVariableInputs(currentFlow, previous));
   }, [currentFlow]);
+
+  useEffect(() => {
+    if (!selectedProjectId || !selectedFlowId || !currentFlow) {
+      return;
+    }
+
+    let cancelled = false;
+    void getStudioApi()
+      .getFlowRunInput(selectedProjectId, selectedFlowId)
+      .then((recentInput) => {
+        if (cancelled || !recentInput) {
+          return;
+        }
+        const draft = buildRunDraftState(currentFlow, recentInput);
+        setSelectedEnvironmentName(draft.selectedEnvironmentName);
+        setBaseUrlDraft(draft.baseUrlDraft);
+        setStorageStatePathDraft(draft.storageStatePathDraft);
+        setVariableInputs(draft.variableInputs);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(formatStudioError(err));
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentFlow, selectedFlowId, selectedProjectId]);
 
   useEffect(() => {
     if (!execution) {
@@ -394,6 +359,10 @@ export function App() {
     setPreviewVersion(null);
     setError(null);
     setExecution(null);
+    setSelectedEnvironmentName("");
+    setBaseUrlDraft("");
+    setStorageStatePathDraft("");
+    setVariableInputs({});
     setTab("flow");
   };
 
@@ -437,10 +406,22 @@ export function App() {
     if (!selectedProjectId || !selectedFlowId || !currentFlow) {
       return;
     }
-    setLoading(true);
     setError(null);
+    const preflightIssues = collectRunPreflightIssues(currentFlow, {
+      baseUrl: baseUrlDraft,
+      storageStatePath: storageStatePathDraft,
+      variables: variableInputs,
+    });
+    if (preflightIssues.length > 0) {
+      setError(
+        `运行前检查未通过：${preflightIssues.map((issue) => issue.message).join("；")}`,
+      );
+      return;
+    }
+
+    setLoading(true);
     try {
-      const variables: Record<string, RunFlowVariableValue> = {};
+      const variables: Record<string, string | number | boolean> = {};
       for (const variable of currentFlow.variables) {
         const value = parseVariableInput(variable, variableInputs[variable.name] ?? "");
         if (value !== undefined) {
@@ -452,8 +433,8 @@ export function App() {
       const result = await api.runFlow(selectedProjectId, selectedFlowId, {
         showBrowser,
         environmentName: selectedEnvironmentName || "默认环境",
-        baseUrl: baseUrlDraft.trim() || undefined,
-        storageStatePath: storageStatePathDraft.trim() || undefined,
+        baseUrl: baseUrlDraft,
+        storageStatePath: storageStatePathDraft,
         variables,
       });
       const detail = await api.getExecution(result.executionId);
@@ -474,8 +455,13 @@ export function App() {
       ? analyzeFlowFragility(currentFlow, {
           baseUrl: baseUrlDraft.trim(),
           variables: buildFragilityVariableContext(currentFlow, variableInputs),
-        })
+      })
       : [];
+  const runPreflightIssues = collectRunPreflightIssues(currentFlow, {
+    baseUrl: baseUrlDraft,
+    storageStatePath: storageStatePathDraft,
+    variables: variableInputs,
+  });
 
   const flowStepRows = currentFlow ? flowStepsToRows(currentFlow.steps) : [];
 
@@ -946,6 +932,25 @@ export function App() {
                 <p className="execution-history-empty">当前 Flow 未声明运行变量</p>
               )}
             </section>
+            <section className="flow-preview">
+              <h3>运行前检查</h3>
+              {runPreflightIssues.length > 0 ? (
+                <ul className="execution-history-list">
+                  {runPreflightIssues.map((issue) => (
+                    <li key={`${issue.code}-${issue.field}`}>
+                      <p className="error" role="alert">
+                        {issue.message}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="execution-history-meta">
+                  本地 preflight 已通过；点击「运行流程」后还会继续检查 Storage State
+                  文件是否存在。
+                </p>
+              )}
+            </section>
           </section>
         ) : null}
         {tab === "flow" ? (
@@ -994,6 +999,7 @@ export function App() {
             {execution?.fragilityIssues && execution.fragilityIssues.length > 0 ? (
               <FragilityNotice warnings={execution.fragilityIssues} />
             ) : null}
+            <ExecutionRunContextPanel runContext={execution?.runContext} />
             <StepLogTable
               steps={steps}
               emptyMessage={

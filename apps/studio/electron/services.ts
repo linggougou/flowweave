@@ -33,6 +33,7 @@ import {
   mapStoredExecutionToStudioExecution,
   shouldUseCachedExecution,
 } from "../src/shared/execution-history.js";
+import { toVariableInputString } from "../src/shared/run-input-state.js";
 import {
   apiAllocateRunDirectory,
   apiCreateProject,
@@ -117,6 +118,13 @@ function normalizeOptionalString(value?: string): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+function hasExplicitOption<K extends keyof RunFlowServiceOptions>(
+  options: RunFlowServiceOptions,
+  key: K,
+): boolean {
+  return Object.prototype.hasOwnProperty.call(options, key);
+}
+
 type ResolvedRunEnvironment = {
   name: string;
   baseUrl?: string;
@@ -128,22 +136,32 @@ function resolveRunEnvironment(
   options: RunFlowServiceOptions,
 ): ResolvedRunEnvironment {
   const stored = projectKnowledgeRepository.getDefaultEnvironment(projectId);
-  const name = normalizeOptionalString(options.environmentName) ?? stored?.name ?? "默认环境";
-  const baseUrl = normalizeOptionalString(options.baseUrl) ?? stored?.baseUrl;
-  const storageStatePath =
-    normalizeOptionalString(options.storageStatePath) ?? stored?.storageStatePath;
-  const shouldPersist =
-    options.environmentName !== undefined ||
-    options.baseUrl !== undefined ||
-    options.storageStatePath !== undefined;
+  const storedName = normalizeOptionalString(stored?.name) ?? "默认环境";
+  const storedBaseUrl = normalizeOptionalString(stored?.baseUrl);
+  const storedStorageStatePath = normalizeOptionalString(stored?.storageStatePath);
+  const hasEnvironmentNameOverride = hasExplicitOption(options, "environmentName");
+  const hasBaseUrlOverride = hasExplicitOption(options, "baseUrl");
+  const hasStorageStatePathOverride = hasExplicitOption(options, "storageStatePath");
 
-  if (shouldPersist && baseUrl) {
+  const name = hasEnvironmentNameOverride
+    ? normalizeOptionalString(options.environmentName) ?? storedName
+    : storedName;
+  const baseUrl = hasBaseUrlOverride
+    ? normalizeOptionalString(options.baseUrl)
+    : storedBaseUrl;
+  const storageStatePath = hasStorageStatePathOverride
+    ? normalizeOptionalString(options.storageStatePath)
+    : storedStorageStatePath;
+  const shouldPersist =
+    hasEnvironmentNameOverride || hasBaseUrlOverride || hasStorageStatePathOverride;
+
+  if (shouldPersist) {
     projectKnowledgeRepository.saveEnvironment(
       projectId,
       name,
-      baseUrl,
+      hasBaseUrlOverride ? options.baseUrl?.trim() ?? "" : storedBaseUrl ?? "",
       true,
-      storageStatePath,
+      hasStorageStatePathOverride ? storageStatePath : storedStorageStatePath,
     );
   }
 
@@ -360,6 +378,27 @@ function toRunContext(
   };
 }
 
+function ensureStorageStatePathExists(storageStatePath?: string): void {
+  if (!storageStatePath) {
+    return;
+  }
+  if (existsSync(storageStatePath)) {
+    return;
+  }
+  throw new Error(`运行前检查未通过：Storage State 文件不存在：${storageStatePath}`);
+}
+
+function toStudioFlowRunInputVariables(
+  variables?: Record<string, RunFlowVariableValue>,
+): Record<string, string> | undefined {
+  if (!variables) {
+    return undefined;
+  }
+  return Object.fromEntries(
+    Object.entries(variables).map(([name, value]) => [name, toVariableInputString(value)]),
+  );
+}
+
 export type RunFlowServiceOptions = RunFlowOptions;
 
 export async function runFlow(
@@ -373,6 +412,7 @@ export async function runFlow(
   const artifactDir = await apiAllocateRunDirectory(projectId, executionId);
   const showBrowser = options.showBrowser ?? true;
   const environment = resolveRunEnvironment(projectId, options);
+  ensureStorageStatePathExists(environment.storageStatePath);
 
   if (!isChromiumInstalled()) {
     throw new Error(
@@ -419,6 +459,32 @@ export async function runFlow(
 
   executions.set(record.executionId, record);
   return record;
+}
+
+export async function getFlowRunInput(
+  projectId: string,
+  flowId: string,
+): Promise<{
+  executionId: string;
+  finishedAt?: string;
+  environmentName?: string;
+  baseUrl?: string;
+  storageStatePath?: string;
+  variables?: Record<string, string>;
+} | null> {
+  const latest = projectKnowledgeRepository.getLatestExecutionForFlow(projectId, flowId);
+  if (!latest?.runContext) {
+    return null;
+  }
+
+  return {
+    executionId: latest.executionId,
+    finishedAt: latest.finishedAt,
+    environmentName: latest.runContext.environmentName,
+    baseUrl: latest.runContext.baseUrl,
+    storageStatePath: latest.runContext.storageStatePath,
+    variables: toStudioFlowRunInputVariables(latest.runContext.variables),
+  };
 }
 
 function mapKnowledgeStatus(status: KnowledgeExecutionResult["status"]): StudioExecution["status"] {
