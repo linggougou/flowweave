@@ -2199,3 +2199,55 @@
 - 风险评估评分：95
 - 综合评分：97
 - 建议：通过
+
+## 2026-06-07 Recorder Scope Hints 轨道验证
+
+### 验证范围
+
+- `packages/recorder/src/target-from-dom.ts`
+- `packages/recorder/src/target-from-dom.test.ts`
+- `packages/recorder/src/normalize.ts`
+- `packages/recorder/src/normalize.test.ts`
+- 验证目标：
+  - 录制侧是否采集最近语义容器的 `scopeText / scopeKind`
+  - `normalize` 是否完整保真新 hints
+  - 改动是否保持在授权范围内
+
+### 验证结果
+
+1. TDD 红绿链路成立。
+   - 红灯断言：
+     - 重复列表行按钮未采集 `scopeKind="row"`
+     - `normalize` 尚未对新字段做保真
+   - 绿灯结果：
+     - `target-from-dom.test.ts`：`8/8`
+     - `normalize.test.ts`：`30/30`
+2. Node 20 指定验收命令通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test -- target-from-dom.test.ts normalize.test.ts step-filter.test.ts`
+   - 结果：通过，`47/47`
+3. 授权范围保持干净。
+   - 功能代码改动仅落在 4 个授权 recorder 文件。
+   - 轨道留痕仅追加到：
+     - `.codex/operations-log.md`
+     - `.codex/verification-report.md`
+4. 额外一致性检查通过。
+   - `git diff --check`：通过
+
+### Findings
+
+1. 未发现阻塞级问题。
+   - 录制侧已经能为重复列表行按钮产出最小作用域线索，且 normalize 可稳定透传。
+2. 残余风险：当前仅完成 recorder 侧证据采集，尚未改变 runtime 成功路径。
+   - 真正的歧义消解收益仍依赖后续 Runtime 轨消费这些 hints。
+3. 残余风险：作用域文本目前采用“最近语义容器 + 短文本抽取”启发式。
+   - 它已覆盖当前列表行场景，但后续若遇到极端复杂卡片或深层弹层，仍需要基准场景继续校准。
+
+### 综合结论
+
+- 代码质量评分：96
+- 测试覆盖评分：95
+- 规范遵循评分：99
+- 战略匹配评分：97
+- 风险评估评分：94
+- 综合评分：96
+- 建议：通过
