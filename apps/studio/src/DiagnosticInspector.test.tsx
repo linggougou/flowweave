@@ -66,10 +66,14 @@ describe("DiagnosticInspector", () => {
     );
 
     expect(html).toContain("诊断工作台");
-    expect(html).toContain("成功策略");
-    expect(html).toContain("失败策略");
-    expect(html).toContain("优先排查");
+    expect(html).toContain("失败类别");
+    expect(html).toContain("当前页未找到目标");
+    expect(html).toContain("页面快照摘要");
+    expect(html).toContain("登录页 · 表单 1 · 按钮 2 · 链接 1");
     expect(html).toContain("修复建议");
+    expect(html).toContain("诊断 JSON");
+    expect(html).toContain("页面快照");
+    expect(html).toContain("步骤截图");
     expect(html).toContain("testId");
     expect(html).toContain("提交登录");
   });

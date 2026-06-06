@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import type { ExecutionStepLog } from "./shared/studio-api-types.js";
+import { buildFailureInsight } from "./shared/failure-insights.js";
 import { buildDiagnosticRepairSuggestions } from "./shared/repair-suggestions.js";
+import type { ExecutionStepLog } from "./shared/studio-api-types.js";
 
 type DiagnosticInspectorProps = {
   steps: ExecutionStepLog[];
@@ -46,19 +47,6 @@ function countStrategyAttempts(
   };
 }
 
-function resolvePrimaryDiagnosticHint(step: ExecutionStepLog): string {
-  const failedAttempt = step.diagnostic?.strategyAttempts.find(
-    (attempt) => !attempt.success && attempt.error,
-  );
-  if (failedAttempt) {
-    return `${failedAttempt.label}：${failedAttempt.error}`;
-  }
-  if (step.message) {
-    return step.message;
-  }
-  return "当前步骤未提供额外失败信息，建议先打开 diagnostic JSON 查看完整原始产物。";
-}
-
 export function DiagnosticInspector({
   steps,
   selectedStepIndex,
@@ -78,6 +66,7 @@ export function DiagnosticInspector({
     diagnosticSteps.find((step) => step.diagnosticPath) ??
     diagnosticSteps[0]!;
   const diagnostic = activeStep.diagnostic;
+  const insight = buildFailureInsight(activeStep);
   const summary = countStrategyAttempts(activeStep);
   const repairSuggestions = buildDiagnosticRepairSuggestions(activeStep);
 
@@ -122,6 +111,42 @@ export function DiagnosticInspector({
         </p>
       ) : null}
 
+      {insight ? (
+        <div
+          style={{
+            display: "grid",
+            gap: 12,
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            marginBottom: 16,
+          }}
+        >
+          <div className="flow-preview" style={{ margin: 0 }}>
+            <strong>失败类别</strong>
+            <div style={{ marginTop: 8 }}>{insight.categoryLabel}</div>
+            <p className="flow-content-meta" style={{ marginTop: 8 }}>
+              {insight.title}
+            </p>
+          </div>
+          <div className="flow-preview" style={{ margin: 0 }}>
+            <strong>优先排查</strong>
+            <p className="flow-content-meta" style={{ marginTop: 8 }}>
+              {insight.summary}
+            </p>
+            {insight.recommendedAction ? (
+              <p className="flow-content-meta" style={{ marginTop: 8 }}>
+                下一步：{insight.recommendedAction}
+              </p>
+            ) : null}
+          </div>
+          <div className="flow-preview" style={{ margin: 0 }}>
+            <strong>页面快照摘要</strong>
+            <p className="flow-content-meta" style={{ marginTop: 8 }}>
+              {insight.pageSummary ?? "当前步骤没有页面快照摘要。"}
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       <div
         style={{
           display: "grid",
@@ -144,13 +169,6 @@ export function DiagnosticInspector({
         </div>
       </div>
 
-      <div className="flow-preview" style={{ margin: "0 0 16px" }}>
-        <strong>优先排查</strong>
-        <p className="flow-content-meta" style={{ marginTop: 8 }}>
-          {resolvePrimaryDiagnosticHint(activeStep)}
-        </p>
-      </div>
-
       {repairSuggestions.length > 0 ? (
         <div className="flow-preview" style={{ margin: "0 0 16px" }}>
           <strong>修复建议</strong>
@@ -170,23 +188,18 @@ export function DiagnosticInspector({
         </div>
       ) : null}
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-        {activeStep.diagnosticPath ? (
-          <button type="button" onClick={() => onOpenPath(activeStep.diagnosticPath!)}>
-            打开 diagnostic JSON
-          </button>
-        ) : null}
-        {activeStep.pageSnapshotPath ? (
-          <button type="button" onClick={() => onOpenPath(activeStep.pageSnapshotPath!)}>
-            打开 page JSON
-          </button>
-        ) : null}
-        {activeStep.screenshotPath ? (
-          <button type="button" onClick={() => onOpenPath(activeStep.screenshotPath!)}>
-            打开截图
-          </button>
-        ) : null}
-      </div>
+      {insight && insight.artifacts.length > 0 ? (
+        <div className="flow-preview" style={{ margin: "0 0 16px" }}>
+          <strong>产物入口</strong>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+            {insight.artifacts.map((artifact) => (
+              <button type="button" key={artifact.path} onClick={() => onOpenPath(artifact.path)}>
+                {artifact.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {diagnostic ? (
         <>
@@ -273,7 +286,7 @@ export function DiagnosticInspector({
 
       {activeStep.pageSnapshot ? (
         <details style={{ marginTop: 12 }} open>
-          <summary>页面摘要</summary>
+          <summary>页面摘要详情</summary>
           <table className="fw-step-log-table" style={{ marginTop: 12 }}>
             <tbody>
               <tr>

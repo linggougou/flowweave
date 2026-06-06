@@ -14,6 +14,7 @@ import { ExecutionCompatibilityNotice } from "./ExecutionCompatibilityNotice.js"
 import { FragilityNotice } from "./FragilityNotice.js";
 import { flowStepsToRows } from "./flow-step-format.js";
 import { buildExecutionCompatibilityWarnings } from "./shared/execution-fragility.js";
+import { buildFailureInsight } from "./shared/failure-insights.js";
 import {
   buildFragilityVariableContext,
   buildVariableInputsForFlow,
@@ -495,19 +496,28 @@ export function App() {
   const selectedFlowName =
     flows.find((f) => f.id === selectedFlowId)?.name ?? selectedFlowId ?? "—";
 
-  const steps: StepLogRow[] = (execution?.steps ?? []).map((step) => ({
-    stepIndex: step.stepIndex,
-    stepId: step.stepId,
-    label: step.label,
-    status: step.status,
-    message: step.message,
-    durationMs: step.durationMs,
-    startedAt: step.startedAt,
-    finishedAt: step.finishedAt,
-    screenshotPath: step.screenshotPath,
-    diagnosticPath: step.diagnosticPath,
-    pageSnapshotPath: step.pageSnapshotPath,
-  }));
+  const steps: StepLogRow[] = (execution?.steps ?? []).map((step) => {
+    const insight = buildFailureInsight(step);
+
+    return {
+      stepIndex: step.stepIndex,
+      stepId: step.stepId,
+      label: step.label,
+      status: step.status,
+      message: step.message,
+      durationMs: step.durationMs,
+      startedAt: step.startedAt,
+      finishedAt: step.finishedAt,
+      screenshotPath: step.screenshotPath,
+      diagnosticPath: step.diagnosticPath,
+      pageSnapshotPath: step.pageSnapshotPath,
+      insightCategoryLabel: insight?.categoryLabel,
+      insightTitle: insight?.title,
+      insightSummary: insight?.summary,
+      pageSummary: insight?.pageSummary,
+      artifacts: insight?.artifacts,
+    };
+  });
 
   const diagnosticSteps: ExecutionStepLog[] = (execution?.steps ?? []).filter(
     (step) => step.diagnosticPath || step.pageSnapshotPath || step.pageSnapshot,

@@ -2674,6 +2674,50 @@
     - 最慢场景排行基于单次运行，适合观察漂移，不适合作为硬性性能基线。
     - `successCoverage` 仍按业务场景族聚合，尚未细化到技术根因层。
 
+## 2026-06-07 Wave 5 轨道回收 - Studio Failure Insight Workbench
+
+- 时间：2026-06-07 00:06:00 CST
+- 轨道信息：
+  - worktree：`.worktrees/codex-real-page-studio-failure-insights`
+  - 分支：`codex/real-page-studio-failure-insights`
+  - 子代理：`Planck / 019e9d84-1df3-7661-90a0-36e0175969fa`
+  - 子代理提交：
+    - `604f4dff1927d16f07a6a4e9ea76d8ebd476ddc2`
+    - `832bff9e7687df5a19d8bf4db9ce2df53573e624`
+- 主代理边界复核：
+  - 实际集成文件：
+    - `apps/studio/src/App.tsx`
+    - `apps/studio/src/DiagnosticInspector.tsx`
+    - `apps/studio/src/DiagnosticInspector.test.tsx`
+    - `apps/studio/src/shared/failure-insights.ts`
+    - `apps/studio/src/shared/failure-insights.test.ts`
+    - `packages/ui/src/StepLogTable.tsx`
+    - `packages/ui/src/index.ts`
+  - 未带入 worktree 私有 `.codex` 文件。
+  - 未新增 Electron API，符合 Studio 轨道边界。
+- reviewer 结论：
+  - 无阻塞问题，建议合并。
+  - 非阻塞提醒：
+    - 原始实现会让一部分“先失败后成功”的通过步骤继续显示硬失败语义。
+    - 左侧“最近执行”列表仍无失败根因并不构成阻塞，因为当前 `ExecutionSummary` 数据链本就不携带该信息。
+- 主代理跟进修正：
+  - 已要求子代理补一刀，把 `passed + fallback success` 场景降级为“备用策略已命中”的弱告警语义。
+  - 新增对应测试后，`failure-insights` 已能正确区分：
+    - 真失败类 insight
+    - 通过但靠备用策略命中的弱告警 insight
+- Node 20 主代理复验：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/ui build`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
+    - 结果：通过，`40/40`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+    - 结果：通过
+- 主代理结论：
+  - 无阻塞问题，允许并回协调分支。
+  - 残余风险：
+    - `StepLogTable` 仍没有独立组件测试文件，目前主要依赖 `failure-insights` 单测、`DiagnosticInspector` 测试与 `app-studio typecheck` 兜底。
+    - 左侧“最近执行”列表仍然只展示 `ExecutionSummary` 的最小字段；若后续要把失败根因前移到侧栏，需要扩数据链，属于下一轮工作。
+
 ## 2026-06-06 提交审查 - Recorder 轨 ed7a78dd7087eef8d80c72e1c35041eec4a19c3b
 
 - 时间：2026-06-06 23:46:00 CST

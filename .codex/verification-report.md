@@ -515,6 +515,52 @@
 - 风险评估评分：92
 - 综合评分：95
 - 建议：通过
+
+## 2026-06-07 Studio Failure Insight Workbench 集成验收
+
+### 验证范围
+
+- 验证 `604f4dff1927d16f07a6a4e9ea76d8ebd476ddc2` 与后续修正提交 `832bff9e7687df5a19d8bf4db9ce2df53573e624` 是否符合 Studio 轨道边界。
+- 验证 failure insight 前移展示、artifact 入口拆分与 fallback-success 弱告警语义在协调分支生效。
+- 验证不新增 Electron API 的前提下，`app-studio` 测试与类型检查通过。
+
+### 验证结果
+
+1. 轨道边界符合预期。
+   - 实际并入文件只落在 `apps/studio/src/**` 与 `packages/ui/src/**`。
+   - 未触碰 `apps/studio/electron/**`、preload 或 `StudioApi` 契约。
+
+2. reviewer 无阻塞问题。
+   - reviewer 结论为“建议合并”。
+   - 唯一需要立即处理的是真通过步骤的语义偏差，已通过第二个提交修正。
+
+3. Node 20 主代理复测通过。
+   - `pnpm --filter @flowweave/ui build`：通过
+   - `pnpm --filter @flowweave/app-studio test`：通过，`40/40`
+   - `pnpm --filter @flowweave/app-studio typecheck`：通过
+
+4. fallback-success 语义已校正。
+   - 对 `status === "passed"` 且存在“先失败后成功”的步骤，现已优先显示“备用策略已命中”的弱告警语义。
+   - 新增测试已锁住该场景。
+
+### Findings
+
+1. 无阻塞问题。
+   - 当前实现满足 Studio 轨道目标，且主代理复测与 reviewer 审查均通过。
+2. 残余风险：`StepLogTable` 仍无独立组件测试。
+   - 当前主要依赖 `failure-insights` 单测、`DiagnosticInspector` 测试和 `app-studio typecheck` 兜底。
+3. 残余风险：左侧“最近执行”列表仍未前移失败根因。
+   - 该限制来自 `ExecutionSummary` 数据链范围，属于下一轮扩展项，不阻塞本次并回。
+
+### 综合结论
+
+- 代码质量评分：95
+- 测试覆盖评分：93
+- 规范遵循评分：97
+- 战略匹配评分：95
+- 风险评估评分：92
+- 综合评分：95
+- 建议：通过
 - 建议：通过
 
 ## 2026-06-06 旧历史执行兼容提示验收（复核补修）
