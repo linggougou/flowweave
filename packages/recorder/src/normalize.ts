@@ -8,6 +8,8 @@ import type { FlowDocument, NormalizedStep, Target } from "@flowweave/flow-dsl";
 import { filterNoisyInteractionSteps, mergeConsecutiveFillSteps } from "./step-filter.js";
 
 type LocatorStrategy = Target["strategies"][number];
+type FlowVariableDefinition = FlowDocument["variables"][number];
+const variablePattern = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g;
 
 /** 构建 Flow 时除会话元数据外需要的字段 */
 export interface BuildFlowFromEventsMeta extends RecorderSessionMeta {
@@ -168,6 +170,84 @@ function buildTargetFromPayload(payload: Record<string, unknown>): Target | null
   }
 
   return hints ? { strategies, hints } : { strategies };
+}
+
+function extractVariableNames(value: unknown): string[] {
+  if (typeof value !== "string") {
+    return [];
+  }
+
+  return Array.from(value.matchAll(variablePattern), (match) => match[1]?.trim() ?? "").filter(Boolean);
+}
+
+function extractTargetVariableNames(target: Target | undefined): string[] {
+  if (!target) {
+    return [];
+  }
+
+  return target.strategies.flatMap((strategy) => {
+    switch (strategy.kind) {
+      case "role":
+        return [...extractVariableNames(strategy.role), ...extractVariableNames(strategy.name)];
+      case "testId":
+        return extractVariableNames(strategy.testId);
+      case "css":
+        return extractVariableNames(strategy.selector);
+      case "xpath":
+        return extractVariableNames(strategy.expression);
+      case "text":
+        return extractVariableNames(strategy.text);
+      default:
+        return [];
+    }
+  });
+}
+
+function collectStepVariableNames(step: NormalizedStep): string[] {
+  switch (step.type) {
+    case "navigate":
+      return extractVariableNames(step.url);
+    case "click":
+      return extractTargetVariableNames(step.target);
+    case "fill":
+      return [...extractTargetVariableNames(step.target), ...extractVariableNames(step.value)];
+    case "select":
+      return [...extractTargetVariableNames(step.target), ...step.values.flatMap(extractVariableNames)];
+    case "setChecked":
+      return extractTargetVariableNames(step.target);
+    case "press":
+      return [...extractTargetVariableNames(step.target), ...extractVariableNames(step.key)];
+    case "upload":
+      return [...extractTargetVariableNames(step.target), ...step.files.flatMap(extractVariableNames)];
+    case "wait":
+      return [
+        ...extractTargetVariableNames(step.target),
+        ...extractVariableNames(step.urlIncludes),
+      ];
+    default:
+      return [];
+  }
+}
+
+function buildFlowVariables(steps: NormalizedStep[]): FlowVariableDefinition[] {
+  const names = new Set<string>();
+  const variables: FlowVariableDefinition[] = [];
+
+  for (const step of steps) {
+    for (const variableName of collectStepVariableNames(step)) {
+      if (!variableName || names.has(variableName)) {
+        continue;
+      }
+      names.add(variableName);
+      variables.push({
+        name: variableName,
+        type: "string",
+        required: true,
+      });
+    }
+  }
+
+  return variables;
 }
 
 function normalizeNavigate(event: RecordedEvent): NormalizedStep | null {
@@ -369,7 +449,7 @@ export function buildFlowFromEvents(
     projectId: meta.projectId,
     name: meta.name,
     description: meta.description,
-    variables: [],
+    variables: buildFlowVariables(steps),
     steps,
     meta: {
       createdAt: timestamp,

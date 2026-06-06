@@ -5,7 +5,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
-import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
+import { buildFlowFromEvents } from "@flowweave/recorder";
+import { FLOW_SCHEMA_VERSION, parseRecordedEvent } from "@flowweave/shared";
 import type { FlowDocument } from "@flowweave/flow-dsl";
 import { executeFlow } from "./playwright-runner.js";
 
@@ -340,6 +341,105 @@ describe("executeFlow", () => {
     );
 
     expect(result.status).toBe("success");
+  });
+
+  it("支持将录制事件构建出的 upload Flow 直接回放", async () => {
+    const uploadDir = mkdtempSync(join(tmpdir(), "fw-runtime-recorded-upload-"));
+    cleanupPaths.add(uploadDir);
+    const evidenceA = join(uploadDir, "evidence-a.txt");
+    const evidenceB = join(uploadDir, "evidence-b.txt");
+    writeFileSync(evidenceA, "alpha", "utf-8");
+    writeFileSync(evidenceB, "beta", "utf-8");
+
+    const flow = buildFlowFromEvents(
+      [
+        parseRecordedEvent({
+          id: "evt_nav",
+          type: "navigate",
+          timestamp: 0,
+          url: uploadFormFixtureUrl,
+          payload: {
+            url: uploadFormFixtureUrl,
+            waitUntil: "domcontentloaded",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_fill_operator",
+          type: "fill",
+          timestamp: 100,
+          url: uploadFormFixtureUrl,
+          payload: {
+            selector: "#operator-name",
+            role: "textbox",
+            name: "经办人",
+            value: "值班同学",
+            inputType: "text",
+            tagName: "input",
+            nameAttr: "operatorName",
+            labelText: "经办人",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_upload",
+          type: "fill",
+          timestamp: 200,
+          url: uploadFormFixtureUrl,
+          payload: {
+            selector: "#evidence-files",
+            testId: "evidence-files",
+            inputType: "file",
+            files: ["{{upload_evidencefiles_1}}", "{{upload_evidencefiles_2}}"],
+            fileNames: ["evidence-a.txt", "evidence-b.txt"],
+            tagName: "input",
+            nameAttr: "evidenceFiles",
+            labelText: "上传素材",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_submit",
+          type: "click",
+          timestamp: 300,
+          url: uploadFormFixtureUrl,
+          payload: {
+            selector: "#submit-upload",
+            role: "button",
+            name: "提交上传",
+          },
+        }),
+      ],
+      {
+        sessionId: "sess_upload",
+        projectId: "proj_test",
+        startedAt: "2026-06-06T23:10:00.000Z",
+        flowId: "flow_recorded_upload",
+        name: "录制上传流程",
+      },
+    );
+
+    expect(flow.variables).toEqual([
+      { name: "upload_evidencefiles_1", type: "string", required: true },
+      { name: "upload_evidencefiles_2", type: "string", required: true },
+    ]);
+
+    const uploadVariables = Object.fromEntries(
+      flow.variables.map((variable, index) => [
+        variable.name,
+        index === 0 ? evidenceA : evidenceB,
+      ]),
+    );
+
+    const result = await executeFlow(flow, {
+      headless: true,
+      variables: uploadVariables,
+    });
+
+    expect(result.status).toBe("success");
+    expect(result.steps.map((step) => step.type)).toEqual([
+      "navigate",
+      "fill",
+      "upload",
+      "click",
+    ]);
   });
 
   it("支持 press 与 wait attached / detached", async () => {

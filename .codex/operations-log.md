@@ -1662,3 +1662,146 @@
 - 本地快速验证：
   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm lint`
     - 结果：通过
+
+## 2026-06-06 录制事件到回放整链回归
+
+- 时间：2026-06-06 23:10:00 CST
+- 任务目标：补齐“RecordedEvent -> buildFlowFromEvents -> executeFlow”的自动回归，并修复录制导出 Flow 缺少 upload 变量声明的问题。
+- 工具与环境说明：
+  - 当前环境未提供 `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code`。
+  - 本轮使用 CodeGraph、仓库文档、本地命令与既有测试替代。
+  - 当前活跃目标：`继续推进 FlowWeave 真实页面稳定性，补齐录制事件到回放的整链回归验证并完成本地 Node 20 验收与留痕。`
+  - 统一开发与验收基线继续使用 `Node v20.19.6`：`PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH`
+- 上下文检索结果：
+  - 已分析相似实现：
+    - `apps/extension/entrypoints/content.ts`
+    - `packages/recorder/src/normalize.ts`
+    - `packages/runtime/src/playwright-runner.test.ts`
+    - `apps/studio/src/App.tsx`
+  - 已生成上下文摘要：
+    - `.codex/context-summary-recorded-flow-playback-regression.md`
+
+## 编码前检查 - 录制事件到回放整链回归
+
+时间：2026-06-06 23:10:00 CST
+
+□ 已查阅上下文摘要文件：`.codex/context-summary-recorded-flow-playback-regression.md`
+□ 将使用以下可复用组件：
+- `buildFlowFromEvents`：录制事件聚合为 Flow 的唯一入口
+- `parseRecordedEvent`：模拟扩展真实协议
+- `executeFlow`：验证导出 Flow 是否可执行
+- `apps/studio/src/App.tsx` 现有变量表单：验证变量声明的真实消费方
+□ 将遵循命名约定：延续 `upload_<token>_<index>` 占位符命名，不新增第二套变量协议
+□ 将遵循代码风格：先写红灯测试，再做最小实现，最后 Node 20 验收
+□ 确认不重复造轮子，证明：已检查 recorder、runtime 与 Studio 变量链路，仓库当前没有“自动从录制占位符声明 Flow 变量”的等价实现
+
+## 单 agent 串行执行说明 - 录制事件到回放整链回归
+
+- 时间：2026-06-06 23:10:00 CST
+- 本轮改动会集中在：
+  - `packages/recorder/src/normalize.ts`
+  - `packages/recorder/src/normalize.test.ts`
+  - `packages/runtime/src/playwright-runner.test.ts`
+- 不并行派发原因：
+  - 三处改动共享同一条协议边界：录制占位符命名、Flow 变量声明、runtime 回归断言。
+  - 若拆成多个子代理并发修改，极易在同一测试夹具、变量顺序和断言上产生冲突，集成成本高于收益。
+- 补偿措施：
+  - 采用 TDD，小步红绿回归；
+  - 先跑定向测试，再跑 Node 20 仓库级验证；
+  - 完成后补齐 `.codex/verification-report.md` 与提交记录。
+
+## 红灯验证 - 录制事件到回放整链回归
+
+- 时间：2026-06-06 23:16:00 CST
+- 定向红灯结果：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test -- normalize.test.ts`
+    - 结果：失败
+    - 失败点：`构建 Flow 时自动声明 upload 占位符变量`
+    - 失败信息：`expected [] to deeply equal [{ name: "upload_evidencefiles_1" }, { name: "upload_evidencefiles_2" }]`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+    - 结果：失败
+    - 失败点：`支持将录制事件构建出的 upload Flow 直接回放`
+    - 失败信息：同样卡在 `flow.variables` 仍为 `[]`
+- 红灯结论：
+  - 当前 recorder 已能把 file input 录成 `{{upload_*}}` 占位符，但 `buildFlowFromEvents()` 没有把这些占位符声明为 Flow 变量。
+  - 这会直接导致 Studio 没有变量输入项，也让“录制事件 -> 直接回放”链路缺少可注入的文件路径变量。
+
+## 实现完成 - 录制事件到回放整链回归
+
+- 时间：2026-06-06 23:21:00 CST
+- 实现范围：
+  - `packages/recorder/src/normalize.ts`
+    - 新增 `extractVariableNames()`、`extractTargetVariableNames()`、`collectStepVariableNames()`、`buildFlowVariables()`
+    - `buildFlowFromEvents()` 不再固定 `variables: []`，而是从可执行字段里的 `{{变量}}` 自动收集并声明为 `string` 类型必填变量
+  - `packages/recorder/src/normalize.test.ts`
+    - 新增“构建 Flow 时自动声明 upload 占位符变量”回归
+  - `packages/runtime/src/playwright-runner.test.ts`
+    - 新增“支持将录制事件构建出的 upload Flow 直接回放”整链回归
+    - 测试直接使用 `parseRecordedEvent()` + `buildFlowFromEvents()` 模拟扩展真实导出的 upload 流程，而不再手写理想 Flow
+- 实现策略说明：
+  - 只补 recorder 变量声明，不改 runtime 插值主逻辑
+  - 变量提取范围限定在步骤可执行字段，避免新增第二套变量协议
+
+## 绿灯验证 - 录制事件到回放整链回归
+
+- 时间：2026-06-06 23:29:00 CST
+- 定向验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test -- normalize.test.ts`
+    - 结果：通过，`19/19`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder build`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+    - 结果：通过，`10/10`
+    - 新增整链用例通过：
+      - `支持将录制事件构建出的 upload Flow 直接回放`
+      - 耗时约 `15.2s`
+- 仓库级验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm lint`
+    - 结果：通过，`12 successful, 12 total`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+    - 结果：通过
+    - 内含：
+      - `pnpm typecheck`
+      - `pnpm test`
+      - `pnpm build`
+      - `pnpm e2e:login`
+    - `e2e:login`
+      - 项目 ID：`308c6feb-b867-4bfd-b352-de057a6f977f`
+      - 执行 ID：`190da809-2955-4d49-9107-ab1e59933acf`
+      - `4` 个步骤全部 `success`
+
+## 调试插曲 - runtime 测试入口修正
+
+- 时间：2026-06-06 23:25:00 CST
+- 现象：
+  - 为了让 runtime 定向测试即时吃到 recorder 最新实现，曾临时把 `playwright-runner.test.ts` 改成跨包直引 `../../recorder/src/index.ts`
+  - 定向 Vitest 可通过，但仓库级 `pnpm smoke` 在 `runtime typecheck` 阶段报：
+    - `TS6059`：跨包源码不在 `runtime/src` 的 `rootDir`
+    - `TS5097`：`.ts` 扩展名导入未开启
+- 修正：
+  - 将 runtime 测试恢复为包边界导入 `@flowweave/recorder`
+  - 针对单包定向回归时，先执行 `pnpm --filter @flowweave/recorder build`
+  - 仓库级 `pnpm smoke` 则继续依赖 `turbo test` 的 `dependsOn: ["^build"]` 自动保证依赖包先构建
+- 结论：
+  - 同一阻塞条件未重复 3 次，已在本轮内消解，无需标记为阻塞
+
+## 补充留痕 - 远端 CI 双基线结果
+
+- 时间：2026-06-06 23:33:00 CST
+- 远端核验来源：
+  - GitHub Actions run：`27062401326`
+  - 页面：`https://github.com/linggougou/flowweave/actions/runs/27062401326`
+- 核验结果：
+  - workflow：`CI`
+  - 触发方式：`push`
+  - 触发时间：`2026-06-06 12:32`
+  - 提交：`e149b25`
+  - 分支：`codex/real-page-stability-program`
+  - 总状态：`Success`
+  - 总时长：`2m 18s`
+  - job：
+    - `verify (node 20)`：成功
+    - `verify (node 24)`：成功
+- 额外观察：
+  - GitHub 页面提示 `actions/checkout@v4`、`actions/setup-node@v4`、`pnpm/action-setup@v4` 仍带有“Node.js 20 actions are deprecated”警告
+  - 这不是本轮功能阻塞，但意味着后续应单独评估 GitHub Actions 运行时升级策略

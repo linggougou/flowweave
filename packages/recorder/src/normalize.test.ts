@@ -531,4 +531,47 @@ describe("buildFlowFromEvents", () => {
       url: "https://app.example.com/dashboard",
     });
   });
+
+  it("构建 Flow 时自动声明 upload 占位符变量", () => {
+    const flow = buildFlowFromEvents(
+      [
+        event({
+          id: "n1",
+          type: "navigate",
+          timestamp: 0,
+          url: "https://app.example.com/upload",
+        }),
+        parseRecordedEvent({
+          id: "u1",
+          type: "fill",
+          timestamp: 10,
+          url: "https://app.example.com/upload",
+          payload: {
+            selector: "#evidence-files",
+            testId: "evidence-files",
+            inputType: "file",
+            files: ["{{upload_evidencefiles_1}}", "{{upload_evidencefiles_2}}"],
+            fileNames: ["evidence-a.txt", "evidence-b.txt"],
+            tagName: "input",
+            nameAttr: "evidenceFiles",
+            labelText: "上传素材",
+          },
+        }),
+      ],
+      baseMeta,
+    );
+
+    expect(flow.variables).toEqual([
+      {
+        name: "upload_evidencefiles_1",
+        type: "string",
+        required: true,
+      },
+      {
+        name: "upload_evidencefiles_2",
+        type: "string",
+        required: true,
+      },
+    ]);
+  });
 });

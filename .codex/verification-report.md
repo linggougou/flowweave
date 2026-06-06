@@ -1262,3 +1262,101 @@
 - 风险评估评分：92
 - 综合评分：95
 - 建议：通过
+
+## 远端 CI 双基线结果回写
+
+时间：2026-06-06 23:33:00 CST
+
+### 验证范围
+
+- `codex/real-page-stability-program` 在远端 GitHub Actions 上是否已真实触发 CI。
+- Node 20 / Node 24 双矩阵是否均成功完成，而不是只验证本地等效命令。
+- 当前 workflow 是否还存在需要后续跟进的运行时警告。
+
+### 验证结果
+
+1. 远端 workflow 已真实执行并成功完成。
+   - run：`27062401326`
+   - 页面：`https://github.com/linggougou/flowweave/actions/runs/27062401326`
+   - workflow：`CI`
+   - 提交：`e149b25`
+   - 分支：`codex/real-page-stability-program`
+   - 触发方式：`push`
+   - 触发时间：`2026-06-06 12:32`
+   - 总状态：`Success`
+   - 总时长：`2m 18s`
+2. 双基线 job 都已完成。
+   - `verify (node 20)`：成功
+   - `verify (node 24)`：成功
+   - 页面同时显示 `2 jobs completed`，与当前 CI matrix 设计一致。
+3. 远端仍存在非阻塞警告。
+   - GitHub Actions 页面提示 `actions/checkout@v4`、`actions/setup-node@v4`、`pnpm/action-setup@v4` 仍运行在将被弃用的 Node.js 20 actions runtime 上。
+   - 这不会影响本轮结果真实性，但应作为下一轮 CI 维护项单独处理。
+
+### 综合结论
+
+- 代码质量评分：95
+- 测试覆盖评分：96
+- 规范遵循评分：97
+- 战略匹配评分：97
+- 风险评估评分：91
+- 综合评分：95
+- 建议：通过
+
+## 录制事件到回放整链回归验收
+
+时间：2026-06-06 23:29:00 CST
+
+### 验证范围
+
+- `buildFlowFromEvents()` 是否会自动把 upload 占位符声明为 `flow.variables`。
+- 由 `RecordedEvent[]` 构建出的真实 upload Flow 是否能直接被 runtime 回放成功。
+- Node 20 下的 `pnpm lint` 与 `pnpm smoke` 是否继续通过。
+
+### 验证结果
+
+1. 红灯已精确命中真实缺口。
+   - `pnpm --filter @flowweave/recorder test -- normalize.test.ts` 初次失败，原因是 `flow.variables` 仍为 `[]`。
+   - `pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts` 初次失败，同样卡在录制导出的 Flow 缺少 upload 变量声明。
+   - 说明当前问题不是 runtime 不支持 upload，而是 recorder 导出契约不完整。
+2. recorder 已补齐自动变量声明。
+   - `packages/recorder/src/normalize.ts` 现已从步骤可执行字段提取 `{{变量}}`，并自动生成 `string` 类型必填变量定义。
+   - `packages/recorder/src/normalize.test.ts` 新增“构建 Flow 时自动声明 upload 占位符变量”回归并通过。
+3. 整链回放验证通过。
+   - 新增 runtime 回归直接使用：
+     - `parseRecordedEvent()`
+     - `buildFlowFromEvents()`
+     - `executeFlow()`
+   - 覆盖场景：
+     - navigate 到 `upload-form.html`
+     - fill 经办人
+     - upload 两个录制占位文件
+     - click 提交
+   - `pnpm --filter @flowweave/recorder build` 后执行 `pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+     - 结果：通过，`10/10`
+     - 新增整链用例通过，耗时约 `15.2s`
+4. 仓库级 Node 20 验证通过。
+   - `pnpm lint`：通过，`12 successful, 12 total`
+   - `pnpm smoke`：通过
+   - `e2e:login`
+     - 项目 ID：`308c6feb-b867-4bfd-b352-de057a6f977f`
+     - 执行 ID：`190da809-2955-4d49-9107-ab1e59933acf`
+     - `4` 个步骤全部 `success`
+5. 中途测试入口漂移已消解。
+   - 曾尝试让 runtime 测试跨包直引 recorder 源码，导致 `runtime typecheck` 报 `TS6059 / TS5097`。
+   - 已恢复为包边界导入 `@flowweave/recorder`，并通过“定向先 build recorder + 仓库级 smoke”双重验证确认不再回归。
+
+### 残余风险
+
+- 当前变量占位符提取仍与 runtime 现有插值契约保持一致，只覆盖 `[A-Za-z0-9_]`。
+- 这足以覆盖录制端当前生成的 `upload_*` 占位符，但如果未来要让录制自动生成更宽字符集变量名，需要同步扩展 runtime 插值正则。
+
+### 综合结论
+
+- 代码质量评分：97
+- 测试覆盖评分：97
+- 规范遵循评分：97
+- 战略匹配评分：98
+- 风险评估评分：94
+- 综合评分：97
+- 建议：通过
