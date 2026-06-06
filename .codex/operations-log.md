@@ -2607,6 +2607,36 @@
   - 残余风险：
     - 当前新增用例更偏“整链可跑通”的闭环回归，最终业务语义断言仍偏弱。
 
+## 2026-06-06 Recorder Wait 推断回归修复
+
+- 时间：2026-06-06 23:48:20 CST
+- 触发来源：
+  - Recorder 审查 agent `Euclid / 019e9d94-bea1-7f22-ba33-fb23a6f23e83` 回报阻塞问题：
+    - `packages/recorder/src/normalize.ts` 对任意 URL 变化都插入 `wait urlIncludes`
+    - 在重建最新 `@flowweave/recorder` 导出后，`packages/runtime/src/playwright-runner.test.ts` 的 `spa-route` 用例从 `[navigate, click, click]` 回归为 `[navigate, click, wait, click]`
+- 主代理复现：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder build`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+    - 初次结果：失败，`spa-route` 回归与审查结论一致
+- 修复策略：
+  - 将 `urlIncludes wait` 与 `visible wait` 统一收窄到“明显异步间隔”门槛：
+    - 事件间隔必须达到 `500ms`
+  - 新增反例测试：
+    - 快速 SPA 路由切换时，不应插入 `wait urlIncludes`
+- 修复后 Node 20 复验：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test -- src/normalize.test.ts src/step-filter.test.ts`
+    - 结果：通过，`38/38`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder typecheck`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder build`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+    - 结果：通过，`16/16`
+- 主代理结论：
+  - 阻塞已解除。
+  - 后续所有涉及 workspace 包导出的整链回归，必须先构建对应包或直接跑仓库级 `build/smoke`，避免再次出现“源码已改、dist 仍旧”的假绿。
+
 ## 2026-06-06 提交审查 - Recorder 轨 ed7a78dd7087eef8d80c72e1c35041eec4a19c3b
 
 - 时间：2026-06-06 23:46:00 CST

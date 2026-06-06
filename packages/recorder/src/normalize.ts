@@ -462,7 +462,12 @@ function inferWaitStep(
     return null;
   }
 
-  if (nextEvent.timestamp <= currentEvent.timestamp) {
+  const eventGap = nextEvent.timestamp - currentEvent.timestamp;
+  if (eventGap <= 0) {
+    return null;
+  }
+
+  if (eventGap < INFERRED_VISIBLE_WAIT_MIN_GAP_MS) {
     return null;
   }
 
@@ -485,10 +490,6 @@ function inferWaitStep(
   }
 
   if (targetSignature(targetOf(current)) === targetSignature(nextTarget)) {
-    return null;
-  }
-
-  if (nextEvent.timestamp - currentEvent.timestamp < INFERRED_VISIBLE_WAIT_MIN_GAP_MS) {
     return null;
   }
 

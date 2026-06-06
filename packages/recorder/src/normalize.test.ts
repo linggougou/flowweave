@@ -826,6 +826,43 @@ describe("buildFlowFromEvents", () => {
     });
   });
 
+  it("构建 Flow 时不会为快速 SPA 路由切换插入 urlIncludes wait", () => {
+    const flow = buildFlowFromEvents(
+      [
+        event({
+          id: "n1",
+          type: "navigate",
+          timestamp: 0,
+          url: "https://app.example.com/dashboard",
+        }),
+        event({
+          id: "c1",
+          type: "click",
+          timestamp: 100,
+          url: "https://app.example.com/dashboard",
+          payload: {
+            selector: "#nav-settings",
+            role: "button",
+            name: "设置",
+          },
+        }),
+        event({
+          id: "c2",
+          type: "click",
+          timestamp: 180,
+          url: "https://app.example.com/dashboard#settings",
+          payload: {
+            selector: "#route-card",
+            text: "已切换到设置",
+          },
+        }),
+      ],
+      baseMeta,
+    );
+
+    expect(flow.steps.map((step) => step.type)).toEqual(["navigate", "click", "click"]);
+  });
+
   it("构建 Flow 时在同页异步切换到新目标前插入 visible wait", () => {
     const flow = buildFlowFromEvents(
       [

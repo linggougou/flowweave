@@ -78,6 +78,64 @@
 - 综合评分：96
 - 建议：通过
 
+## 提交审查：Recorder Async Stabilization `ed7a78dd7087eef8d80c72e1c35041eec4a19c3b`
+
+时间：2026-06-06 23:46:00 CST
+
+### 审查范围
+
+- 目标提交是否符合 `Recorder Async Stabilization` 规划边界
+- `keypress` flush 与 wait 推断是否引入行为回归
+- 测试是否足够覆盖
+
+### 审查结论
+
+1. **存在阻塞问题，不建议按当前状态合并。**
+   - `packages/recorder/src/normalize.ts:469-479` 在“URL 发生变化”时无条件插入 `wait urlIncludes`，没有使用“明显异步间隔”门槛。
+   - 这超出了本轮计划里“有限边界、基于相邻事件关系、明显异步间隔再推断”的收敛目标。
+2. **该问题已在本地 recorded replay 验证中被实证触发。**
+   - 在提交快照 `ed7a78d` 上运行 `packages/runtime/src/playwright-runner.test.ts` 后，`spa-route` 现有 recorded replay 用例失败。
+   - 失败表现不是执行报错，而是 recorder 导出的步骤序列从 `navigate -> click -> click` 变为 `navigate -> click -> wait -> click`，破坏了既有测试契约。
+3. **`keypress` flush 逻辑本身没有发现同等级阻塞回归。**
+   - `apps/extension/entrypoints/content.ts` 中提交型按键前 flush、`change/blur` 优先消费 pending fill 的顺序，与新增单测一致。
+   - 当前主要风险来自 wait 推断过宽，而非 flush 顺序。
+4. **测试覆盖不足以支撑“无回归”结论。**
+   - 提交新增测试只覆盖 extension / recorder 层：
+     - `apps/extension/lib/content-contract.test.ts`
+     - `packages/recorder/src/normalize.test.ts`
+   - 它们没有覆盖已有 runtime recorded replay 契约，因此没能提前发现 `spa-route` 回归。
+
+### 关键证据
+
+- 规划边界：
+  - `docs/superpowers/specs/2026-06-06-real-page-stability-wave5-design.md:86-101`
+  - `docs/superpowers/plans/2026-06-06-real-page-stability-wave5-plan.md:20-25`
+- 风险实现：
+  - `packages/recorder/src/normalize.ts:455-500`
+- 回归现象：
+  - `packages/runtime/src/playwright-runner.test.ts:521-571`
+  - 本地验证结果：`12/13` 通过，`spa-route` 用例失败，实际步骤多出 `wait`
+
+### 本地验证结果
+
+- `pnpm --dir /tmp/flowweave-ed7a78d-eXfijC --filter @flowweave/app-extension test -- lib/content-contract.test.ts`
+  - 通过，`4/4`
+- `pnpm --dir /tmp/flowweave-ed7a78d-eXfijC --filter @flowweave/recorder test -- src/normalize.test.ts src/step-filter.test.ts`
+  - 通过，`37/37`
+- `pnpm --dir /tmp/flowweave-ed7a78d-eXfijC --filter @flowweave/runtime test -- playwright-runner.test.ts`
+  - 失败，`12/13`
+  - 失败用例：`支持将录制事件构建出的 spa-route Flow 直接回放`
+
+### 评分
+
+- 代码质量评分：82
+- 测试覆盖评分：70
+- 规范遵循评分：78
+- 战略匹配评分：76
+- 风险评估评分：68
+- 综合评分：75
+- 建议：退回
+
 ## 2026-06-06 执行时 Flow 快照补修验收
 
 ### 验证范围
@@ -371,6 +429,47 @@
 - 战略匹配评分：96
 - 风险评估评分：91
 - 综合评分：94
+- 建议：通过
+
+## 2026-06-06 Recorder Wait 推断回归修复验收
+
+### 验证范围
+
+- 验证 Recorder 新增 `wait urlIncludes` 推断是否被收窄到“明显异步间隔”边界。
+- 验证 `spa-route` recorded replay 回归在重建最新 `@flowweave/recorder` 导出后已解除。
+- 验证本次修复没有破坏 Recorder 轨与 Runtime 轨已通过的定向回归。
+
+### 验证结果
+
+1. 已成功复现审查指出的真实回归。
+   - 在先执行 `pnpm --filter @flowweave/recorder build` 后重跑 `pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`，`spa-route` 用例确实失败。
+   - 说明此前 Runtime 假绿的根因是 `@flowweave/recorder` 的旧 `dist` 导出未被刷新。
+
+2. 修复后 Recorder 自测通过。
+   - `pnpm --filter @flowweave/recorder test -- src/normalize.test.ts src/step-filter.test.ts`：通过，`38/38`
+   - `pnpm --filter @flowweave/recorder typecheck`：通过
+   - 新增反例测试已锁住“快速 SPA 路由切换不应插入 `wait urlIncludes`”。
+
+3. 修复后 Runtime 整链回归恢复通过。
+   - `pnpm --filter @flowweave/recorder build`：通过
+   - `pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`：通过，`16/16`
+   - `spa-route` 用例重新回到预期步骤序列。
+
+### Findings
+
+1. 无阻塞问题。
+   - 当前修复已经消除 `spa-route` 回归，并补上明确反例测试。
+2. 流程性风险已确认。
+   - 对使用 workspace 包 `exports` 的整链测试，仅跑源码侧测试不足以证明无回归；后续必须在最新构建产物上复验。
+
+### 综合结论
+
+- 代码质量评分：95
+- 测试覆盖评分：94
+- 规范遵循评分：97
+- 战略匹配评分：96
+- 风险评估评分：94
+- 综合评分：95
 - 建议：通过
 - 建议：通过
 
