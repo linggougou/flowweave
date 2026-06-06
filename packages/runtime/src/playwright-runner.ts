@@ -251,58 +251,7 @@ async function collectCandidateSnapshot(
   const visible = await candidate.isVisible().catch(() => false);
   const details = await candidate
     .evaluate(
-      (element, scopeKind) => {
-        const normalize = (value: string | null | undefined): string | undefined => {
-          if (!value) {
-            return undefined;
-          }
-
-          const normalized = value.replace(/\s+/g, " ").trim();
-          return normalized.length > 0 ? normalized : undefined;
-        };
-
-        const shorten = (value: string | null | undefined, maxLength = 120): string | undefined => {
-          const normalized = normalize(value);
-          if (!normalized) {
-            return undefined;
-          }
-
-          return normalized.length <= maxLength
-            ? normalized
-            : `${normalized.slice(0, maxLength - 1)}…`;
-        };
-
-        const readLabelText = (targetElement: Element): string | undefined => {
-          const ariaLabel = targetElement.getAttribute("aria-label");
-          if (ariaLabel) {
-            return shorten(ariaLabel);
-          }
-
-          const ariaLabelledBy = targetElement.getAttribute("aria-labelledby");
-          if (ariaLabelledBy) {
-            const text = ariaLabelledBy
-              .split(/\s+/)
-              .map((id) => document.getElementById(id)?.textContent ?? "")
-              .join(" ");
-            const normalizedText = shorten(text);
-            if (normalizedText) {
-              return normalizedText;
-            }
-          }
-
-          if ("labels" in targetElement) {
-            const labels = Array.from((targetElement as HTMLInputElement).labels ?? [])
-              .map((label) => label.textContent ?? "")
-              .join(" ");
-            const normalizedText = shorten(labels);
-            if (normalizedText) {
-              return normalizedText;
-            }
-          }
-
-          return shorten(targetElement.closest("label")?.textContent);
-        };
-
+      function (element, scopeKind) {
         const scopeSelectors: Record<string, string> = {
           row: "tr, [role='row']",
           listitem: "li, [role='listitem']",
@@ -311,6 +260,85 @@ async function collectCandidateSnapshot(
           section: "section, article, [role='region']",
           card: "[data-card], [class*='card'], article, [role='group']",
         };
+        let labelText = (function (text, limit) {
+          if (!text) {
+            return undefined;
+          }
+
+          const normalized = text.replace(/\s+/g, " ").trim();
+          if (!normalized) {
+            return undefined;
+          }
+
+          return normalized.length <= limit
+            ? normalized
+            : `${normalized.slice(0, limit - 1)}…`;
+        })(element.getAttribute("aria-label"), 120);
+
+        if (!labelText) {
+          const ariaLabelledBy = element.getAttribute("aria-labelledby");
+          if (ariaLabelledBy) {
+            labelText = (function (text, limit) {
+              if (!text) {
+                return undefined;
+              }
+
+              const normalized = text.replace(/\s+/g, " ").trim();
+              if (!normalized) {
+                return undefined;
+              }
+
+              return normalized.length <= limit
+                ? normalized
+                : `${normalized.slice(0, limit - 1)}…`;
+            })(
+              ariaLabelledBy
+                .split(/\s+/)
+                .map((id) => document.getElementById(id)?.textContent ?? "")
+                .join(" "),
+              120,
+            );
+          }
+        }
+
+        if (!labelText && "labels" in element) {
+          labelText = (function (text, limit) {
+            if (!text) {
+              return undefined;
+            }
+
+            const normalized = text.replace(/\s+/g, " ").trim();
+            if (!normalized) {
+              return undefined;
+            }
+
+            return normalized.length <= limit
+              ? normalized
+              : `${normalized.slice(0, limit - 1)}…`;
+          })(
+            Array.from((element as HTMLInputElement).labels ?? [])
+              .map((label) => label.textContent ?? "")
+              .join(" "),
+            120,
+          );
+        }
+
+        if (!labelText) {
+          labelText = (function (text, limit) {
+            if (!text) {
+              return undefined;
+            }
+
+            const normalized = text.replace(/\s+/g, " ").trim();
+            if (!normalized) {
+              return undefined;
+            }
+
+            return normalized.length <= limit
+              ? normalized
+              : `${normalized.slice(0, limit - 1)}…`;
+          })(element.closest("label")?.textContent, 120);
+        }
 
         const scopeKinds = scopeKind
           ? [scopeKind]
@@ -321,7 +349,20 @@ async function collectCandidateSnapshot(
             continue;
           }
           const container = element.closest(selector);
-          const scopeText = shorten(container?.textContent, 160);
+          const scopeText = (function (text, limit) {
+            if (!text) {
+              return undefined;
+            }
+
+            const normalized = text.replace(/\s+/g, " ").trim();
+            if (!normalized) {
+              return undefined;
+            }
+
+            return normalized.length <= limit
+              ? normalized
+              : `${normalized.slice(0, limit - 1)}…`;
+          })(container?.textContent, 160);
           if (scopeText) {
             return {
               tagName: element.tagName.toLowerCase(),
@@ -329,10 +370,49 @@ async function collectCandidateSnapshot(
                 "type" in element && typeof (element as HTMLInputElement).type === "string"
                   ? (element as HTMLInputElement).type
                   : undefined,
-              nameAttr: shorten(element.getAttribute("name")),
-              placeholder: shorten(element.getAttribute("placeholder")),
-              labelText: readLabelText(element),
-              textSample: shorten(element.textContent, 120),
+              nameAttr: (function (text, limit) {
+                if (!text) {
+                  return undefined;
+                }
+
+                const normalized = text.replace(/\s+/g, " ").trim();
+                if (!normalized) {
+                  return undefined;
+                }
+
+                return normalized.length <= limit
+                  ? normalized
+                  : `${normalized.slice(0, limit - 1)}…`;
+              })(element.getAttribute("name"), 120),
+              placeholder: (function (text, limit) {
+                if (!text) {
+                  return undefined;
+                }
+
+                const normalized = text.replace(/\s+/g, " ").trim();
+                if (!normalized) {
+                  return undefined;
+                }
+
+                return normalized.length <= limit
+                  ? normalized
+                  : `${normalized.slice(0, limit - 1)}…`;
+              })(element.getAttribute("placeholder"), 120),
+              labelText,
+              textSample: (function (text, limit) {
+                if (!text) {
+                  return undefined;
+                }
+
+                const normalized = text.replace(/\s+/g, " ").trim();
+                if (!normalized) {
+                  return undefined;
+                }
+
+                return normalized.length <= limit
+                  ? normalized
+                  : `${normalized.slice(0, limit - 1)}…`;
+              })(element.textContent, 120),
               scopeKind: candidateScopeKind,
               scopeText,
             };
@@ -345,10 +425,49 @@ async function collectCandidateSnapshot(
             "type" in element && typeof (element as HTMLInputElement).type === "string"
               ? (element as HTMLInputElement).type
               : undefined,
-          nameAttr: shorten(element.getAttribute("name")),
-          placeholder: shorten(element.getAttribute("placeholder")),
-          labelText: readLabelText(element),
-          textSample: shorten(element.textContent, 120),
+          nameAttr: (function (text, limit) {
+            if (!text) {
+              return undefined;
+            }
+
+            const normalized = text.replace(/\s+/g, " ").trim();
+            if (!normalized) {
+              return undefined;
+            }
+
+            return normalized.length <= limit
+              ? normalized
+              : `${normalized.slice(0, limit - 1)}…`;
+          })(element.getAttribute("name"), 120),
+          placeholder: (function (text, limit) {
+            if (!text) {
+              return undefined;
+            }
+
+            const normalized = text.replace(/\s+/g, " ").trim();
+            if (!normalized) {
+              return undefined;
+            }
+
+            return normalized.length <= limit
+              ? normalized
+              : `${normalized.slice(0, limit - 1)}…`;
+          })(element.getAttribute("placeholder"), 120),
+          labelText,
+          textSample: (function (text, limit) {
+            if (!text) {
+              return undefined;
+            }
+
+            const normalized = text.replace(/\s+/g, " ").trim();
+            if (!normalized) {
+              return undefined;
+            }
+
+            return normalized.length <= limit
+              ? normalized
+              : `${normalized.slice(0, limit - 1)}…`;
+          })(element.textContent, 120),
         };
       },
       preferredScopeKind,

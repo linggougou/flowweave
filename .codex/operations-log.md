@@ -3306,3 +3306,54 @@
   - `apps/studio/src/shared/studio-api-types.ts` 本轨未改动。
 - 提交哈希：
   - 功能提交哈希：`aa6b08a70e641ff8c05f71755785e1cd52f2fcb8`
+
+## 2026-06-07 Benchmarks 收口续作
+
+- 时间：2026-06-07 01:38:53 CST
+- 本轮目标：
+  - 继续完成 `codex/target-benchmarks-p7` 合并收口。
+  - 修复 `packages/runtime/src/playwright-runner.ts` 在 `tsx -> source import -> locator.evaluate` 链路下的 `__name` 注入问题。
+  - 在 Node 20.19.6 下重新完成 runtime 定向验证与 `pnpm e2e:real-pages` 验收。
+- 当前状态确认：
+  - 协调分支：`codex/real-page-stability-program`
+  - Git 状态：`All conflicts fixed but you are still merging`
+  - 当前已暂存 Benchmarks 轨文件：
+    - `docs/guides/fixture-matrix.md`
+    - `examples/fixtures/repeated-row-actions.html`
+    - `examples/real-page-smoke.ts`
+    - `packages/runtime/src/real-page-matrix.test.ts`
+    - `packages/runtime/src/playwright-runner.ts`
+  - `packages/runtime/src/playwright-runner.ts` 仍有未暂存的续修内容，说明 Benchmarks 合并尚不能直接提交。
+- 工具与替代说明：
+  - 当前环境仍未提供 `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code`。
+  - 本轮继续使用本地命令、CodeGraph、既有测试与 `apply_patch` 替代，并在本日志显式留痕。
+- 初步根因复核：
+  - 历史失败命令：`PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+  - 唯一失败 case：`repeated-row-actions`
+  - 已知根因不是打分阈值，而是 `locator.evaluate()` page-side callback 在 `tsx` 执行源码时被注入 `__name` helper，浏览器上下文缺失该符号后抛出 `ReferenceError: __name is not defined`。
+  - 本轮先验证 `collectCandidateSnapshot()` 的匿名化改写是否已消除 helper 注入，再决定是否继续精简 page-side 逻辑。
+- 修复实施：
+  - 文件：`packages/runtime/src/playwright-runner.ts`
+  - 位置：`collectCandidateSnapshot()` 的 `locator.evaluate()` page-side callback
+  - 处理方式：
+    - 删除会被 `tsx/esbuild` 命名注入的局部 helper 绑定（如 `normalize`、`shorten`、`readLabelText`）。
+    - 改为匿名 IIFE 直接在 page-side 作用域内完成文本归一化、截断、`labelText` 解析与 `scopeText` 计算。
+    - 保持候选快照结构、打分逻辑与 `scopeKind` 优先策略不变，只修复浏览器上下文可执行性。
+- Node 20 验证结果：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime typecheck`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts real-page-matrix.test.ts`
+    - 结果：通过，`2` 个测试文件 `23/23`
+    - 关键证据：
+      - `多命中按钮时会结合 scopeText 与 scopeKind 命中正确行`
+      - `真实页面 fixture 矩阵全部成功`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+    - 结果：通过
+    - 输出摘要：
+      - 档位：`p7`
+      - 基准总数：`19`
+      - 成功 / 失败：`19 / 0`
+      - `repeated-row-actions`：成功，`3` 步，`706ms`
+- 结论：
+  - `tsx -> source import -> locator.evaluate` 真实入口已恢复，无需再保留临时调试输出。
+  - Benchmarks P7 在协调分支最新 runtime 修复上完成最终验收，可进入 merge 提交与工作区清理阶段。

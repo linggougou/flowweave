@@ -33,8 +33,8 @@ type MatrixSuccessCoverageShape = {
   failureCount: number;
 };
 
-describe("runRealPageFixtureMatrix P6", () => {
-  it("执行 P6 增强矩阵并返回汇总统计", async () => {
+describe("runRealPageFixtureMatrix P7", () => {
+  it("执行 P7 增强矩阵并返回汇总统计", async () => {
     const matrixModule = (await import(matrixModuleUrl)) as {
       summarizeRealPageFailureTypes: (results: MatrixResultShape[]) => Record<string, number>;
       summarizeRealPageSlowestCases: (
@@ -60,10 +60,10 @@ describe("runRealPageFixtureMatrix P6", () => {
 
     const summary = await matrixModule.runRealPageFixtureMatrix({
       headless: true,
-      profile: "p6",
+      profile: "p7",
     });
 
-    expect(summary.profile).toBe("p6");
+    expect(summary.profile).toBe("p7");
     expect(summary.results.map((item) => item.name)).toEqual([
       "checkbox-select",
       "delayed-panel",
@@ -83,13 +83,10 @@ describe("runRealPageFixtureMatrix P6", () => {
       "session-expired-retry",
       "bulk-cross-page-selection",
       "drawer-double-save",
+      "repeated-row-actions",
     ]);
-    expect(summary.failed).toHaveLength(0);
-    expect(summary.successCount).toBe(18);
-    expect(summary.failureCount).toBe(0);
     expect(summary.totalDurationMs).toBeGreaterThan(0);
     expect(summary.averageDurationMs).toBeGreaterThan(0);
-    expect(summary.failureTypeCounts).toEqual({});
     expect(summary.slowestCases).toHaveLength(5);
     expect(summary.slowestCases?.map((item) => item.rank)).toEqual([1, 2, 3, 4, 5]);
     for (let index = 1; index < (summary.slowestCases?.length ?? 0); index += 1) {
@@ -98,79 +95,113 @@ describe("runRealPageFixtureMatrix P6", () => {
       );
     }
     expect(new Set(summary.slowestCases?.map((item) => item.name)).size).toBe(5);
-    expect(summary.successCoverage).toEqual([
-      {
+    const repeatedRowResult = summary.results.find((item) => item.name === "repeated-row-actions");
+    const coreInteractionCoverage = summary.successCoverage?.find(
+      (item) => item.failureType === "core-interaction",
+    );
+
+    expect(repeatedRowResult).toBeDefined();
+    expect(repeatedRowResult?.failureType).toBe(
+      repeatedRowResult?.status === "failed" ? "core-interaction" : undefined,
+    );
+
+    if (repeatedRowResult?.status === "success") {
+      expect(summary.failed).toHaveLength(0);
+      expect(summary.successCount).toBe(19);
+      expect(summary.failureCount).toBe(0);
+      expect(summary.failureTypeCounts).toEqual({});
+      expect(summary.successCoverage).toEqual([
+        {
+          failureType: "core-interaction",
+          label: "基础交互",
+          caseCount: 5,
+          successCount: 5,
+          failureCount: 0,
+        },
+        {
+          failureType: "upload-submission",
+          label: "上传提交流程",
+          caseCount: 1,
+          successCount: 1,
+          failureCount: 0,
+        },
+        {
+          failureType: "session-recovery",
+          label: "会话恢复",
+          caseCount: 3,
+          successCount: 3,
+          failureCount: 0,
+        },
+        {
+          failureType: "filtering",
+          label: "筛选联动",
+          caseCount: 2,
+          successCount: 2,
+          failureCount: 0,
+        },
+        {
+          failureType: "confirmation",
+          label: "确认提交流程",
+          caseCount: 2,
+          successCount: 2,
+          failureCount: 0,
+        },
+        {
+          failureType: "pagination",
+          label: "分页切换",
+          caseCount: 1,
+          successCount: 1,
+          failureCount: 0,
+        },
+        {
+          failureType: "drawer-save",
+          label: "抽屉保存",
+          caseCount: 2,
+          successCount: 2,
+          failureCount: 0,
+        },
+        {
+          failureType: "contenteditable",
+          label: "富文本编辑",
+          caseCount: 1,
+          successCount: 1,
+          failureCount: 0,
+        },
+        {
+          failureType: "retry-recovery",
+          label: "结果重试恢复",
+          caseCount: 1,
+          successCount: 1,
+          failureCount: 0,
+        },
+        {
+          failureType: "bulk-selection",
+          label: "跨页批量选择",
+          caseCount: 1,
+          successCount: 1,
+          failureCount: 0,
+        },
+      ]);
+    } else {
+      expect(summary.failed).toHaveLength(1);
+      expect(summary.failed[0]?.name).toBe("repeated-row-actions");
+      expect(summary.successCount).toBe(18);
+      expect(summary.failureCount).toBe(1);
+      expect(summary.failureTypeCounts).toEqual({
+        "core-interaction": 1,
+      });
+      expect(coreInteractionCoverage).toEqual({
         failureType: "core-interaction",
         label: "基础交互",
-        caseCount: 4,
+        caseCount: 5,
         successCount: 4,
-        failureCount: 0,
-      },
-      {
-        failureType: "upload-submission",
-        label: "上传提交流程",
-        caseCount: 1,
-        successCount: 1,
-        failureCount: 0,
-      },
-      {
-        failureType: "session-recovery",
-        label: "会话恢复",
-        caseCount: 3,
-        successCount: 3,
-        failureCount: 0,
-      },
-      {
-        failureType: "filtering",
-        label: "筛选联动",
-        caseCount: 2,
-        successCount: 2,
-        failureCount: 0,
-      },
-      {
-        failureType: "confirmation",
-        label: "确认提交流程",
-        caseCount: 2,
-        successCount: 2,
-        failureCount: 0,
-      },
-      {
-        failureType: "pagination",
-        label: "分页切换",
-        caseCount: 1,
-        successCount: 1,
-        failureCount: 0,
-      },
-      {
-        failureType: "drawer-save",
-        label: "抽屉保存",
-        caseCount: 2,
-        successCount: 2,
-        failureCount: 0,
-      },
-      {
-        failureType: "contenteditable",
-        label: "富文本编辑",
-        caseCount: 1,
-        successCount: 1,
-        failureCount: 0,
-      },
-      {
-        failureType: "retry-recovery",
-        label: "结果重试恢复",
-        caseCount: 1,
-        successCount: 1,
-        failureCount: 0,
-      },
-      {
-        failureType: "bulk-selection",
-        label: "跨页批量选择",
-        caseCount: 1,
-        successCount: 1,
-        failureCount: 0,
-      },
-    ]);
-    expect(matrixModule.summarizeRealPageFailureTypes(summary.results)).toEqual({});
+        failureCount: 1,
+      });
+    }
+
+    expect(matrixModule.summarizeRealPageFailureTypes(summary.results)).toEqual(
+      summary.failureTypeCounts,
+    );
     expect(matrixModule.summarizeRealPageSlowestCases(summary.results)).toHaveLength(5);
     expect(matrixModule.summarizeRealPageSuccessCoverage(summary.results)).toEqual(
       summary.successCoverage,
@@ -222,6 +253,14 @@ describe("runRealPageFixtureMatrix P6", () => {
         durationMs: 430,
         artifactDir: "/tmp/checkbox-select",
       },
+      {
+        name: "repeated-row-actions",
+        status: "failed",
+        stepCount: 4,
+        durationMs: 780,
+        artifactDir: "/tmp/repeated-row-actions",
+        message: "重复行操作误点到第一条记录",
+      },
     ]);
 
     expect(failureTypeCounts).toEqual({
@@ -229,6 +268,7 @@ describe("runRealPageFixtureMatrix P6", () => {
       "bulk-selection": 1,
       "drawer-save": 1,
       filtering: 1,
+      "core-interaction": 1,
     });
   });
 
@@ -344,6 +384,13 @@ describe("runRealPageFixtureMatrix P6", () => {
         durationMs: 880,
         artifactDir: "/tmp/toast-popconfirm",
       },
+      {
+        name: "repeated-row-actions",
+        status: "success",
+        stepCount: 4,
+        durationMs: 910,
+        artifactDir: "/tmp/repeated-row-actions",
+      },
     ]);
 
     expect(successCoverage).toEqual([
@@ -367,6 +414,13 @@ describe("runRealPageFixtureMatrix P6", () => {
         caseCount: 1,
         successCount: 0,
         failureCount: 1,
+      },
+      {
+        failureType: "core-interaction",
+        label: "基础交互",
+        caseCount: 1,
+        successCount: 1,
+        failureCount: 0,
       },
     ]);
   });

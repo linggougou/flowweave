@@ -2423,3 +2423,63 @@
 - 风险评估评分：95
 - 综合评分：97
 - 建议：通过
+
+## 2026-06-07 Benchmarks P7 最终验收
+
+### 验证范围
+
+- `packages/runtime/src/playwright-runner.ts`
+- `packages/runtime/src/real-page-matrix.test.ts`
+- `examples/real-page-smoke.ts`
+- `examples/fixtures/repeated-row-actions.html`
+- `docs/guides/fixture-matrix.md`
+- 目标：
+  - Benchmarks P7 新增的重复行同文案按钮场景应稳定并入真实页面矩阵
+  - `tsx` 真实入口下的 `locator.evaluate()` 不再触发 `__name is not defined`
+  - Node 20.19.6 下 runtime 定向测试与 `pnpm e2e:real-pages` 全部通过
+
+### 验证结果
+
+1. 根因定位与修复闭环成立。
+   - 历史失败只出现在 `tsx examples/run-real-page-smoke.ts` 链路，唯一失败 case 为 `repeated-row-actions`。
+   - 根因已确认：`collectCandidateSnapshot()` 的 page-side callback 内局部命名 helper 被 `tsx/esbuild` 注入 `__name`，浏览器上下文没有该 helper，导致候选快照采集失败并误报“最高分 0”。
+   - 当前修复改为匿名 IIFE，保留原有候选打分协议，不改动录制提示或矩阵契约。
+2. Node 20 定向验证通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime typecheck`
+     - 结果：通过
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts real-page-matrix.test.ts`
+     - 结果：通过，`2` 个测试文件 `23/23`
+   - 关键回归：
+     - `多命中按钮时会结合 scopeText 与 scopeKind 命中正确行`
+     - `真实页面 fixture 矩阵全部成功`
+3. 真实入口验收通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+   - 结果：通过
+   - 关键输出：
+     - 档位：`p7`
+     - 基准数量：`19`
+     - 成功 / 失败：`19 / 0`
+     - `repeated-row-actions`：成功，`3` 步，`706ms`
+4. Benchmarks 轨新增资产与主线目标一致。
+   - `examples/fixtures/repeated-row-actions.html` 为真实重复按钮歧义提供固定基准。
+   - `examples/real-page-smoke.ts` 将 `p7` 纳入真实矩阵，并兼容旧 `p6` 入口映射到最新矩阵。
+   - `packages/runtime/src/real-page-matrix.test.ts` 同时覆盖全绿与失败统计摘要口径。
+
+### Findings
+
+1. 未发现阻塞级问题。
+   - Benchmarks P7 已能在真实 `tsx` 入口稳定运行，不再依赖仅测试环境下的偶然通过。
+2. 残余风险：`collectCandidateSnapshot()` 的 page-side 逻辑为了规避 helper 注入而更偏展开式写法。
+   - 当前可执行性优先，后续若要继续整理，可考虑迁移为不会触发注入的字符串内联脚本或更稳定的 page-side 序列化策略。
+3. 残余风险：真实矩阵规模已升到 `19` 个 case。
+   - 当前 `p7` 总耗时约 `26.7s`，后续继续扩容时应考虑新的分档策略，避免默认回归时间继续膨胀。
+
+### 综合结论
+
+- 代码质量评分：96
+- 测试覆盖评分：98
+- 规范遵循评分：99
+- 战略匹配评分：98
+- 风险评估评分：95
+- 综合评分：97
+- 建议：通过
