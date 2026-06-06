@@ -1133,6 +1133,80 @@ async function waitForNavigationPressSettled(
   });
 }
 
+async function verifyLocatorFillValue(locator: Locator, expectedValue: string): Promise<boolean> {
+  return locator
+    .evaluate((element) => {
+      if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+        return element.value;
+      }
+
+      if (element instanceof HTMLElement && element.isContentEditable) {
+        return element.textContent?.replace(/\s+/g, " ").trim() ?? "";
+      }
+
+      if ("value" in element && typeof element.value === "string") {
+        return element.value;
+      }
+
+      return null;
+    })
+    .then((value) => value === expectedValue)
+    .catch(() => false);
+}
+
+async function verifyLocatorSelectedValues(
+  locator: Locator,
+  expectedValues: string[],
+): Promise<boolean> {
+  const actualValues = await locator
+    .evaluate((element) => {
+      if (!(element instanceof HTMLSelectElement)) {
+        return [];
+      }
+
+      return Array.from(element.selectedOptions).map((option) => option.value);
+    })
+    .catch(() => []);
+
+  return (
+    actualValues.length === expectedValues.length &&
+    actualValues.every((value, index) => value === expectedValues[index])
+  );
+}
+
+async function performRecoveredLocatorAction(
+  page: Page,
+  target: Target,
+  timeoutMs: number,
+  options: {
+    desiredState?: TargetWaitState;
+    action: (locator: Locator, attemptIndex: number) => Promise<void>;
+    verify: (locator: Locator) => Promise<boolean>;
+    failureMessage: string;
+    failureCause: string;
+  },
+): Promise<Locator> {
+  const desiredState = options.desiredState ?? "visible";
+  let locator = await resolveTarget(page, target, timeoutMs, desiredState);
+
+  for (let attemptIndex = 0; attemptIndex < 2; attemptIndex += 1) {
+    await options.action(locator, attemptIndex);
+    if (await options.verify(locator)) {
+      return locator;
+    }
+
+    if (attemptIndex === 1) {
+      break;
+    }
+
+    locator = await resolveTarget(page, target, timeoutMs, desiredState);
+  }
+
+  throw new FlowWeaveError("RUNTIME_STEP_FAILED", options.failureMessage, {
+    cause: options.failureCause,
+  });
+}
+
 async function resolveTarget(
   page: Page,
   target: Target,
@@ -1388,30 +1462,49 @@ async function runStep(
         break;
       }
       case "fill": {
-        const locator = await resolveTarget(page, resolvedStep.target, timeoutMs);
-        const suggestBaseline = await captureSuggestTargetSnapshot(locator);
-        if (resolvedStep.clear !== false) {
-          await locator.clear();
-        }
-        await locator.fill(resolvedStep.value);
-        await waitForBrowserFrame(page);
-        await waitForSuggestTargetReady(page, locator, {
-          baseline: suggestBaseline,
-          expectedValue: resolvedStep.value,
-          timeoutMs: Math.min(timeoutMs, SUGGEST_READY_TIMEOUT_MS),
+        await performRecoveredLocatorAction(page, resolvedStep.target, timeoutMs, {
+          action: async (locator) => {
+            const suggestBaseline = await captureSuggestTargetSnapshot(locator);
+            if (resolvedStep.clear !== false) {
+              await locator.clear();
+            }
+            await locator.fill(resolvedStep.value);
+            await waitForBrowserFrame(page);
+            await waitForSuggestTargetReady(page, locator, {
+              baseline: suggestBaseline,
+              expectedValue: resolvedStep.value,
+              timeoutMs: Math.min(timeoutMs, SUGGEST_READY_TIMEOUT_MS),
+            });
+          },
+          verify: (locator) => verifyLocatorFillValue(locator, resolvedStep.value),
+          failureMessage: "fill 后目标值未稳定写入",
+          failureCause: "fill-value-reset",
         });
         break;
       }
       case "select": {
-        const locator = await resolveTarget(page, resolvedStep.target, timeoutMs);
-        await locator.selectOption(resolvedStep.values);
-        await waitForPageSettled(page, Math.min(timeoutMs, 8_000));
+        await performRecoveredLocatorAction(page, resolvedStep.target, timeoutMs, {
+          action: async (locator) => {
+            await locator.selectOption(resolvedStep.values);
+            await waitForPageSettled(page, Math.min(timeoutMs, 8_000));
+          },
+          verify: (locator) => verifyLocatorSelectedValues(locator, resolvedStep.values),
+          failureMessage: "select 后选中值未稳定保留",
+          failureCause: "select-value-reset",
+        });
         break;
       }
       case "setChecked": {
-        const locator = await resolveTarget(page, resolvedStep.target, timeoutMs);
-        await locator.setChecked(resolvedStep.checked);
-        await waitForPageSettled(page, Math.min(timeoutMs, 8_000));
+        await performRecoveredLocatorAction(page, resolvedStep.target, timeoutMs, {
+          action: async (locator) => {
+            await locator.setChecked(resolvedStep.checked);
+            await waitForPageSettled(page, Math.min(timeoutMs, 8_000));
+          },
+          verify: (locator) =>
+            locator.isChecked().then((checked) => checked === resolvedStep.checked).catch(() => false),
+          failureMessage: "setChecked 后勾选状态未稳定保留",
+          failureCause: "checked-state-reset",
+        });
         break;
       }
       case "press": {
