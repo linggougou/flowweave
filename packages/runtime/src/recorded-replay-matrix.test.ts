@@ -42,6 +42,10 @@ describe("runRecordedReplayMatrix baseline", () => {
       "contenteditable-editor",
       "session-expired-retry",
       "bulk-cross-page-selection",
+      "repeated-row-actions",
+      "linked-filters",
+      "session-dashboard",
+      "drawer-double-save",
       "placeholder-disambiguation",
     ]);
     expect(summary.results.map((item) => [item.name, item.stepCount])).toEqual([
@@ -51,6 +55,10 @@ describe("runRecordedReplayMatrix baseline", () => {
       ["contenteditable-editor", 4],
       ["session-expired-retry", 4],
       ["bulk-cross-page-selection", 6],
+      ["repeated-row-actions", 3],
+      ["linked-filters", 8],
+      ["session-dashboard", 3],
+      ["drawer-double-save", 9],
       ["placeholder-disambiguation", 4],
     ]);
     expect(summary.results.every((item) => item.status === "success")).toBe(true);
@@ -59,7 +67,7 @@ describe("runRecordedReplayMatrix baseline", () => {
       true,
     );
     expect(summary.failed).toHaveLength(0);
-    expect(summary.successCount).toBe(7);
+    expect(summary.successCount).toBe(11);
     expect(summary.failureCount).toBe(0);
     expect(summary.totalDurationMs).toBeGreaterThan(0);
     expect(summary.averageDurationMs).toBeGreaterThan(0);

@@ -10,7 +10,7 @@
 
 ## 它证明什么
 
-这条 smoke runner 只覆盖当前主线已经存在的 `7` 条 recorded replay 基线场景，不等待 Wave 7 其他轨道的新 case 合流：
+这条 smoke runner 当前覆盖 `11` 条 recorded replay 基线场景，既包含主线原有的 `7` 条 baseline，也包含 Wave 7 新增的 `4` 条高价值真实页面场景：
 
 | 场景                         | 证明的链路                            |
 | ---------------------------- | ------------------------------------- |
@@ -20,6 +20,10 @@
 | `contenteditable-editor`     | `contenteditable` 填写与保存          |
 | `session-expired-retry`      | `storageStatePath` 驱动的会话恢复重试 |
 | `bulk-cross-page-selection`  | 跨页勾选与批量提交                    |
+| `repeated-row-actions`       | `scopeText / scopeKind` 行级消歧      |
+| `linked-filters`             | 联动筛选与异步结果稳定命中            |
+| `session-dashboard`          | 登录态仪表盘 recorded replay          |
+| `drawer-double-save`         | 首次失败后修正并二次保存              |
 | `placeholder-disambiguation` | placeholder hint 驱动的输入框消歧     |
 
 Runner 输出的 summary 协议包含这些核心字段：
@@ -67,4 +71,4 @@ Runner 复用了 `examples/real-page-smoke.ts` 的本地组织思路：
 - 为每个 case 分配独立 `artifactDir`
 - 在结束时汇总所有 case 的结果、耗时与失败列表
 
-目前唯一的例外是 `placeholder-disambiguation`。因为它还没有进入 `examples/fixtures/`，runner 会在临时工作目录里生成一个一次性的本地 HTML fixture，再按同样的 recorded replay 链路执行。
+目前唯一的临时例外是 `placeholder-disambiguation`。因为它还没有进入 `examples/fixtures/`，runner 会在临时工作目录里生成一个一次性的本地 HTML fixture，再按同样的 recorded replay 链路执行。

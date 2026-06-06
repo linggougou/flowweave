@@ -3741,3 +3741,87 @@
 3. 当前实现边界结论
    - 仅增加 runtime recorded replay 覆盖即可满足本轨道目标。
    - `packages/recorder/src/normalize.ts` 与 `packages/recorder/src/normalize.test.ts` 无需改动。
+
+## 2026-06-07 Wave 7 第二轮持续开发推进
+
+- 时间：2026-06-07 03:27:40 CST
+- 任务目标：继续执行 Wave 7“真实录制回放闭环 + recorded replay 矩阵”，先完成主线 smoke runner 从 `7` 条扩到 `11` 条基线的提交，再回收扩展导出 follow-up 轨道，最后做统一验收与资源回收。
+- 所用技能：
+  - `using-superpowers`：重新核对当前回合技能约束。
+  - `subagent-driven-development`：保持“主代理集成 + 轨道审查回收”的执行方式。
+  - `verification-before-completion`：约束后续提交、合并与完成声明前必须跑新鲜验证。
+- 工具与环境说明：
+  - 当前环境仍未提供 `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code`，继续使用结构化分析、本地命令、CodeGraph、worktree 与子代理替代。
+  - 统一使用 `Node v20.19.6` 作为本轮所有验证环境。
+- 当前状态确认：
+  - 协调分支：`codex/real-page-stability-program`
+  - 主线未提交改动仅包含以下 3 个文件：
+    - `examples/recorded-replay-smoke.ts`
+    - `packages/runtime/src/recorded-replay-matrix.test.ts`
+    - `docs/guides/recorded-replay-matrix.md`
+  - 这 3 个文件的改动目标一致：把 recorded replay smoke baseline 从 `7` 条扩到 `11` 条，并接入 `repeated-row-actions`、`linked-filters`、`session-dashboard`、`drawer-double-save`。
+  - 扩展导出 worktree `.worktrees/codex-real-page-wave7-extension-export` 已新增 follow-up 提交 `f8cc022 测试: 补强扩展背景合同边界`，当前仅修改 `apps/extension/lib/background-contract.test.ts`。
+- 编码前检查 - Wave 7 Recorded Replay Smoke Baseline 11 条补强
+  - 已查阅上下文摘要文件：`.codex/context-summary-real-page-stability-wave7.md`
+  - 将使用以下可复用组件：
+    - `buildFlowFromEvents`：`examples/recorded-replay-smoke.ts` 中所有 recorded case 的统一归一化入口
+    - `writeStorageState`：`examples/recorded-replay-smoke.ts` 中既有 storage state fixture 生成模式
+    - `runRecordedReplayMatrix`：`examples/recorded-replay-smoke.ts` 现有矩阵执行入口
+    - `recorded-replay-matrix.test.ts`：基线 smoke summary 契约断言位置
+  - 将遵循命名约定：沿用现有 `name`、`flow_recorded_*`、`summary.results` 的 recorded replay 命名模式。
+  - 将遵循代码风格：只扩已有 baseline 列表与文档说明，不引入第二套 smoke runner。
+  - 确认不重复造轮子，证明：已核对 `examples/recorded-replay-smoke.ts`、`packages/runtime/src/recorded-replay-matrix.test.ts`、`docs/guides/recorded-replay-matrix.md` 当前结构，现有实现已提供足够扩展点，无需新增独立 runner。
+- 并行轨道检查：
+  - `Rawls / 019e9e3a-3887-7743-94a3-9fd064381b32` 所属扩展导出轨已产出补强提交，待主代理审查并回收。
+  - `Pascal / 019e9e3a-38dd-7aa2-80cf-92f9366f7a53` recorded replay 覆盖轨已合并完成，待统一资源回收。
+  - `Boyle / 019e9e3a-3929-7be0-8bd5-3547a08a0d70` recorded smoke 轨已合并完成，主线补强后待统一资源回收。
+  - `Wegener / 019e9e40-7ca5-72e3-909d-6ca5e326f29c` 作为 reviewer 轨仍可用于 follow-up 审查。
+- 本轮执行顺序：
+  1. 先用 Node 20 验证主线 smoke runner `11` 条 baseline 改动。
+  2. 若验证通过，提交主线 smoke 补强。
+  3. 审查并合并 `f8cc022` 扩展导出 follow-up。
+  4. 回到主线执行 Wave 7 统一验收，随后更新 `.codex/verification-report.md` 并回收资源。
+
+## 编码后声明 - Wave 7 Recorded Replay Smoke Baseline 11 条补强
+
+- 时间：2026-06-07 03:36:20 CST
+- 复用了以下既有组件：
+  - `buildFlowFromEvents`：用于把新增 4 条 recorded event 场景继续走 recorder -> runtime 闭环
+  - `writeStorageState`：用于 `session-dashboard` 的登录态注入
+  - `runRecordedReplayMatrix`：用于保持现有 smoke 执行入口不变，只扩 baseline
+- 遵循了以下项目约定：
+  - 命名约定：继续使用 `flow_recorded_*`、`summary.results` 与 `name` 字段的既有 recorded replay 命名模式
+  - 代码风格：没有引入第二套 smoke runner，只在现有 baseline 列表和 summary 断言中扩容
+  - 文件组织：实现只落在 `examples/recorded-replay-smoke.ts`、`packages/runtime/src/recorded-replay-matrix.test.ts`、`docs/guides/recorded-replay-matrix.md`
+- 对比了以下相似实现：
+  - `examples/real-page-smoke.ts`：沿用其 fixture URL、artifactDir 与 summary 输出组织方式
+  - `packages/runtime/src/playwright-runner.test.ts`：直接复用 Wave 7 新增 recorded replay case 的目标场景和断言意图
+  - `examples/recorded-replay-smoke.ts` 既有 7 条 baseline：保持同一录制回放矩阵入口，不新建平行脚本
+- 未重复造轮子的证明：
+  - 已核对现有 smoke runner、runtime recorded replay 测试与 real-page smoke 入口，确认扩容现有 baseline 就能完成 Wave 7 闭环要求
+  - `session-dashboard` 直接复用现有 storage state fixture 模式，不新增独立会话注入脚手架
+
+## 验证记录 - Wave 7 Recorded Replay Smoke Baseline 11 条补强
+
+- 时间：2026-06-07 03:36:20 CST
+- 定向矩阵测试（Node 20）
+  - 首次命令：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- recorded-replay-matrix.test.ts`
+  - 首次结果：失败，但失败仅来自 summary 步数断言
+  - 失败证据：
+    - `linked-filters` 实际步数为 `8`，而非预期 `5`
+    - `drawer-double-save` 实际步数为 `9`，而非预期 `7`
+  - 修正动作：同步 `packages/runtime/src/recorded-replay-matrix.test.ts` 断言到真实 recorded replay 归一化产物
+  - 复跑命令：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- recorded-replay-matrix.test.ts`
+  - 复跑结果：通过，`1/1`
+- 录制回放烟测（Node 20）
+  - 命令：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:recorded-pages`
+  - 结果：通过，`11/11`
+  - 关键信息：
+    - `repeated-row-actions`: `3` 步
+    - `linked-filters`: `8` 步
+    - `session-dashboard`: `3` 步
+    - `drawer-double-save`: `9` 步
+    - 总结：录制回放 smoke baseline 已从 `7` 条稳定扩展到 `11` 条
