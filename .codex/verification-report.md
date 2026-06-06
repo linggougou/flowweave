@@ -2525,3 +2525,78 @@
 - 风险评估评分：95
 - 综合评分：96
 - 建议：通过
+
+## 2026-06-07 Wave 6 轨道收口与统一验收
+
+### 验证范围
+
+- `packages/page-intelligence/src/fragility.ts`
+- `packages/page-intelligence/src/fragility.test.ts`
+- `packages/runtime/src/types.ts`
+- `packages/runtime/src/playwright-runner.ts`
+- `packages/runtime/src/playwright-runner.test.ts`
+- `apps/studio/electron/services.ts`
+- `apps/studio/src/shared/studio-api-types.ts`
+- `apps/studio/src/shared/failure-insights.ts`
+- `apps/studio/src/shared/failure-insights.test.ts`
+- `apps/studio/src/shared/repair-suggestions.test.ts`
+- `apps/studio/src/DiagnosticInspector.tsx`
+- `apps/studio/src/DiagnosticInspector.test.tsx`
+- `docs/superpowers/specs/2026-06-07-real-page-stability-wave6-design.md`
+- `docs/superpowers/plans/2026-06-07-real-page-stability-wave6-plan.md`
+- `docs/superpowers/plans/2026-06-07-real-page-stability-wave6-orchestration.md`
+
+### 验证结果
+
+1. 三条 Wave 6 轨道均已落地并并回协调分支。
+   - Fragility 轨把 target 风险预警从 `click / fill` 扩到：
+     - `select`
+     - `setChecked`
+     - `upload`
+     - `press(target)`
+   - Runtime 轨已将步骤失败诊断统一为 `target-resolution | runtime-error` 两类 envelope。
+   - Studio 轨已把诊断 DTO、失败摘要与面板展示改成基于 union 的统一消费，不再假设总有 `strategyAttempts / targetHints`。
+2. Runtime reviewer 的非阻塞建议已被吸收并验证。
+   - `packages/runtime/src/playwright-runner.test.ts` 新增护栏，明确锁定：
+     - `runtime-error` 诊断不包含 `strategyAttempts / targetHints`
+     - target 失败诊断保留 `cause`
+     - 普通 `Error` 场景也会写入 `runtime-error` 诊断 JSON
+   - 对应吸收提交：`90cb149 test: 补强 runtime 诊断护栏`
+   - 主线合并提交：`5c73334 merge: 合并 Wave 6 runtime 诊断护栏测试`
+3. Node 20 分层验证通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/page-intelligence test -- fragility.test.ts`
+     - 结果：通过，`17/17`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+     - 结果：通过，主线最新为 `21/21`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime typecheck`
+     - 结果：通过
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- src/shared/failure-insights.test.ts DiagnosticInspector.test.tsx src/shared/repair-suggestions.test.ts`
+     - 结果：通过，`14/14`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+     - 结果：通过
+4. 真实页面矩阵验收继续保持通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+   - 结果：通过
+   - 关键输出：
+     - 档位：`p7`
+     - 成功 / 失败：`19 / 0`
+   - 说明：Wave 6 新增的是诊断与脆弱性能力，没有破坏既有真实页面回放矩阵。
+
+### Findings
+
+1. 未发现阻塞级问题。
+   - Wave 6 规划、并行实施、review 回补与主线复验已经形成完整闭环。
+2. 残余风险：`runtime-error` 目前提供的是统一 envelope，不是更细粒度的错误分类体系。
+   - 当前足以支撑 Studio 展示与执行记录留档；若后续要做自动修复编排，可再按错误来源继续细分 `kind` 或 `errorCode`。
+3. 残余风险：Wave 6 的验证基线仍以 `Node v20.19.6` 为准。
+   - 这与仓库 `.nvmrc` 和现有 CI 基线一致；Node 24 兼容性仍需单独轨道推进，不构成当前验收阻塞。
+
+### 综合结论
+
+- 代码质量评分：98
+- 测试覆盖评分：98
+- 规范遵循评分：99
+- 战略匹配评分：98
+- 风险评估评分：96
+- 综合评分：98
+- 建议：通过

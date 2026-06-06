@@ -3417,3 +3417,82 @@
     - 创建 3 个隔离 worktree
     - 依据编排板派发子代理
     - 在轨道返回后做 Node 20 复验、合并与回收
+- 已执行的编排动作：
+  - 提交规划文档：`df46c47 docs: 规划 Wave 6 真实页面稳定性`
+  - 创建 worktree：
+    - `.worktrees/codex-real-page-wave6-fragility`
+    - `.worktrees/codex-real-page-wave6-runtime-diagnostic`
+    - `.worktrees/codex-real-page-wave6-studio-diagnostic`
+  - 创建分支：
+    - `codex/real-page-wave6-fragility`
+    - `codex/real-page-wave6-runtime-diagnostic`
+    - `codex/real-page-wave6-studio-diagnostic`
+  - 子代理：
+    - Fragility：`Linnaeus` / `019e9e15-4e93-7191-99d7-324ce52569cb`
+    - Runtime：`Heisenberg` / `019e9e15-a645-7d60-bc55-07eac806e702`
+    - Studio：`Singer` / `019e9e16-052b-72d0-873f-3f2dba2b5e3e`
+- worktree 基线处置：
+  - 三个 worktree 执行 `pnpm install` 后，Studio 轨基线测试可直接通过。
+  - Fragility / Runtime 轨首次基线测试失败，根因不是代码，而是新 worktree 中缺少 workspace 依赖包的 `dist` 产物：
+    - Fragility 轨报错：`Failed to resolve entry for package "@flowweave/shared"`
+    - Runtime 轨报错：`Failed to resolve entry for package "@flowweave/recorder"`
+  - 已补救：
+    - Fragility worktree：`PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/page-intelligence... build`
+    - Runtime worktree：`PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime... build`
+  - 补救后基线：
+    - Fragility：`pnpm --filter @flowweave/page-intelligence test -- fragility.test.ts` 通过
+    - Runtime：`pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts` 通过
+    - Studio：`pnpm --filter @flowweave/app-studio test -- src/shared/failure-insights.test.ts DiagnosticInspector.test.tsx` 通过
+
+## 2026-06-07 Wave 6 轨道收口与统一验收
+
+- 时间：2026-06-07 02:19:00 CST
+- 任务目标：
+  - 回收 `Fragility Multi-Step Coverage`、`Runtime Generic Diagnostic Envelope`、`Studio Unified Failure Insight` 三条轨道。
+  - 吸收 runtime reviewer 提出的非阻塞护栏建议，完成主线 Node 20 复验，并为后续回收 worktree / 分支做准备。
+- 工具与替代说明：
+  - 当前环境仍未提供 `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code`。
+  - 本轮继续以 CodeGraph、本地命令、Node 20 验证与既有子代理产物替代，并在本日志记录全过程。
+- 轨道回收结果：
+  - Fragility 轨道：
+    - 子代理提交：`c864845 扩展 fragility 多步骤覆盖`
+    - reviewer 建议：补 `press` 无 `target` 时不应产出 target fragility issue 的保护测试。
+    - 吸收提交：`24da796 补强 press 无 target 的 fragility 测试`
+    - 主线合并提交：`5da2313 merge: 合并 Wave 6 fragility 多步骤覆盖轨道`
+  - Runtime 轨道：
+    - 子代理提交：`f879ef0 feat: 统一 runtime 步骤失败诊断`
+    - reviewer 非阻塞建议：
+      1. `runtime-error` 断言中补“不包含 strategyAttempts / targetHints”
+      2. 直接覆盖 `cause` 字段
+      3. 证明普通 `Error` 也会落盘 `runtime-error` envelope
+    - 吸收提交：`90cb149 test: 补强 runtime 诊断护栏`
+    - 主线合并提交：
+      - `becc29c merge: 合并 Wave 6 runtime 通用诊断轨道`
+      - `5c73334 merge: 合并 Wave 6 runtime 诊断护栏测试`
+  - Studio 轨道：
+    - 子代理提交：`dd09b4a feat: 统一 Studio 失败诊断消费`
+    - 主线合并提交：`1e489be merge: 合并 Wave 6 studio 统一失败诊断轨道`
+- Node 20 统一验收：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/page-intelligence test -- fragility.test.ts`
+    - 结果：通过，`17/17`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+    - 结果：通过，轨道并回前 `20/20`，吸收护栏测试并回主线后 `21/21`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime typecheck`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- src/shared/failure-insights.test.ts DiagnosticInspector.test.tsx src/shared/repair-suggestions.test.ts`
+    - 结果：通过，`14/14`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+    - 结果：通过，档位 `p7`，`19/19`
+- 编码后声明：
+  - 复用了既有实现与契约：
+    - `packages/page-intelligence/src/fragility.ts` 的 target 提取与 issue 结构
+    - `packages/runtime/src/types.ts` 的 `StepDiagnostic` union 与诊断落盘协议
+    - `apps/studio/electron/services.ts` 的诊断读取与回填链路
+    - `apps/studio/src/shared/failure-insights.ts` 与 `DiagnosticInspector.tsx` 的统一消费面
+  - 本轮额外吸收的改动只增加回归护栏测试，没有再扩写新的生产逻辑或平行协议。
+- 下一步：
+  - 提交主线 `.codex` 收口留痕。
+  - 回收已验收 worktree / 分支 / 子代理。
+  - 推送 `codex/real-page-stability-program` 到 `origin`。
