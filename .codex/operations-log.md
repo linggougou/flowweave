@@ -4322,3 +4322,45 @@
 - 编码后声明：
   - 本轮复用了既有 `keypress -> press` 协议与 `playwright-runner.ts` 主执行链路，没有引入新的事件类型或平行执行器。
   - `async-command-palette` 已同时纳入 recorded replay baseline 与 real-page smoke，确保真实页面异步 suggest 录制与执行闭环都受回归保护。
+
+## 2026-06-07 下一阶段上下文扫描启动
+
+- 时间：2026-06-07 05:56:33 CST
+- 任务目标：在 Wave 9 收口后，为“真实页面执行稳定性下一阶段增强”完成现状核对、上下文扫描、完整计划与新的并行轨道设计。
+- 当前主线状态：
+  - 分支：`codex/real-page-stability-program`
+  - 相对 `origin/codex/real-page-stability-program`：`ahead 13`
+  - `git worktree list`：当前仅保留主工作区
+- 本轮已核对的上下文来源：
+  - 既有主计划与编排板：
+    - `docs/superpowers/plans/2026-06-06-real-page-stability-implementation-plan.md`
+    - `docs/superpowers/plans/2026-06-06-real-page-stability-orchestration.md`
+  - 既有设计与残余风险：
+    - `docs/superpowers/specs/2026-06-07-real-page-target-disambiguation-design.md`
+    - `docs/superpowers/specs/2026-06-07-real-page-stability-wave9-async-suggest-design.md`
+    - `docs/guides/fixture-matrix.md`
+    - `.codex/verification-report.md`
+  - 代码主链路：
+    - `packages/runtime/src/playwright-runner.ts`
+    - `packages/runtime/src/real-page-matrix.test.ts`
+    - `packages/runtime/src/recorded-replay-matrix.test.ts`
+    - `examples/real-page-smoke.ts`
+    - `examples/recorded-replay-smoke.ts`
+    - `packages/recorder/src/target-from-dom.ts`
+    - `apps/studio/src/shared/failure-insights.ts`
+    - `apps/studio/src/shared/repair-suggestions.ts`
+- 当前已确认的模式与边界：
+  - real-page matrix 现有档位为 `baseline / p5 / p6 / p7`，默认 `pnpm e2e:real-pages` 已执行 `21` 个场景。
+  - recorded replay baseline 已稳定在 `13` 个场景，断言仍以显式 case 列表和步数列表为主。
+  - runtime 已具备 target disambiguation、suggest-ready 等能力，但 `runStep()` 内对 `click / fill / select / setChecked / press / upload` 仍主要采用一次性动作调用，缺少显式的动作级瞬态重试封装。
+  - Studio 已能表达 `ambiguous-target / hidden-target / missing-target / execution-error` 等失败洞察，但真实页面矩阵的汇总仍以业务场景族为主，尚未形成技术根因维度的统一统计。
+- 本轮并行探索：
+  - 已派发只读 explorer `Cicero / 019e9ef0-3eda-7be1-9659-f7f064f999f2`
+    - 范围：`packages/runtime/src/*`
+    - 目标：确认 runtime 剩余高价值稳定性缺口与优先级
+  - 已派发只读 explorer `Epicurus / 019e9ef0-6171-76a0-881b-e41c0737869a`
+    - 范围：`examples/*`、`apps/studio/src/*`、`docs/guides/fixture-matrix.md`
+    - 目标：确认矩阵/Studio 剩余高价值缺口与建议轨道切分
+- 初步判断：
+  - 下一阶段高概率会落在“动作级韧性补强 + p8 基准矩阵/技术根因观测”方向。
+  - 在 explorer 结果返回前，不提前写死具体实现方案，先整理上下文摘要与计划草案。
