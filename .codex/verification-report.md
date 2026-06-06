@@ -2199,3 +2199,52 @@
 - 风险评估评分：95
 - 综合评分：97
 - 建议：通过
+
+## 2026-06-07 Studio Ambiguity Insight 轨道验证
+
+### 验证范围
+
+- `apps/studio/src/DiagnosticInspector.tsx`
+- `apps/studio/src/DiagnosticInspector.test.tsx`
+- `apps/studio/src/shared/repair-suggestions.ts`
+- `apps/studio/src/shared/repair-suggestions.test.ts`
+- 验证重点：
+  - Studio 是否能把多命中、候选并列、作用域不足转成更具体的修复建议
+  - 诊断面板是否展示歧义目标的关键作用域线索
+  - 改动是否严格停留在授权范围
+
+### 验证结果
+
+1. TDD 红绿流程完整。
+   - 先新增 `3` 条歧义相关断言，并通过定向测试命令看到红灯失败。
+   - 再补最小实现，最终同一命令回到绿灯。
+2. Node 20 定向验证通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- DiagnosticInspector.test.tsx src/shared/repair-suggestions.test.ts`
+     - 结果：通过，`2` 个测试文件、`8` 个测试全部通过
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+     - 结果：通过
+3. 轨道边界保持干净。
+   - 未改动 `packages/runtime/**`
+   - 未改动 `packages/recorder/**`
+   - 未改动 `examples/**`
+   - 未改动 `apps/studio/src/shared/studio-api-types.ts`
+
+### Findings
+
+1. 未发现阻塞级问题。
+   - 新增建议和 UI 展示都建立在现有 `repair-suggestions` 与 `DiagnosticInspector` 骨架上，没有引入新的诊断通道。
+2. 歧义提示的用户行动更具体。
+   - 候选并列且已有作用域线索时，会明确提示“重新录制到正确列表行/弹层/区域”。
+   - 多命中但缺少作用域线索时，会明确提示“补上作用域线索后再重录”。
+3. 残余风险可接受。
+   - `failure-insights.ts` 仍沿用原有“目标不唯一”分类摘要，没有单独展开作用域文案，但 `DiagnosticInspector` 已补足关键线索展示，不构成阻塞。
+
+### 综合结论
+
+- 代码质量评分：97
+- 测试覆盖评分：96
+- 规范遵循评分：99
+- 战略匹配评分：97
+- 风险评估评分：95
+- 综合评分：97
+- 建议：通过

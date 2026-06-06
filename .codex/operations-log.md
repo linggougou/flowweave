@@ -3135,3 +3135,82 @@
 - 下一步执行策略：
   - 先用 Node 20 复跑 Foundation 相关验证，确认基线仍然稳定。
   - 随后创建四个独立 worktree，并按修正后的文件边界派发 Recorder / Runtime / Studio / Benchmarks 四条并行轨道。
+
+## 2026-06-07 Studio Ambiguity Insight 轨道实施
+
+- 时间：2026-06-07 00:56:54 CST
+- 轨道目标：
+  - 在授权范围内把 runtime 侧已有的歧义失败信号转成 Studio 更明确的诊断洞察与修复建议。
+  - 聚焦“多命中 / 作用域不足 / 候选并列”三类场景，不做大范围 UI 重构。
+- worktree / 分支：
+  - worktree：`.worktrees/codex-target-studio-ambiguity`
+  - 分支：`codex/target-studio-ambiguity`
+- 使用技能：
+  - `using-superpowers`
+  - `test-driven-development`
+  - `verification-before-completion`
+- 工具与替代说明：
+  - 当前环境未提供 `sequential-thinking`，改用结构化分解、计划工具与显式红绿验证替代。
+  - 当前环境未提供 `desktop-commander`、`context7`、`github.search_code`，改用本地命令、CodeGraph、仓库现有文档与测试替代。
+- 单 agent 执行原因：
+  - 本轨仅允许修改 `DiagnosticInspector`、`repair-suggestions` 及其测试，写入区域高度耦合；若继续拆分多个 agent，极易并发修改同一文件。
+  - 补偿措施：上下文读取与命令执行尽量并行，代码实现保持单线程 TDD。
+- 上下文依据：
+  - `/Users/ling/codeHome/A_Mine/flowweave/AGENTS.md`
+  - `/Users/ling/codeHome/A_Mine/flowweave/.codex/context-summary-target-disambiguation-wave.md`
+  - `docs/superpowers/specs/2026-06-07-real-page-target-disambiguation-design.md`
+  - `docs/superpowers/plans/2026-06-07-real-page-target-disambiguation-plan.md`
+  - `docs/superpowers/plans/2026-06-07-real-page-target-disambiguation-orchestration.md`
+  - `apps/studio/src/DiagnosticInspector.tsx`
+  - `apps/studio/src/shared/repair-suggestions.ts`
+  - `apps/studio/src/shared/failure-insights.ts`
+- 编码前检查：
+  - 已确认 worktree 与目标分支正确，初始 `git status --short` 为空。
+  - 已确认 `scopeText / scopeKind` 已进入 `apps/studio/src/shared/studio-api-types.ts`。
+  - 已确认现有可复用模式：
+    - `apps/studio/src/shared/failure-insights.ts`：失败类别归因与摘要结构
+    - `apps/studio/src/shared/repair-suggestions.ts`：修复建议优先级与去重
+    - `apps/studio/src/DiagnosticInspector.tsx`：诊断卡片 + 明细表格的现有展示骨架
+  - 当前阻塞：
+    - 运行 `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- DiagnosticInspector.test.tsx src/shared/repair-suggestions.test.ts` 时，因 worktree 缺少 `node_modules` 导致 `vitest: command not found`，需先补齐依赖后再进入红灯验证。
+- 红灯验证：
+  - 协调侧补齐依赖后，先新增以下回归：
+    - `apps/studio/src/shared/repair-suggestions.test.ts`
+      - 候选并列 + 列表行线索 → 应提示“重新录制到正确列表行”
+      - 多命中但缺少作用域线索 → 应提示“补上作用域线索后再重录”
+    - `apps/studio/src/DiagnosticInspector.test.tsx`
+      - 歧义目标场景 → 应展示“歧义线索”“作用域类型/文本”“重新录制到正确列表行”
+  - 红灯命令：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- DiagnosticInspector.test.tsx src/shared/repair-suggestions.test.ts`
+  - 红灯结果：
+    - 失败，`3` 条新增断言全部按预期失败：
+      - `repair-suggestions` 尚未识别候选并列 / 作用域不足专用建议
+      - `DiagnosticInspector` 尚未展示歧义线索与作用域字段
+- 实现记录：
+  - `apps/studio/src/shared/repair-suggestions.ts`
+    - 新增 `scopeKind -> 中文标签` 映射
+    - 让 target hint 摘要纳入 `scopeText / scopeKind`
+    - 新增“重新录制到正确列表行/弹层/区域”建议
+    - 新增“补上作用域线索后再重录”建议
+    - 保留既有“先收窄目标范围”建议，并补充列表行/卡片/弹层重录指引
+  - `apps/studio/src/DiagnosticInspector.tsx`
+    - 新增歧义线索卡片，集中展示多命中、候选并列和作用域不足原因
+    - 在“目标提示”表格中补展示 `作用域类型` 与 `作用域文本`
+  - `apps/studio/src/DiagnosticInspector.test.tsx`
+    - 新增歧义展示回归
+  - `apps/studio/src/shared/repair-suggestions.test.ts`
+    - 新增候选并列 / 作用域不足建议回归
+- Node20 验证结果：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- DiagnosticInspector.test.tsx src/shared/repair-suggestions.test.ts`
+    - 结果：通过，`2` 个测试文件、`8` 个测试全部通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+    - 结果：通过
+- 授权范围复核：
+  - 实际源码改动仅涉及：
+    - `apps/studio/src/DiagnosticInspector.tsx`
+    - `apps/studio/src/DiagnosticInspector.test.tsx`
+    - `apps/studio/src/shared/repair-suggestions.ts`
+    - `apps/studio/src/shared/repair-suggestions.test.ts`
+  - `apps/studio/src/shared/studio-api-types.ts` 本轨未改动。
+- 提交哈希：
+  - 功能提交哈希：待提交后补记

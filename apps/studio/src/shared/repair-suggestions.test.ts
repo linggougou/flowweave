@@ -122,6 +122,80 @@ describe("buildDiagnosticRepairSuggestions", () => {
     ).toBe(true);
   });
 
+  it("对候选并列且已带列表行线索的歧义失败，提示重新录制到正确行", () => {
+    const suggestions = buildDiagnosticRepairSuggestions(
+      buildStep({
+        label: "编辑订单行",
+        diagnostic: {
+          stepId: "s6",
+          stepIndex: 5,
+          url: "https://staging.example.com/orders",
+          title: "订单列表",
+          strategyAttempts: [
+            {
+              label: "role=button[name=编辑]",
+              matchedCount: 2,
+              visibleCount: 2,
+              success: false,
+              error: "候选评分并列，无法唯一确认目标",
+            },
+          ],
+          targetHints: {
+            tagName: "button",
+            labelText: "编辑",
+            scopeKind: "row",
+            scopeText: "订单 A-102 / 张三",
+          },
+        },
+      }),
+    );
+
+    expect(
+      suggestions.some(
+        (item) =>
+          item.title === "重新录制到正确列表行" &&
+          item.action.includes("订单 A-102 / 张三") &&
+          item.reason.includes("候选并列"),
+      ),
+    ).toBe(true);
+  });
+
+  it("对多命中但缺少作用域线索的失败，提示补上上下文后再重录", () => {
+    const suggestions = buildDiagnosticRepairSuggestions(
+      buildStep({
+        label: "保存订单",
+        diagnostic: {
+          stepId: "s7",
+          stepIndex: 6,
+          url: "https://staging.example.com/orders",
+          title: "订单列表",
+          strategyAttempts: [
+            {
+              label: "role=button[name=保存]",
+              matchedCount: 4,
+              visibleCount: 4,
+              success: false,
+              error: "strict mode violation: locator resolved to 4 elements",
+            },
+          ],
+          targetHints: {
+            tagName: "button",
+            labelText: "保存",
+          },
+        },
+      }),
+    );
+
+    expect(
+      suggestions.some(
+        (item) =>
+          item.title === "补上作用域线索后再重录" &&
+          item.action.includes("列表行、卡片或弹层") &&
+          item.reason.includes("没有记录到"),
+      ),
+    ).toBe(true);
+  });
+
   it("对上传控件给出重新对准真实 input 的建议", () => {
     const suggestions = buildDiagnosticRepairSuggestions(
       buildStep({
