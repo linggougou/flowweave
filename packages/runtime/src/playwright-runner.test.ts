@@ -172,6 +172,83 @@ function buildSessionDashboardHtml(): string {
 </html>`;
 }
 
+function buildRepeatedRowActionsHtml(options?: { duplicateScope?: boolean }): string {
+  const secondScope = options?.duplicateScope ? "待处理工单" : "重点客户回访";
+
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+  <body>
+    <table>
+      <tbody>
+        <tr data-row-id="row-a">
+          <th scope="row">待处理工单</th>
+          <td>张三</td>
+          <td><button type="button" class="row-action">编辑</button></td>
+        </tr>
+        <tr data-row-id="row-b">
+          <th scope="row">${secondScope}</th>
+          <td>李四</td>
+          <td><button type="button" class="row-action">编辑</button></td>
+        </tr>
+      </tbody>
+    </table>
+    <p id="selected-row" data-selected="idle">未选择</p>
+
+    <script>
+      const selectedRow = document.getElementById("selected-row");
+      document.querySelectorAll(".row-action").forEach((button) => {
+        button.addEventListener("click", (event) => {
+          const row = event.currentTarget.closest("tr");
+          const scopeText = row.querySelector("th")?.textContent?.trim() || "unknown";
+          selectedRow.dataset.selected = scopeText;
+          selectedRow.textContent = "已选择：" + scopeText;
+        });
+      });
+    </script>
+  </body>
+</html>`;
+}
+
+function buildPlaceholderDisambiguationHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+  <body>
+    <label for="primary-keyword">主搜索词</label>
+    <input id="primary-keyword" type="text" placeholder="主搜索词" />
+
+    <label for="archive-reason">归档原因</label>
+    <input id="archive-reason" type="text" placeholder="归档原因" />
+
+    <button id="submit-form" type="button">提交</button>
+    <p id="submit-status" data-state="idle">待提交</p>
+
+    <script>
+      const primaryKeyword = document.getElementById("primary-keyword");
+      const archiveReason = document.getElementById("archive-reason");
+      const submitStatus = document.getElementById("submit-status");
+
+      document.getElementById("submit-form").addEventListener("click", () => {
+        if (
+          primaryKeyword.value === "" &&
+          archiveReason.value === "仅写入目标字段"
+        ) {
+          submitStatus.dataset.state = "matched";
+          submitStatus.textContent = "已写入归档原因";
+          return;
+        }
+
+        submitStatus.dataset.state = "missed";
+        submitStatus.textContent =
+          "主搜索词=" +
+          (primaryKeyword.value || "空") +
+          "；归档原因=" +
+          (archiveReason.value || "空");
+      });
+    </script>
+  </body>
+</html>`;
+}
+
 async function startStaticServer(
   rootDir: string,
 ): Promise<{ server: Server; baseUrl: string }> {
@@ -1156,6 +1233,187 @@ describe("executeFlow", () => {
     );
 
     expect(result.status).toBe("success");
+  });
+
+  it("多命中按钮时会结合 scopeText 与 scopeKind 命中正确行", async () => {
+    const fixtureDir = mkdtempSync(join(tmpdir(), "fw-runtime-scope-row-"));
+    cleanupPaths.add(fixtureDir);
+    const fixturePath = join(fixtureDir, "repeated-row-actions.html");
+    writeFileSync(fixturePath, buildRepeatedRowActionsHtml(), "utf-8");
+    const fixtureUrl = pathToFileURL(fixturePath).href;
+
+    const result = await executeFlow(
+      buildFlow("flow_scope_row_disambiguation", "作用域行消解流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: fixtureUrl,
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "click",
+          target: {
+            strategies: [{ kind: "role", role: "button", name: "编辑" }],
+            hints: {
+              scopeText: "重点客户回访",
+              scopeKind: "row",
+            },
+          },
+        },
+        {
+          id: "s3",
+          type: "click",
+          target: {
+            strategies: [{ kind: "css", selector: "#selected-row[data-selected='重点客户回访']" }],
+          },
+        },
+      ]),
+      { headless: true },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.steps.map((step) => step.type)).toEqual([
+      "navigate",
+      "click",
+      "click",
+    ]);
+  });
+
+  it("支持将携带 placeholder hint 的录制回放命中正确输入框", async () => {
+    const fixtureDir = mkdtempSync(join(tmpdir(), "fw-runtime-placeholder-"));
+    cleanupPaths.add(fixtureDir);
+    const fixturePath = join(fixtureDir, "placeholder-disambiguation.html");
+    writeFileSync(fixturePath, buildPlaceholderDisambiguationHtml(), "utf-8");
+    const fixtureUrl = pathToFileURL(fixturePath).href;
+
+    const flow = buildFlowFromEvents(
+      [
+        parseRecordedEvent({
+          id: "evt_nav_placeholder",
+          type: "navigate",
+          timestamp: 0,
+          url: fixtureUrl,
+          payload: {
+            url: fixtureUrl,
+            waitUntil: "domcontentloaded",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_fill_archive_reason",
+          type: "fill",
+          timestamp: 100,
+          url: fixtureUrl,
+          payload: {
+            strategies: [{ kind: "css", selector: "input[type='text']" }],
+            value: "仅写入目标字段",
+            tagName: "input",
+            inputType: "text",
+            placeholder: "归档原因",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_submit_placeholder",
+          type: "click",
+          timestamp: 200,
+          url: fixtureUrl,
+          payload: {
+            selector: "#submit-form",
+            role: "button",
+            name: "提交",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_status_placeholder",
+          type: "click",
+          timestamp: 300,
+          url: fixtureUrl,
+          payload: {
+            selector: "#submit-status[data-state='matched']",
+            text: "已写入归档原因",
+          },
+        }),
+      ],
+      buildRecordedFlowMeta("flow_recorded_placeholder_disambiguation", "录制输入框消解流程"),
+    );
+
+    const result = await executeFlow(flow, { headless: true });
+
+    expect(result.status).toBe("success");
+    expect(result.steps.map((step) => step.type)).toEqual([
+      "navigate",
+      "fill",
+      "click",
+      "click",
+    ]);
+  });
+
+  it("多命中候选并列最高分时返回明确歧义诊断", async () => {
+    artifactDir = mkdtempSync(join(tmpdir(), "fw-runtime-ambiguity-"));
+    const fixtureDir = mkdtempSync(join(tmpdir(), "fw-runtime-ambiguity-fixture-"));
+    cleanupPaths.add(fixtureDir);
+    const fixturePath = join(fixtureDir, "ambiguous-row-actions.html");
+    writeFileSync(
+      fixturePath,
+      buildRepeatedRowActionsHtml({ duplicateScope: true }),
+      "utf-8",
+    );
+    const fixtureUrl = pathToFileURL(fixturePath).href;
+
+    const result = await executeFlow(
+      buildFlow("flow_ambiguous_row_disambiguation", "歧义行消解流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: fixtureUrl,
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "click",
+          target: {
+            strategies: [{ kind: "role", role: "button", name: "编辑" }],
+            hints: {
+              scopeText: "待处理工单",
+              scopeKind: "row",
+            },
+          },
+        },
+      ]),
+      { headless: true, timeoutMs: 4_000, artifactDir },
+    );
+
+    expect(result.status).toBe("failed");
+    const failedStep = result.steps.at(-1);
+    expect(failedStep?.status).toBe("failed");
+    expect(failedStep?.message).toContain("歧义");
+    expect(failedStep?.message).toContain("候选");
+    expect(failedStep?.diagnosticPath).toBe(join(artifactDir, "step-1-diagnostic.json"));
+
+    const diagnostic = JSON.parse(
+      readFileSync(join(artifactDir, "step-1-diagnostic.json"), "utf-8"),
+    ) as {
+      strategyAttempts: Array<{
+        label: string;
+        matchedCount: number;
+        visibleCount?: number;
+        success: boolean;
+        error?: string;
+        ambiguityReason?: string;
+        candidateSummaries?: Array<{
+          index: number;
+          score: number;
+          visible: boolean;
+          matchedHints: string[];
+          scopeText?: string;
+        }>;
+      }>;
+    };
+
+    expect(diagnostic.strategyAttempts).toHaveLength(1);
+    expect(diagnostic.strategyAttempts[0]?.ambiguityReason).toContain("并列");
+    expect(diagnostic.strategyAttempts[0]?.candidateSummaries).toHaveLength(2);
+    expect(diagnostic.strategyAttempts[0]?.candidateSummaries?.[0]?.score).toBeGreaterThan(0);
   });
 
   it("真实页面 fixture 矩阵全部成功", async () => {

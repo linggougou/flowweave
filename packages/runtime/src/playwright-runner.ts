@@ -25,6 +25,9 @@ type StrategyAttempt = {
   visibleCount?: number;
   success: boolean;
   error?: string;
+  selectedIndex?: number;
+  ambiguityReason?: string;
+  candidateSummaries?: CandidateSummary[];
 };
 
 type TargetDiagnosticContext = {
@@ -33,6 +36,41 @@ type TargetDiagnosticContext = {
   strategyAttempts: StrategyAttempt[];
   targetHints?: Target["hints"];
 };
+
+type ScopeKind = NonNullable<NonNullable<Target["hints"]>["scopeKind"]>;
+
+type CandidateSnapshot = {
+  index: number;
+  visible: boolean;
+  tagName?: string;
+  inputType?: string;
+  nameAttr?: string;
+  placeholder?: string;
+  labelText?: string;
+  textSample?: string;
+  scopeKind?: ScopeKind;
+  scopeText?: string;
+};
+
+type CandidateSummary = CandidateSnapshot & {
+  score: number;
+  matchedHints: string[];
+};
+
+type CandidateResolution =
+  | {
+      status: "selected";
+      locator: Locator;
+      selectedIndex: number;
+      candidateSummaries: CandidateSummary[];
+    }
+  | {
+      status: "ambiguous";
+      reason: string;
+      candidateSummaries: CandidateSummary[];
+    };
+
+const MIN_DISAMBIGUATION_SCORE = 4;
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -130,6 +168,65 @@ function formatTargetHints(target: Target): string | null {
   return entries.map(([key, value]) => `${key}=${value}`).join("，");
 }
 
+function normalizeTextValue(value: string | null | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length > 0 ? normalized.toLowerCase() : undefined;
+}
+
+function truncateText(value: string | undefined, maxLength = 60): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  return value.length <= maxLength ? value : `${value.slice(0, maxLength - 1)}…`;
+}
+
+function scoreTextHint(
+  candidateValue: string | undefined,
+  hintValue: string | undefined,
+  exactScore: number,
+  containsScore: number,
+): number {
+  const normalizedCandidate = normalizeTextValue(candidateValue);
+  const normalizedHint = normalizeTextValue(hintValue);
+
+  if (!normalizedCandidate || !normalizedHint) {
+    return 0;
+  }
+
+  if (normalizedCandidate === normalizedHint) {
+    return exactScore;
+  }
+
+  if (
+    normalizedCandidate.includes(normalizedHint) ||
+    normalizedHint.includes(normalizedCandidate)
+  ) {
+    return containsScore;
+  }
+
+  return 0;
+}
+
+function scoreExactHint(
+  candidateValue: string | undefined,
+  hintValue: string | undefined,
+  score: number,
+): number {
+  const normalizedCandidate = normalizeTextValue(candidateValue);
+  const normalizedHint = normalizeTextValue(hintValue);
+
+  if (!normalizedCandidate || !normalizedHint) {
+    return 0;
+  }
+
+  return normalizedCandidate === normalizedHint ? score : 0;
+}
+
 async function countVisible(locator: Locator, matchedCount: number): Promise<number> {
   if (matchedCount === 0) {
     return 0;
@@ -145,6 +242,256 @@ async function countVisible(locator: Locator, matchedCount: number): Promise<num
   return visibleCount;
 }
 
+async function collectCandidateSnapshot(
+  locator: Locator,
+  index: number,
+  preferredScopeKind?: ScopeKind,
+): Promise<CandidateSnapshot> {
+  const candidate = locator.nth(index);
+  const visible = await candidate.isVisible().catch(() => false);
+  const details = await candidate
+    .evaluate(
+      (element, scopeKind) => {
+        const normalize = (value: string | null | undefined): string | undefined => {
+          if (!value) {
+            return undefined;
+          }
+
+          const normalized = value.replace(/\s+/g, " ").trim();
+          return normalized.length > 0 ? normalized : undefined;
+        };
+
+        const shorten = (value: string | null | undefined, maxLength = 120): string | undefined => {
+          const normalized = normalize(value);
+          if (!normalized) {
+            return undefined;
+          }
+
+          return normalized.length <= maxLength
+            ? normalized
+            : `${normalized.slice(0, maxLength - 1)}…`;
+        };
+
+        const readLabelText = (targetElement: Element): string | undefined => {
+          const ariaLabel = targetElement.getAttribute("aria-label");
+          if (ariaLabel) {
+            return shorten(ariaLabel);
+          }
+
+          const ariaLabelledBy = targetElement.getAttribute("aria-labelledby");
+          if (ariaLabelledBy) {
+            const text = ariaLabelledBy
+              .split(/\s+/)
+              .map((id) => document.getElementById(id)?.textContent ?? "")
+              .join(" ");
+            const normalizedText = shorten(text);
+            if (normalizedText) {
+              return normalizedText;
+            }
+          }
+
+          if ("labels" in targetElement) {
+            const labels = Array.from((targetElement as HTMLInputElement).labels ?? [])
+              .map((label) => label.textContent ?? "")
+              .join(" ");
+            const normalizedText = shorten(labels);
+            if (normalizedText) {
+              return normalizedText;
+            }
+          }
+
+          return shorten(targetElement.closest("label")?.textContent);
+        };
+
+        const scopeSelectors: Record<string, string> = {
+          row: "tr, [role='row']",
+          listitem: "li, [role='listitem']",
+          dialog: "[role='dialog'], dialog, .el-dialog",
+          tabpanel: "[role='tabpanel']",
+          section: "section, article, [role='region']",
+          card: "[data-card], [class*='card'], article, [role='group']",
+        };
+
+        const scopeKinds = scopeKind
+          ? [scopeKind]
+          : (["row", "listitem", "dialog", "tabpanel", "section", "card"] as const);
+        for (const candidateScopeKind of scopeKinds) {
+          const selector = scopeSelectors[candidateScopeKind];
+          if (!selector) {
+            continue;
+          }
+          const container = element.closest(selector);
+          const scopeText = shorten(container?.textContent, 160);
+          if (scopeText) {
+            return {
+              tagName: element.tagName.toLowerCase(),
+              inputType:
+                "type" in element && typeof (element as HTMLInputElement).type === "string"
+                  ? (element as HTMLInputElement).type
+                  : undefined,
+              nameAttr: shorten(element.getAttribute("name")),
+              placeholder: shorten(element.getAttribute("placeholder")),
+              labelText: readLabelText(element),
+              textSample: shorten(element.textContent, 120),
+              scopeKind: candidateScopeKind,
+              scopeText,
+            };
+          }
+        }
+
+        return {
+          tagName: element.tagName.toLowerCase(),
+          inputType:
+            "type" in element && typeof (element as HTMLInputElement).type === "string"
+              ? (element as HTMLInputElement).type
+              : undefined,
+          nameAttr: shorten(element.getAttribute("name")),
+          placeholder: shorten(element.getAttribute("placeholder")),
+          labelText: readLabelText(element),
+          textSample: shorten(element.textContent, 120),
+        };
+      },
+      preferredScopeKind,
+    )
+    .catch(() => ({}));
+
+  return {
+    index,
+    visible,
+    ...details,
+  };
+}
+
+function buildCandidateSummary(
+  snapshot: CandidateSnapshot,
+  hints: Target["hints"],
+): CandidateSummary {
+  let score = 0;
+  const matchedHints: string[] = [];
+
+  const pushMatch = (label: string, points: number) => {
+    if (points <= 0) {
+      return;
+    }
+
+    score += points;
+    matchedHints.push(label);
+  };
+
+  pushMatch("scopeText", scoreTextHint(snapshot.scopeText, hints?.scopeText, 24, 16));
+  pushMatch("scopeKind", scoreExactHint(snapshot.scopeKind, hints?.scopeKind, 4));
+  pushMatch("labelText", scoreTextHint(snapshot.labelText, hints?.labelText, 12, 8));
+  pushMatch("placeholder", scoreTextHint(snapshot.placeholder, hints?.placeholder, 10, 6));
+  pushMatch("nameAttr", scoreTextHint(snapshot.nameAttr, hints?.nameAttr, 10, 6));
+  pushMatch("textSample", scoreTextHint(snapshot.textSample, hints?.textSample, 8, 4));
+  pushMatch("tagName", scoreExactHint(snapshot.tagName, hints?.tagName, 2));
+  pushMatch("inputType", scoreExactHint(snapshot.inputType, hints?.inputType, 2));
+
+  return {
+    ...snapshot,
+    score,
+    matchedHints,
+  };
+}
+
+function formatCandidateSummary(candidate: CandidateSummary): string {
+  const parts = [
+    `#${candidate.index + 1}`,
+    `${candidate.score} 分`,
+    candidate.visible ? "可见" : "不可见",
+  ];
+
+  if (candidate.scopeText) {
+    parts.push(`scope=${truncateText(candidate.scopeText)}`);
+  }
+  if (candidate.labelText) {
+    parts.push(`label=${truncateText(candidate.labelText)}`);
+  }
+  if (candidate.placeholder) {
+    parts.push(`placeholder=${truncateText(candidate.placeholder)}`);
+  }
+  if (candidate.textSample) {
+    parts.push(`text=${truncateText(candidate.textSample)}`);
+  }
+  if (candidate.matchedHints.length > 0) {
+    parts.push(`命中 ${candidate.matchedHints.join("/")}`);
+  }
+
+  return parts.join("，");
+}
+
+async function resolveCandidateLocator(
+  locator: Locator,
+  target: Target,
+  matchedCount: number,
+  desiredState: TargetWaitState,
+): Promise<CandidateResolution> {
+  const candidateSnapshots = await Promise.all(
+    Array.from({ length: matchedCount }, (_, index) =>
+      collectCandidateSnapshot(locator, index, target.hints?.scopeKind),
+    ),
+  );
+  const candidateSummaries = candidateSnapshots.map((snapshot) =>
+    buildCandidateSummary(snapshot, target.hints),
+  );
+
+  const candidatePool =
+    desiredState === "visible"
+      ? candidateSummaries.filter((candidate) => candidate.visible)
+      : candidateSummaries;
+  if (candidatePool.length === 1) {
+    const selectedIndex = candidatePool[0]!.index;
+    return {
+      status: "selected",
+      locator: locator.nth(selectedIndex),
+      selectedIndex,
+      candidateSummaries,
+    };
+  }
+
+  const rankedCandidates = [...candidatePool].sort((left, right) => {
+    if (right.score !== left.score) {
+      return right.score - left.score;
+    }
+    return left.index - right.index;
+  });
+  const bestCandidate = rankedCandidates[0];
+
+  if (!bestCandidate) {
+    return {
+      status: "ambiguous",
+      reason: "没有可用于消解的候选元素",
+      candidateSummaries,
+    };
+  }
+
+  const tiedTopCandidates = rankedCandidates.filter(
+    (candidate) => candidate.score === bestCandidate.score,
+  );
+  if (bestCandidate.score < MIN_DISAMBIGUATION_SCORE) {
+    return {
+      status: "ambiguous",
+      reason: `最高分 ${bestCandidate.score} 过低，无法唯一确定候选`,
+      candidateSummaries,
+    };
+  }
+
+  if (tiedTopCandidates.length > 1) {
+    return {
+      status: "ambiguous",
+      reason: `最高分 ${bestCandidate.score} 并列，无法唯一确定候选`,
+      candidateSummaries,
+    };
+  }
+
+  return {
+    status: "selected",
+    locator: locator.nth(bestCandidate.index),
+    selectedIndex: bestCandidate.index,
+    candidateSummaries,
+  };
+}
+
 async function buildTargetDiagnosticError(
   page: Page,
   target: Target,
@@ -158,6 +505,20 @@ async function buildTargetDiagnosticError(
       const metrics = [`匹配 ${attempt.matchedCount} 个`];
       if (attempt.visibleCount !== undefined) {
         metrics.push(`可见 ${attempt.visibleCount} 个`);
+      }
+      if (attempt.selectedIndex !== undefined) {
+        metrics.push(`选中候选 #${attempt.selectedIndex + 1}`);
+      }
+      if (attempt.ambiguityReason) {
+        metrics.push(`歧义：${attempt.ambiguityReason}`);
+      }
+      if (attempt.candidateSummaries?.length) {
+        metrics.push(
+          `候选：${attempt.candidateSummaries
+            .slice(0, 3)
+            .map((candidate) => formatCandidateSummary(candidate))
+            .join("；")}`,
+        );
       }
       if (attempt.error) {
         metrics.push(`错误：${attempt.error}`);
@@ -278,6 +639,7 @@ async function resolveTarget(
     const label = formatStrategyLabel(strategy);
     const locator = strategyToLocator(page, strategy);
     const first = locator.first();
+    let resolvedLocator = first;
     const attempt: StrategyAttempt = {
       label,
       matchedCount: await locator.count().catch(() => 0),
@@ -288,14 +650,33 @@ async function resolveTarget(
     }
 
     try {
-      await first.waitFor({ state: desiredState, timeout: perStrategyTimeout });
+      if (attempt.matchedCount > 1) {
+        const resolution = await resolveCandidateLocator(
+          locator,
+          target,
+          attempt.matchedCount,
+          desiredState,
+        );
+        attempt.candidateSummaries = resolution.candidateSummaries;
+        if (resolution.status === "ambiguous") {
+          attempt.ambiguityReason = resolution.reason;
+          attempt.error = resolution.reason;
+          attempts.push(attempt);
+          lastError = new Error(resolution.reason);
+          continue;
+        }
+        attempt.selectedIndex = resolution.selectedIndex;
+        resolvedLocator = resolution.locator;
+      }
+
+      await resolvedLocator.waitFor({ state: desiredState, timeout: perStrategyTimeout });
       attempt.success = true;
       attempt.matchedCount = await locator.count().catch(() => attempt.matchedCount);
       attempt.visibleCount = await countVisible(locator, attempt.matchedCount).catch(
         () => attempt.visibleCount ?? 0,
       );
       attempts.push(attempt);
-      return first;
+      return resolvedLocator;
     } catch (error) {
       attempt.error = formatUnknownError(error);
       attempts.push(attempt);
@@ -329,6 +710,7 @@ async function waitForTargetState(
     const label = formatStrategyLabel(strategy);
     const locator = strategyToLocator(page, strategy);
     const first = locator.first();
+    let resolvedLocator = first;
     const attempt: StrategyAttempt = {
       label,
       matchedCount: await locator.count().catch(() => 0),
@@ -344,8 +726,22 @@ async function waitForTargetState(
         attempt.matchedCount = await locator.count().catch(() => attempt.matchedCount);
       }
 
+      if (attempt.matchedCount > 1) {
+        const resolution = await resolveCandidateLocator(locator, target, attempt.matchedCount, state);
+        attempt.candidateSummaries = resolution.candidateSummaries;
+        if (resolution.status === "ambiguous") {
+          attempt.ambiguityReason = resolution.reason;
+          attempt.error = resolution.reason;
+          attempts.push(attempt);
+          lastError = new Error(resolution.reason);
+          continue;
+        }
+        attempt.selectedIndex = resolution.selectedIndex;
+        resolvedLocator = resolution.locator;
+      }
+
       attempt.visibleCount = await countVisible(locator, attempt.matchedCount).catch(() => 0);
-      await first.waitFor({ state, timeout: perStrategyTimeout });
+      await resolvedLocator.waitFor({ state, timeout: perStrategyTimeout });
       attempt.success = true;
       attempt.matchedCount = await locator.count().catch(() => attempt.matchedCount);
       attempt.visibleCount = await countVisible(locator, attempt.matchedCount).catch(
