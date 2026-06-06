@@ -3568,3 +3568,123 @@
     - 创建 3 个隔离 worktree
     - 依据编排板派发子代理
     - 在 Node 20 下完成分层验收、合并与回收
+
+## 2026-06-07 Wave 7 Recorded Replay Coverage Expansion 启动
+
+- 时间：2026-06-07 02:40:27 CST
+- 任务目标：
+  - 在 `packages/runtime/src/playwright-runner.test.ts` 新增 4 条 recorded replay 整链回归：
+    - `repeated-row-actions`
+    - `linked-filters`
+    - `session-dashboard`
+    - `drawer-double-save`
+  - 仅当红灯明确证明 recorder 归一化存在缺口时，才最小修改：
+    - `packages/recorder/src/normalize.ts`
+    - `packages/recorder/src/normalize.test.ts`
+- 所用技能：
+  - `using-superpowers`：确认本轮先走技能检查再动手。
+  - `test-driven-development`：先写新增红灯测试，再决定是否需要生产代码修补。
+  - `verification-before-completion`：完成前必须用 Node 20 重新执行指定命令。
+- 工具与替代说明：
+  - 当前环境未提供 `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code`。
+  - 采用 CodeGraph、本地 `rg`/`sed`、既有文档与现有测试替代，且不因工具缺失跳过验证。
+- 已完成上下文收集：
+  - 文档：
+    - `docs/architecture/overview.md`
+    - `docs/domain/flow-dsl.md`
+    - `docs/superpowers/plans/2026-05-26-run-first-roadmap.md`
+    - `docs/superpowers/specs/2026-06-07-real-page-stability-wave7-design.md`
+    - `docs/superpowers/plans/2026-06-07-real-page-stability-wave7-plan.md`
+    - `docs/superpowers/plans/2026-06-07-real-page-stability-wave7-orchestration.md`
+    - `docs/guides/fixture-matrix.md`
+  - 代码：
+    - `packages/runtime/src/playwright-runner.test.ts`
+    - `packages/recorder/src/normalize.ts`
+    - `packages/recorder/src/normalize.test.ts`
+    - `examples/real-page-smoke.ts`
+    - `examples/fixtures/session-dashboard.html`
+    - `examples/fixtures/linked-filters.html`
+    - `examples/fixtures/drawer-double-save.html`
+    - `examples/fixtures/repeated-row-actions.html`
+- 关键上下文结论：
+  - 现有 recorded replay 样板已覆盖 `upload`、`spa-route`、`filterable-list`、`contenteditable-editor`、`session-expired-retry`、`bulk-cross-page-selection`、`placeholder-disambiguation`。
+  - `session-dashboard` 的手写 Flow 已证明 `storageStatePath` 能工作；本轮要把这条能力补进 recorded replay 链路。
+  - `repeated-row-actions` 的手写 Flow 已证明 runtime 会消费 `scopeText / scopeKind`；本轮要把这条能力补进 recorded event -> Flow 闭环。
+  - `linked-filters` 与 `drawer-double-save` 的手写矩阵已给出成功断言，可直接转成 recorded event 场景。
+
+## 编码前检查 - Wave 7 Recorded Replay Coverage Expansion
+
+时间：2026-06-07 02:40:27 CST
+
+□ 已查阅上下文摘要文件：`.codex/context-summary-wave7-recorded-replay.md`
+□ 将使用以下可复用组件：
+
+- `buildRecordedFlowMeta`: `packages/runtime/src/playwright-runner.test.ts` - 统一 recorded flow meta
+- `startStaticServer`: `packages/runtime/src/playwright-runner.test.ts` - 为 session 场景提供稳定 origin
+- `buildFlowFromEvents`: `packages/recorder/src/normalize.ts` - 录制事件归一化入口
+- `parseRecordedEvent`: `packages/shared/src/recording-protocol.ts` - 录制事件 schema 校验入口
+□ 将遵循命名约定：沿用“支持将录制事件构建出的 X Flow 直接回放”测试命名风格
+□ 将遵循代码风格：保持当前测试文件的事件数组 + `buildFlowFromEvents()` + `executeFlow()` 结构
+□ 确认不重复造轮子，证明：已检查 `packages/runtime/src/playwright-runner.test.ts` 现有 recorded replay 用例、`examples/real-page-smoke.ts` 手写矩阵、`packages/recorder/src/normalize.test.ts` 等待推断回归，暂无等价场景覆盖上述 4 条目标
+
+## 任务计划 - Wave 7 Recorded Replay Coverage Expansion
+
+时间：2026-06-07 02:40:27 CST
+
+1. 先在 `packages/runtime/src/playwright-runner.test.ts` 新增 4 条 recorded replay 回归，不提前修改 recorder。
+2. 使用 Node 20 执行 `pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts` 验证红灯。
+3. 若红灯指向 recorder 归一化或等待推断，再最小修改 `packages/recorder/src/normalize.ts`，并在 `packages/recorder/src/normalize.test.ts` 补对应回归。
+4. 重新执行用户指定的 recorder/runtime 两条命令，随后执行 `git diff --check`。
+5. 更新 `.codex/verification-report.md`，最后用中文 commit 提交。
+
+## 编码后声明 - Wave 7 Recorded Replay Coverage Expansion
+
+时间：2026-06-07 02:47:57 CST
+
+### 1. 复用了以下既有组件
+
+- `buildRecordedFlowMeta`: 用于统一 4 条新增 recorded replay 用例的 Flow meta，位于 `packages/runtime/src/playwright-runner.test.ts`
+- `startStaticServer`: 用于 `session-dashboard` 的稳定 origin 注入，位于 `packages/runtime/src/playwright-runner.test.ts`
+- `parseRecordedEvent`: 用于将构造的 `RecordedEvent[]` 走共享协议校验，位于 `packages/shared/src/recording-protocol.ts`
+- `buildFlowFromEvents`: 用于把 recorded events 归一化为 Flow，位于 `packages/recorder/src/normalize.ts`
+- `executeFlow`: 用于最终真实回放，位于 `packages/runtime/src/playwright-runner.ts`
+
+### 2. 遵循了以下项目约定
+
+- 命名约定：新增测试全部沿用“支持将录制事件构建出的 X Flow 直接回放”格式。
+- 代码风格：继续使用事件数组 + `buildFlowFromEvents()` + `executeFlow()` 的 runtime recorded replay 模板，没有引入第二套 helper 或手写 Flow 替代链路。
+- 文件组织：只修改主写文件 `packages/runtime/src/playwright-runner.test.ts`，并在仓库 `.codex/` 下补留痕；未触碰 `examples/**`、`apps/**`、`package.json`。
+
+### 3. 对比了以下相似实现
+
+- `packages/runtime/src/playwright-runner.test.ts:511`
+  - 我的方案与其差异是：从 `upload`/`filterable-list` 扩展到 4 个 `p7` 场景，但仍保留同一 recorded replay 证据链。
+- `packages/runtime/src/playwright-runner.test.ts:838`
+  - 我的方案与其差异是：复用其 `storageStatePath` 注入模式到 `session-dashboard`，但目标从“会话过期重试”切换为“登录态仪表盘”。
+- `packages/runtime/src/playwright-runner.test.ts:1238`
+  - 我的方案与其差异是：把原本手写 Flow 的 `scopeText / scopeKind` 行消歧，升级成 recorded event -> Flow 的整链回放证明。
+
+### 4. 未重复造轮子的证明
+
+- 检查了 `packages/runtime/src/playwright-runner.test.ts` 的现有 recorded replay 用例，确认不存在 `repeated-row-actions`、`linked-filters`、`session-dashboard`、`drawer-double-save` 的 recorded coverage。
+- 检查了 `examples/real-page-smoke.ts` 的手写矩阵，直接复用了现有 fixture 与断言目标，没有新增 fixture 或平行测试入口。
+- 红灯验证后未发现 recorder 归一化缺口，因此没有扩写 `packages/recorder/**` 的实现边界。
+
+## 验证记录 - Wave 7 Recorded Replay Coverage Expansion
+
+时间：2026-06-07 02:47:57 CST
+
+1. Runtime 定向验证（Node 20）
+   - 命令：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+   - 结果：通过，`25/25`
+   - 关键信息：
+     - 新增 4 条 recorded replay 用例全部首次通过
+     - 未暴露需要修改 `packages/recorder/**` 的 recorder 边界缺口
+2. Recorder 定向验证（Node 20）
+   - 命令：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test -- normalize.test.ts`
+   - 结果：通过，`30/30`
+3. 当前实现边界结论
+   - 仅增加 runtime recorded replay 覆盖即可满足本轨道目标。
+   - `packages/recorder/src/normalize.ts` 与 `packages/recorder/src/normalize.test.ts` 无需改动。
