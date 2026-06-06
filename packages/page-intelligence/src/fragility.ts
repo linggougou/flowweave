@@ -1,5 +1,13 @@
 import type { FlowDocument, NormalizedStep } from "@flowweave/flow-dsl";
 
+const variablePattern = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g;
+const variablePresencePattern = /\{\{\s*[A-Za-z0-9_]+\s*\}\}/;
+
+export type FragilityAnalysisContext = {
+  baseUrl?: string;
+  variables?: Record<string, unknown>;
+};
+
 export type FragilityIssue = {
   stepId: string;
   stepIndex: number;
@@ -8,10 +16,71 @@ export type FragilityIssue = {
     | "NO_STRATEGIES"
     | "CSS_NTH_OF_TYPE"
     | "TEXT_ONLY"
-    | "WAIT_MAY_BE_UNSTABLE";
+    | "WAIT_MAY_BE_UNSTABLE"
+    | "MISSING_ENVIRONMENT"
+    | "MISSING_VARIABLE";
   message: string;
   severity: "warning" | "error";
 };
+
+function isAbsoluteUrl(value: string): boolean {
+  return /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(value);
+}
+
+function interpolateVariables(
+  value: string,
+  variables?: FragilityAnalysisContext["variables"],
+): string {
+  if (!variables) {
+    return value;
+  }
+
+  return value.replace(variablePattern, (match, variableName: string) => {
+    const resolved = variables[variableName];
+    return resolved === undefined ? match : String(resolved);
+  });
+}
+
+function extractVariableNames(value: unknown): string[] {
+  if (typeof value === "string") {
+    return Array.from(value.matchAll(variablePattern), (match) => match[1] ?? "");
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => extractVariableNames(item));
+  }
+
+  if (value && typeof value === "object") {
+    return Object.values(value).flatMap((entryValue) => extractVariableNames(entryValue));
+  }
+
+  return [];
+}
+
+function hasVariablePlaceholder(value: string): boolean {
+  return variablePresencePattern.test(value);
+}
+
+function collectAvailableVariables(
+  flow: FlowDocument,
+  context: FragilityAnalysisContext,
+): Set<string> {
+  const available = new Set<string>();
+
+  flow.variables.forEach((variableDef) => {
+    if (variableDef.defaultValue !== undefined) {
+      available.add(variableDef.name);
+    }
+  });
+
+  Object.entries(context.variables ?? {}).forEach(([name, value]) => {
+    if (value !== undefined) {
+      available.add(name);
+    }
+  });
+
+  return available;
+}
 
 function hasNthOfTypeSelector(step: Extract<NormalizedStep, { type: "click" | "fill" }>): boolean {
   return step.target.strategies.some(
@@ -82,11 +151,57 @@ function inspectStep(step: NormalizedStep, stepIndex: number): FragilityIssue[] 
   return issues;
 }
 
-/** 对 Flow 做脆弱性体检 */
-export function analyzeFlowFragility(flow: FlowDocument): FragilityIssue[] {
+function inspectContextualStep(
+  step: NormalizedStep,
+  stepIndex: number,
+  context: FragilityAnalysisContext,
+  availableVariables: Set<string>,
+): FragilityIssue[] {
   const issues: FragilityIssue[] = [];
+
+  const normalizedBaseUrl = context.baseUrl?.trim();
+  if (step.type === "navigate" && !normalizedBaseUrl) {
+    const resolvedUrl = interpolateVariables(step.url, context.variables);
+    if (!hasVariablePlaceholder(resolvedUrl) && !isAbsoluteUrl(resolvedUrl)) {
+      issues.push({
+        stepId: step.id,
+        stepIndex,
+        code: "MISSING_ENVIRONMENT",
+        message: "流程包含相对地址，但当前没有可用 baseUrl，真实页面回放会直接失败",
+        severity: "error",
+      });
+    }
+  }
+
+  if (context.variables !== undefined) {
+    const missingVariables = Array.from(new Set(extractVariableNames(step))).filter(
+      (variableName) => variableName && !availableVariables.has(variableName),
+    );
+
+    if (missingVariables.length > 0) {
+      issues.push({
+        stepId: step.id,
+        stepIndex,
+        code: "MISSING_VARIABLE",
+        message: `步骤引用了缺失变量：${missingVariables.join("、")}`,
+        severity: "error",
+      });
+    }
+  }
+
+  return issues;
+}
+
+/** 对 Flow 做脆弱性体检 */
+export function analyzeFlowFragility(
+  flow: FlowDocument,
+  context: FragilityAnalysisContext = {},
+): FragilityIssue[] {
+  const issues: FragilityIssue[] = [];
+  const availableVariables = collectAvailableVariables(flow, context);
   flow.steps.forEach((step, stepIndex) => {
     issues.push(...inspectStep(step, stepIndex));
+    issues.push(...inspectContextualStep(step, stepIndex, context, availableVariables));
   });
   return issues;
 }

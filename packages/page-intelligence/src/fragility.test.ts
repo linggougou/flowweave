@@ -16,6 +16,45 @@ function baseFlow(steps: FlowDocument["steps"]): FlowDocument {
 }
 
 describe("analyzeFlowFragility", () => {
+  it("当相对地址 navigate 缺少 baseUrl 时给出 MISSING_ENVIRONMENT", () => {
+    const flow = baseFlow([
+      {
+        id: "s1",
+        type: "navigate",
+        url: "/orders",
+      },
+    ]);
+
+    const codes = analyzeFlowFragility(flow).map((issue) => issue.code as string);
+    expect(codes).toContain("MISSING_ENVIRONMENT");
+  });
+
+  it("当步骤引用变量但运行输入缺失时给出 MISSING_VARIABLE", () => {
+    const flow = baseFlow([
+      {
+        id: "s1",
+        type: "navigate",
+        url: "https://example.com/login",
+      },
+      {
+        id: "s2",
+        type: "fill",
+        target: {
+          strategies: [{ kind: "role", role: "textbox", name: "用户名" }],
+        },
+        value: "{{username}}",
+      },
+    ]);
+
+    const codes = analyzeFlowFragility(flow, {
+      variables: {
+        providedOnly: "ok",
+      },
+    }).map((issue) => issue.code as string);
+
+    expect(codes).toContain("MISSING_VARIABLE");
+  });
+
   it("对纯 css 步骤给出 warning", () => {
     const flow = baseFlow([
       {
