@@ -292,6 +292,116 @@ function buildPlainArrowInputFixtureHtml(): string {
 </html>`;
 }
 
+function buildControlledFillRetryFixtureHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+  <body>
+    <label for="customer-name">客户名称</label>
+    <input id="customer-name" type="text" autocomplete="off" />
+    <button id="submit-save" type="button" disabled>提交</button>
+    <p id="save-result" hidden data-ready="false" data-name="">待提交</p>
+
+    <script>
+      const submitSave = document.getElementById("submit-save");
+      const saveResult = document.getElementById("save-result");
+      let fillResetConsumed = false;
+
+      function syncSubmitState(input) {
+        submitSave.disabled = input.value.trim().length === 0;
+      }
+
+      function bindInput(input) {
+        input.addEventListener("input", () => {
+          if (!fillResetConsumed) {
+            fillResetConsumed = true;
+            window.setTimeout(() => {
+              const replacement = input.cloneNode(true);
+              replacement.value = "";
+              input.replaceWith(replacement);
+              bindInput(replacement);
+              syncSubmitState(replacement);
+            }, 0);
+            return;
+          }
+
+          syncSubmitState(input);
+        });
+      }
+
+      bindInput(document.getElementById("customer-name"));
+
+      submitSave.addEventListener("click", () => {
+        const currentInput = document.getElementById("customer-name");
+        if (currentInput.value.trim().length === 0) {
+          return;
+        }
+
+        saveResult.hidden = false;
+        saveResult.dataset.ready = "true";
+        saveResult.dataset.name = currentInput.value.trim();
+        saveResult.textContent = "已提交：" + currentInput.value.trim();
+      });
+    </script>
+  </body>
+</html>`;
+}
+
+function buildControlledCheckboxRetryFixtureHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+  <body>
+    <label>
+      <input id="agree-checkbox" type="checkbox" />
+      同意协议
+    </label>
+    <button id="save-preferences" type="button" disabled>保存</button>
+    <p id="checkbox-result" hidden data-ready="false" data-checked="false">待保存</p>
+
+    <script>
+      const saveButton = document.getElementById("save-preferences");
+      const checkboxResult = document.getElementById("checkbox-result");
+      let resetConsumed = false;
+
+      function syncSaveState(checkbox) {
+        saveButton.disabled = !checkbox.checked;
+      }
+
+      function bindCheckbox(checkbox) {
+        checkbox.addEventListener("change", () => {
+          if (checkbox.checked && !resetConsumed) {
+            resetConsumed = true;
+            window.setTimeout(() => {
+              const replacement = checkbox.cloneNode(true);
+              replacement.checked = false;
+              checkbox.closest("label").replaceChildren(replacement, document.createTextNode(" 同意协议"));
+              bindCheckbox(replacement);
+              syncSaveState(replacement);
+            }, 0);
+            return;
+          }
+
+          syncSaveState(checkbox);
+        });
+      }
+
+      bindCheckbox(document.getElementById("agree-checkbox"));
+
+      saveButton.addEventListener("click", () => {
+        const checkbox = document.getElementById("agree-checkbox");
+        if (!checkbox.checked) {
+          return;
+        }
+
+        checkboxResult.hidden = false;
+        checkboxResult.dataset.ready = "true";
+        checkboxResult.dataset.checked = "true";
+        checkboxResult.textContent = "保存成功";
+      });
+    </script>
+  </body>
+</html>`;
+}
+
 function buildSessionDashboardHtml(): string {
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -1684,6 +1794,102 @@ describe("executeFlow", () => {
 
     expect(result.status).toBe("success");
     expect(result.steps[1]?.durationMs ?? 0).toBeLessThan(1_100);
+  });
+
+  it("fill 后若受控输入被重渲染清空，会重新定位并补写一次", async () => {
+    const fixtureDir = mkdtempSync(join(tmpdir(), "fw-runtime-fill-retry-"));
+    cleanupPaths.add(fixtureDir);
+    const fixturePath = join(fixtureDir, "controlled-fill-retry.html");
+    writeFileSync(fixturePath, buildControlledFillRetryFixtureHtml(), "utf-8");
+    const fixtureUrl = pathToFileURL(fixturePath).href;
+
+    const result = await executeFlow(
+      buildFlow("flow_controlled_fill_retry", "受控输入补写流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: fixtureUrl,
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "fill",
+          target: { strategies: [{ kind: "css", selector: "#customer-name" }] },
+          value: "客户 A",
+        },
+        {
+          id: "s3",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#submit-save" }] },
+        },
+        {
+          id: "s4",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#save-result[data-ready='true'][data-name='客户 A']",
+              },
+            ],
+          },
+        },
+      ]),
+      {
+        headless: true,
+      },
+    );
+
+    expect(result.status).toBe("success");
+  });
+
+  it("setChecked 后若受控勾选被重置，会重新定位并补设一次", async () => {
+    const fixtureDir = mkdtempSync(join(tmpdir(), "fw-runtime-check-retry-"));
+    cleanupPaths.add(fixtureDir);
+    const fixturePath = join(fixtureDir, "controlled-checkbox-retry.html");
+    writeFileSync(fixturePath, buildControlledCheckboxRetryFixtureHtml(), "utf-8");
+    const fixtureUrl = pathToFileURL(fixturePath).href;
+
+    const result = await executeFlow(
+      buildFlow("flow_controlled_checkbox_retry", "受控勾选补设流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: fixtureUrl,
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "setChecked",
+          target: { strategies: [{ kind: "css", selector: "#agree-checkbox" }] },
+          checked: true,
+        },
+        {
+          id: "s3",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#save-preferences" }] },
+        },
+        {
+          id: "s4",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#checkbox-result[data-ready='true'][data-checked='true']",
+              },
+            ],
+          },
+        },
+      ]),
+      {
+        headless: true,
+      },
+    );
+
+    expect(result.status).toBe("success");
   });
 
   it("支持真实页面风格的命令面板键盘回放", async () => {
