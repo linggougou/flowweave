@@ -1926,3 +1926,68 @@
 - 结论：
   - Foundation 已完成，可作为后续 5 个 worktree 的共同基线。
   - 同一阻塞条件未连续出现 3 次，无需标记为阻塞。
+
+## 并行执行启动 - worktree 与 worker 首批派发
+
+- 时间：2026-06-07 00:24:00 CST
+- worktree 基线：
+  - 所有新 worktree 均从 `bc6e191 feat: 提供共享占位符协议基线` 起跑
+  - 已创建：
+    - `.worktrees/codex-real-page-recorder-contract`
+    - `.worktrees/codex-real-page-runtime-contract`
+    - `.worktrees/codex-real-page-studio-experience`
+    - `.worktrees/codex-real-page-benchmarks-p5`
+    - `.worktrees/codex-ci-runtime-refresh`
+  - 已核对 5 个 worktree 的 `git status --short` 为空，`HEAD` 全部为 `bc6e191`
+- 子代理派发结果：
+  - Recorder Placeholder Contract：
+    - `Sagan / 019e9d17-8688-78b1-86e7-ee7dd9ae33bd`
+    - 工作树：`.worktrees/codex-real-page-recorder-contract`
+  - Runtime Replay Contract：
+    - `Heisenberg / 019e9d17-86ef-7f11-a8c1-a1ea0a085123`
+    - 工作树：`.worktrees/codex-real-page-runtime-contract`
+  - Studio Experience：
+    - `Hilbert / 019e9d17-8748-7f60-9d50-cf1b78943f0d`
+    - 工作树：`.worktrees/codex-real-page-studio-experience`
+- 工具插曲：
+  - 首次调用 `multi_agent_v1.spawn_agent` 时误同时传入 `message` 与 `items`，工具返回参数错误。
+  - 已立即改为“`skill` + `text` items”模式重新派发，同一阻塞未重复出现，无需标记为阻塞。
+  - 随后再派发第 4、5 个 worker 时命中当前 agent thread limit。
+- 资源回收：
+  - 已关闭上一轮 3 个只读 explorer，释放配额：
+    - `Lovelace / 019e9d03-6903-77f2-90e2-4c6067e49708`
+    - `Locke / 019e9d03-8a65-7a83-9004-ac7df7bbb324`
+    - `Ampere / 019e9d03-b80d-74c0-842b-9f621b475cf4`
+- 当前决策：
+  - 由于当前并发上限仍只允许 3 个活跃 worker，`Benchmarks P5` 与 `CI Runtime Refresh` 将在首批 worker 任一条轨道完成后立即补派。
+  - 主代理此时不重复实现已委派范围，转而负责：
+    - 统一留痕
+    - 回收节奏控制
+    - 后续规格复核与 Node 20 集成验收
+
+## 并行执行补派 - 复用已关闭子代理线程
+
+- 时间：2026-06-07 00:29:00 CST
+- 背景：
+  - 新建 agent thread 受并发上限限制，直接 `spawn` 第 4、5 个 worker 会失败。
+  - 为避免空等，主代理改为复用刚关闭的相关子代理线程。
+- 已恢复并转派：
+  - `Lovelace / 019e9d03-6903-77f2-90e2-4c6067e49708`
+    - 新职责：`Benchmarks P5`
+    - 工作树：`.worktrees/codex-real-page-benchmarks-p5`
+    - 发送方式：`resume_agent` + `send_input interrupt=true`
+  - `Ampere / 019e9d03-b80d-74c0-842b-9f621b475cf4`
+    - 新职责：`CI Runtime Refresh`
+    - 工作树：`.worktrees/codex-ci-runtime-refresh`
+    - 发送方式：`resume_agent` + `send_input interrupt=true`
+- 当前 5 条轨道对应关系：
+  - Recorder Placeholder Contract：`Sagan / 019e9d17-8688-78b1-86e7-ee7dd9ae33bd`
+  - Runtime Replay Contract：`Heisenberg / 019e9d17-86ef-7f11-a8c1-a1ea0a085123`
+  - Studio Experience：`Hilbert / 019e9d17-8748-7f60-9d50-cf1b78943f0d`
+  - Benchmarks P5：`Lovelace / 019e9d03-6903-77f2-90e2-4c6067e49708`
+  - CI Runtime Refresh：`Ampere / 019e9d03-b80d-74c0-842b-9f621b475cf4`
+- Node 20 协调分支补充验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm lint`
+  - 结果：通过，`12 successful, 12 total`
+- 结论：
+  - 当前已进入“等待结果回流 -> 逐条验收并回”的阶段。
