@@ -1,3 +1,4 @@
+import type { BrowserContext } from "playwright";
 import type { NormalizedStep } from "@flowweave/flow-dsl";
 import type { PageSnapshotSummary } from "@flowweave/page-intelligence";
 
@@ -36,6 +37,10 @@ export interface ExecutionResult {
   };
 }
 
+export type ExecutionVariableValue = string | number | boolean;
+
+export type ExecutionCookie = Parameters<BrowserContext["addCookies"]>[0][number];
+
 export type ExecutionOptions = {
   /** 默认 true */
   headless?: boolean;
@@ -47,4 +52,14 @@ export type ExecutionOptions = {
   artifactDir?: string;
   /** 是否记录 HAR（需 artifactDir），默认 true */
   recordHar?: boolean;
+  /** 为相对路径 navigate 提供基础地址 */
+  baseUrl?: string;
+  /** 运行时变量，供后续插值与环境注入使用 */
+  variables?: Record<string, ExecutionVariableValue>;
+  /** Playwright storageState JSON 文件路径 */
+  storageStatePath?: string;
+  /** 追加注入到 BrowserContext 的 Cookie 列表 */
+  cookies?: ExecutionCookie[];
+  /** 当前运行使用的环境名称，便于诊断与落盘 */
+  environmentName?: string;
 };

@@ -22,6 +22,7 @@ export type ProjectEnvironment = {
   name: string;
   baseUrl: string;
   isDefault: boolean;
+  storageStatePath?: string;
 };
 
 export type PageSnapshotRecord = {

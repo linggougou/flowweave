@@ -1,4 +1,4 @@
-# Flow DSL 规范（草案 v0.1）
+# Flow DSL 规范（草案 v0.2）
 
 > 实现包：`@flowweave/flow-dsl` · `schemaVersion` 当前为 **1**
 
@@ -33,16 +33,25 @@ interface FlowDocument {
 
 | type | 说明 | 关键字段 |
 |------|------|----------|
-| `navigate` | 打开 URL | `url`, `waitUntil` |
+| `navigate` | 打开绝对 URL 或基于 `baseUrl` 的相对路径 | `url`, `waitUntil` |
 | `click` | 点击元素 | `target`, `button` |
 | `fill` | 输入文本 | `target`, `value`, `clear` |
 | `select` | 下拉选择 | `target`, `values` |
-| `press` | 键盘 | `key` |
-| `wait` | 等待 | `ms` 或 `condition` |
-| `assert` | 断言 | `assertion` |
-| `screenshot` | 截图 | `name` |
-| `extract` | 抽取变量 | `target`, `variable` |
-| `apiCall` | 接口步骤（P3+） | `requestTemplateId` |
+| `setChecked` | 设置 checkbox / radio 勾选状态 | `target`, `checked` |
+| `press` | 键盘操作 | `key`, `target?` |
+| `upload` | 文件上传 | `target`, `files` |
+| `wait` | 显式等待 | `ms` 或 `condition` |
+
+### `wait` 条件
+
+| condition | 用途 | 附加字段 |
+|-----------|------|----------|
+| `networkidle` | 等待网络空闲 | 无 |
+| `visible` | 等待目标可见 | `target` |
+| `hidden` | 等待目标隐藏 | `target` |
+| `attached` | 等待目标挂载到 DOM | `target` |
+| `detached` | 等待目标从 DOM 移除 | `target` |
+| `urlIncludes` | 等待 URL 包含指定片段 | `urlIncludes` |
 
 ## 4. 元素定位（Target）
 
@@ -51,6 +60,7 @@ interface FlowDocument {
 ```typescript
 interface Target {
   strategies: LocatorStrategy[];
+  hints?: TargetHints;
 }
 
 type LocatorStrategy =
@@ -59,7 +69,18 @@ type LocatorStrategy =
   | { kind: "css"; selector: string }
   | { kind: "xpath"; expression: string }
   | { kind: "text"; text: string; exact?: boolean };
+
+type TargetHints = {
+  tagName?: string;
+  inputType?: string;
+  nameAttr?: string;
+  placeholder?: string;
+  labelText?: string;
+  textSample?: string;
+};
 ```
+
+`strategies` 是执行主入口，`hints` 用于稳定性分析、失败诊断和后续自愈扩展，不直接参与当前定位优先级。
 
 ## 5. 执行计划（ExecutablePlan）
 
@@ -92,7 +113,7 @@ ExecutablePlan **不**作为用户手改格式长期存储；可缓存于执行�
     {
       "id": "s1",
       "type": "navigate",
-      "url": "https://example.com/login"
+      "url": "/login"
     },
     {
       "id": "s2",
@@ -100,9 +121,20 @@ ExecutablePlan **不**作为用户手改格式长期存储；可缓存于执行�
       "target": {
         "strategies": [
           { "kind": "role", "role": "textbox", "name": "用户名" }
-        ]
+        ],
+        "hints": {
+          "tagName": "input",
+          "nameAttr": "username",
+          "placeholder": "请输入用户名"
+        }
       },
       "value": "{{username}}"
+    },
+    {
+      "id": "s3",
+      "type": "wait",
+      "condition": "urlIncludes",
+      "urlIncludes": "/dashboard"
     }
   ],
   "meta": {
@@ -113,6 +145,22 @@ ExecutablePlan **不**作为用户手改格式长期存储；可缓存于执行�
 }
 ```
 
-## 8. 相关 ADR
+## 8. 当前边界
+
+- 上表中的 8 类步骤是 `schemaVersion: 1` 当前真实支持的 DSL 范围。
+- `press` 的 `target` 为可选；未提供时，后续 runtime 可按页面级键盘操作解释。
+- `upload.files` 当前约定为本地文件路径数组，后续由 runtime 负责映射到 Playwright `setInputFiles`。
+- 变量插值、`baseUrl` 拼接、登录态注入与诊断落盘由 runtime / environment 轨道承接，本文件只冻结数据契约。
+
+## 9. 后续阶段候选能力
+
+以下能力仍处于规划中，**不属于当前 schema 实现范围**：
+
+- `assert`
+- `screenshot`
+- `extract`
+- `apiCall`
+
+## 10. 相关 ADR
 
 - [ADR-0006: Flow DSL 与 Zod 版本化](../adr/0006-flow-dsl-zod-versioning.md)

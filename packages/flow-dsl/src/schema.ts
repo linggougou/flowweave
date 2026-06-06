@@ -9,8 +9,18 @@ export const locatorStrategySchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("text"), text: z.string(), exact: z.boolean().optional() }),
 ]);
 
+export const targetHintsSchema = z.object({
+  tagName: z.string().optional(),
+  inputType: z.string().optional(),
+  nameAttr: z.string().optional(),
+  placeholder: z.string().optional(),
+  labelText: z.string().optional(),
+  textSample: z.string().optional(),
+});
+
 export const targetSchema = z.object({
   strategies: z.array(locatorStrategySchema).min(1),
+  hints: targetHintsSchema.optional(),
 });
 
 export const variableDefSchema = z.object({
@@ -25,10 +35,58 @@ const stepBaseSchema = z.object({
   label: z.string().optional(),
 });
 
+const waitTargetConditions = ["visible", "hidden", "attached", "detached"] as const;
+const waitConditionSchema = z.enum([
+  "networkidle",
+  "visible",
+  "hidden",
+  "attached",
+  "detached",
+  "urlIncludes",
+]);
+
+const waitStepSchema = stepBaseSchema
+  .extend({
+    type: z.literal("wait"),
+    ms: z.number().int().positive().optional(),
+    condition: waitConditionSchema.optional(),
+    target: targetSchema.optional(),
+    urlIncludes: z.string().min(1).optional(),
+  })
+  .superRefine((step, ctx) => {
+    if (step.ms === undefined && step.condition === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["condition"],
+        message: "wait 步骤必须至少提供 ms 或 condition",
+      });
+    }
+
+    if (
+      step.condition !== undefined &&
+      waitTargetConditions.includes(step.condition as (typeof waitTargetConditions)[number]) &&
+      step.target === undefined
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["target"],
+        message: `wait condition=${step.condition} 时必须提供 target`,
+      });
+    }
+
+    if (step.condition === "urlIncludes" && step.urlIncludes === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["urlIncludes"],
+        message: "wait condition=urlIncludes 时必须提供 urlIncludes",
+      });
+    }
+  });
+
 export const normalizedStepSchema = z.discriminatedUnion("type", [
   stepBaseSchema.extend({
     type: z.literal("navigate"),
-    url: z.string().url(),
+    url: z.string().min(1),
     waitUntil: z.enum(["load", "domcontentloaded", "networkidle"]).optional(),
   }),
   stepBaseSchema.extend({
@@ -43,10 +101,26 @@ export const normalizedStepSchema = z.discriminatedUnion("type", [
     clear: z.boolean().optional(),
   }),
   stepBaseSchema.extend({
-    type: z.literal("wait"),
-    ms: z.number().int().positive().optional(),
-    condition: z.enum(["networkidle", "visible"]).optional(),
+    type: z.literal("select"),
+    target: targetSchema,
+    values: z.array(z.string()).min(1),
   }),
+  stepBaseSchema.extend({
+    type: z.literal("setChecked"),
+    target: targetSchema,
+    checked: z.boolean(),
+  }),
+  stepBaseSchema.extend({
+    type: z.literal("press"),
+    target: targetSchema.optional(),
+    key: z.string().min(1),
+  }),
+  stepBaseSchema.extend({
+    type: z.literal("upload"),
+    target: targetSchema,
+    files: z.array(z.string().min(1)).min(1),
+  }),
+  waitStepSchema,
 ]);
 
 export const flowDocumentSchema = z.object({
