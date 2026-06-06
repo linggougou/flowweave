@@ -321,3 +321,175 @@
 - 风险评估评分：94
 - 综合评分：97
 - 建议：通过
+
+## 2026-06-06 Recorder 稳定性缺口只读审查
+
+### 验证范围
+
+- `apps/extension/entrypoints/content.ts` 是否已真实录制 `select / setChecked / press / upload`。
+- `packages/recorder` 是否已将上述事件稳定归一化，并覆盖 spec 要求的去噪与 `target hints`。
+- 当前测试是否证明 Recorder 轨道已经贯通到真实页面录制回放，而不是仅证明 runtime 手写 Flow 可执行。
+
+### 验证结果
+
+1. DSL 与 runtime 能力已具备，但 Recorder 录制闭环仍不完整。
+   - `packages/flow-dsl/src/schema.ts` 与 `packages/runtime/src/playwright-runner.ts` 已支持 `select / setChecked / press / upload / wait`。
+   - `pnpm --filter @flowweave/flow-dsl test` 与 `pnpm --filter @flowweave/runtime test` 均通过，说明“数据模型 + 执行端”没有明显缺口。
+2. `select / setChecked / upload / target hints` 已部分贯通到 Recorder。
+   - `content.ts` 已在 `recordInteractionFromElement()` 中产生：
+     - `select`：`HTMLSelectElement` -> `type: "select"`
+     - `setChecked`：checkbox/radio -> `type: "click"` + `payload.checked`
+     - `upload`：file input -> `type: "fill"` + `payload.files`
+   - `normalize.ts` 已分别归一化为 `select / setChecked / upload`。
+   - `target-from-dom.ts` 已提取并透传 `tagName / inputType / nameAttr / placeholder / labelText / textSample`。
+   - `pnpm --filter @flowweave/recorder test` 通过，说明这些局部能力已有单元测试证据。
+3. `press` 仍未贯通，是最明确的功能缺口。
+   - `packages/shared/src/recording-protocol.ts` 虽保留 `keypress` 事件类型，但 `content.ts` 没有任何键盘监听。
+   - `normalize.ts` 的 `normalizeRecordedEvent()` 也没有 `keypress` 分支。
+   - 结论：当前只能手写 `press` 步骤给 runtime 执行，扩展录制端无法产出。
+4. `upload` 语义只实现到“文件名落盘”，尚未实现“真实可回放来源”。
+   - `content.ts` 的 `readUploadFiles()` 只记录 `file.name`。
+   - runtime `setInputFiles()` 需要真实文件路径或文件描述对象。
+   - 现有 runtime upload 测试使用的是手写绝对路径变量，不是扩展录制结果。
+   - 结论：`upload` 不是“真正贯通”，只是“语义字段存在”。
+5. 去噪仍是当前直接影响稳定性的主要缺口。
+   - `step-filter.ts` 只处理：
+     - 布局噪声 click
+     - `click -> fill/select/setChecked`
+     - 连续 fill 合并
+   - 尚未处理：
+     - 连续相同 `navigate`
+     - `change + blur` 导致的重复 `select / setChecked / upload`
+     - 录制层 `lastFillSignature` 在跨页面或重复同值场景下的误杀风险
+   - 结论：真实页面录制结果仍容易包含重复步骤或缺步骤。
+6. 当前“真实页面验证”不能证明 Recorder 轨道稳定。
+   - `examples/real-page-smoke.ts` 中的 `select / setChecked / upload` 均为手写 `FlowDocument`。
+   - `packages/runtime/src/playwright-runner.test.ts` 证明的是 runtime 回放，而不是扩展录制输出。
+   - 结论：仓库仍缺“真实录制 -> Flow 导出 -> runtime 回放”的整链回归。
+
+### 综合结论
+
+- 代码质量评分：92
+- 测试覆盖评分：81
+- 规范遵循评分：95
+- 战略匹配评分：78
+- 风险评估评分：80
+- 综合评分：85
+- 建议：需讨论
+
+### 审查结论
+
+- 已完成部分主要集中在 DSL、payload 提取、归一化和 runtime 执行底座。
+- 直接影响真实页面录制与回放稳定性的剩余缺口主要有三类：
+  - `press` 未录制；
+  - `upload` 录制信息不足以真实回放；
+  - 去噪与整链回归不足，导致真实页面录制结果仍可能重复、丢失或无法证明可回放。
+- 审查时间：2026-06-06 16:32:38 CST
+
+## 2026-06-06 Benchmarks 缺口只读探索验收
+
+### 验证范围
+
+- 当前真实页面矩阵已覆盖哪些场景。
+- 哪些高价值后台场景仍未覆盖。
+- 推荐的下一轮优先级是否与矩阵文档、稳定性设计和 live matrix 实现一致。
+- 若进入下一轮实现，预计会改哪些文件。
+
+### 验证结果
+
+1. 已覆盖场景边界清晰。
+   - `docs/guides/fixture-matrix.md:21` 与 `examples/real-page-smoke.ts:114` 到 `355` 一致，当前矩阵共 `7` 个 case：
+     - `checkbox-select`
+     - `delayed-panel`
+     - `upload-form`
+     - `spa-route`
+     - `session-dashboard`
+     - `filterable-list`
+     - `modal-bulk-action`
+   - `packages/runtime/src/playwright-runner.test.ts:531` 到 `552` 也已把 `7` 个 case 的数量与名称顺序固化为测试断言。
+2. 未覆盖缺口与文档意图一致。
+   - `docs/guides/fixture-matrix.md:136` 到 `138` 已直接列出分页、Tab、抽屉侧栏、二次确认 toast 与登录失效双态是后续扩展方向。
+   - 仓库内搜索确认当前 `examples/fixtures/` 下尚无这些 fixture，说明它们不是“已有但没接入”，而是确实未落地。
+3. 推荐优先级与 runtime 当前脆弱点对齐。
+   - `packages/runtime/src/playwright-runner.ts:243` 到 `268` 的 `waitForPageSettled()` 目前主要处理 loading mask、`aria-busy` 和 `[data-loading='true']`。
+   - `packages/runtime/src/playwright-runner.ts:321` 到 `376` 与 `503` 到 `520` 表明显式等待主要依赖 `visible/hidden/attached/detached/urlIncludes`。
+   - 因此，登录失效、分页、Drawer、toast/轻量二次确认比再加普通表单更能压出真实后台稳定性问题。
+4. 推荐排序合理。
+   - `P0` 登录失效：补齐当前只验证正向会话恢复、不验证会话过期回退的问题。
+   - `P1` 分页列表：在现有筛选列表基础上继续施压局部刷新、页码切换和结果重挂载。
+   - `P2` Drawer：覆盖非 modal、隐藏不卸载、背景 DOM 共存的后台高频结构。
+   - `P3` toast/轻量二次确认：补齐短暂元素与二段确认链路。
+   - `Tab` 暂列候补：因为 `spa-route` 已部分覆盖同页内容切换，新增价值低于前四项。
+5. 预估改动文件边界明确。
+   - 核心入口仍是：
+     - `docs/guides/fixture-matrix.md`
+     - `examples/real-page-smoke.ts`
+     - `packages/runtime/src/playwright-runner.test.ts`
+   - fixture 层建议新增独立页面，而不是把所有状态塞进既有 `session-dashboard.html` 或 `modal-bulk-action.html`，以免损伤现有正向基准稳定性。
+
+### 综合结论
+
+- 代码质量评分：96
+- 测试覆盖评分：88
+- 规范遵循评分：97
+- 战略匹配评分：96
+- 风险评估评分：95
+- 综合评分：94
+- 建议：通过
+
+### 说明
+
+- 本次为只读探索，无业务代码改动。
+- 本次验证基于仓库文档、live matrix 实现、runtime 源码与现有测试断言的一致性审查，不代表这些候选场景已经实现。
+
+## 2026-06-06 Diagnostics 轨道缺口只读探索验收
+
+### 验证范围
+
+- 相对于 `docs/superpowers/specs/2026-06-06-real-page-stability-design.md`，runtime 是否已具备失败诊断产物基础能力。
+- Studio 是否能直接渲染 diagnostic JSON 内容，还是仅能打开文件路径。
+- `page-intelligence` 与 Studio 的 warning / error 分组、修复建议与配置型脆弱性检测是否完整。
+- 哪些缺口最直接影响真实页面失败排查。
+
+### 验证结果
+
+1. runtime 基础诊断产物已部分达标。
+   - `packages/runtime/src/playwright-runner.ts:406` 到 `429` 已实现 `step-<n>-diagnostic.json` 写入。
+   - 诊断 JSON 已包含设计要求的核心字段：`stepId`、`stepIndex`、`url`、`title`、`strategyAttempts`、`targetHints`。
+   - `packages/runtime/src/playwright-runner.ts:568` 到 `588` 证明失败分支也会补截图与页面摘要，并在可提取 `TargetDiagnosticContext` 时写入诊断 JSON。
+   - `packages/runtime/src/playwright-runner.test.ts` 当前 `9/9` 通过，其中已覆盖真实页面矩阵与定位诊断场景。
+2. Studio 还不能直接渲染 diagnostic JSON 内容。
+   - `apps/studio/src/shared/studio-api-types.ts:89` 到 `110` 的 `StudioApi` 只有 `openPath`，没有读取本地 JSON 内容的 API。
+   - `apps/studio/electron/preload.ts:5` 到 `25` 与 `apps/studio/electron/main.ts:134` 到 `142` 表明现有能力仅是把路径交给系统外部打开。
+   - `apps/studio/src/App.tsx:459` 到 `465` 与 `packages/ui/src/StepLogTable.tsx:82` 到 `99` 证明执行页只展示 `diagnosticPath` 按钮，不解析 JSON。
+   - 结论：设计文档要求的“Studio 诊断入口”仅实现了“打开文件”，未实现“在 Studio 内直接查看诊断内容”。
+3. warning / error 分组与修复建议仍不完整。
+   - `packages/page-intelligence/src/fragility.ts:6` 到 `11` 当前只有 5 类 fragility code，缺少设计要求中的 `MISSING_ENVIRONMENT`、`MISSING_VARIABLE`。
+   - `packages/page-intelligence/src/fragility.ts:30` 到 `70` 仅检查 `click` / `fill`，没有覆盖 `select`、`setChecked`、`upload`、`press(target)`。
+   - `packages/page-intelligence/src/fragility.ts:72` 到 `80` 对所有 `condition` 型 wait 一律报 `WAIT_MAY_BE_UNSTABLE`，存在误报风险。
+   - `apps/studio/src/FragilityNotice.tsx:44` 到 `69` 只有单一“提示”视图，没有 warning / error 分组，没有单独的修复建议模块。
+   - `apps/studio/electron/services.ts:315` 到 `317` 只保留 warning，`apps/studio/src/App.tsx:936` 到 `947` 更把执行页问题统一回填成 `code=CSS_ONLY`、`severity=warning`，导致错误级别完全失真。
+4. 还有两处直接影响排障效率的断层。
+   - `apps/studio/electron/services.ts:302` 到 `304` 会保存 `pageSnapshots`，但 `apps/studio/src/shared/studio-api-types.ts:21` 到 `49` 没有对应展示字段；Studio 也没有查看 `page-<n>.json` 的入口。
+   - `apps/studio/electron/services.ts:338` 到 `361` 从知识库重载执行记录时不会恢复 `fragilityWarnings`，说明当前 fragility 展示依赖内存缓存，不是稳定持久化能力。
+5. 最直接影响真实页面失败排查的优先级判断明确。
+   - `P0`：Studio 内嵌查看 diagnostic JSON。
+   - `P0`：非定位类失败也生成可读诊断 JSON。
+   - `P1`：保真传递 `FragilityIssue` 的 `code / severity / stepIndex`，恢复真正的 warning / error 分组。
+   - `P1`：补上 `MISSING_ENVIRONMENT` / `MISSING_VARIABLE` 预警。
+   - `P2`：把 `page-<n>.json` 变成 Studio 可查看的一等证据，而不是后台静默保存。
+
+### 综合结论
+
+- 代码质量评分：90
+- 测试覆盖评分：79
+- 规范遵循评分：93
+- 战略匹配评分：76
+- 风险评估评分：74
+- 综合评分：82
+- 建议：需讨论
+
+### 说明
+
+- 本次为只读探索，无业务代码改动。
+- 当前 Diagnostics 轨道并非“完全未做”，而是已经完成基础产物写入，但距离设计文档要求的“Studio 内可诊断、可分级、可快速修复”仍有关键断层。

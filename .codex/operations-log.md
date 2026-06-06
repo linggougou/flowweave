@@ -456,3 +456,307 @@
   - 真实页面矩阵已从 `5` 个 case 扩展到 `7` 个 case，并正式覆盖“列表筛选”和“覆盖层弹窗批量操作”两类更贴近后台页面的交互。
   - 新场景已经在 runtime 局部测试、独立矩阵脚本和仓库级 `smoke:full` 三层全部转绿，不存在“文档写了但主链路没接入”的假完成。
   - `Node 24` 与 `better-sqlite3` 的 ABI 风险仍存在，本轮最终验收继续以 `Node 20` 为准。
+
+## 2026-06-06 下一轮并行开发计划与 worktree 落地
+
+- 时间：2026-06-06 16:42:45 CST
+- 任务目标：在用户已授权“自主规划 + worktree + 子代理并行开发”的前提下，基于当前 Phase 3 成果继续推进真实页面稳定性增强下一轮，实现从“手写 Flow 可跑”进一步走向“真实录制闭环 + Studio 内排障 + 后台压力基准”。
+- 所用技能：
+  - `using-superpowers`：确认当前继续按 Superpowers 工作流推进，而不是绕开技能直接派发。
+  - `writing-plans`：将下一轮工作收敛成可执行的 4 轨并行计划。
+  - `using-git-worktrees`：为每条轨道建立隔离 worktree，并验证其可运行性。
+  - `dispatching-parallel-agents`：先派发只读探索代理，确认剩余缺口与最小任务包。
+  - `subagent-driven-development`：在计划成形后，再派发 4 个实现代理并行开发。
+- 工具与替代流程记录：
+  - `sequential-thinking`、`desktop-commander`、`context7` 当前环境仍不可用。
+  - 本轮改用：
+    - `codegraph_context`
+    - `rg` / `sed`
+    - 本地 `pnpm` 命令
+    - `multi_agent_v1` 子代理
+  - 全部替代流程均继续留痕到仓库 `.codex/`。
+- 只读探索与结论收敛：
+  - Recorder 轨道审计结论：
+    - 已完成 `select / setChecked / upload / target hints` 的局部语义落盘。
+    - 未完成 `press` 录制、upload 可回放契约、真实页面去噪与 Recorder 整链回归。
+    - 留痕：`.codex/context-summary-recorder-stability-gap-audit.md`
+  - Benchmarks 轨道审计结论：
+    - 当前矩阵 `7` 个 case 已覆盖基础表单、局部 loading、上传、SPA hash 路由、登录态恢复、列表筛选、Modal 批量操作。
+    - 下一轮优先级应调整为：会话失效、分页、Drawer、toast/轻量确认；`Tab` 暂降为候补。
+    - 留痕：`.codex/context-summary-benchmarks-gap-analysis.md`
+  - Diagnostics 轨道审计结论：
+    - runtime 已能为定位/等待类失败生成 diagnostic JSON，但 Studio 仍只能“打开文件”，不能直接渲染。
+    - `FragilityIssue` 在 Studio 层丢失 `code / severity / stepIndex`，warning / error 分组不可信。
+    - 缺少 `MISSING_ENVIRONMENT`、`MISSING_VARIABLE` 与非定位类失败诊断补齐。
+    - 留痕：`.codex/context-summary-diagnostics-gap-analysis.md`
+- 计划文件落盘：
+  - 已新增：`docs/superpowers/plans/2026-06-06-real-page-stability-next-wave-plan.md`
+  - 当前计划采用 4 条并行轨道：
+    - `Recorder P2`
+    - `Fragility`
+    - `Diagnostics UI`
+    - `Benchmarks P4`
+- worktree 落地与环境预热：
+  - 已创建 worktree：
+    - `.worktrees/codex-real-page-recorder-p2`
+    - `.worktrees/codex-real-page-fragility-context`
+    - `.worktrees/codex-real-page-diagnostics-ui`
+    - `.worktrees/codex-real-page-benchmarks-p4`
+  - 基线验证中发现的真实问题：
+    - 新建 worktree 直接运行 `pnpm` 时会因本地 `node_modules` 缺失而失败。
+    - 单纯软链 `node_modules` 虽能缓解部分命令，但对 workspace 包解析并不稳定。
+  - 处理方式：
+    - 在各 worktree 内执行 `pnpm install`。
+    - 对需要 workspace 依赖声明的轨道，先补依赖包构建再跑局部验证。
+  - 当前 worktree 基线结果：
+    - `codex-real-page-fragility-context`
+      - `pnpm --filter @flowweave/page-intelligence test`：通过，`7/7`
+    - `codex-real-page-diagnostics-ui`
+      - 先执行 `pnpm --filter @flowweave/page-intelligence build`
+      - 再执行 `pnpm --filter @flowweave/ui build`
+      - `pnpm --filter @flowweave/app-studio typecheck` 已作为预热链路执行
+    - `codex-real-page-benchmarks-p4`
+      - 先执行 `pnpm --filter @flowweave/shared build`
+      - `pnpm --filter @flowweave/flow-dsl build`
+      - `pnpm --filter @flowweave/page-intelligence build`
+      - `pnpm --filter @flowweave/runtime test`：通过，`9/9`
+      - `pnpm e2e:real-pages`：通过，`7` 个现有 case 全绿
+    - `codex-real-page-recorder-p2`
+      - 先执行 `pnpm --filter @flowweave/shared build`
+      - `pnpm --filter @flowweave/flow-dsl build`
+      - `pnpm --filter @flowweave/recorder test`：通过，`25/25`
+- 实现代理派发：
+  - 已派发并运行中的实现代理：
+    - `Mencius`
+      - 轨道：Recorder P2
+      - 分支：`codex/real-page-recorder-p2`
+      - 边界：`apps/extension`、`packages/recorder`、必要时 `packages/shared/src/recording-protocol.ts`
+    - `Kant`
+      - 轨道：Fragility
+      - 分支：`codex/real-page-fragility-context`
+      - 边界：`packages/page-intelligence`
+    - `Bacon`
+      - 轨道：Diagnostics UI
+      - 分支：`codex/real-page-diagnostics-ui`
+      - 边界：`apps/studio`、`packages/ui`、必要时 `apps/studio/electron`
+    - `Sagan`
+      - 轨道：Benchmarks P4
+      - 分支：`codex/real-page-benchmarks-p4`
+      - 边界：`examples`、`packages/runtime/src/playwright-runner.test.ts`、`docs/guides/fixture-matrix.md`
+  - 已回收只读探索代理：
+    - Recorder 差距审计
+    - Diagnostics 差距审计
+    - Benchmarks 差距审计
+- 当前结论：
+  - 下一轮并行开发已经从“想法阶段”进入“隔离环境 + 子代理执行阶段”。
+  - 4 条轨道的边界已拆开，当前最大的共享风险只剩主代理最终集成时的文档与留痕合并。
+  - 下一步将等待各实现代理提交结果，逐条复核、集成并执行仓库级 `Node 20` 验收。
+
+## 2026-06-06 Recorder 稳定性缺口只读审查
+
+- 时间：2026-06-06 16:32:38 CST
+- 任务目标：只读探索 `apps/extension/entrypoints/content.ts` 与 `packages/recorder` 相对于 `docs/superpowers/specs/2026-06-06-real-page-stability-design.md` 的剩余缺口，重点核对 `select / setChecked / press / upload / 去噪 / target hints` 是否真正贯通到可稳定录制回放。
+- 所用技能：
+  - `using-superpowers`：先核对 Superpowers 技能使用规则，再进入代码探索。
+- 工具可用性说明：
+  - `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code` 当前环境不可用。
+  - 本轮以 CodeGraph、`rg`、`sed`、本地测试命令替代，并将替代流程记录到仓库 `.codex/`。
+- 单 agent 串行执行说明：
+  - 本轮任务是只读结构审查，输出依赖统一结论与交叉比对。
+  - 若拆分子代理并行探索，会在同一批证据文件与同一审查结论上引入重复汇总和判断偏差。
+  - 因此由主代理串行完成，上下文摘要、日志和验证报告统一由主代理写入。
+- 检索与阅读记录：
+  - 文件名搜索：`rg --files packages/recorder apps/extension packages/shared packages/flow-dsl`
+  - 内容阅读：
+    - `docs/superpowers/specs/2026-06-06-real-page-stability-design.md`
+    - `docs/architecture/overview.md`
+    - `docs/domain/flow-dsl.md`
+    - `docs/superpowers/plans/2026-05-26-run-first-roadmap.md`
+    - `apps/extension/entrypoints/content.ts`
+    - `packages/recorder/src/target-from-dom.ts`
+    - `packages/recorder/src/normalize.ts`
+    - `packages/recorder/src/step-filter.ts`
+    - `packages/shared/src/recording-protocol.ts`
+    - `packages/runtime/src/playwright-runner.ts`
+    - `examples/real-page-smoke.ts`
+  - CodeGraph：
+    - `codegraph_context`：获取 Recorder 审查入口符号与相关依赖
+    - `codegraph_explore`：聚合查看 `content.ts / normalize.ts / recording-protocol.ts / schema.ts`
+- 编码前检查（本轮为只读审查）：
+  - 已查阅上下文摘要文件：`.codex/context-summary-recorder-stability-gap-audit.md`
+  - 将复用以下既有组件：
+    - `buildInteractionPayload()`：判断 target hints 与策略是否已落盘
+    - `normalizeRecordedEvent()`：判断事件语义是否已转成步骤
+    - `filterNoisyInteractionSteps()`：判断去噪是否覆盖 spec 要求
+    - `runRealPageFixtureMatrix()`：判断当前“真实页面验证”是否真的覆盖 Recorder 轨道
+  - 将遵循命名约定：日志与文档简体中文，标识符英文。
+  - 确认不重复造轮子：本轮不新增脚本，不构造平行分析器，仅基于现有代码和测试给出差距。
+- 关键观察：
+  - `select / setChecked / upload / target hints` 已进入 `content.ts -> normalize.ts -> flow-dsl -> runtime` 的数据模型链路。
+  - `press` 仅存在于 DSL 与 runtime，`content.ts` 没有键盘监听，`normalize.ts` 也没有 `keypress` 分支，录制链路未贯通。
+  - `upload` 在 content script 中通过 `readUploadFiles()` 只记录 `file.name`，而 runtime `setInputFiles()` 需要真实可访问路径，真实录制回放仍不闭环。
+  - `step-filter.ts` 只覆盖 `click -> fill/select/setChecked` 与连续 `fill`，没有覆盖重复 `select / setChecked / upload`、也没有覆盖连续 `navigate` 去重。
+  - `examples/real-page-smoke.ts` 全部为手写 `FlowDocument`，当前回归证明的是 runtime，不是 Recorder 轨道。
+- 执行中监控：
+  - 是否使用了上下文摘要中列出的可复用组件？
+    - ✅ 是：围绕 `content.ts`、`target-from-dom.ts`、`normalize.ts`、`step-filter.ts`、`playwright-runner.ts` 与 `real-page-smoke.ts` 完成交叉核对。
+  - 命名是否符合项目约定？
+    - ✅ 是：本轮仅新增 `.codex/` 审查留痕，未改业务代码。
+  - 代码风格是否一致？
+    - ✅ 是：只读审查，无代码实现改动。
+- 只读验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/flow-dsl test`
+    - 结果：通过，`4/4`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test`
+    - 结果：通过，`25/25`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test`
+    - 结果：通过，`9/9`
+  - 验证结论：
+    - 局部单元能力存在且已有测试。
+    - runtime 手写 Flow 回放能力存在且已有测试。
+    - 但仓库内仍无“真实录制 -> 导出 Flow -> 回放”整链验证，因此 Recorder 轨道稳定性仍不能判定为已闭环。
+- 当前结论：
+  - Recorder 轨道已完成 `select / setChecked / upload / target hints` 的基础语义落盘，但 `press` 未贯通。
+  - 去噪与稳定性仍缺关键收尾：重复 `navigate`、重复 `select / setChecked / upload`、以及上传文件真实回放信息。
+  - 下一轮最小任务应优先围绕“补录 press、修正 upload 录制契约、扩展去噪并建立录制整链回归”展开。
+
+## 2026-06-06 Benchmarks 缺口只读探索
+
+时间：2026-06-06 16:31:15 CST
+
+- 任务目标：
+  - 只读探索 Benchmarks 轨道当前剩余缺口。
+  - 回答相对于 `docs/guides/fixture-matrix.md`、`docs/superpowers/specs/2026-06-06-real-page-stability-design.md` 与 `examples/real-page-smoke.ts`，下一轮最值得补的 `2-4` 个真实页面场景是什么。
+  - 输出已覆盖摘要、未覆盖高价值场景、推荐优先级与预估改动文件，不修改业务代码。
+- 工具与替代流程记录：
+  - `sequential-thinking`：当前环境不可用；本次改用“CodeGraph 结构化上下文 + 仓库内全文搜索 + 逐文件对照”的人工等效流程。
+  - `desktop-commander`：当前环境不可用；改用 `rg`、`sed`、`nl` 和 CodeGraph。
+  - `context7`：当前环境不可用；本任务主要依赖仓库现有设计文档与实现，不需要外部库文档。
+  - `github.search_code`：当前环境不可用；本轮问题聚焦项目内基准矩阵缺口，未依赖外部开源实现。
+- 只读探索检查：
+  - ✅ 已查阅上下文摘要文件：`.codex/context-summary-benchmarks-gap-analysis.md`
+  - ✅ 已阅读并对照核心依据：
+    - `docs/guides/fixture-matrix.md`
+    - `docs/superpowers/specs/2026-06-06-real-page-stability-design.md`
+    - `examples/real-page-smoke.ts`
+    - `packages/runtime/src/playwright-runner.ts`
+    - `packages/runtime/src/playwright-runner.test.ts`
+  - ✅ 已分析至少 3 个相似实现：
+    - `examples/fixtures/filterable-list.html`
+    - `examples/fixtures/modal-bulk-action.html`
+    - `examples/fixtures/session-dashboard.html`
+    - `examples/fixtures/spa-route.html`
+  - ✅ 确认不重复造轮子：
+    - 检查 `examples/fixtures/`、`examples/real-page-smoke.ts` 和 `docs/guides/fixture-matrix.md` 后，确认当前尚无分页、Tab、Drawer、toast/轻量二次确认、登录失效双态基准。
+- 关键观察：
+  - 当前矩阵 `7` 个 case 已覆盖基础表单、局部 loading、上传、SPA hash 路由、登录态恢复、列表筛选和 modal 批量操作。
+  - `docs/guides/fixture-matrix.md` 已明确把“分页、Tab、抽屉侧栏、二次确认 toast、登录失效双态”列为下一轮方向。
+  - runtime 当前最容易暴露稳定性短板的点是：
+    - `waitForPageSettled()` 主要识别 loading mask、`aria-busy` 与 `[data-loading='true']`
+    - `wait` 主要依赖 `visible/hidden/attached/detached/urlIncludes`
+    - `storageStatePath` 只在正向登录态场景中被验证
+  - 因此，新场景应优先压测“局部刷新 + 短暂元素 + 覆盖层 + 会话失效”，而不是继续增加普通表单。
+- 推荐优先级结论：
+  - `P0`：登录失效 / 会话过期双态基准
+    - 价值：最直接暴露 `storageStatePath` 只验证正向恢复、未验证失效跳转或回退访客态的问题。
+    - 推荐方式：新增独立 fixture，避免污染当前 `session-dashboard.html` 的稳定正向用例。
+  - `P1`：分页列表基准
+    - 价值：在 `filterable-list` 之上补上“切页后同一列表重渲染、页码变化、选择态重置、loading 隐藏后结果回填”。
+    - 这是最像真实后台表格页的稳定性压力点。
+  - `P2`：Drawer 侧栏编辑基准
+    - 价值：比当前 modal 更贴近后台实际；常见问题是背景 DOM 仍在、抽屉隐藏但未卸载、动画期间元素可见性不稳定。
+  - `P3`：toast / 轻量二次确认基准
+    - 价值：覆盖短时出现后消失的轻量确认链路，最能暴露 `wait visible -> click -> wait hidden` 的边界问题。
+  - `Reserve`：Tab 切换基准
+    - 价值仍然存在，但 `spa-route` 已部分覆盖“同页内容切换”；相对前四项的新增信息量略低。
+- 预估文件改动（若下一轮进入实现）：
+  - 必改：
+    - `docs/guides/fixture-matrix.md`
+    - `examples/real-page-smoke.ts`
+    - `packages/runtime/src/playwright-runner.test.ts`
+  - 大概率新增：
+    - `examples/fixtures/session-expired-dashboard.html`
+    - `examples/fixtures/paginated-list.html`
+    - `examples/fixtures/drawer-edit-form.html`
+    - `examples/fixtures/toast-popconfirm.html`
+  - 视方案而定：
+    - `examples/run-real-page-smoke.ts` 通常无需改；仅当需要额外输出分类统计时才考虑调整。
+- 本轮无代码实现，无本地测试执行；验证方式为“设计文档 + 矩阵文档 + live 实现 + runtime 等待机制”四向对照。
+
+## 2026-06-06 Diagnostics 轨道缺口只读探索
+
+时间：2026-06-06 16:36:00 CST
+
+- 任务目标：
+  - 只读探索 Diagnostics 轨道相对于 `docs/superpowers/specs/2026-06-06-real-page-stability-design.md` 的剩余高价值缺口。
+  - 聚焦 `packages/page-intelligence`、`packages/runtime` 失败诊断产物，以及 `apps/studio` 的诊断 / 脆弱性展示。
+  - 重点回答：
+    - Studio 是否能直接渲染 diagnostic JSON 内容；
+    - warning / error 分组与修复建议是否完整；
+    - 哪些缺口最直接影响真实页面失败排查。
+- 工具与替代流程记录：
+  - `sequential-thinking`：当前环境不可用；改用“设计文档逐项对照 + CodeGraph 结构化上下文 + 精确源码定位 + 本地测试验证”。
+  - `desktop-commander`：当前环境不可用；改用 `rg`、`sed`、`nl`、CodeGraph。
+  - `context7`：当前环境不可用；本次问题聚焦仓库现状，不依赖外部库文档。
+  - `github.search_code`：当前环境不可用；本轮无需外部开源样例。
+- 只读探索检查：
+  - ✅ 已查阅上下文摘要文件：`.codex/context-summary-diagnostics-gap-analysis.md`
+  - ✅ 已对照设计与主线文档：
+    - `docs/superpowers/specs/2026-06-06-real-page-stability-design.md`
+    - `docs/superpowers/plans/2026-05-26-run-first-roadmap.md`
+    - `docs/architecture/overview.md`
+    - `docs/domain/flow-dsl.md`
+  - ✅ 已分析至少 3 个相似实现 / 集成点：
+    - `packages/runtime/src/playwright-runner.ts`
+    - `packages/page-intelligence/src/fragility.ts`
+    - `apps/studio/src/FragilityNotice.tsx`
+    - `apps/studio/src/App.tsx`
+    - `apps/studio/electron/services.ts`
+  - ✅ 确认不重复造轮子：
+    - 当前 runtime 已具备诊断 JSON 写入基础；
+    - 当前 Studio 已具备打开本地路径能力；
+    - 当前缺口主要是“扩展既有诊断链路”，不是另造新诊断系统。
+- 关键观察：
+  - 已完成能力：
+    - runtime 已在定位失败时写入 `step-<n>-diagnostic.json`，包含 `stepId`、`stepIndex`、`url`、`title`、`strategyAttempts`、`targetHints`。
+    - runtime 失败时也会补截图与 `page-<n>.json` 页面摘要，真实页面矩阵与诊断测试当前通过。
+    - `page-intelligence` 已从早期两类扩展到 5 类 fragility code：`CSS_ONLY`、`NO_STRATEGIES`、`CSS_NTH_OF_TYPE`、`TEXT_ONLY`、`WAIT_MAY_BE_UNSTABLE`。
+    - Studio 已能展示 fragility 提示，并在执行日志中提供截图 / 诊断文件路径按钮。
+  - 明确缺口：
+    - Studio 不能直接读取或渲染 diagnostic JSON，只能通过 `openPath` 打开文件路径；没有 `readDiagnostic` / `readLocalJson` 之类 API。
+    - `StudioExecution` 与 `fragilityWarnings` DTO 丢失 `code`、`severity`、`stepIndex`，执行页甚至把所有问题强制回填成 `code=CSS_ONLY`、`severity=warning`。
+    - `FragilityNotice` 只有单一“提示”样式，没有 warning / error 分组，也没有结构化修复建议区。
+    - `MISSING_ENVIRONMENT`、`MISSING_VARIABLE` 仍未实现；这两类正是最容易在真实页面上造成“录得到但跑不起来”的配置问题。
+    - fragility 分析仍只覆盖 `click` / `fill`，没有覆盖 `select` / `setChecked` / `upload` / `press(target)`。
+    - runtime 仅对可提取 `TargetDiagnosticContext` 的错误写 diagnostic JSON；导航失败、变量未替换、环境缺失等非定位类失败仍无详细诊断 JSON。
+    - `pageSnapshots` 已被保存，但 Studio 完全没有查看入口，导致 `page-<n>.json` 对排障基本不可见。
+    - 历史执行从知识库重载后会丢失 `fragilityWarnings`，Studio 只能在当前进程缓存命中时看到它们。
+  - 哪些缺口最直接影响真实页面失败排查：
+    - `P0`：Studio 不能内嵌查看 diagnostic JSON 内容，排障必须跳出 Studio。
+    - `P0`：非定位类失败没有 diagnostic JSON，很多真实失败只剩一条错误消息和截图。
+    - `P1`：warning / error 严重级别在 Studio 层丢失，导致真正阻塞执行的错误无法被快速分组。
+    - `P1`：缺失 `MISSING_ENVIRONMENT` / `MISSING_VARIABLE`，无法在运行前预警最常见的配置错误。
+    - `P2`：`page-<n>.json` 没有 UI 入口，URL / title / 页面摘要证据未被有效利用。
+- 编码前检查（只读任务等效）：
+  - ✅ 已查阅上下文摘要：`.codex/context-summary-diagnostics-gap-analysis.md`
+  - ✅ 将复用以下既有组件做结论：
+    - `writeStepDiagnostic()`：确认 runtime 当前诊断产物边界。
+    - `analyzeFlowFragility()`：确认已实现和未实现的 fragility code。
+    - `FragilityNotice` + `StepLogTable`：确认 Studio 当前展示能力只到“消息 + 路径”层。
+  - ✅ 将遵循命名与风格约定：结论与留痕使用简体中文，代码标识符保持现状英文。
+  - ✅ 确认不重复造轮子：本轮只识别缺口，不提出新体系替换建议。
+- 验证记录：
+  - `pnpm --filter @flowweave/page-intelligence test`
+    - 结果：通过，`7/7` 测试全部通过。
+  - `pnpm --filter @flowweave/runtime test`
+    - 结果：通过，`9/9` 测试全部通过。
+    - 关键证明：包含“定位失败时在 message 中包含更清晰的策略诊断”与“真实页面 fixture 矩阵全部成功”。
+  - `pnpm --filter @flowweave/app-studio typecheck`
+    - 结果：通过。
+- 当前结论：
+  - Diagnostics 轨道的“基础产物写入”已经到位，但“Studio 内理解这些产物”和“按严重度组织脆弱性”仍明显未完成。
+  - 当前最值得优先补的不是继续增加更多 message 文案，而是：
+    1. 让 Studio 直接读取并渲染 diagnostic JSON；
+    2. 保真传递 `FragilityIssue` 的 `code / severity / stepIndex`；
+    3. 把 `MISSING_ENVIRONMENT` / `MISSING_VARIABLE` 与非定位类失败诊断补齐。
+  - 本轮无代码实现，无业务文件改动。
