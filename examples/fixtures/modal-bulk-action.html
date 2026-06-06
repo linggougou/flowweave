@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowWeave Modal 批量操作 Fixture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui,
+          sans-serif;
+        --bg: #f5f1fb;
+        --panel: #fffefe;
+        --border: #d9cceb;
+        --text: #2f2442;
+        --muted: #6c5b84;
+        --accent: #7d4cb5;
+        --accent-soft: rgba(125, 76, 181, 0.12);
+        --success: #2d6a52;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top left, rgba(125, 76, 181, 0.18), transparent 30%),
+          linear-gradient(180deg, #fbf8ff 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      body[data-modal-open="true"] {
+        overflow: hidden;
+      }
+
+      main {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 40px 20px 72px;
+      }
+
+      .hero,
+      .shell,
+      .result,
+      .modal-card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 22px;
+        box-shadow: 0 18px 42px rgba(47, 36, 66, 0.08);
+      }
+
+      .hero,
+      .shell,
+      .result {
+        padding: 24px;
+      }
+
+      .hero {
+        margin-bottom: 20px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 12px 10px;
+        border-bottom: 1px solid rgba(108, 91, 132, 0.16);
+        text-align: left;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--accent);
+      }
+
+      button,
+      textarea {
+        font: inherit;
+      }
+
+      button {
+        border: none;
+        border-radius: 14px;
+        padding: 12px 16px;
+        background: var(--accent);
+        color: #fff;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.48;
+      }
+
+      .toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 18px;
+      }
+
+      .toolbar p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .result {
+        margin-top: 18px;
+      }
+
+      .result[hidden] {
+        display: none;
+      }
+
+      .backdrop {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background: rgba(44, 29, 63, 0.4);
+      }
+
+      .backdrop[hidden] {
+        display: none;
+      }
+
+      .modal-card {
+        width: min(100%, 520px);
+        padding: 24px;
+      }
+
+      .modal-card textarea {
+        width: 100%;
+        min-height: 120px;
+        margin-top: 12px;
+        border-radius: 14px;
+        border: 1px solid var(--border);
+        padding: 12px 14px;
+        resize: vertical;
+      }
+
+      .modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      .ghost {
+        background: #fff;
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+
+      .loading {
+        margin-top: 12px;
+        color: var(--muted);
+      }
+
+      @media (max-width: 640px) {
+        main {
+          padding-inline: 14px;
+        }
+
+        .toolbar,
+        .modal-actions {
+          flex-direction: column;
+          align-items: stretch;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <p>Fixture 目标：验证覆盖层弹窗、批量操作、确认文本填写与弹窗关闭后的稳定结果。</p>
+        <h1 id="page-title">批量归档控制台</h1>
+        <p>
+          推荐后续自动化步骤：勾选待处理项、打开批量归档弹窗、填写原因、点击确认，然后等待弹窗关闭和结果区展示。
+        </p>
+      </section>
+
+      <section class="shell" id="bulk-shell" data-loading="false">
+        <div class="toolbar">
+          <p id="selection-status">当前未选择任务。</p>
+          <button id="open-archive-modal" type="button" disabled>批量归档</button>
+        </div>
+
+        <table aria-label="待处理任务">
+          <thead>
+            <tr>
+              <th>选择</th>
+              <th>任务编号</th>
+              <th>任务说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr id="bulk-row-401">
+              <td>
+                <input id="select-bulk-row-401" type="checkbox" data-testid="bulk-row-checkbox" />
+              </td>
+              <td>FW-401</td>
+              <td>待归档发票补件</td>
+            </tr>
+            <tr id="bulk-row-402">
+              <td>
+                <input id="select-bulk-row-402" type="checkbox" />
+              </td>
+              <td>FW-402</td>
+              <td>待归档历史报价</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <section
+          id="archive-result"
+          class="result"
+          hidden
+          data-ready="false"
+          aria-labelledby="archive-result-title"
+        >
+          <p id="archive-result-status">尚未执行归档。</p>
+          <h2 id="archive-result-title">归档任务已完成</h2>
+          <p id="archive-result-summary">-</p>
+        </section>
+      </section>
+    </main>
+
+    <div
+      id="archive-modal"
+      class="backdrop"
+      hidden
+      data-ready="false"
+      aria-hidden="true"
+    >
+      <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <p id="modal-badge">批量操作：待确认</p>
+        <h2 id="modal-title">确认归档选中任务</h2>
+        <p id="modal-description">请填写本次归档原因，确认后结果区将展示归档摘要。</p>
+        <label for="archive-reason">归档原因</label>
+        <textarea
+          id="archive-reason"
+          placeholder="例如：已完成补件并同步知识库"
+        ></textarea>
+        <p id="modal-status" class="loading">请至少填写 4 个字。</p>
+        <div class="modal-actions">
+          <button id="cancel-archive" type="button" class="ghost">取消</button>
+          <button id="confirm-archive" type="button" disabled>确认归档</button>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      const body = document.body;
+      const shell = document.getElementById("bulk-shell");
+      const selectionStatus = document.getElementById("selection-status");
+      const openModalButton = document.getElementById("open-archive-modal");
+      const rowCheckbox = document.getElementById("select-bulk-row-401");
+      const modal = document.getElementById("archive-modal");
+      const reasonInput = document.getElementById("archive-reason");
+      const modalStatus = document.getElementById("modal-status");
+      const cancelButton = document.getElementById("cancel-archive");
+      const confirmButton = document.getElementById("confirm-archive");
+      const result = document.getElementById("archive-result");
+      const resultStatus = document.getElementById("archive-result-status");
+      const resultSummary = document.getElementById("archive-result-summary");
+
+      function syncSelection() {
+        const checked = rowCheckbox.checked;
+        openModalButton.disabled = !checked;
+        selectionStatus.textContent = checked
+          ? "已选择 1 条任务，可执行批量归档。"
+          : "当前未选择任务。";
+      }
+
+      function syncReasonState() {
+        const valid = reasonInput.value.trim().length >= 4;
+        confirmButton.disabled = !valid;
+        modalStatus.textContent = valid
+          ? "原因已满足要求，可提交归档。"
+          : "请至少填写 4 个字。";
+      }
+
+      function closeModal() {
+        modal.hidden = true;
+        modal.dataset.ready = "false";
+        modal.setAttribute("aria-hidden", "true");
+        body.dataset.modalOpen = "false";
+      }
+
+      rowCheckbox.addEventListener("change", syncSelection);
+
+      openModalButton.addEventListener("click", () => {
+        modal.hidden = false;
+        modal.dataset.ready = "true";
+        modal.setAttribute("aria-hidden", "false");
+        body.dataset.modalOpen = "true";
+        reasonInput.value = "";
+        syncReasonState();
+      });
+
+      reasonInput.addEventListener("input", syncReasonState);
+
+      cancelButton.addEventListener("click", closeModal);
+
+      confirmButton.addEventListener("click", () => {
+        if (confirmButton.disabled || shell.dataset.loading === "true") {
+          return;
+        }
+
+        shell.dataset.loading = "true";
+        shell.setAttribute("aria-busy", "true");
+        modalStatus.textContent = "正在归档，请稍候...";
+
+        window.setTimeout(() => {
+          closeModal();
+          shell.dataset.loading = "false";
+          shell.removeAttribute("aria-busy");
+          result.hidden = false;
+          result.dataset.ready = "true";
+          resultStatus.textContent = "归档状态：已完成";
+          resultSummary.textContent = `已归档 1 条任务，原因：${reasonInput.value.trim()}`;
+          selectionStatus.textContent = "最近一次归档已完成。";
+          rowCheckbox.checked = false;
+          syncSelection();
+        }, 780);
+      });
+
+      syncSelection();
+    </script>
+  </body>
+</html>

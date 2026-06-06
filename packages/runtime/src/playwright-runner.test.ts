@@ -532,11 +532,22 @@ describe("executeFlow", () => {
     const matrixModuleUrl = pathToFileURL(join(repoRoot, "examples/real-page-smoke.ts")).href;
     const matrixModule = (await import(matrixModuleUrl)) as {
       runRealPageFixtureMatrix: (options?: { headless?: boolean }) => Promise<{
+        results: Array<{ name: string; status: string }>;
         failed: Array<{ name: string; status: string; message?: string }>;
       }>;
     };
 
     const summary = await matrixModule.runRealPageFixtureMatrix({ headless: true });
+    expect(summary.results).toHaveLength(7);
+    expect(summary.results.map((item) => item.name)).toEqual([
+      "checkbox-select",
+      "delayed-panel",
+      "upload-form",
+      "spa-route",
+      "session-dashboard",
+      "filterable-list",
+      "modal-bulk-action",
+    ]);
     expect(summary.failed).toHaveLength(0);
   });
 

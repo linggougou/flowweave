@@ -248,6 +248,111 @@ function buildMatrixCases(baseUrl: string, workspaceDir: string): MatrixCase[] {
         storageStatePath,
       },
     },
+    {
+      name: "filterable-list",
+      flow: buildFlow("flow_filterable_list", "列表筛选流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "filterable-list.html",
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "fill",
+          target: { strategies: [{ kind: "css", selector: "#keyword" }] },
+          value: "待同步",
+        },
+        {
+          id: "s3",
+          type: "select",
+          target: { strategies: [{ kind: "testId", testId: "status-filter" }] },
+          values: ["needs-review"],
+        },
+        {
+          id: "s4",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#apply-filters" }] },
+        },
+        {
+          id: "s5",
+          type: "wait",
+          condition: "hidden",
+          target: { strategies: [{ kind: "css", selector: "#filter-loading" }] },
+        },
+        {
+          id: "s6",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#filter-summary[data-ready='true'][data-count='2']",
+              },
+            ],
+          },
+        },
+      ]),
+    },
+    {
+      name: "modal-bulk-action",
+      flow: buildFlow("flow_modal_bulk_action", "弹窗批量归档流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "modal-bulk-action.html",
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "setChecked",
+          target: { strategies: [{ kind: "testId", testId: "bulk-row-checkbox" }] },
+          checked: true,
+        },
+        {
+          id: "s3",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#open-archive-modal" }] },
+        },
+        {
+          id: "s4",
+          type: "wait",
+          condition: "visible",
+          target: { strategies: [{ kind: "css", selector: "#archive-modal[data-ready='true']" }] },
+        },
+        {
+          id: "s5",
+          type: "fill",
+          target: { strategies: [{ kind: "css", selector: "#archive-reason" }] },
+          value: "已完成补件并同步知识库",
+        },
+        {
+          id: "s6",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#confirm-archive" }] },
+        },
+        {
+          id: "s7",
+          type: "wait",
+          condition: "hidden",
+          target: { strategies: [{ kind: "css", selector: "#archive-modal" }] },
+        },
+        {
+          id: "s8",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#archive-result[data-ready='true']",
+              },
+            ],
+          },
+        },
+      ]),
+    },
   ];
 }
 

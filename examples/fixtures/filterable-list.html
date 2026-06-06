@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowWeave 列表筛选 Fixture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui,
+          sans-serif;
+        --bg: #f2f6fb;
+        --panel: #fcfdff;
+        --border: #cad7ea;
+        --text: #21324b;
+        --muted: #61748f;
+        --accent: #2962a3;
+        --accent-soft: rgba(41, 98, 163, 0.12);
+        --success: #1f5c43;
+        --success-soft: rgba(31, 92, 67, 0.1);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top right, rgba(41, 98, 163, 0.16), transparent 32%),
+          linear-gradient(180deg, #f9fbff 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      main {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 40px 20px 72px;
+      }
+
+      .hero,
+      .shell,
+      .summary {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 22px;
+        box-shadow: 0 18px 42px rgba(33, 50, 75, 0.08);
+      }
+
+      .hero,
+      .shell,
+      .summary {
+        padding: 24px;
+      }
+
+      .hero {
+        margin-bottom: 20px;
+      }
+
+      .filters {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+        align-items: end;
+      }
+
+      label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+
+      input,
+      select,
+      button {
+        width: 100%;
+        border-radius: 14px;
+        border: 1px solid var(--border);
+        padding: 12px 14px;
+        font: inherit;
+        background: #fff;
+        color: var(--text);
+      }
+
+      button {
+        border: none;
+        background: var(--accent);
+        color: #fff;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .loading {
+        margin-top: 16px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .loading[hidden] {
+        display: none;
+      }
+
+      .summary {
+        margin-top: 18px;
+      }
+
+      .summary[hidden] {
+        display: none;
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+        margin-top: 16px;
+      }
+
+      .summary-box {
+        padding: 14px;
+        border-radius: 16px;
+        background: var(--success-soft);
+      }
+
+      .summary-box strong {
+        display: block;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      .summary-box span {
+        color: var(--success);
+        font-size: 1.1rem;
+        font-weight: 700;
+      }
+
+      ul {
+        margin: 16px 0 0;
+        padding-left: 1.2rem;
+      }
+
+      li[hidden] {
+        display: none;
+      }
+
+      #filter-status {
+        min-height: 24px;
+        margin-top: 16px;
+        color: var(--muted);
+      }
+
+      @media (max-width: 640px) {
+        main {
+          padding-inline: 14px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <p>Fixture 目标：验证列表筛选、局部 loading、结果数量断言与筛选结果稳定落点。</p>
+        <h1 id="page-title">任务筛选工作台</h1>
+        <p>
+          推荐后续自动化步骤：输入关键字、选择状态、点击筛选、等待 loading 消失，再断言筛选摘要和结果列表。
+        </p>
+      </section>
+
+      <section id="list-shell" class="shell" data-loading="false">
+        <div class="filters">
+          <div>
+            <label for="keyword">关键字</label>
+            <input id="keyword" type="text" placeholder="例如：待同步" />
+          </div>
+          <div>
+            <label for="status-filter">任务状态</label>
+            <select id="status-filter" data-testid="status-filter">
+              <option value="all">全部</option>
+              <option value="needs-review">待复核</option>
+              <option value="ready">可执行</option>
+              <option value="archived">已归档</option>
+            </select>
+          </div>
+          <div>
+            <button id="apply-filters" type="button">应用筛选</button>
+          </div>
+        </div>
+
+        <div id="filter-loading" class="loading" hidden aria-live="polite">
+          正在刷新结果列表，请稍候...
+        </div>
+        <p id="filter-status">尚未应用筛选。</p>
+
+        <section
+          id="filter-summary"
+          class="summary"
+          hidden
+          data-ready="false"
+          data-count="0"
+          aria-labelledby="summary-title"
+        >
+          <p id="summary-badge">筛选状态：未执行</p>
+          <h2 id="summary-title">筛选结果</h2>
+          <div class="summary-grid">
+            <div class="summary-box">
+              <strong>命中任务数</strong>
+              <span id="result-count">0</span>
+            </div>
+            <div class="summary-box">
+              <strong>当前状态</strong>
+              <span id="result-status">全部</span>
+            </div>
+            <div class="summary-box">
+              <strong>关键字</strong>
+              <span id="result-keyword">-</span>
+            </div>
+          </div>
+          <ul id="task-list">
+            <li id="task-row-101" data-status="ready">FW-101 | 首页发布流程 | 可执行</li>
+            <li id="task-row-204" data-status="needs-review">FW-204 | 待同步客户名单 | 待复核</li>
+            <li id="task-row-218" data-status="needs-review">FW-218 | 待同步结算单 | 待复核</li>
+            <li id="task-row-301" data-status="archived">FW-301 | 已归档合同 | 已归档</li>
+          </ul>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const shell = document.getElementById("list-shell");
+      const keywordInput = document.getElementById("keyword");
+      const statusFilter = document.getElementById("status-filter");
+      const applyButton = document.getElementById("apply-filters");
+      const loading = document.getElementById("filter-loading");
+      const filterStatus = document.getElementById("filter-status");
+      const summary = document.getElementById("filter-summary");
+      const summaryBadge = document.getElementById("summary-badge");
+      const resultCount = document.getElementById("result-count");
+      const resultStatus = document.getElementById("result-status");
+      const resultKeyword = document.getElementById("result-keyword");
+      const rows = Array.from(document.querySelectorAll("#task-list li"));
+
+      function normalizeKeyword(value) {
+        return value.trim().toLowerCase();
+      }
+
+      function applyFilters() {
+        const keyword = normalizeKeyword(keywordInput.value);
+        const status = statusFilter.value;
+        const visibleRows = rows.filter((row) => {
+          const matchesKeyword = keyword === "" || row.textContent.toLowerCase().includes(keyword);
+          const matchesStatus = status === "all" || row.dataset.status === status;
+          return matchesKeyword && matchesStatus;
+        });
+
+        rows.forEach((row) => {
+          row.hidden = !visibleRows.includes(row);
+        });
+
+        summary.hidden = false;
+        summary.dataset.ready = "true";
+        summary.dataset.count = String(visibleRows.length);
+        summaryBadge.textContent = `筛选状态：已命中 ${visibleRows.length} 项`;
+        resultCount.textContent = String(visibleRows.length);
+        resultStatus.textContent =
+          status === "needs-review"
+            ? "待复核"
+            : status === "ready"
+              ? "可执行"
+              : status === "archived"
+                ? "已归档"
+                : "全部";
+        resultKeyword.textContent = keywordInput.value.trim() || "未设置";
+        filterStatus.textContent = `已完成筛选：${resultStatus.textContent} / ${resultKeyword.textContent}`;
+      }
+
+      applyButton.addEventListener("click", () => {
+        if (shell.dataset.loading === "true") {
+          return;
+        }
+
+        shell.dataset.loading = "true";
+        shell.setAttribute("aria-busy", "true");
+        loading.hidden = false;
+        summary.hidden = true;
+        summary.dataset.ready = "false";
+        summary.dataset.count = "0";
+        filterStatus.textContent = "正在刷新筛选结果...";
+
+        window.setTimeout(() => {
+          applyFilters();
+          shell.dataset.loading = "false";
+          shell.removeAttribute("aria-busy");
+          loading.hidden = true;
+        }, 720);
+      });
+    </script>
+  </body>
+</html>

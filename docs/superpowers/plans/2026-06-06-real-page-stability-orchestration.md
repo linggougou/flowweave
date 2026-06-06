@@ -1,6 +1,6 @@
 # 真实页面稳定性增强并行编排板
 
-更新时间：2026-06-06 16:09 CST
+更新时间：2026-06-06 16:20 CST
 
 ## 1. 主目标
 
@@ -96,6 +96,17 @@
    - 验证：
      - `pnpm lint`
      - `pnpm smoke:full`
+10. Benchmarks 第三阶段已由主代理直接完成并通过统一验收：
+   - 新能力：
+     - 新增 `examples/fixtures/filterable-list.html`，覆盖列表筛选、局部 loading 与命中数量断言
+     - 新增 `examples/fixtures/modal-bulk-action.html`，覆盖覆盖层弹窗、批量操作与弹窗关闭后结果断言
+     - `examples/real-page-smoke.ts` 已扩成 `7` 个真实页面 case
+     - `packages/runtime/src/playwright-runner.test.ts` 已提升为断言 `7` 个 case 名称顺序全部接入
+   - 验证：
+     - `pnpm --filter @flowweave/runtime test`
+     - `pnpm e2e:real-pages`
+     - `pnpm lint`
+     - `pnpm smoke:full`
 
 ### 阶段 C：统一集成
 
@@ -115,7 +126,7 @@
     - `1051e10 feat: 打通 Studio 运行环境与变量注入`
     - `76851c9 feat: 增强失败步骤诊断产物与入口`
     - `d5bcfea feat: 建立真实页面回归矩阵并补齐登录态基准`
-  - Node 20 统一验收结果：`pnpm lint` 与 `pnpm smoke:full` 全部通过。
+  - Node 20 统一验收结果：截至第三阶段，`pnpm lint` 与 `pnpm smoke:full` 全部通过。
 
 ## 5. 验收门槛
 
@@ -155,6 +166,6 @@
 
 ## 8. 下一轮候选
 
-1. Benchmarks 第三阶段：补列表筛选、分页、Modal、双态登录失效等基准，并形成成功率与耗时矩阵。
+1. Benchmarks 第四阶段：补分页、Tab、抽屉侧栏、双态登录失效等基准，并形成成功率与耗时矩阵。
 2. Diagnostics 第三阶段：在 Studio 内直接渲染诊断 JSON 内容，并补 warning / error 分组与修复建议。
 3. Node 24 兼容排查：单独评估 `better-sqlite3` ABI 与安装策略，决定是否支持双 Node 基线。
