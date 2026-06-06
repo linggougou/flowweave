@@ -2637,6 +2637,43 @@
   - 阻塞已解除。
   - 后续所有涉及 workspace 包导出的整链回归，必须先构建对应包或直接跑仓库级 `build/smoke`，避免再次出现“源码已改、dist 仍旧”的假绿。
 
+## 2026-06-06 Wave 5 轨道回收 - Benchmarks Observability
+
+- 时间：2026-06-06 23:51:10 CST
+- 轨道信息：
+  - worktree：`.worktrees/codex-real-page-benchmarks-observability`
+  - 分支：`codex/real-page-benchmarks-observability`
+  - 子代理：`Helmholtz / 019e9d84-1d14-7d83-8d37-7d96b6676a6a`
+  - 子代理提交：`976cc8063e7b0dcb0e565790adf3847734a7e6fa`
+- 主代理边界复核：
+  - 实际集成文件仅保留：
+    - `docs/guides/fixture-matrix.md`
+    - `examples/real-page-smoke.ts`
+    - `examples/run-real-page-smoke.ts`
+    - `packages/runtime/src/real-page-matrix.test.ts`
+  - 未带入 worktree 私有 `.codex` 文件。
+  - 未扩 profile 档位，也未新增无关 fixture，符合 Benchmarks 轨道边界。
+- 新增观测能力：
+  - `slowestCases`：Top 5 最慢场景排行
+  - `successCoverage`：按场景族汇总的成功态摘要
+  - CLI 新增：
+    - `成功态摘要（按场景族）`
+    - `最慢场景排行（Top 5）`
+- Node 20 主代理复验：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- real-page-matrix.test.ts`
+    - 结果：通过，`4/4`
+    - 关键耗时：约 `26.49s`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+    - 结果：通过，`18/18`
+    - 总耗时：`26262ms`
+    - 平均耗时：`1459ms`
+    - 最慢 Top 5：`drawer-double-save`、`bulk-cross-page-selection`、`session-expired-retry`、`empty-results-retry`、`modal-bulk-action`
+- 主代理结论：
+  - 无阻塞问题，允许并回协调分支。
+  - 残余风险：
+    - 最慢场景排行基于单次运行，适合观察漂移，不适合作为硬性性能基线。
+    - `successCoverage` 仍按业务场景族聚合，尚未细化到技术根因层。
+
 ## 2026-06-06 提交审查 - Recorder 轨 ed7a78dd7087eef8d80c72e1c35041eec4a19c3b
 
 - 时间：2026-06-06 23:46:00 CST
@@ -2696,3 +2733,65 @@
     - 提交型按键前 flush、`change/blur` 优先消费 pending fill 的基本顺序已被单测覆盖。
   - 测试覆盖不足：
     - 新增单测只覆盖 extension / recorder 层，没有覆盖本次已经实测暴露出来的 runtime recorded replay 回归面。
+
+## 2026-06-06 提交审查 - Studio 轨 604f4dff1927d16f07a6a4e9ea76d8ebd476ddc2
+
+- 时间：2026-06-06 23:58:00 CST
+- 任务：对 `604f4dff1927d16f07a6a4e9ea76d8ebd476ddc2` 做只读代码审查，重点检查：
+  - 是否符合“不新增 Electron API、前移 failure insight”的规划边界
+  - UI 改动是否有行为回归或测试缺口
+  - worker 自报 concern（左侧最近执行列表仍无失败根因、`StepLogTable` 无独立组件测试）是否构成阻塞
+- 使用技能：
+  - `using-superpowers`：确认本轮必须先检查技能流程。
+  - `judge-harness`：按审查判定模式组织证据和结论。
+- 工具与替代说明：
+  - `sequential-thinking`：当前环境不可用；改用结构化检索、显式审查清单与本地验证替代。
+  - `desktop-commander` / `context7` / `github.search_code`：当前环境不可用；改用 `codegraph_*`、`git show`、`rg` 与本地命令完成等效核查。
+- 审查前上下文：
+  - 已生成上下文摘要：`.codex/context-summary-review-studio-failure-insights-604f4dff.md`
+  - 已核对必读文档：
+    - `docs/architecture/overview.md`
+    - `docs/superpowers/plans/2026-05-26-run-first-roadmap.md`
+    - `docs/superpowers/specs/2026-06-06-real-page-stability-wave5-design.md`
+    - `docs/superpowers/plans/2026-06-06-real-page-stability-wave5-plan.md`
+    - `docs/superpowers/plans/2026-06-06-real-page-stability-wave5-orchestration.md`
+- 结构化检索结果：
+  - 目标提交文件：
+    - `apps/studio/src/App.tsx`
+    - `apps/studio/src/DiagnosticInspector.tsx`
+    - `apps/studio/src/shared/failure-insights.ts`
+    - `apps/studio/src/shared/failure-insights.test.ts`
+    - `packages/ui/src/StepLogTable.tsx`
+    - `apps/studio/src/DiagnosticInspector.test.tsx`
+  - 相似/依赖实现：
+    - `apps/studio/src/FragilityNotice.tsx`
+    - `apps/studio/src/shared/repair-suggestions.ts`
+    - `apps/studio/src/shared/execution-history.ts`
+    - `apps/studio/src/studio-client.ts`
+- 审查证据：
+  - 直接比对提交 diff，确认没有改动：
+    - `apps/studio/electron/**`
+    - `apps/studio/src/shared/studio-api-types.ts`
+    - 任何 preload / IPC channel 定义
+  - 代码级证据：
+    - `App.tsx` 只把已有 `ExecutionStepLog` 字段映射为 `StepLogRow` 的 insight 展示字段，没有新增数据请求或 Electron API。
+    - `studio-client.ts:65-73,186-190` 说明侧栏“最近执行”仍只拿 `ExecutionSummary` 的状态/时间；因此“左侧无失败根因”是数据边界未扩展，而不是本提交漏接 UI。
+    - `failure-insights.ts:85-125` 中 `ambiguous/hidden/missing` 分支优先于 `fallback-success`，会让一部分“先失败后成功”的通过步骤继续显示为硬失败类别。
+- 本地验证：
+  - 提交快照目录：`/tmp/flowweave-review-7q1PoZ`
+  - 验证命令：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
+      - 结果：通过，`10/10` 文件、`39/39` 测试
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/ui typecheck`
+      - 结果：通过
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+      - 在干净导出目录下未直接复现；失败原因是工作区依赖包导出的 `dist` 类型产物未预建，不是本次 diff 直接修改的文件报错
+      - 作为补充说明记录，不作为本提交阻塞结论
+- 审查结论摘要：
+  - 规划边界符合预期：
+    - 本轮确实把 failure insight 前移到了执行步骤表格和诊断首屏，同时没有新增 Electron API。
+  - worker concern 不构成阻塞：
+    - 左侧“最近执行”没有失败根因，是 `ExecutionSummary` 数据契约本来就不提供该信息，属于后续扩展项，不是这次提交越界或漏做。
+    - `StepLogTable` 缺独立组件测试属测试缺口，但当前已有 `failure-insights` 纯函数测试与 `DiagnosticInspector` 渲染测试兜底，不足以单独阻塞合并。
+  - 非阻塞发现：
+    - `failure-insights.ts` 的分类顺序会把一部分“先失败后成功”的通过步骤显示成 `当前页未找到目标 / 目标不可见 / 目标不唯一` 之类硬失败文案，和步骤状态 `passed` 的语义不完全一致。

@@ -471,6 +471,50 @@
 - 风险评估评分：94
 - 综合评分：95
 - 建议：通过
+
+## 2026-06-06 Benchmarks Observability 集成验收
+
+### 验证范围
+
+- 验证 `976cc8063e7b0dcb0e565790adf3847734a7e6fa` 是否仅增强矩阵观测性，不扰动 `baseline / p5 / p6` 既有行为。
+- 验证 `slowestCases` 与 `successCoverage` 的结构化结果及 CLI 输出在协调分支可复现。
+- 验证真实页面矩阵 `p6` 在新输出下仍然全部通过。
+
+### 验证结果
+
+1. 轨道边界符合预期。
+   - 实际并入文件仅包含 `examples/**`、`packages/runtime/src/real-page-matrix.test.ts` 与 `docs/guides/fixture-matrix.md`。
+   - 未扩 profile 档位，未新增无关 fixture。
+
+2. Node 20 主代理复测通过。
+   - `pnpm --filter @flowweave/runtime test -- real-page-matrix.test.ts`：通过，`4/4`
+   - `pnpm e2e:real-pages`：通过，`18/18`
+   - CLI 成功输出了：
+     - 成功态摘要（按场景族）
+     - 最慢场景排行（Top 5）
+
+3. 新增观测字段与断言匹配。
+   - `slowestCases` 能稳定输出 Top 5，并按耗时降序。
+   - `successCoverage` 能按当前场景族输出成功 / 失败覆盖摘要。
+
+### Findings
+
+1. 无阻塞问题。
+   - 当前实现满足 Benchmarks 轨道目标，且主代理在协调分支复测全部通过。
+2. 残余风险：最慢场景排行来自单次运行。
+   - 该指标适合观察趋势，不适合作为严格性能门槛。
+3. 残余风险：成功态摘要仍按业务场景族聚合。
+   - 如需定位更细粒度的技术根因，后续仍要补第二层分类。
+
+### 综合结论
+
+- 代码质量评分：95
+- 测试覆盖评分：94
+- 规范遵循评分：97
+- 战略匹配评分：96
+- 风险评估评分：92
+- 综合评分：95
+- 建议：通过
 - 建议：通过
 
 ## 2026-06-06 旧历史执行兼容提示验收（复核补修）
@@ -1731,4 +1775,74 @@
 - 战略匹配评分：97
 - 风险评估评分：94
 - 综合评分：96
+- 建议：通过
+
+## Studio 轨提交 604f4dff1927d16f07a6a4e9ea76d8ebd476ddc2 审查
+
+时间：2026-06-06 23:58:00 CST
+
+### 审查范围
+
+- 是否符合 Wave 5 Studio Failure Insight Workbench 的规划边界：
+  - 不新增 Electron API
+  - 前移 failure insight 到应用内首屏
+- UI 改动是否存在行为回归或明显测试缺口：
+  - `apps/studio/src/App.tsx`
+  - `apps/studio/src/DiagnosticInspector.tsx`
+  - `apps/studio/src/shared/failure-insights.ts`
+  - `packages/ui/src/StepLogTable.tsx`
+- worker 自报 concern 是否构成阻塞：
+  - 左侧最近执行列表仍无失败根因
+  - `StepLogTable` 无独立组件测试
+
+### 审查结论
+
+1. 未发现“新增 Electron API”越界问题。
+   - 该提交只改动渲染层和共享纯函数，没有触碰 `apps/studio/electron/**`、preload 或 `StudioApi` 契约。
+   - `App.tsx` 仅把已有 `ExecutionStepLog` 数据映射为 `StepLogRow` 的 insight 字段，不新增 IPC 或 HTTP 请求。
+2. “左侧最近执行列表仍无失败根因”不构成阻塞。
+   - `apps/studio/src/studio-client.ts:65-73` 与 `186-190` 证明 `ExecutionSummary` 只提供 `executionId / flowId / status / startedAt / finishedAt / environmentName`。
+   - `apps/studio/src/App.tsx:736-790` 的侧栏“最近执行”只消费这份 summary；若要展示失败根因，必须先扩展 summary 数据链，已超出本次 Task 4 授权边界。
+   - 本次提交已把失败根因前移到执行详情页的步骤表格和诊断首屏，符合规划要求。
+3. `StepLogTable` 无独立组件测试是缺口，但当前不足以阻塞合并。
+   - 提交新增了 `apps/studio/src/shared/failure-insights.test.ts`，覆盖目标过宽、不可见、仅页面快照三类主分支。
+   - `apps/studio/src/DiagnosticInspector.test.tsx` 覆盖了失败类别、页面快照摘要和 artifact 入口的首屏可见性。
+   - 仓库搜索未发现 `StepLogTable` 独立测试文件，因此这确实是后续可补强项，但已有测试和本地通过的 `app-studio` Vitest 能覆盖本轮主路径。
+4. 存在 1 个非阻塞行为风险：通过步骤的 fallback 语义可能被误渲染成硬失败。
+   - `apps/studio/src/shared/failure-insights.ts:85-125` 先判断 `ambiguous-target / hidden-target / missing-target`，再判断 `fallback-success`。
+   - 这意味着“主策略失败、备用策略成功”的 `passed` 步骤，只要失败尝试满足前面任一条件，就会继续显示为“当前页未找到目标 / 目标不可见 / 目标不唯一”等硬失败类别。
+   - `apps/studio/src/App.tsx:500-519` 会把这类 insight 无条件前移到 `StepLogTable`，从而在状态是“通过”时仍显示较强失败语义，容易让用户误判为真正失败。
+
+### 本地验证
+
+- 审查对象以提交快照导出到临时目录：`/tmp/flowweave-review-7q1PoZ`
+- `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
+  - 结果：通过
+  - 数据：`10` 个测试文件、`39` 个测试全部通过
+- `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/ui typecheck`
+  - 结果：通过
+- `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+  - 在干净导出目录下未直接复现
+  - 原因：工作区其他包的导出类型产物未预建，属于仓库现有验证前置条件问题，不是本次 diff 直接引入的渲染层错误
+
+### 风险评估
+
+1. 非阻塞风险：`fallback-success` 语义覆盖不足。
+   - 当前没有针对“先失败后成功”的明确测试，`failure-insights.test.ts:37-129` 也未覆盖该分支。
+   - 如果后续继续放大“首屏失败摘要”的权重，建议补一条 passed + fallback 成功的回归测试。
+2. 非阻塞风险：`StepLogTable` 仍缺独立渲染测试。
+   - 当前主要依赖 `DiagnosticInspector` 与纯函数测试间接兜底。
+   - 若后续再改表格交互或列布局，回归风险会高于有独立测试的组件。
+3. 验证残余风险：`app-studio typecheck` 在干净导出目录依赖预建类型产物。
+   - 这会削弱“单包 typecheck 命令可独立复现”的可信度。
+   - 但该问题不由本提交新引入，故仅记录为验证环境注意项。
+
+### 综合评分
+
+- 代码质量评分：92
+- 测试覆盖评分：86
+- 规范遵循评分：97
+- 战略匹配评分：95
+- 风险评估评分：88
+- 综合评分：90
 - 建议：通过

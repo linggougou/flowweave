@@ -14,6 +14,29 @@ async function main() {
   console.log(`成功 / 失败: ${summary.successCount} / ${summary.failureCount}`);
   console.log(`总耗时: ${summary.totalDurationMs}ms`);
   console.log(`平均耗时: ${summary.averageDurationMs}ms`);
+  if (summary.successCoverage.length === 0) {
+    console.log("成功态摘要: 无");
+  } else {
+    console.log("成功态摘要（按场景族）:");
+    for (const item of summary.successCoverage) {
+      const failureSuffix = item.failureCount > 0 ? `，失败 ${item.failureCount}` : "";
+      console.log(`  - ${item.label}: ${item.successCount}/${item.caseCount} 通过${failureSuffix}`);
+    }
+  }
+  if (summary.slowestCases.length === 0) {
+    console.log("最慢场景排行: 无");
+  } else {
+    console.log("最慢场景排行（Top 5）:");
+    for (const item of summary.slowestCases) {
+      const statusLabel = item.status === "success" ? "成功" : "失败";
+      const failureSuffix = item.failureType
+        ? `，失败类型：${getRealPageFailureTypeLabel(item.failureType)}`
+        : "";
+      console.log(
+        `  ${item.rank}. ${item.name}: ${item.durationMs}ms，${item.stepCount} 步，状态：${statusLabel}${failureSuffix}`,
+      );
+    }
+  }
   if (Object.keys(summary.failureTypeCounts).length === 0) {
     console.log("失败类型统计: 无");
   } else {
@@ -26,7 +49,8 @@ async function main() {
   }
 
   for (const item of summary.results) {
-    console.log(`  - ${item.name}: ${item.status} (${item.stepCount} 步, ${item.durationMs}ms)`);
+    const statusLabel = item.status === "success" ? "成功" : "失败";
+    console.log(`  - ${item.name}: ${statusLabel} (${item.stepCount} 步, ${item.durationMs}ms)`);
     console.log(`    产物目录: ${item.artifactDir}`);
     if (item.failureType) {
       console.log(`    失败类型: ${getRealPageFailureTypeLabel(item.failureType)}`);

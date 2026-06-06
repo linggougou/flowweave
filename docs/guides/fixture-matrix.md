@@ -16,7 +16,7 @@
 - `p5`
   - 在 `baseline` 之上新增 `4` 个更贴近后台站点的 fixture，由 `examples/run-real-page-smoke.ts` 和 `pnpm e2e:real-pages` 默认执行。
 - `p6`
-  - 在 `p5` 之上继续新增 `3` 个后台异常路径 / 复杂状态切换 fixture，并输出失败类型统计；当前默认由 `examples/run-real-page-smoke.ts` 和 `pnpm e2e:real-pages` 执行。
+  - 在 `p5` 之上继续新增 `3` 个后台异常路径 / 复杂状态切换 fixture，并输出失败类型统计、最慢场景排行与成功态覆盖摘要；当前默认由 `examples/run-real-page-smoke.ts` 和 `pnpm e2e:real-pages` 执行。
 
 所有页面都满足以下约束：
 
@@ -279,12 +279,28 @@
   - 适合覆盖 Drawer 内失败后修正、二次提交和状态回填。
   - 适合作为后台表单错误恢复的长期基准。
 
+## 当前观测输出
+
+- `examples/real-page-smoke.ts`
+  - `runRealPageFixtureMatrix()` 当前会返回：
+    - `failureTypeCounts`：按场景族聚合的失败类型统计。
+    - `slowestCases`：按耗时倒序的最慢场景 Top 5，包含名次、case 名、状态、步数与耗时。
+    - `successCoverage`：按场景族聚合的成功覆盖摘要，包含 `caseCount / successCount / failureCount`。
+- `examples/run-real-page-smoke.ts`
+  - CLI 当前会打印：
+    - 成功数 / 失败数
+    - 总耗时 / 平均耗时
+    - 成功态摘要（按场景族）
+    - 最慢场景排行（Top 5）
+    - 失败类型统计
+    - 每个 case 的产物目录与失败信息
+
 ## 当前回归入口
 
 - `examples/real-page-smoke.ts`
-  - 统一定义 `baseline` / `p5` / `p6` 三档矩阵，负责 Flow、上传测试文件、`storageStatePath` 注入和失败类型汇总。
+  - 统一定义 `baseline` / `p5` / `p6` 三档矩阵，负责 Flow、上传测试文件、`storageStatePath` 注入，以及观测字段汇总。
 - `examples/run-real-page-smoke.ts`
-  - 默认执行 `p6` 档位，并打印成功数、失败数、总耗时、平均耗时、失败类型统计与每个 case 的产物目录。
+  - 默认执行 `p6` 档位，并打印成功数、失败数、总耗时、平均耗时、成功态摘要、最慢场景排行、失败类型统计与每个 case 的产物目录。
 - `pnpm e2e:real-pages`
   - 独立执行 `p6` 增强矩阵，适合局部回归 Benchmarks 轨道。
 - `pnpm smoke:full`
@@ -292,9 +308,8 @@
 
 ## 后续扩展建议
 
-1. 在失败类型统计之外，再补按 case 聚合的最慢场景排行，便于长期追踪矩阵耗时漂移。
-2. 为 `p6` 三个后台异常路径继续增加更细粒度的成功态摘要，便于后续做更强断言。
-3. 当矩阵继续扩容时，评估是否需要独立的 `p7` 档位，而不是继续挤压默认 `p6` 时长。
+1. 当矩阵继续扩容时，评估是否需要独立的 `p7` 档位，而不是继续挤压默认 `p6` 时长。
+2. 如果未来要从“业务场景族”继续下钻，可在失败类型统计之外再补一层技术根因分类，例如 `locator`、`timeout`、`detached`。
 
 ## 备注
 
@@ -303,5 +318,5 @@
 - 第三阶段继续扩到 `filterable-list.html` 与 `modal-bulk-action.html`，矩阵总数提升到 `7`。
 - 第四阶段继续扩到 `session-expired-dashboard.html`、`paginated-list.html`、`drawer-edit-form.html` 与 `toast-popconfirm.html`，矩阵总数提升到 `11`。
 - 第五阶段新增 `tabbed-workspace.html`、`contenteditable-editor.html`、`empty-results-retry.html` 与 `linked-filters.html`，`p5` 档位矩阵总数提升到 `15`，同时保留 `baseline` 的 `11` 个稳定 case。
-- 第六阶段新增 `session-expired-retry.html`、`bulk-cross-page-selection.html` 与 `drawer-double-save.html`，`p6` 档位矩阵总数提升到 `18`，并新增失败类型统计输出。
+- 第六阶段新增 `session-expired-retry.html`、`bulk-cross-page-selection.html` 与 `drawer-double-save.html`，`p6` 档位矩阵总数提升到 `18`，并新增失败类型统计、最慢场景排行与成功态覆盖摘要输出。
 - 矩阵脚本直接从 `packages/*/src/index.ts` 导入 live implementation，避免脚本误吃旧 `dist` 产物，导致基准结果与当前源码脱节。

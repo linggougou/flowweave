@@ -87,6 +87,23 @@ export type RealPageFixtureCaseResult = {
   failureType?: RealPageFailureType;
 };
 
+export type RealPageSlowCase = {
+  rank: number;
+  name: string;
+  status: "success" | "failed";
+  stepCount: number;
+  durationMs: number;
+  failureType?: RealPageFailureType;
+};
+
+export type RealPageSuccessCoverageSummary = {
+  failureType: RealPageFailureType;
+  label: string;
+  caseCount: number;
+  successCount: number;
+  failureCount: number;
+};
+
 export type RealPageFixtureMatrixSummary = {
   profile: RealPageMatrixProfile;
   baseUrl: string;
@@ -98,6 +115,8 @@ export type RealPageFixtureMatrixSummary = {
   totalDurationMs: number;
   averageDurationMs: number;
   failureTypeCounts: RealPageFailureTypeCounts;
+  slowestCases: RealPageSlowCase[];
+  successCoverage: RealPageSuccessCoverageSummary[];
 };
 
 function buildFlow(id: string, name: string, steps: FlowDocument["steps"]): FlowDocument {
@@ -228,6 +247,71 @@ export function summarizeRealPageFailureTypes(
   }
 
   return counts;
+}
+
+export function summarizeRealPageSlowestCases(
+  results: Array<
+    Pick<
+      RealPageFixtureCaseResult,
+      "name" | "status" | "stepCount" | "durationMs" | "failureType"
+    >
+  >,
+  limit = 5,
+): RealPageSlowCase[] {
+  if (limit <= 0) {
+    return [];
+  }
+
+  return results
+    .map((item, index) => ({ item, index }))
+    .sort((left, right) => {
+      if (right.item.durationMs !== left.item.durationMs) {
+        return right.item.durationMs - left.item.durationMs;
+      }
+      return left.index - right.index;
+    })
+    .slice(0, limit)
+    .map(({ item }, index) => ({
+      rank: index + 1,
+      name: item.name,
+      status: item.status,
+      stepCount: item.stepCount,
+      durationMs: item.durationMs,
+      failureType:
+        item.status === "failed"
+          ? (item.failureType ?? resolveRealPageFailureType(item.name))
+          : undefined,
+    }));
+}
+
+export function summarizeRealPageSuccessCoverage(
+  results: Array<Pick<RealPageFixtureCaseResult, "name" | "status" | "failureType">>,
+): RealPageSuccessCoverageSummary[] {
+  const coverage = new Map<RealPageFailureType, RealPageSuccessCoverageSummary>();
+
+  for (const item of results) {
+    const failureType = item.failureType ?? resolveRealPageFailureType(item.name);
+    const existing =
+      coverage.get(failureType) ??
+      ({
+        failureType,
+        label: getRealPageFailureTypeLabel(failureType),
+        caseCount: 0,
+        successCount: 0,
+        failureCount: 0,
+      } satisfies RealPageSuccessCoverageSummary);
+
+    existing.caseCount += 1;
+    if (item.status === "success") {
+      existing.successCount += 1;
+    } else {
+      existing.failureCount += 1;
+    }
+
+    coverage.set(failureType, existing);
+  }
+
+  return Array.from(coverage.values());
 }
 
 function buildBaselineMatrixCases({
@@ -1090,6 +1174,8 @@ export async function runRealPageFixtureMatrix(
   const failed = results.filter((item) => item.status !== "success");
   const totalDurationMs = results.reduce((total, item) => total + item.durationMs, 0);
   const failureTypeCounts = summarizeRealPageFailureTypes(results);
+  const slowestCases = summarizeRealPageSlowestCases(results);
+  const successCoverage = summarizeRealPageSuccessCoverage(results);
 
   return {
     profile,
@@ -1102,5 +1188,7 @@ export async function runRealPageFixtureMatrix(
     totalDurationMs,
     averageDurationMs: results.length === 0 ? 0 : Math.round(totalDurationMs / results.length),
     failureTypeCounts,
+    slowestCases,
+    successCoverage,
   };
 }
