@@ -169,3 +169,56 @@
 1. Benchmarks 第四阶段：补分页、Tab、抽屉侧栏、双态登录失效等基准，并形成成功率与耗时矩阵。
 2. Diagnostics 第三阶段：在 Studio 内直接渲染诊断 JSON 内容，并补 warning / error 分组与修复建议。
 3. Node 24 兼容排查：单独评估 `better-sqlite3` ABI 与安装策略，决定是否支持双 Node 基线。
+
+## 9. 2026-06-06 下一轮四轨并行收口（已完成）
+
+### 轨道结果
+
+| 轨道 | worktree / 分支 | 子代理提交 | 主分支集成 | 结果 |
+|------|------------------|------------|------------|------|
+| Recorder P2 | `.worktrees/codex-real-page-recorder-p2` / `codex/real-page-recorder-p2` | `ee1a09c` | `6a4798c` | 已完成 |
+| Fragility | `.worktrees/codex-real-page-fragility-context` / `codex/real-page-fragility-context` | `19805f5` | `983254e` + `fe93cfc` | 已完成 |
+| Diagnostics UI | `.worktrees/codex-real-page-diagnostics-ui` / `codex/real-page-diagnostics-ui` | `de8bafc` | `2372dba` + `8065884` | 已完成 |
+| Benchmarks P4 | `.worktrees/codex-real-page-benchmarks-p4` / `codex/real-page-benchmarks-p4` | `244f7b1` | `f7c8fe6` | 已完成 |
+
+### 本轮新增能力
+
+- Recorder：
+  - `keypress -> press` 归一化
+  - upload 回放输入改为变量占位符
+  - 连续重复 `select / setChecked / upload` 合并
+  - 连续同 URL `navigate` 去重
+- Fragility：
+  - 新增 `MISSING_ENVIRONMENT`、`MISSING_VARIABLE`
+  - 修正 Studio 无上下文假阳性
+  - 变量名支持连字符、点号、中文
+  - 变量扫描只覆盖执行关键字段
+- Diagnostics UI：
+  - Studio 内嵌 `DiagnosticInspector`
+  - 执行步骤支持 `diagnostic / pageSnapshot / pageSnapshotPath`
+  - `FragilityNotice` 按 `error / warning` 分组
+  - 预览页与运行结果可消费环境/变量上下文
+- Benchmarks P4：
+  - 新增 `session-expired-dashboard`
+  - 新增 `paginated-list`
+  - 新增 `drawer-edit-form`
+  - 新增 `toast-popconfirm`
+  - 真实页面矩阵扩展到 `11` 个场景
+
+### 统一验收
+
+- Node 基线：`v20.19.6`
+- 通过命令：
+  - `pnpm lint`
+  - `pnpm smoke:full`
+- `smoke:full` 内部结果：
+  - `pnpm typecheck`：通过
+  - `pnpm test`：通过
+  - `pnpm build`：通过
+  - `pnpm e2e:login`：通过
+  - `pnpm e2e:real-pages`：通过，`11` 个场景全部成功
+
+### 当前状态
+
+- 本轮 4 轨并行开发已完成，可进入下一轮能力规划。
+- 当前协调分支仍以 Node 20 作为唯一稳定验收基线。

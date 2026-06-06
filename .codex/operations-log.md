@@ -760,3 +760,152 @@
     2. 保真传递 `FragilityIssue` 的 `code / severity / stepIndex`；
     3. 把 `MISSING_ENVIRONMENT` / `MISSING_VARIABLE` 与非定位类失败诊断补齐。
   - 本轮无代码实现，无业务文件改动。
+
+## 只读审查 - real-page-fragility-context / 19805f5c4e046e5d3a3ffbc2893dae3d9bb3c87a
+
+时间：2026-06-06 16:55:31 CST
+
+- 任务类型：只读代码质量与回归风险审查，不修改目标 worktree 代码。
+- 使用技能：
+  - `using-superpowers`：按技能优先规则先确认流程。
+  - `requesting-code-review`：采用 owner review 视角，直接围绕提交内容给出 findings。
+- 工具说明：
+  - 当前环境无 `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code`。
+  - 替代流程：使用 `codegraph_context`、`rg`、`git show`、`sed` 与本地测试完成结构化审查，并在此留痕。
+- 上下文检索：
+  - 已查看目标提交 diff：`packages/page-intelligence/src/fragility.ts`、`packages/page-intelligence/src/fragility.test.ts`、`packages/page-intelligence/src/index.ts`。
+  - 已对照 3 个现有实现：
+    - `packages/runtime/src/playwright-runner.ts`：真实变量替换与 `baseUrl` 解析。
+    - `apps/studio/src/App.tsx`：Flow 页面 fragility 调用点。
+    - `apps/studio/electron/services.ts`：执行结果 fragility 消费点。
+- 编码前检查（只读任务等效）：
+  - ✅ 已查阅上下文摘要：`.codex/context-summary-real-page-fragility-review.md`
+  - ✅ 已确认本轮不改业务代码，仅输出 findings。
+  - ✅ 已确认 review 重点：变量扫描误报/漏报、`MISSING_ENVIRONMENT` 兼容性、边界与测试缺口。
+- 验证记录：
+  - `pnpm --filter @flowweave/page-intelligence test -- --runInBand`
+    - 结果：失败，原因是 Vitest 不支持 `--runInBand`，非代码失败。
+  - `pnpm --filter @flowweave/page-intelligence test`
+    - 结果：通过，`src/fragility.test.ts` 与 `src/snapshot.test.ts` 共 `9/9` 通过。
+- 审查结论摘要：
+  - 发现 2 个需要优先处理的问题：
+    1. `MISSING_ENVIRONMENT` 在无上下文调用点会对现有 Studio 相对路径 Flow 产生假阳性。
+    2. 变量名正则比 DSL 允许范围更窄，新增变量扫描存在漏报。
+  - 另有 1 个中风险点：
+    - 变量扫描递归整个 step，会把 `label` / `target.hints` 这类非执行关键字段也算入缺失变量，存在误报空间。
+
+## 只读规格审查 - real-page-fragility-context / 19805f5c4e046e5d3a3ffbc2893dae3d9bb3c87a
+
+时间：2026-06-06 17:00:00 CST
+
+- 任务类型：只读规格符合性审查，不修改业务代码。
+- 使用技能：
+  - `using-superpowers`：按会话启动规则确认技能使用要求。
+  - `judge-harness`：按审查判定视角组织证据与结论。
+- 工具说明：
+  - 当前环境无 `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code`。
+  - 替代流程：使用 `codegraph_context`、`codegraph_callers`、`git show`、`rg`、`sed`、局部测试与类型检查完成审查，并在此留痕。
+- 上下文检索：
+  - 已查看规格来源：
+    - `docs/superpowers/specs/2026-06-06-real-page-stability-design.md`
+    - `docs/superpowers/plans/2026-06-06-real-page-stability-next-wave-plan.md`
+  - 已对照至少 3 个既有实现：
+    - `packages/page-intelligence/src/fragility.ts`
+    - `packages/runtime/src/playwright-runner.ts`
+    - `packages/flow-dsl/src/schema.ts`
+    - 补充调用点：`apps/studio/src/App.tsx`、`apps/studio/electron/services.ts`
+- 编码前检查（只读任务等效）：
+  - ✅ 已查阅上下文摘要：`.codex/context-summary-fragility-spec-review-19805f5.md`
+  - ✅ 已确认本轮不改业务代码，仅输出规格审查结论。
+  - ✅ 已确认 review 重点：两项新增能力、旧调用兼容性、既有 5 类 code 语义稳定性。
+- 验证记录：
+  - `pnpm --filter @flowweave/page-intelligence test -- --runInBand`
+    - 结果：失败，原因是 Vitest 不支持 `--runInBand`，属于命令参数问题，不是代码失败。
+  - `pnpm --filter @flowweave/page-intelligence test`
+    - 结果：通过，`2` 个测试文件 `9/9` 通过。
+  - `pnpm --filter @flowweave/page-intelligence typecheck`
+    - 结果：通过。
+  - `pnpm --filter @flowweave/page-intelligence build`
+    - 结果：通过，`dist/index.js` 与 `dist/index.d.ts` 均成功产出。
+- 审查结论摘要：
+  - 验收标准 1：满足。
+  - 验收标准 2：部分满足；常见变量名场景满足，但与 DSL 变量命名契约存在收窄偏差。
+  - 验收标准 3：满足；第二参数可选，旧调用点与旧测试均未破坏。
+  - 验收标准 4：满足；既有 5 类 code 的实现分支未改动，原测试语义保留并通过。
+- 当前主结论：
+  - 发现 1 个阻塞级规格偏差：
+    - `MISSING_VARIABLE` 解析的变量名范围比 DSL 合法范围更窄，会对部分合法变量名漏报。
+  - 发现 1 个非阻塞测试缺口：
+    - 缺少“提供 `baseUrl` 时不报 `MISSING_ENVIRONMENT`”与“变量默认值存在时不报 `MISSING_VARIABLE`”的回归断言。
+
+## 2026-06-06 真实页面稳定性下一轮四轨并行收口
+
+- 时间：2026-06-06 17:10:00 CST
+- 任务目标：完成 `Recorder P2`、`Fragility`、`Diagnostics UI`、`Benchmarks P4` 四条轨道并行开发、主分支集成、回归修复与 Node 20 统一验收。
+- 所用技能：
+  - `using-superpowers`
+  - `subagent-driven-development`
+  - `using-git-worktrees`
+  - `systematic-debugging`
+  - `test-driven-development`
+  - `verification-before-completion`
+- 工具与环境说明：
+  - 当前环境未提供 `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code`，本轮继续使用 CodeGraph、本地命令、worktree、局部测试与仓库级验收替代。
+  - 统一验收基线仍为 `Node v20.19.6`：`PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH`
+- 四条轨道回收与集成结果：
+  - `Fragility`
+    - 子代理提交：`19805f5`
+    - 主分支并入：`983254e 实现脆弱性上下文预检`
+    - 审查后补修：`fe93cfc 修正脆弱性上下文误报与变量漏报`
+    - 关键修正：
+      - 仅在显式提供 `baseUrl` 上下文时才判定 `MISSING_ENVIRONMENT`
+      - 变量占位符支持连字符、点号、中文等 DSL 合法变量名
+      - 变量扫描仅覆盖真实执行字段，忽略 `label` 与 `target.hints`
+  - `Recorder P2`
+    - 子代理提交：`ee1a09c`
+    - 主分支并入：`6a4798c 增强真实页面录制闭环稳定性`
+    - 后续回归修正：
+      - 在仓库级 `smoke:full` 中发现 `packages/recorder/src/normalize.test.ts` 通过跨包相对路径导入 `parseRecordedEvent`，触发 `rootDir` 类型检查失败
+      - 已修正为包级导入并通过局部与全仓复验
+  - `Diagnostics UI`
+    - 子代理提交：`de8bafc`
+    - 主分支并入：`2372dba feat: 完成 Studio 诊断面板`
+    - 主代理补强：`8065884 补齐诊断面板上下文与页面摘要入口`
+    - 关键补强：
+      - 运行详情与 Flow 预览会把 `baseUrl`、变量输入上下文传给 `analyzeFlowFragility`
+      - 仅有 `pageSnapshotPath` 的步骤也能通过“查看诊断”进入内嵌诊断面板
+  - `Benchmarks P4`
+    - 子代理提交：`244f7b1`
+    - 主分支并入：`f7c8fe6 test: 扩展真实页面矩阵到四个后台场景`
+    - 新增场景：
+      - `session-expired-dashboard`
+      - `paginated-list`
+      - `drawer-edit-form`
+      - `toast-popconfirm`
+- 本轮新增上下文与审查留痕：
+  - `.codex/context-summary-recorder-stability-gap-audit.md`
+  - `.codex/context-summary-benchmarks-gap-analysis.md`
+  - `.codex/context-summary-diagnostics-gap-analysis.md`
+  - `.codex/context-summary-real-page-fragility-review.md`
+  - `.codex/context-summary-fragility-spec-review-19805f5.md`
+- 主代理局部验证记录：
+  - `pnpm --filter @flowweave/page-intelligence test`：通过，`13/13`
+  - `pnpm --filter @flowweave/page-intelligence build`：通过
+  - `pnpm --filter @flowweave/recorder test`：通过，`33/33`
+  - `pnpm --filter @flowweave/recorder typecheck`：通过
+  - `pnpm --filter @flowweave/runtime test`：通过，`9/9`
+  - `pnpm --filter @flowweave/ui build`：通过
+  - `pnpm --filter @flowweave/app-studio typecheck`：通过
+  - `pnpm e2e:real-pages`：通过，`11` 个场景全部成功
+- 仓库级统一验收：
+  - `pnpm lint`：通过
+  - `pnpm smoke:full`：通过，内部已完整跑通：
+    - `pnpm typecheck`
+    - `pnpm test`
+    - `pnpm build`
+    - `pnpm e2e:login`
+    - `pnpm e2e:real-pages`
+- 当前结论：
+  - 下一轮 4 轨并行开发已全部完成并并入 `codex/real-page-stability-program`
+  - Studio 现已具备内嵌诊断面板、页面摘要入口和分级 fragility 展示能力
+  - 真实页面矩阵已扩展到 `11` 个场景，并在主工作区与 `smoke:full` 中双重通过

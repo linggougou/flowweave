@@ -259,6 +259,97 @@
 
 ## 2026-06-06 Benchmarks 第三阶段验收
 
+## 2026-06-06 真实页面稳定性下一轮四轨并行验收
+
+### 验证范围
+
+- `Recorder P2`、`Fragility`、`Diagnostics UI`、`Benchmarks P4` 四条轨道是否均已并入 `codex/real-page-stability-program`。
+- `Fragility` 回归修复后，是否消除了 Studio 无上下文假阳性，并补齐宽变量名、默认值、展示字段误报等测试。
+- Studio 是否已支持内嵌诊断面板、页面摘要入口与保真 `FragilityIssue` 展示。
+- 真实页面矩阵是否已扩展到 `11` 个场景，并在主工作区与 `smoke:full` 中全部通过。
+- 仓库级 `pnpm lint` 与 `pnpm smoke:full` 是否在 Node 20 基线下通过。
+
+### 验证结果
+
+1. 四条轨道并入检查通过。
+   - `983254e 实现脆弱性上下文预检`
+   - `6a4798c 增强真实页面录制闭环稳定性`
+   - `fe93cfc 修正脆弱性上下文误报与变量漏报`
+   - `2372dba feat: 完成 Studio 诊断面板`
+   - `8065884 补齐诊断面板上下文与页面摘要入口`
+   - `f7c8fe6 test: 扩展真实页面矩阵到四个后台场景`
+2. `Fragility` 回归修复验证通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/page-intelligence test`：通过，`13/13`
+   - 已确认新增回归覆盖：
+     - 未提供环境上下文时不报 `MISSING_ENVIRONMENT`
+     - 显式提供空 `baseUrl` 时会报 `MISSING_ENVIRONMENT`
+     - 变量名支持连字符、点号与中文
+     - Flow 变量 `defaultValue` 存在时不报 `MISSING_VARIABLE`
+     - `label` / `target.hints` 中的占位符不会误报
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/page-intelligence build`：通过
+3. `Recorder P2` 与导入路径回归修复验证通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder typecheck`：通过
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test`：通过，`33/33`
+   - 已确认修复 `normalize.test.ts` 的跨包相对路径导入，消除 `rootDir` 类型检查失败。
+4. Diagnostics UI 集成验证通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/ui build`：通过
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`：通过
+   - 已确认：
+     - Electron 服务会读取 `step-<n>-diagnostic.json` 与 `page-<n>.json`
+     - Studio 内嵌 `DiagnosticInspector` 可查看 URL、标题、策略尝试、目标提示、页面摘要
+     - `FragilityNotice` 按 `error / warning` 分组并保真展示 `code / severity / stepIndex`
+     - Flow 预览与运行结果会消费 `baseUrl`、变量输入上下文
+5. Benchmarks P4 主工作区验证通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test`：通过，`9/9`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`：通过，`11` 个场景全部成功
+   - 新增 4 个场景均通过：
+     - `session-expired-dashboard`
+     - `paginated-list`
+     - `drawer-edit-form`
+     - `toast-popconfirm`
+6. 仓库级统一验收通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm lint`：通过
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke:full`：通过
+   - `smoke:full` 内部完整通过：
+     - `pnpm typecheck`
+     - `pnpm test`
+     - `pnpm build`
+     - `pnpm e2e:login`
+     - `pnpm e2e:real-pages`
+7. 端到端结果明细通过。
+   - `e2e:login`
+     - 项目 ID：`ff8f0e55-d55f-4312-baee-8de5b8fb5684`
+     - 执行 ID：`902b793d-b87b-4487-832e-880c108bc05d`
+     - 共 `4` 个步骤，全部 `success`
+   - `e2e:real-pages`
+     - `checkbox-select`：成功，`5` 步，`920ms`
+     - `delayed-panel`：成功，`4` 步，`1587ms`
+     - `upload-form`：成功，`5` 步，`788ms`
+     - `spa-route`：成功，`4` 步，`805ms`
+     - `session-dashboard`：成功，`3` 步，`688ms`
+     - `filterable-list`：成功，`6` 步，`1588ms`
+     - `modal-bulk-action`：成功，`8` 步，`1776ms`
+     - `session-expired-dashboard`：成功，`4` 步，`1208ms`
+     - `paginated-list`：成功，`4` 步，`1025ms`
+     - `drawer-edit-form`：成功，`8` 步，`1631ms`
+     - `toast-popconfirm`：成功，`6` 步，`1677ms`
+
+### 残余风险
+
+- 历史执行从知识库重载后，`Fragility` 的上下文相关结论仍然无法百分百复原，因为当前执行记录尚未持久化实际 `baseUrl` 与变量输入。
+- `press` 录制的真实站点手动联调仍未单独做人工验收，但已被 recorder 单测与仓库级烟测覆盖。
+- Node 24 与 `better-sqlite3` 的 ABI 风险仍未关闭，本轮验收继续以仓库既定 Node 20 为准。
+
+### 综合结论
+
+- 代码质量评分：97
+- 测试覆盖评分：96
+- 规范遵循评分：98
+- 战略匹配评分：97
+- 风险评估评分：94
+- 综合评分：96
+- 建议：通过
+
 ### 验证范围
 
 - 真实页面矩阵是否已扩展到 `filterable-list` 与 `modal-bulk-action` 两个新场景。
@@ -493,3 +584,106 @@
 
 - 本次为只读探索，无业务代码改动。
 - 当前 Diagnostics 轨道并非“完全未做”，而是已经完成基础产物写入，但距离设计文档要求的“Studio 内可诊断、可分级、可快速修复”仍有关键断层。
+
+## 只读审查报告 - real-page-fragility-context / 19805f5c4e046e5d3a3ffbc2893dae3d9bb3c87a
+
+时间：2026-06-06 16:55:31 CST
+
+### Findings
+
+1. `packages/page-intelligence/src/fragility.ts:162` 到 `174`
+   - 阻塞级：`MISSING_ENVIRONMENT` 现在在 `context.baseUrl` 缺失时默认触发，而现有 Studio 预览页仍在 `apps/studio/src/App.tsx:435` 直接调用 `analyzeFlowFragility(currentFlow)`。
+   - 影响：所有使用相对路径的现有 Flow，只要在 Flow 预览页加载，就会被标成“当前没有可用 baseUrl”，即使项目已配置默认环境且运行时会注入 `baseUrlDraft`。
+   - 结论：这是对已有场景的假阳性回归。
+2. `packages/page-intelligence/src/fragility.ts:3` 到 `4`、`44` 到 `46`
+   - 高风险：变量扫描只识别 `[A-Za-z0-9_]`，但 DSL 里 `variableDefSchema.name` 仅要求 `z.string().min(1)`，见 `packages/flow-dsl/src/schema.ts:22` 到 `27`。
+   - 影响：合法变量名若包含 `-`、`.` 或非 ASCII 字符，`MISSING_VARIABLE` 会直接漏报；同时这也暴露出运行时插值与 DSL 契约不一致。
+   - 结论：新增变量扫描存在实质漏报。
+3. `packages/page-intelligence/src/fragility.ts:44` 到 `55`、`176` 到 `187`
+   - 中风险：`extractVariableNames(step)` 会递归扫描整个 step 对象，把 `label`、`target.hints.*` 等非执行关键字段里的 `{{...}}` 也纳入缺失变量判断。
+   - 影响：如果这些字段只是展示或诊断文案，`MISSING_VARIABLE` 会把非阻塞信息升级为 error，产生误报。
+   - 结论：扫描范围过宽，和“真实执行会不会失败”不是一一对应。
+
+### 测试覆盖评估
+
+- 已有单测只覆盖：
+  - 相对路径 + 无 `baseUrl` 直接报 `MISSING_ENVIRONMENT`
+  - 简单字符串变量缺失时报 `MISSING_VARIABLE`
+- 缺失的关键测试：
+  - 传入 `baseUrl` 时不报 `MISSING_ENVIRONMENT`
+  - Studio 现有无上下文调用场景不会误报
+  - 变量名包含 `-`、`.`、中文等 DSL 允许字符时的行为
+  - `label` / `target.hints` 中出现 `{{...}}` 时是否应该忽略
+  - Flow 变量默认值存在时不报 `MISSING_VARIABLE`
+
+### 评分
+
+- 代码质量：78
+- 测试覆盖：68
+- 规范遵循：88
+- 需求匹配：72
+- 架构一致：70
+- 风险评估：62
+- 综合评分：73
+- 建议：退回
+
+### 结论
+
+- 本次提交没有大面积实现问题，但新增上下文规则和现有 Studio 调用点没有一起收口，已经构成可见回归风险。
+- 在修正 `MISSING_ENVIRONMENT` 默认行为与变量扫描边界前，不建议合入。
+
+## 规格符合性审查报告 - real-page-fragility-context / 19805f5c4e046e5d3a3ffbc2893dae3d9bb3c87a
+
+时间：2026-06-06 17:00:00 CST
+
+### 验收结论
+
+1. 对相对 `navigate` 且缺少 `baseUrl` 的流程报 `MISSING_ENVIRONMENT`
+   - 结论：满足
+   - 证据：`packages/page-intelligence/src/fragility.ts:162-174`
+   - 测试：`packages/page-intelligence/src/fragility.test.ts:19-30`
+2. 显式提供 `context.variables` 时，扫描步骤中的 `{{variable}}` 引用，对缺失输入报 `MISSING_VARIABLE`
+   - 结论：部分满足
+   - 证据：`packages/page-intelligence/src/fragility.ts:176-189`
+   - 测试：`packages/page-intelligence/src/fragility.test.ts:32-56`
+   - 偏差：变量占位符解析仅支持 `[A-Za-z0-9_]`，但 DSL 变量名允许任意非空字符串，见 `packages/flow-dsl/src/schema.ts:22-27`
+3. 兼容旧调用：`analyzeFlowFragility(flow)` 仍可工作
+   - 结论：满足
+   - 证据：`packages/page-intelligence/src/fragility.ts:196-199` 将第二参数设为可选默认值
+   - 调用点：`apps/studio/electron/services.ts:315`、`apps/studio/src/App.tsx:436` 仍是旧签名
+4. 不应破坏原有 5 类 fragility code 与既有测试语义
+   - 结论：满足
+   - 证据：既有 `inspectStep()` 主分支仍保留，见 `packages/page-intelligence/src/fragility.ts:96-151`
+   - 验证：`pnpm --filter @flowweave/page-intelligence test` 通过，旧测试语义保留
+
+### Findings
+
+1. 阻塞：`MISSING_VARIABLE` 的变量名契约比 DSL 更窄，导致合法变量名场景漏报。  
+   - 位置：`[fragility.ts](/Users/ling/codeHome/A_Mine/flowweave/.worktrees/codex-real-page-fragility-context/packages/page-intelligence/src/fragility.ts:3)`、`[fragility.ts](/Users/ling/codeHome/A_Mine/flowweave/.worktrees/codex-real-page-fragility-context/packages/page-intelligence/src/fragility.ts:44)`、`[schema.ts](/Users/ling/codeHome/A_Mine/flowweave/.worktrees/codex-real-page-fragility-context/packages/flow-dsl/src/schema.ts:22)`
+   - 说明：本次新增能力以 `/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/` 抽取变量名，只能识别字母、数字、下划线。与此同时，DSL 的 `variableDefSchema.name` 仅要求非空字符串，没有同样的命名限制。结果是：像 `user-name`、`env.prod`、中文名` 这类当前 DSL 允许的变量，既不会被 `extractVariableNames()` 捕获，也不会触发 `MISSING_VARIABLE`。这与“显式提供 `context.variables` 时扫描步骤中的 `{{variable}}` 引用”这一验收目标不完全一致，属于直接漏报。
+
+### 测试缺口
+
+- `packages/page-intelligence/src/fragility.test.ts`
+  - 缺少“传入 `baseUrl` 时不报 `MISSING_ENVIRONMENT`”断言。
+  - 缺少“Flow 变量有 `defaultValue` 时不报 `MISSING_VARIABLE`”断言。
+  - 缺少“DSL 合法但非下划线风格变量名”的断言。
+
+### 评分
+
+- 代码质量：88
+- 测试覆盖：81
+- 规范遵循：93
+- 需求匹配：79
+- 架构一致：89
+- 风险评估：78
+- 综合评分：85
+- 建议：需讨论
+
+### 说明
+
+- 本次为只读审查，无业务代码改动。
+- 局部验证已执行并通过：
+  - `pnpm --filter @flowweave/page-intelligence test`
+  - `pnpm --filter @flowweave/page-intelligence typecheck`
+  - `pnpm --filter @flowweave/page-intelligence build`
