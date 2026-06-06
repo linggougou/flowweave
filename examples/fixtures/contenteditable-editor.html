@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowWeave contenteditable Fixture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+        --bg: #f8f4ee;
+        --panel: rgba(255, 254, 250, 0.96);
+        --border: #d8cdbc;
+        --text: #31281d;
+        --muted: #726352;
+        --accent: #8b5a2d;
+        --accent-soft: rgba(139, 90, 45, 0.12);
+        --success-soft: rgba(45, 112, 82, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top right, rgba(139, 90, 45, 0.12), transparent 30%),
+          linear-gradient(180deg, #fcfbf8 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      main {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 40px 20px 72px;
+      }
+
+      .hero,
+      .shell,
+      .result {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: 0 18px 42px rgba(49, 40, 29, 0.08);
+      }
+
+      .hero,
+      .shell,
+      .result {
+        padding: 24px;
+      }
+
+      .hero {
+        margin-bottom: 20px;
+      }
+
+      [contenteditable="true"] {
+        min-height: 150px;
+        padding: 16px 18px;
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: #fff;
+        outline: none;
+        line-height: 1.7;
+      }
+
+      [contenteditable="true"]:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 4px var(--accent-soft);
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        margin-top: 16px;
+      }
+
+      button {
+        border: none;
+        border-radius: 14px;
+        padding: 12px 18px;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        background: var(--accent);
+        color: #fff;
+      }
+
+      button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      .result {
+        margin-top: 18px;
+      }
+
+      .result[hidden] {
+        display: none;
+      }
+
+      .result-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+        margin-top: 16px;
+      }
+
+      .result-box {
+        padding: 16px;
+        border-radius: 18px;
+        background: var(--success-soft);
+      }
+
+      .result-box strong {
+        display: block;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <p>Fixture 目标：验证 contenteditable 编辑、保存按钮启用与结果回显。</p>
+        <h1 id="page-title">交接备注编辑器</h1>
+        <p>推荐步骤：填入备注正文、点击保存，再断言结果区与字符统计完成更新。</p>
+      </section>
+
+      <section class="shell" aria-labelledby="editor-title">
+        <h2 id="editor-title">交接备注</h2>
+        <div
+          id="editor-body"
+          contenteditable="true"
+          role="textbox"
+          aria-label="交接备注"
+          spellcheck="false"
+          data-mode="rich-note"
+        ></div>
+        <div class="toolbar">
+          <span id="editor-hint">支持直接输入长段说明，适合模拟后台富文本备注。</span>
+          <button id="save-note" type="button" disabled>保存备注</button>
+        </div>
+
+        <section
+          id="note-result"
+          class="result"
+          hidden
+          data-ready="false"
+          aria-labelledby="result-title"
+        >
+          <h3 id="result-title">保存结果</h3>
+          <div class="result-grid">
+            <div class="result-box">
+              <strong>保存状态</strong>
+              <span id="note-status">未保存</span>
+            </div>
+            <div class="result-box">
+              <strong>字符数</strong>
+              <span id="note-length">0</span>
+            </div>
+            <div class="result-box">
+              <strong>摘要</strong>
+              <span id="note-preview">-</span>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const editor = document.getElementById("editor-body");
+      const saveButton = document.getElementById("save-note");
+      const result = document.getElementById("note-result");
+      const status = document.getElementById("note-status");
+      const length = document.getElementById("note-length");
+      const preview = document.getElementById("note-preview");
+
+      function normalizedText() {
+        return editor.textContent.replace(/\s+/g, " ").trim();
+      }
+
+      function syncButtonState() {
+        saveButton.disabled = normalizedText().length < 8;
+      }
+
+      editor.addEventListener("input", syncButtonState);
+      editor.addEventListener("blur", syncButtonState);
+
+      saveButton.addEventListener("click", () => {
+        const text = normalizedText();
+        status.textContent = "已保存";
+        length.textContent = String(text.length);
+        preview.textContent = text.slice(0, 18);
+        result.hidden = false;
+        result.dataset.ready = "true";
+      });
+    </script>
+  </body>
+</html>

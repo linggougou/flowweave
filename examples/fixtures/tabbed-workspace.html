@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowWeave 同页 Tab Fixture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+        --bg: #f4f7fb;
+        --panel: #ffffff;
+        --border: #ccd8e7;
+        --text: #203047;
+        --muted: #677991;
+        --accent: #2c5da8;
+        --accent-soft: rgba(44, 93, 168, 0.12);
+        --success-soft: rgba(36, 101, 73, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top right, rgba(44, 93, 168, 0.15), transparent 32%),
+          linear-gradient(180deg, #fbfcff 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 40px 20px 72px;
+      }
+
+      .hero,
+      .shell,
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: 0 18px 40px rgba(32, 48, 71, 0.08);
+      }
+
+      .hero,
+      .shell,
+      .panel {
+        padding: 24px;
+      }
+
+      .hero {
+        margin-bottom: 20px;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .tab {
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 10px 18px;
+        font: inherit;
+        font-weight: 700;
+        background: #fff;
+        color: var(--muted);
+        cursor: pointer;
+      }
+
+      .tab[aria-selected="true"] {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+
+      .loading {
+        margin-top: 16px;
+        padding: 11px 14px;
+        border-radius: 16px;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .loading[hidden],
+      .panel[hidden] {
+        display: none;
+      }
+
+      .panel {
+        margin-top: 18px;
+      }
+
+      .panel-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+        margin-top: 16px;
+      }
+
+      .metric {
+        padding: 16px;
+        border-radius: 18px;
+        background: var(--success-soft);
+      }
+
+      .metric strong {
+        display: block;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      .metric span {
+        font-size: 1.05rem;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <p>Fixture 目标：验证同页 Tab 切换、局部 loading 与成功面板切换。</p>
+        <h1 id="page-title">运营工作台</h1>
+        <p>推荐步骤：切换到审批记录 Tab，等待 loading 消失，再断言目标面板进入 ready 态。</p>
+      </section>
+
+      <section id="workspace-shell" class="shell" data-loading="false">
+        <div class="tabs" role="tablist" aria-label="工作台视图">
+          <button id="tab-overview" class="tab" type="button" role="tab" aria-selected="true">
+            总览
+          </button>
+          <button id="tab-approvals" class="tab" type="button" role="tab" aria-selected="false">
+            审批记录
+          </button>
+          <button id="tab-queue" class="tab" type="button" role="tab" aria-selected="false">
+            队列健康度
+          </button>
+        </div>
+
+        <div id="tab-loading" class="loading" hidden aria-live="polite">
+          正在切换视图并同步摘要...
+        </div>
+
+        <section id="panel-overview" class="panel" data-ready="true">
+          <h2>今日总览</h2>
+          <p>当前展示的是默认总览面板。</p>
+        </section>
+
+        <section
+          id="panel-approvals"
+          class="panel"
+          hidden
+          data-ready="false"
+          aria-labelledby="approvals-title"
+        >
+          <h2 id="approvals-title">审批记录</h2>
+          <div class="panel-grid">
+            <div class="metric">
+              <strong>待审批数量</strong>
+              <span id="approval-count">18</span>
+            </div>
+            <div class="metric">
+              <strong>最新负责人</strong>
+              <span id="approval-owner">值班审核组</span>
+            </div>
+            <div class="metric">
+              <strong>当前锚点</strong>
+              <span id="approval-anchor">tab:approvals</span>
+            </div>
+          </div>
+        </section>
+
+        <section id="panel-queue" class="panel" hidden data-ready="false">
+          <h2>队列健康度</h2>
+          <p>这里用于模拟第三个 Tab，但本轮自动化不直接覆盖。</p>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const shell = document.getElementById("workspace-shell");
+      const loading = document.getElementById("tab-loading");
+      const tabs = [
+        document.getElementById("tab-overview"),
+        document.getElementById("tab-approvals"),
+        document.getElementById("tab-queue"),
+      ];
+      const panels = {
+        overview: document.getElementById("panel-overview"),
+        approvals: document.getElementById("panel-approvals"),
+        queue: document.getElementById("panel-queue"),
+      };
+
+      function selectTab(name) {
+        shell.dataset.loading = "true";
+        loading.hidden = false;
+
+        tabs.forEach((button) => {
+          button.setAttribute("aria-selected", button.id === `tab-${name}` ? "true" : "false");
+        });
+
+        window.setTimeout(() => {
+          Object.entries(panels).forEach(([key, panel]) => {
+            const active = key === name;
+            panel.hidden = !active;
+            panel.dataset.ready = active ? "true" : "false";
+          });
+          loading.hidden = true;
+          shell.dataset.loading = "false";
+        }, 620);
+      }
+
+      document
+        .getElementById("tab-overview")
+        .addEventListener("click", () => selectTab("overview"));
+      document
+        .getElementById("tab-approvals")
+        .addEventListener("click", () => selectTab("approvals"));
+      document.getElementById("tab-queue").addEventListener("click", () => selectTab("queue"));
+    </script>
+  </body>
+</html>

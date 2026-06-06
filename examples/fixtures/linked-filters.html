@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowWeave 联动筛选 Fixture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+        --bg: #f2f7f4;
+        --panel: #ffffff;
+        --border: #c9ddd0;
+        --text: #21322a;
+        --muted: #61776a;
+        --accent: #2a8a63;
+        --accent-soft: rgba(42, 138, 99, 0.12);
+        --success-soft: rgba(42, 138, 99, 0.14);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top right, rgba(42, 138, 99, 0.14), transparent 30%),
+          linear-gradient(180deg, #fbfffc 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      main {
+        max-width: 940px;
+        margin: 0 auto;
+        padding: 40px 20px 72px;
+      }
+
+      .hero,
+      .shell,
+      .result {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: 0 18px 42px rgba(33, 50, 42, 0.08);
+      }
+
+      .hero,
+      .shell,
+      .result {
+        padding: 24px;
+      }
+
+      .hero {
+        margin-bottom: 20px;
+      }
+
+      .filters {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px;
+        align-items: end;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+      }
+
+      select,
+      button {
+        width: 100%;
+        border-radius: 14px;
+        padding: 12px 14px;
+        font: inherit;
+      }
+
+      select {
+        border: 1px solid var(--border);
+        background: #fff;
+        color: var(--text);
+      }
+
+      button {
+        border: none;
+        background: var(--accent);
+        color: #fff;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      button:disabled,
+      select:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .loading {
+        margin-top: 18px;
+        padding: 12px 14px;
+        border-radius: 18px;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .loading[hidden],
+      .result[hidden] {
+        display: none;
+      }
+
+      .result {
+        margin-top: 18px;
+      }
+
+      .result-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+        margin-top: 16px;
+      }
+
+      .result-box {
+        padding: 16px;
+        border-radius: 18px;
+        background: var(--success-soft);
+      }
+
+      .result-box strong {
+        display: block;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <p>Fixture 目标：验证联动筛选、依赖下拉刷新与最终筛选摘要。</p>
+        <h1 id="page-title">团队任务联动筛选</h1>
+        <p>推荐步骤：先选业务线，等待团队下拉刷新，再选团队并应用筛选。</p>
+      </section>
+
+      <section id="linked-shell" class="shell" data-loading="false">
+        <div class="filters">
+          <div>
+            <label for="business-unit">业务线</label>
+            <select id="business-unit">
+              <option value="">请选择业务线</option>
+              <option value="growth">增长运营</option>
+              <option value="risk">风控巡检</option>
+            </select>
+          </div>
+          <div>
+            <label for="team-filter">团队</label>
+            <select id="team-filter" disabled>
+              <option value="">请先选择业务线</option>
+            </select>
+          </div>
+          <div>
+            <button id="apply-linked-filters" type="button" disabled>应用联动筛选</button>
+          </div>
+        </div>
+
+        <div id="filter-loading" class="loading" hidden aria-live="polite">
+          正在刷新联动选项，请稍候...
+        </div>
+
+        <section
+          id="linked-result"
+          class="result"
+          hidden
+          data-ready="false"
+          data-team=""
+          aria-labelledby="result-title"
+        >
+          <h2 id="result-title">筛选结果</h2>
+          <div class="result-grid">
+            <div class="result-box">
+              <strong>业务线</strong>
+              <span id="result-unit">-</span>
+            </div>
+            <div class="result-box">
+              <strong>团队</strong>
+              <span id="result-team">-</span>
+            </div>
+            <div class="result-box">
+              <strong>命中任务</strong>
+              <span id="result-count">0</span>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const shell = document.getElementById("linked-shell");
+      const unitSelect = document.getElementById("business-unit");
+      const teamSelect = document.getElementById("team-filter");
+      const applyButton = document.getElementById("apply-linked-filters");
+      const loading = document.getElementById("filter-loading");
+      const result = document.getElementById("linked-result");
+      const resultUnit = document.getElementById("result-unit");
+      const resultTeam = document.getElementById("result-team");
+      const resultCount = document.getElementById("result-count");
+
+      const teamMap = {
+        growth: [
+          { value: "growth-east", label: "增长运营一组", count: "6" },
+          { value: "growth-west", label: "增长运营二组", count: "4" },
+        ],
+        risk: [
+          { value: "risk-night", label: "风控夜班组", count: "5" },
+          { value: "risk-day", label: "风控白班组", count: "7" },
+        ],
+      };
+
+      function setLoading(active) {
+        shell.dataset.loading = active ? "true" : "false";
+        loading.hidden = !active;
+      }
+
+      unitSelect.addEventListener("change", () => {
+        const selected = unitSelect.value;
+        teamSelect.innerHTML = "";
+        teamSelect.disabled = true;
+        applyButton.disabled = true;
+        result.hidden = true;
+        result.dataset.ready = "false";
+        result.dataset.team = "";
+
+        if (!selected) {
+          const option = document.createElement("option");
+          option.value = "";
+          option.textContent = "请先选择业务线";
+          teamSelect.append(option);
+          return;
+        }
+
+        setLoading(true);
+        window.setTimeout(() => {
+          const options = teamMap[selected] || [];
+          const placeholder = document.createElement("option");
+          placeholder.value = "";
+          placeholder.textContent = "请选择团队";
+          teamSelect.append(placeholder);
+          options.forEach((item) => {
+            const option = document.createElement("option");
+            option.value = item.value;
+            option.textContent = item.label;
+            option.dataset.count = item.count;
+            teamSelect.append(option);
+          });
+          teamSelect.disabled = false;
+          setLoading(false);
+        }, 640);
+      });
+
+      teamSelect.addEventListener("change", () => {
+        applyButton.disabled = teamSelect.value === "";
+      });
+
+      applyButton.addEventListener("click", () => {
+        setLoading(true);
+        window.setTimeout(() => {
+          const team = teamSelect.selectedOptions[0];
+          result.hidden = false;
+          result.dataset.ready = "true";
+          result.dataset.team = team.value;
+          resultUnit.textContent = unitSelect.selectedOptions[0].textContent;
+          resultTeam.textContent = team.textContent;
+          resultCount.textContent = team.dataset.count || "0";
+          setLoading(false);
+        }, 680);
+      });
+    </script>
+  </body>
+</html>

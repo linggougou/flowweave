@@ -18,6 +18,8 @@ type MatrixCase = {
   options?: Pick<ExecutionOptions, "variables" | "storageStatePath">;
 };
 
+export type RealPageMatrixProfile = "baseline" | "p5";
+
 export type RealPageFixtureCaseResult = {
   name: string;
   status: "success" | "failed";
@@ -28,10 +30,15 @@ export type RealPageFixtureCaseResult = {
 };
 
 export type RealPageFixtureMatrixSummary = {
+  profile: RealPageMatrixProfile;
   baseUrl: string;
   workspaceDir: string;
   results: RealPageFixtureCaseResult[];
   failed: RealPageFixtureCaseResult[];
+  successCount: number;
+  failureCount: number;
+  totalDurationMs: number;
+  averageDurationMs: number;
 };
 
 function buildFlow(id: string, name: string, steps: FlowDocument["steps"]): FlowDocument {
@@ -81,7 +88,7 @@ async function startStaticServer(rootDir: string): Promise<{ server: Server; bas
   };
 }
 
-function buildMatrixCases(baseUrl: string, workspaceDir: string): MatrixCase[] {
+function buildBaselineMatrixCases(baseUrl: string, workspaceDir: string): MatrixCase[] {
   const uploadFileA = join(workspaceDir, "evidence-a.txt");
   const uploadFileB = join(workspaceDir, "evidence-b.txt");
   writeFileSync(uploadFileA, "alpha", "utf-8");
@@ -568,12 +575,202 @@ function buildMatrixCases(baseUrl: string, workspaceDir: string): MatrixCase[] {
   ];
 }
 
+function buildP5MatrixCases(): MatrixCase[] {
+  return [
+    {
+      name: "tabbed-workspace",
+      flow: buildFlow("flow_tabbed_workspace", "同页 Tab 切换流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "tabbed-workspace.html",
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#tab-approvals" }] },
+        },
+        {
+          id: "s3",
+          type: "wait",
+          condition: "hidden",
+          target: { strategies: [{ kind: "css", selector: "#tab-loading" }] },
+        },
+        {
+          id: "s4",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#panel-approvals[data-ready='true']",
+              },
+            ],
+          },
+        },
+      ]),
+    },
+    {
+      name: "contenteditable-editor",
+      flow: buildFlow("flow_contenteditable_editor", "富文本备注编辑流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "contenteditable-editor.html",
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "fill",
+          target: {
+            strategies: [
+              { kind: "css", selector: "#editor-body" },
+              { kind: "role", role: "textbox", name: "交接备注" },
+            ],
+          },
+          value: "已补齐截图与重试说明，待值班同学二次复核。",
+        },
+        {
+          id: "s3",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#save-note" }] },
+        },
+        {
+          id: "s4",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#note-result[data-ready='true']",
+              },
+            ],
+          },
+        },
+      ]),
+    },
+    {
+      name: "empty-results-retry",
+      flow: buildFlow("flow_empty_results_retry", "空结果重试恢复流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "empty-results-retry.html",
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#run-query" }] },
+        },
+        {
+          id: "s3",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#empty-state[data-ready='true']",
+              },
+            ],
+          },
+        },
+        {
+          id: "s4",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#retry-query" }] },
+        },
+        {
+          id: "s5",
+          type: "wait",
+          condition: "hidden",
+          target: { strategies: [{ kind: "css", selector: "#query-loading" }] },
+        },
+        {
+          id: "s6",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#result-panel[data-ready='true'][data-count='3']",
+              },
+            ],
+          },
+        },
+      ]),
+    },
+    {
+      name: "linked-filters",
+      flow: buildFlow("flow_linked_filters", "联动筛选流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "linked-filters.html",
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "select",
+          target: { strategies: [{ kind: "css", selector: "#business-unit" }] },
+          values: ["growth"],
+        },
+        {
+          id: "s3",
+          type: "wait",
+          condition: "hidden",
+          target: { strategies: [{ kind: "css", selector: "#filter-loading" }] },
+        },
+        {
+          id: "s4",
+          type: "select",
+          target: { strategies: [{ kind: "css", selector: "#team-filter" }] },
+          values: ["growth-east"],
+        },
+        {
+          id: "s5",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#apply-linked-filters" }] },
+        },
+        {
+          id: "s6",
+          type: "wait",
+          condition: "hidden",
+          target: { strategies: [{ kind: "css", selector: "#filter-loading" }] },
+        },
+        {
+          id: "s7",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#linked-result[data-ready='true'][data-team='growth-east']",
+              },
+            ],
+          },
+        },
+      ]),
+    },
+  ];
+}
+
 export async function runRealPageFixtureMatrix(
-  options: { headless?: boolean } = {},
+  options: { headless?: boolean; profile?: RealPageMatrixProfile } = {},
 ): Promise<RealPageFixtureMatrixSummary> {
+  const profile = options.profile ?? "baseline";
   const workspaceDir = mkdtempSync(join(tmpdir(), "flowweave-real-page-smoke-"));
   const { server, baseUrl } = await startStaticServer(fixturesDir);
-  const cases = buildMatrixCases(baseUrl, workspaceDir);
+  const cases =
+    profile === "p5"
+      ? [...buildBaselineMatrixCases(baseUrl, workspaceDir), ...buildP5MatrixCases()]
+      : buildBaselineMatrixCases(baseUrl, workspaceDir);
   const results: RealPageFixtureCaseResult[] = [];
 
   try {
@@ -608,10 +805,18 @@ export async function runRealPageFixtureMatrix(
     });
   }
 
+  const failed = results.filter((item) => item.status !== "success");
+  const totalDurationMs = results.reduce((total, item) => total + item.durationMs, 0);
+
   return {
+    profile,
     baseUrl,
     workspaceDir,
     results,
-    failed: results.filter((item) => item.status !== "success"),
+    failed,
+    successCount: results.length - failed.length,
+    failureCount: failed.length,
+    totalDurationMs,
+    averageDurationMs: results.length === 0 ? 0 : Math.round(totalDurationMs / results.length),
   };
 }

@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowWeave 空结果重试 Fixture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+        --bg: #f5f6fb;
+        --panel: #ffffff;
+        --border: #ced5e6;
+        --text: #253148;
+        --muted: #69778f;
+        --accent: #4a62b8;
+        --accent-soft: rgba(74, 98, 184, 0.12);
+        --warning-soft: rgba(176, 98, 31, 0.12);
+        --success-soft: rgba(37, 107, 74, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top right, rgba(74, 98, 184, 0.14), transparent 30%),
+          linear-gradient(180deg, #fbfcff 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      main {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 40px 20px 72px;
+      }
+
+      .hero,
+      .shell,
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: 0 18px 42px rgba(37, 49, 72, 0.08);
+      }
+
+      .hero,
+      .shell,
+      .panel {
+        padding: 24px;
+      }
+
+      .hero {
+        margin-bottom: 20px;
+      }
+
+      button {
+        border: none;
+        border-radius: 14px;
+        padding: 12px 18px;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        background: var(--accent);
+        color: #fff;
+      }
+
+      .ghost {
+        background: #fff;
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+
+      .actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .loading,
+      .empty,
+      .panel {
+        margin-top: 18px;
+      }
+
+      .loading,
+      .empty {
+        padding: 14px 16px;
+        border-radius: 18px;
+      }
+
+      .loading {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .empty {
+        background: var(--warning-soft);
+      }
+
+      .loading[hidden],
+      .empty[hidden],
+      .panel[hidden] {
+        display: none;
+      }
+
+      ul {
+        margin: 16px 0 0;
+        padding-left: 1.2rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <p>Fixture 目标：验证空结果态、重试按钮与第二次查询成功。</p>
+        <h1 id="page-title">回放结果查询台</h1>
+        <p>推荐步骤：先查询得到空结果，再点击重试，等待 loading 消失并断言最终结果列表。</p>
+      </section>
+
+      <section id="query-shell" class="shell" data-loading="false" data-attempt="0">
+        <div class="actions">
+          <button id="run-query" type="button">执行查询</button>
+          <button id="retry-query" type="button" class="ghost" hidden>重试查询</button>
+        </div>
+
+        <div id="query-loading" class="loading" hidden aria-live="polite">
+          正在查询后台同步记录...
+        </div>
+
+        <section
+          id="empty-state"
+          class="empty"
+          hidden
+          data-ready="false"
+          aria-labelledby="empty-title"
+        >
+          <strong id="empty-title">当前无匹配结果</strong>
+          <p id="empty-copy">第一次查询未拿到结果，请点击“重试查询”重新拉取。</p>
+        </section>
+
+        <section
+          id="result-panel"
+          class="panel"
+          hidden
+          data-ready="false"
+          data-count="0"
+          aria-labelledby="result-title"
+        >
+          <h2 id="result-title">查询结果</h2>
+          <p id="result-summary">尚未成功查询。</p>
+          <ul id="result-list">
+            <li>同步批次 FW-BATCH-203</li>
+            <li>截图回补 FW-BATCH-204</li>
+            <li>人工复核 FW-BATCH-205</li>
+          </ul>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const shell = document.getElementById("query-shell");
+      const runButton = document.getElementById("run-query");
+      const retryButton = document.getElementById("retry-query");
+      const loading = document.getElementById("query-loading");
+      const emptyState = document.getElementById("empty-state");
+      const resultPanel = document.getElementById("result-panel");
+      const resultSummary = document.getElementById("result-summary");
+
+      function setLoading(active) {
+        shell.dataset.loading = active ? "true" : "false";
+        loading.hidden = !active;
+      }
+
+      function renderAttempt() {
+        const attempt = Number(shell.dataset.attempt || "0");
+        setLoading(true);
+
+        window.setTimeout(() => {
+          setLoading(false);
+
+          if (attempt === 1) {
+            emptyState.hidden = false;
+            emptyState.dataset.ready = "true";
+            retryButton.hidden = false;
+            resultPanel.hidden = true;
+            resultPanel.dataset.ready = "false";
+            return;
+          }
+
+          emptyState.hidden = true;
+          emptyState.dataset.ready = "false";
+          resultPanel.hidden = false;
+          resultPanel.dataset.ready = "true";
+          resultPanel.dataset.count = "3";
+          resultSummary.textContent = "第二次查询成功，共恢复 3 条后台记录。";
+          retryButton.hidden = true;
+        }, 720);
+      }
+
+      runButton.addEventListener("click", () => {
+        shell.dataset.attempt = "1";
+        renderAttempt();
+      });
+
+      retryButton.addEventListener("click", () => {
+        shell.dataset.attempt = "2";
+        renderAttempt();
+      });
+    </script>
+  </body>
+</html>
