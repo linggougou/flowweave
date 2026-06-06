@@ -165,4 +165,36 @@ describe("buildInteractionPayload", () => {
       files: ["/tmp/resume.pdf"],
     });
   });
+
+  it("为重复列表行按钮提取最近行作用域 hints", () => {
+    document.body.innerHTML = `
+      <table>
+        <tbody>
+          <tr>
+            <td>订单 A</td>
+            <td>处理中</td>
+            <td><button type="button">编辑</button></td>
+          </tr>
+          <tr>
+            <td>订单 B</td>
+            <td>已暂停</td>
+            <td><button type="button">编辑</button></td>
+          </tr>
+        </tbody>
+      </table>
+    `;
+
+    const buttons = document.querySelectorAll("button");
+    const target = buttons.item(1);
+    if (!(target instanceof HTMLButtonElement)) {
+      throw new Error("failed to resolve second row button");
+    }
+
+    const payload = buildInteractionPayload(target, "click");
+
+    expect(payload.scopeKind).toBe("row");
+    expect(payload.scopeText).toContain("订单 B");
+    expect(payload.scopeText).toContain("已暂停");
+    expect(payload.scopeText).not.toContain("编辑");
+  });
 });

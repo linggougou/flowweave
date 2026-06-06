@@ -3200,3 +3200,72 @@
 - 后续动作：
   - 已向四个子代理补发“依赖已安装，可继续 Node 20 红绿验证”的通知。
   - 若后续再出现同类阻塞，优先先查 worktree 依赖，再判断是否为真实代码问题。
+
+## 2026-06-07 Recorder Scope Hints 轨道实施
+
+- 时间：2026-06-07 01:02:48 CST
+- 轨道目标：
+  - 仅在 `packages/recorder` 录制侧补充最近语义容器的作用域线索采集。
+  - 保持 `normalize` 对 `scopeText / scopeKind` 的保真，不破坏既有 hints。
+  - 为重复按钮、重复文案、列表行操作补最小可回归测试。
+- 单 agent 执行原因：
+  - 本轨授权文件仅 4 个，且 `target-from-dom` 与 `normalize` 的测试、类型和实现相互耦合。
+  - 若继续拆子代理，会直接共享同一组文件和同一条红绿链路，冲突成本高于收益，因此本轨在独立 worktree 中串行完成。
+- 工具与替代说明：
+  - 当前环境仍未提供 `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code`。
+  - 本轨使用 CodeGraph、本地命令、既有设计/计划文档和包级测试替代。
+  - `requesting-code-review` 相关的 Task/子代理能力在当前会话不可用，因此改用 `git diff` 自查、`git diff --check` 和 Node 20 验证作为补偿。
+- 编码前检查：
+  - 已查阅上下文摘要：`.codex/context-summary-target-disambiguation-wave.md`
+  - 已查阅设计与计划：
+    - `docs/superpowers/specs/2026-06-07-real-page-target-disambiguation-design.md`
+    - `docs/superpowers/plans/2026-06-07-real-page-target-disambiguation-plan.md`
+    - `docs/superpowers/plans/2026-06-07-real-page-target-disambiguation-orchestration.md`
+  - 复用的既有实现：
+    - `packages/recorder/src/target-from-dom.ts`
+    - `packages/recorder/src/normalize.ts`
+    - `packages/recorder/src/target-from-dom.test.ts`
+    - `packages/recorder/src/normalize.test.ts`
+- 红灯测试：
+  - 新增 `packages/recorder/src/target-from-dom.test.ts`
+    - 用例：`为重复列表行按钮提取最近行作用域 hints`
+    - 目标：第二行“编辑”按钮应录到 `scopeKind="row"`，且 `scopeText` 包含该行文本，不回收按钮文案本身。
+  - 新增 `packages/recorder/src/normalize.test.ts`
+    - 用例：`将作用域 hints 保真写入 click 目标`
+    - 目标：payload 中的 `scopeText / scopeKind` 进入 `target.hints`。
+  - 红灯命令：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test -- target-from-dom.test.ts normalize.test.ts`
+  - 红灯结果：
+    - 初次运行因当前 worktree 缺依赖，出现 `vitest: command not found`；已在本 worktree 补齐依赖后重跑。
+    - 有效红灯为：
+      - `target-from-dom.test.ts` 断言失败：`expected undefined to be 'row'`
+      - 这证明 recorder 录制侧尚未采集作用域线索。
+- 实现摘要：
+  - `packages/recorder/src/target-from-dom.ts`
+    - 为录制 payload 增加 `scopeText / scopeKind`。
+    - 沿祖先链查找最近语义容器，覆盖 `row / listitem / dialog / tabpanel / section / card`。
+    - 优先读取标题型容器文本；对列表行/普通容器则提取直接子块短文本，并跳过按钮、输入控件等噪声文本。
+    - 控制作用域文本长度和块数，避免把整段长文案塞进 payload。
+    - 避免在 `scopeText` 中重复写入目标本体名称或按钮文案。
+  - `packages/recorder/src/normalize.ts`
+    - 为录制 payload 类型补 `scopeText / scopeKind`。
+    - `buildTargetHints()` 增加对新字段的读取与 `scopeKind` 白名单校验，确保保真透传。
+- Node 20 验证：
+  - 依赖入口准备：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/shared build`
+      - 结果：通过
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/flow-dsl build`
+      - 结果：通过
+  - 红绿过程验证：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test -- target-from-dom.test.ts`
+      - 结果：通过，`8/8`
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test -- normalize.test.ts`
+      - 结果：通过，`30/30`
+  - 验收命令：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test -- target-from-dom.test.ts normalize.test.ts step-filter.test.ts`
+      - 结果：通过，`47/47`
+  - 补充校验：
+    - `git diff --check`
+      - 结果：通过
+- 提交哈希：
+  - Recorder 代码提交：`46214222d117d793c30ea86c31c32597ff3fc15b`

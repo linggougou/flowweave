@@ -10,11 +10,13 @@ import type { FlowDocument, NormalizedStep, Target } from "@flowweave/flow-dsl";
 import { filterNoisyInteractionSteps, mergeConsecutiveFillSteps } from "./step-filter.js";
 
 type LocatorStrategy = Target["strategies"][number];
+type ScopeKind = NonNullable<NonNullable<Target["hints"]>["scopeKind"]>;
 type FlowVariableDefinition = FlowDocument["variables"][number];
 type UploadStepWithMetadata = Extract<NormalizedStep, { type: "upload" }> & {
   fileNames?: string[];
 };
 const INFERRED_VISIBLE_WAIT_MIN_GAP_MS = 500;
+const SCOPE_KIND_VALUES: ScopeKind[] = ["row", "listitem", "dialog", "tabpanel", "section", "card"];
 
 /** 构建 Flow 时除会话元数据外需要的字段 */
 export interface BuildFlowFromEventsMeta extends RecorderSessionMeta {
@@ -50,6 +52,8 @@ type InteractionPayload = {
   placeholder?: string;
   labelText?: string;
   textSample?: string;
+  scopeText?: string;
+  scopeKind?: ScopeKind;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -64,6 +68,11 @@ function readString(payload: Record<string, unknown>, key: string): string | und
 function readBoolean(payload: Record<string, unknown>, key: string): boolean | undefined {
   const value = payload[key];
   return typeof value === "boolean" ? value : undefined;
+}
+
+function readScopeKind(payload: Record<string, unknown>, key: string): ScopeKind | undefined {
+  const value = readString(payload, key);
+  return value && SCOPE_KIND_VALUES.includes(value as ScopeKind) ? (value as ScopeKind) : undefined;
 }
 
 function isLocatorStrategy(value: unknown): value is LocatorStrategy {
@@ -110,6 +119,8 @@ function buildTargetHints(payload: Record<string, unknown>): Target["hints"] | u
   const placeholder = readString(payload, "placeholder");
   const labelText = readString(payload, "labelText");
   const textSample = readString(payload, "textSample");
+  const scopeText = readString(payload, "scopeText");
+  const scopeKind = readScopeKind(payload, "scopeKind");
 
   if (tagName) {
     hints.tagName = tagName;
@@ -128,6 +139,12 @@ function buildTargetHints(payload: Record<string, unknown>): Target["hints"] | u
   }
   if (textSample) {
     hints.textSample = textSample;
+  }
+  if (scopeText) {
+    hints.scopeText = scopeText;
+  }
+  if (scopeKind) {
+    hints.scopeKind = scopeKind;
   }
 
   return Object.keys(hints).length > 0 ? hints : undefined;
