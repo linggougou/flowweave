@@ -1,7 +1,9 @@
 import type { FlowDocument, NormalizedStep } from "@flowweave/flow-dsl";
 
-const variablePattern = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g;
-const variablePresencePattern = /\{\{\s*[A-Za-z0-9_]+\s*\}\}/;
+const variablePattern = /\{\{\s*([^{}]+?)\s*\}\}/g;
+const leadingVariablePattern = /^\s*\{\{\s*[^{}]+\s*\}\}/;
+
+type StepTarget = Extract<NormalizedStep, { type: "click" }>["target"];
 
 export type FragilityAnalysisContext = {
   baseUrl?: string;
@@ -36,29 +38,15 @@ function interpolateVariables(
   }
 
   return value.replace(variablePattern, (match, variableName: string) => {
-    const resolved = variables[variableName];
+    const resolved = variables[variableName.trim()];
     return resolved === undefined ? match : String(resolved);
   });
 }
 
 function extractVariableNames(value: unknown): string[] {
-  if (typeof value === "string") {
-    return Array.from(value.matchAll(variablePattern), (match) => match[1] ?? "");
-  }
-
-  if (Array.isArray(value)) {
-    return value.flatMap((item) => extractVariableNames(item));
-  }
-
-  if (value && typeof value === "object") {
-    return Object.values(value).flatMap((entryValue) => extractVariableNames(entryValue));
-  }
-
-  return [];
-}
-
-function hasVariablePlaceholder(value: string): boolean {
-  return variablePresencePattern.test(value);
+  return typeof value === "string"
+    ? Array.from(value.matchAll(variablePattern), (match) => match[1]?.trim() ?? "").filter(Boolean)
+    : [];
 }
 
 function collectAvailableVariables(
@@ -80,6 +68,63 @@ function collectAvailableVariables(
   });
 
   return available;
+}
+
+function hasExplicitBaseUrlContext(context: FragilityAnalysisContext): boolean {
+  return Object.prototype.hasOwnProperty.call(context, "baseUrl");
+}
+
+function requiresBaseUrl(value: string): boolean {
+  return !isAbsoluteUrl(value) && !leadingVariablePattern.test(value);
+}
+
+function extractTargetVariableNames(target: StepTarget | undefined): string[] {
+  if (!target) {
+    return [];
+  }
+
+  return target.strategies.flatMap((strategy) => {
+    switch (strategy.kind) {
+      case "role":
+        return [...extractVariableNames(strategy.role), ...extractVariableNames(strategy.name)];
+      case "testId":
+        return extractVariableNames(strategy.testId);
+      case "css":
+        return extractVariableNames(strategy.selector);
+      case "xpath":
+        return extractVariableNames(strategy.expression);
+      case "text":
+        return extractVariableNames(strategy.text);
+      default:
+        return [];
+    }
+  });
+}
+
+function extractExecutableVariableNames(step: NormalizedStep): string[] {
+  switch (step.type) {
+    case "navigate":
+      return extractVariableNames(step.url);
+    case "click":
+      return extractTargetVariableNames(step.target);
+    case "fill":
+      return [...extractTargetVariableNames(step.target), ...extractVariableNames(step.value)];
+    case "select":
+      return [...extractTargetVariableNames(step.target), ...step.values.flatMap(extractVariableNames)];
+    case "setChecked":
+      return extractTargetVariableNames(step.target);
+    case "press":
+      return [...extractTargetVariableNames(step.target), ...extractVariableNames(step.key)];
+    case "upload":
+      return [...extractTargetVariableNames(step.target), ...step.files.flatMap(extractVariableNames)];
+    case "wait":
+      return [
+        ...extractTargetVariableNames(step.target),
+        ...extractVariableNames(step.urlIncludes),
+      ];
+    default:
+      return [];
+  }
 }
 
 function hasNthOfTypeSelector(step: Extract<NormalizedStep, { type: "click" | "fill" }>): boolean {
@@ -160,9 +205,9 @@ function inspectContextualStep(
   const issues: FragilityIssue[] = [];
 
   const normalizedBaseUrl = context.baseUrl?.trim();
-  if (step.type === "navigate" && !normalizedBaseUrl) {
+  if (step.type === "navigate" && hasExplicitBaseUrlContext(context) && !normalizedBaseUrl) {
     const resolvedUrl = interpolateVariables(step.url, context.variables);
-    if (!hasVariablePlaceholder(resolvedUrl) && !isAbsoluteUrl(resolvedUrl)) {
+    if (requiresBaseUrl(resolvedUrl)) {
       issues.push({
         stepId: step.id,
         stepIndex,
@@ -174,7 +219,7 @@ function inspectContextualStep(
   }
 
   if (context.variables !== undefined) {
-    const missingVariables = Array.from(new Set(extractVariableNames(step))).filter(
+    const missingVariables = Array.from(new Set(extractExecutableVariableNames(step))).filter(
       (variableName) => variableName && !availableVariables.has(variableName),
     );
 

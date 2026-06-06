@@ -16,7 +16,7 @@ function baseFlow(steps: FlowDocument["steps"]): FlowDocument {
 }
 
 describe("analyzeFlowFragility", () => {
-  it("当相对地址 navigate 缺少 baseUrl 时给出 MISSING_ENVIRONMENT", () => {
+  it("未提供环境上下文时不把相对地址 navigate 判为 MISSING_ENVIRONMENT", () => {
     const flow = baseFlow([
       {
         id: "s1",
@@ -26,6 +26,22 @@ describe("analyzeFlowFragility", () => {
     ]);
 
     const codes = analyzeFlowFragility(flow).map((issue) => issue.code as string);
+    expect(codes).not.toContain("MISSING_ENVIRONMENT");
+  });
+
+  it("显式提供空 baseUrl 时对相对地址 navigate 给出 MISSING_ENVIRONMENT", () => {
+    const flow = baseFlow([
+      {
+        id: "s1",
+        type: "navigate",
+        url: "/orders",
+      },
+    ]);
+
+    const codes = analyzeFlowFragility(flow, {
+      baseUrl: " ",
+    }).map((issue) => issue.code as string);
+
     expect(codes).toContain("MISSING_ENVIRONMENT");
   });
 
@@ -53,6 +69,79 @@ describe("analyzeFlowFragility", () => {
     }).map((issue) => issue.code as string);
 
     expect(codes).toContain("MISSING_VARIABLE");
+  });
+
+  it("变量名支持连字符、点号与中文", () => {
+    const flow = baseFlow([
+      {
+        id: "s1",
+        type: "fill",
+        target: {
+          strategies: [{ kind: "role", role: "textbox", name: "用户名" }],
+        },
+        value: "{{tenant-id}} / {{profile.name}} / {{中文变量}}",
+      },
+    ]);
+
+    const issue = analyzeFlowFragility(flow, {
+      variables: {},
+    }).find((item) => item.code === "MISSING_VARIABLE");
+
+    expect(issue?.message).toContain("tenant-id");
+    expect(issue?.message).toContain("profile.name");
+    expect(issue?.message).toContain("中文变量");
+  });
+
+  it("变量已有默认值时不报 MISSING_VARIABLE", () => {
+    const flow = {
+      ...baseFlow([
+        {
+          id: "s1",
+          type: "fill" as const,
+          target: {
+            strategies: [{ kind: "role" as const, role: "textbox", name: "用户名" }],
+          },
+          value: "{{username}}",
+        },
+      ]),
+      variables: [
+        {
+          name: "username",
+          type: "string" as const,
+          required: false,
+          defaultValue: "默认用户名",
+        },
+      ],
+    };
+
+    const codes = analyzeFlowFragility(flow, {
+      variables: {},
+    }).map((issue) => issue.code as string);
+
+    expect(codes).not.toContain("MISSING_VARIABLE");
+  });
+
+  it("忽略 label 与 target.hints 中的变量占位符", () => {
+    const flow = baseFlow([
+      {
+        id: "s1",
+        label: "说明 {{preview-only}}",
+        type: "click",
+        target: {
+          strategies: [{ kind: "role", role: "button", name: "保存" }],
+          hints: {
+            labelText: "{{hint-only}}",
+            textSample: "{{sample-only}}",
+          },
+        },
+      },
+    ]);
+
+    const codes = analyzeFlowFragility(flow, {
+      variables: {},
+    }).map((issue) => issue.code as string);
+
+    expect(codes).not.toContain("MISSING_VARIABLE");
   });
 
   it("对纯 css 步骤给出 warning", () => {
