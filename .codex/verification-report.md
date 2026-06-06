@@ -2483,3 +2483,45 @@
 - 风险评估评分：95
 - 综合评分：97
 - 建议：通过
+
+## 2026-06-07 Wave 6 规划审查
+
+### 审查范围
+
+- `.codex/context-summary-real-page-stability-wave6.md`
+- `docs/superpowers/specs/2026-06-07-real-page-stability-wave6-design.md`
+- `docs/superpowers/plans/2026-06-07-real-page-stability-wave6-plan.md`
+- `docs/superpowers/plans/2026-06-07-real-page-stability-wave6-orchestration.md`
+
+### 审查结果
+
+1. 需求字段完整性通过。
+   - 目标明确：聚焦“通用失败诊断 + 多步骤脆弱性预警”。
+   - 范围明确：`page-intelligence / runtime / studio` 三层，不额外扩 `p8` fixture 档位。
+   - 并行边界明确：3 条轨道写入范围互斥。
+2. 当前缺口判断有现状证据支撑。
+   - `fragility.ts` 当前确实只对 `click / fill` 做 target 风险分析。
+   - runtime 当前确实只会为 Target 类错误写 `diagnostic.json`。
+   - Studio 当前 `diagnostic` DTO 仍假设总有 `strategyAttempts / targetHints`。
+3. Node 20 基线已核对。
+   - `pnpm --filter @flowweave/page-intelligence test -- fragility.test.ts`：通过
+   - `pnpm --filter @flowweave/app-studio test -- src/shared/failure-insights.test.ts DiagnosticInspector.test.tsx`：通过
+4. 计划与编排板一致。
+   - 实施计划里的 3 个任务与并行编排板一一对应。
+   - 合并顺序与统一验收命令已明确。
+
+### Findings
+
+1. 未发现当前规划阶段的阻塞问题。
+2. 残余风险：`writing-plans` 规范倾向更细粒度的逐步代码片段计划。
+   - 当前计划已提供文件范围、测试入口、合并顺序和验收命令，足以支撑下一轮子代理实施。
+
+### 综合结论
+
+- 代码质量评分：95
+- 测试覆盖评分：93
+- 规范遵循评分：98
+- 战略匹配评分：98
+- 风险评估评分：95
+- 综合评分：96
+- 建议：通过

@@ -3368,3 +3368,52 @@
   - 已删除分支：
     - `codex/target-benchmarks-p7`
     - `codex/target-runtime-disambiguation`
+
+## 2026-06-07 真实页面稳定性 Wave 6 规划启动
+
+- 时间：2026-06-07 01:52:00 CST
+- 任务目标：
+  - 在上一阶段 `Target Disambiguation + Benchmarks P7` 已完成并推送后，继续自主推进真实页面执行稳定性的下一阶段增强。
+  - 先完成当前代码现状扫描、上下文摘要、完整设计/计划/编排板，再按 worktree 并行轨道派发实现。
+- 所用技能：
+  - `writing-plans`：产出 Wave 6 设计与实施计划。
+  - `using-git-worktrees`：为下一轮并行轨道准备隔离 worktree。
+  - `subagent-driven-development`：后续按互斥写入边界派发子代理。
+- 工具与替代说明：
+  - 当前环境仍未提供 `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code`。
+  - 本轮继续用 CodeGraph、本地命令、既有文档与 Node 20 验证替代，并在本日志显式留痕。
+- 上下文依据：
+  - `.codex/context-summary-real-page-stability-wave5.md`
+  - `.codex/context-summary-diagnostics-gap-analysis.md`
+  - `packages/page-intelligence/src/fragility.ts`
+  - `packages/runtime/src/playwright-runner.ts`
+  - `apps/studio/src/shared/studio-api-types.ts`
+  - `apps/studio/electron/services.ts`
+  - `apps/studio/src/DiagnosticInspector.tsx`
+  - `apps/studio/src/shared/failure-insights.ts`
+- 现状核对结论：
+  - 已确认 `MISSING_ENVIRONMENT` / `MISSING_VARIABLE`、`contenteditable`、`scopeText / scopeKind`、`p7` 矩阵与 `tsx` 真实入口都已落地，不再作为下一阶段主缺口。
+  - 当前仍真实存在的执行稳定性缺口：
+    1. `packages/page-intelligence/src/fragility.ts` 的 target 风险体检仍只覆盖 `click / fill`，没有覆盖 `select / setChecked / upload / press(target)`。
+    2. `packages/runtime/src/playwright-runner.ts` 只会为 Target 类失败写 `step-<n>-diagnostic.json`，非定位类步骤失败仍只有原始 `message`。
+    3. `apps/studio/src/shared/studio-api-types.ts` 的 `StudioStepDiagnostic` 仍假设诊断一定带 `strategyAttempts / targetHints`，不适合通用步骤失败诊断。
+- Node 20 基线验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/page-intelligence test -- fragility.test.ts`
+    - 结果：通过，`12/12`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- src/shared/failure-insights.test.ts DiagnosticInspector.test.tsx`
+    - 结果：通过，`6/6`
+- 本轮新增文档：
+  - `.codex/context-summary-real-page-stability-wave6.md`
+  - `docs/superpowers/specs/2026-06-07-real-page-stability-wave6-design.md`
+  - `docs/superpowers/plans/2026-06-07-real-page-stability-wave6-plan.md`
+  - `docs/superpowers/plans/2026-06-07-real-page-stability-wave6-orchestration.md`
+- Wave 6 主题决策：
+  - 主题：`通用失败诊断 + 多步骤脆弱性预警`
+  - 计划并行轨道：
+    1. `Fragility Multi-Step Coverage`
+    2. `Runtime Generic Diagnostic Envelope`
+    3. `Studio Unified Failure Insight`
+  - 主代理下一步：
+    - 创建 3 个隔离 worktree
+    - 依据编排板派发子代理
+    - 在轨道返回后做 Node 20 复验、合并与回收
