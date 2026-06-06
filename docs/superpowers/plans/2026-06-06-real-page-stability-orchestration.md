@@ -1,6 +1,6 @@
 # 真实页面稳定性增强并行编排板
 
-更新时间：2026-06-06 14:45 CST
+更新时间：2026-06-06 14:55 CST
 
 ## 1. 主目标
 
@@ -25,6 +25,14 @@
 | Diagnostics | `codex/real-page-diagnostics` | `.worktrees/codex-real-page-diagnostics` | fragility、诊断展示、Studio 调试入口 | recorder 录制语义 |
 | Benchmarks | `codex/real-page-benchmarks` | `.worktrees/codex-real-page-benchmarks` | fixture、新 smoke、文档 | 运行时接口定义 |
 
+## 3.1 已启动子代理
+
+| 轨道 | 子代理 | Agent ID | 状态 | 说明 |
+|------|--------|----------|------|------|
+| Foundation | `Kepler` | `019e9bb4-15c4-7d61-bd88-c9632921efc7` | running | 负责冻结 DSL / ExecutionOptions / 环境类型与说明文档 |
+| Benchmarks（第一阶段） | `Halley` | `019e9bb4-4cd4-7931-a911-c2f8c7521167` | running | 先创建本地 fixture 页面与覆盖说明文档，不碰 runtime 代码 |
+| Diagnostics（第一阶段） | `Kuhn` | `019e9bb4-8113-7092-b538-a6e7ef66d76c` | running | 先增强 `page-intelligence` 的静态脆弱性规则与测试 |
+
 ## 4. 执行顺序
 
 ### 阶段 A：冻结接口
@@ -38,6 +46,12 @@
 1. Recorder / Runtime / Environment / Diagnostics / Benchmarks 同时启动。
 2. 每轨道必须先补失败测试，再实现最小变更。
 3. 每轨道完成后先由主代理做规格符合性复核，再做代码质量复核。
+
+当前状态：
+
+1. Foundation 已启动，等待接口冻结完成。
+2. Benchmarks 与 Diagnostics 先行处理不依赖 Foundation 的子任务，减少空转。
+3. Recorder / Runtime / Environment 的正式编码在 Foundation 回收后统一拉起。
 
 ### 阶段 C：统一集成
 
