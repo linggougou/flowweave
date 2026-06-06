@@ -130,10 +130,11 @@ function isKeyboardNavigationTarget(target: EventTarget | null): boolean {
     }
 
     const role = current.getAttribute("role")?.toLowerCase();
+    const autocomplete = current.getAttribute("aria-autocomplete")?.trim().toLowerCase();
     if (
       role === "combobox" ||
-      current.getAttribute("aria-autocomplete") !== null ||
-      current.getAttribute("aria-controls") !== null
+      autocomplete === "list" ||
+      autocomplete === "both"
     ) {
       return true;
     }

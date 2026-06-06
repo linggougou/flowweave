@@ -288,14 +288,13 @@ describe("content upload placeholder contract", () => {
     expect(sendMessage).toHaveBeenCalledTimes(2);
   });
 
-  it("suggest 输入上的 ArrowDown 会记录 keypress，但不会提前 flush pending fill", async () => {
+  it("真实 suggest 输入上的 ArrowDown 会记录 keypress，但不会提前 flush pending fill", async () => {
     vi.useFakeTimers();
 
     const { handlers, sendMessage } = await setupContentHarness();
     const input = new FakeHTMLInputElement();
     input.id = "keyword";
     input.value = "flow";
-    input.setAttribute("aria-controls", "keyword-suggestions");
     input.setAttribute("aria-autocomplete", "list");
 
     recorderMocks.shouldRecordFill.mockImplementation((element) => element === (input as unknown as Element));
@@ -330,6 +329,80 @@ describe("content upload placeholder contract", () => {
         value: "flow",
       },
     });
+  });
+
+  it("aria-autocomplete=none 的普通输入框上的 ArrowDown 不会被录制，也不会提前 flush", async () => {
+    vi.useFakeTimers();
+
+    const { handlers, sendMessage } = await setupContentHarness();
+    const input = new FakeHTMLInputElement();
+    input.id = "plain-none";
+    input.value = "plain text";
+    input.setAttribute("aria-autocomplete", "none");
+
+    recorderMocks.shouldRecordFill.mockImplementation((element) => element === (input as unknown as Element));
+
+    handlers.get("input")?.[0]?.({ target: input });
+    handlers.get("keydown")?.[0]?.({
+      target: input,
+      key: "ArrowDown",
+      isComposing: false,
+      repeat: false,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+      metaKey: false,
+    });
+
+    expect(sendMessage).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(450);
+    expect(readRecordedEvents(sendMessage)).toEqual([
+      expect.objectContaining({
+        type: "fill",
+        payload: expect.objectContaining({
+          selector: "#plain-none",
+          value: "plain text",
+        }),
+      }),
+    ]);
+  });
+
+  it("只有 aria-controls 的输入框上的 ArrowDown 不会被录制，也不会提前 flush", async () => {
+    vi.useFakeTimers();
+
+    const { handlers, sendMessage } = await setupContentHarness();
+    const input = new FakeHTMLInputElement();
+    input.id = "plain-controls";
+    input.value = "plain text";
+    input.setAttribute("aria-controls", "keyword-suggestions");
+
+    recorderMocks.shouldRecordFill.mockImplementation((element) => element === (input as unknown as Element));
+
+    handlers.get("input")?.[0]?.({ target: input });
+    handlers.get("keydown")?.[0]?.({
+      target: input,
+      key: "ArrowDown",
+      isComposing: false,
+      repeat: false,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+      metaKey: false,
+    });
+
+    expect(sendMessage).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(450);
+    expect(readRecordedEvents(sendMessage)).toEqual([
+      expect.objectContaining({
+        type: "fill",
+        payload: expect.objectContaining({
+          selector: "#plain-controls",
+          value: "plain text",
+        }),
+      }),
+    ]);
   });
 
   it("原生 select 与组合框容器内输入框上的方向键会记录为 keypress", async () => {
