@@ -4364,3 +4364,83 @@
 - 初步判断：
   - 下一阶段高概率会落在“动作级韧性补强 + p8 基准矩阵/技术根因观测”方向。
   - 在 explorer 结果返回前，不提前写死具体实现方案，先整理上下文摘要与计划草案。
+
+## 2026-06-07 Wave 10 规划基线落盘
+
+- 时间：2026-06-07 06:05:00 CST
+- 已新增上下文与计划资产：
+  - `.codex/context-summary-real-page-stability-wave10.md`
+  - `docs/superpowers/specs/2026-06-07-real-page-stability-wave10-action-resilience-design.md`
+  - `docs/superpowers/plans/2026-06-07-real-page-stability-wave10-action-resilience-plan.md`
+  - `docs/superpowers/plans/2026-06-07-real-page-stability-wave10-orchestration.md`
+- 已提交主线规划基线：
+  - `f550f52 docs: 规划 Wave 10 动作韧性阶段`
+- 核心结论：
+  - runtime explorer 结论优先级：
+    1. 动作级重试框架缺失
+    2. 动作过程中的 detached / rerender 恢复缺失
+    3. overlay / scroll / settle 统一稳定化不足
+  - benchmarks / studio explorer 结论优先级：
+    1. fixture / 文档 / real-page / recorded replay 的“单一真相”需要收口
+    2. recorded replay 对真实 fixture 的覆盖仍缺少 9 条主线场景
+    3. Studio 目前更偏单次执行排障，尚未吸收矩阵级聚合摘要
+- 基于 explorer 结论的计划收敛：
+  - Wave 10 当前优先做：
+    - Runtime 动作级韧性
+    - Benchmarks 单一真相收口 + recorded gap 缩小
+    - Studio 动作失败根因洞察
+
+## 2026-06-07 Wave 10 轨道启动与 Runtime 首段并回
+
+- 时间：2026-06-07 06:16:00 CST
+- 新建 worktree / 分支：
+  - `.worktrees/codex-real-page-wave10-runtime-resilience`
+    - `codex/real-page-wave10-runtime-resilience`
+  - `.worktrees/codex-real-page-wave10-benchmarks-p8`
+    - `codex/real-page-wave10-benchmarks-p8`
+  - `.worktrees/codex-real-page-wave10-studio-runtime-cause`
+    - `codex/real-page-wave10-studio-runtime-cause`
+- 已派发并行 worker：
+  - `Schrodinger / 019e9ef9-3481-7082-9fe1-27277088a1f6`
+    - 轨道：Benchmarks / Docs 单一真相收口
+    - 授权范围：
+      - `examples/real-page-smoke.ts`
+      - `examples/run-real-page-smoke.ts`
+      - `examples/recorded-replay-smoke.ts`
+      - `packages/runtime/src/real-page-matrix.test.ts`
+      - `packages/runtime/src/recorded-replay-matrix.test.ts`
+      - `docs/guides/fixture-matrix.md`
+- Runtime 轨冷启动：
+  - 初始失败：
+    - `pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+    - 报错：`vitest: command not found`
+  - 根因：新 worktree 缺少 `node_modules`
+  - 补救：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm install --frozen-lockfile`
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/shared --filter @flowweave/flow-dsl --filter @flowweave/recorder --filter @flowweave/page-intelligence --filter @flowweave/runtime build`
+- Runtime 轨 TDD 结果：
+  - 新增回归：
+    - `fill 后若受控输入被重渲染清空，会重新定位并补写一次`
+    - `setChecked 后若受控勾选被重置，会重新定位并补设一次`
+  - 红灯验证：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+    - 结果：`32` 条中 `2` 条失败，符合预期
+  - 实现策略：
+    - 在 `packages/runtime/src/playwright-runner.ts` 新增：
+      - `verifyLocatorFillValue()`
+      - `verifyLocatorSelectedValues()`
+      - `performRecoveredLocatorAction()`
+    - `fill / select / setChecked` 改为动作后验状态；若状态未保留，则重新 `resolveTarget()` 后补做一次动作
+    - 二次仍失败时抛 `FlowWeaveError`，并写入明确 `cause`
+  - 轨道复验：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+    - 结果：通过，`32/32`
+- Runtime 轨提交与并回：
+  - 轨道提交：`1c2aee2 feat: 提升受控表单动作稳定性`
+  - 主线合并：`Merge branch 'codex/real-page-wave10-runtime-resilience' into codex/real-page-stability-program`
+  - 主线并回后复核：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+    - 结果：通过，`32/32`
+- 当前状态：
+  - Wave 10 已完成第一条主线改进。
+  - Benchmarks / Docs 侧轨仍在进行中。

@@ -2945,3 +2945,59 @@
 - 风险评估评分：96
 - 综合评分：98
 - 建议：通过
+
+## 2026-06-07 Wave 10 Runtime 首段：受控表单动作稳定性验收
+
+### 审查范围
+
+- `packages/runtime/src/playwright-runner.ts`
+- `packages/runtime/src/playwright-runner.test.ts`
+- `.codex/context-summary-real-page-stability-wave10.md`
+- `.codex/operations-log.md`
+- 关键提交：
+  - 规划基线：`f550f52 docs: 规划 Wave 10 动作韧性阶段`
+  - runtime 轨道提交：`1c2aee2 feat: 提升受控表单动作稳定性`
+
+### 审查结果
+
+1. 当前改动与 Wave 10 目标一致。
+   - 这轮没有绕开真实问题去补 fixture，而是直接增强 runtime 对受控输入与受控勾选“动作后状态回弹”的恢复能力。
+   - 改动集中在 `fill / select / setChecked`，属于动作级韧性主线，而不是旁支文案优化。
+2. TDD 闭环完整。
+   - 新增两条 deterministic 回归：
+     - `fill 后若受控输入被重渲染清空，会重新定位并补写一次`
+     - `setChecked 后若受控勾选被重置，会重新定位并补设一次`
+   - 红灯阶段证据：
+     - `pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+     - 结果：`32` 条中 `2` 条失败
+   - 实现后复验：
+     - 同一命令结果：通过，`32/32`
+3. 实现边界收敛合理。
+   - 新增 `verifyLocatorFillValue()`、`verifyLocatorSelectedValues()`、`performRecoveredLocatorAction()`。
+   - 当前恢复只对白名单动作做一次重新定位与补做，不会扩成无限重试或全局强等待。
+   - 二次仍失败时会抛 `FlowWeaveError` 并写入明确 `cause`，没有把真实错误静默吃掉。
+4. 主线并回后验证通过。
+   - `git merge --no-ff codex/real-page-wave10-runtime-resilience`
+   - 合并后重新运行：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+     - 结果：通过，`32/32`
+
+### Findings
+
+1. 未发现本阶段阻塞级问题。
+   - runtime 首段已经把“受控表单动作回弹”从可复现红灯转成稳定绿灯。
+2. 当前仍是 Wave 10 的阶段性完成，不是整轮完成。
+   - 还未完成 Benchmarks 单一真相收口、recorded replay 缺口补齐和 Studio 根因洞察消费。
+3. 残余风险：`click / press / upload` 的动作级恢复还未纳入这一段实现。
+   - 本轮只把最容易 deterministic 建模且真实价值高的 `fill / select / setChecked` 先吃掉。
+   - 对 detached / overlay interception / 长页滚动等更广泛动作问题，仍需后续轨道继续推进。
+
+### 综合结论
+
+- 代码质量评分：98
+- 测试覆盖评分：96
+- 规范遵循评分：100
+- 战略匹配评分：98
+- 风险评估评分：93
+- 综合评分：97
+- 建议：通过（限 Wave 10 Runtime 首段）
