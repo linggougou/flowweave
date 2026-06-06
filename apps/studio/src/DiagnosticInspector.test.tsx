@@ -96,6 +96,42 @@ describe("DiagnosticInspector", () => {
     expect(html).not.toContain("目标提示");
   });
 
+  it("对动作后状态被页面重置的 runtime-error 展示更具体的洞察与建议", () => {
+    const html = renderToStaticMarkup(
+      <DiagnosticInspector
+        steps={[
+          buildStep({
+            stepIndex: 3,
+            stepId: "s4",
+            label: "填写订单备注",
+            message: "fill 后目标值未稳定写入",
+            stepType: "fill",
+            diagnostic: {
+              kind: "runtime-error",
+              stepId: "s4",
+              stepIndex: 3,
+              stepType: "fill",
+              message: "fill 后目标值未稳定写入",
+              errorCode: "RUNTIME_STEP_FAILED",
+              cause: "fill-value-reset",
+              url: "https://staging.example.com/orders/edit",
+              title: "订单编辑页",
+            } as unknown as ExecutionStepLog["diagnostic"],
+          }),
+        ]}
+        selectedStepIndex={3}
+        onSelectStepIndex={() => {}}
+        onOpenPath={() => {}}
+      />,
+    );
+
+    expect(html).toContain("输入值被页面重置");
+    expect(html).toContain("核对输入后是否被页面回写");
+    expect(html).toContain("受控字段");
+    expect(html).toContain("blur");
+    expect(html).toContain("fill-value-reset");
+  });
+
   it("把诊断信息提升为更适合排障的工作台视图", () => {
     const html = renderToStaticMarkup(
       <DiagnosticInspector
