@@ -253,6 +253,22 @@ describe("analyzeFlowFragility", () => {
     expect(codes).toContain("NO_STRATEGIES");
   });
 
+  it("对不带 target 的 press 步骤不产出 target 类风险", () => {
+    const flow = baseFlow([
+      {
+        id: "s1",
+        type: "press",
+        key: "Enter",
+      },
+    ]);
+
+    const codes = analyzeFlowFragility(flow).map((issue) => issue.code as string);
+    expect(codes).not.toContain("NO_STRATEGIES");
+    expect(codes).not.toContain("CSS_ONLY");
+    expect(codes).not.toContain("CSS_NTH_OF_TYPE");
+    expect(codes).not.toContain("TEXT_ONLY");
+  });
+
   it("对仅依赖通用 condition 的 wait 步骤给出 WAIT_MAY_BE_UNSTABLE", () => {
     const flow = baseFlow([
       {
