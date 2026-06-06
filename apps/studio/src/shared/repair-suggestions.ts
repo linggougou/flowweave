@@ -5,11 +5,15 @@ import type {
   StudioDiagnosticStrategyAttempt,
   StudioDiagnosticTargetHints,
 } from "./studio-api-types.js";
-import { isTargetResolutionDiagnostic } from "./studio-api-types.js";
+import {
+  getStudioActionStateResetDescriptor,
+  isRuntimeErrorDiagnostic,
+  isTargetResolutionDiagnostic,
+} from "./studio-api-types.js";
 
 export type RepairSuggestion = {
   id: string;
-  source: "fragility" | "strategy" | "target-hint" | "fallback";
+  source: "fragility" | "strategy" | "target-hint" | "runtime-cause" | "fallback";
   severity: "error" | "warning";
   title: string;
   action: string;
@@ -259,6 +263,28 @@ function buildAttemptReason(
   return parts.join("，") + "。";
 }
 
+function buildRuntimeDiagnosticPageLabel(step: ExecutionStepLog): string | undefined {
+  const diagnostic = isRuntimeErrorDiagnostic(step.diagnostic) ? step.diagnostic : undefined;
+  const title = diagnostic?.title?.trim();
+  if (title && diagnostic?.url) {
+    return `${title}（${diagnostic.url}）`;
+  }
+
+  return title ?? diagnostic?.url;
+}
+
+function joinSentences(parts: Array<string | undefined>): string {
+  const sentences = parts
+    .map((part) => part?.trim())
+    .filter((part): part is string => Boolean(part));
+
+  if (sentences.length === 0) {
+    return "";
+  }
+
+  return `${sentences.join("。")}。`;
+}
+
 function buildScopedRetargetSuggestion(
   step: ExecutionStepLog,
   attempt: StudioDiagnosticStrategyAttempt,
@@ -320,8 +346,42 @@ export function buildDiagnosticRepairSuggestions(
 ): RepairSuggestion[] {
   const ranked: RankedRepairSuggestion[] = [];
   const diagnostic = step.diagnostic;
+
+  if (isRuntimeErrorDiagnostic(diagnostic)) {
+    const descriptor = getStudioActionStateResetDescriptor(diagnostic.cause);
+    if (descriptor) {
+      ranked.push({
+        id: `runtime-cause:${diagnostic.cause}:${step.stepId}`,
+        source: "runtime-cause",
+        severity: "error",
+        priority: 0,
+        title: descriptor.title,
+        action: descriptor.suggestedAction,
+        reason: joinSentences([
+          diagnostic.message,
+          descriptor.explanation,
+          buildRuntimeDiagnosticPageLabel(step)
+            ? `当前页：${buildRuntimeDiagnosticPageLabel(step)}`
+            : undefined,
+        ]),
+      });
+    }
+  }
+
   if (!isTargetResolutionDiagnostic(diagnostic)) {
-    return [];
+    if (ranked.length === 0 && step.message) {
+      ranked.push({
+        id: `fallback:${step.stepId}`,
+        source: "fallback",
+        severity: step.status === "failed" ? "error" : "warning",
+        priority: 99,
+        title: "先对照诊断产物缩小范围",
+        action: "先打开 diagnostic JSON 与 page snapshot，对照页面 URL、标题和目标提示，确认异常发生在哪个阶段。",
+        reason: step.message,
+      });
+    }
+
+    return dedupeSuggestions(ranked);
   }
 
   const failedAttempts = diagnostic.strategyAttempts.filter((attempt) => !attempt.success);

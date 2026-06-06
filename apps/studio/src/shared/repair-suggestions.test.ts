@@ -70,6 +70,61 @@ describe("buildFragilityRepairSuggestions", () => {
 });
 
 describe("buildDiagnosticRepairSuggestions", () => {
+  it.each([
+    {
+      cause: "fill-value-reset",
+      stepType: "fill",
+      message: "fill 后目标值未稳定写入",
+      title: "核对输入后是否被页面回写",
+      actionFragment: "blur",
+      reasonFragment: "受控字段",
+    },
+    {
+      cause: "select-value-reset",
+      stepType: "select",
+      message: "select 后选中值未稳定保留",
+      title: "核对下拉值是否被联动改回",
+      actionFragment: "option value",
+      reasonFragment: "默认值",
+    },
+    {
+      cause: "checked-state-reset",
+      stepType: "setChecked",
+      message: "setChecked 后勾选状态未稳定保留",
+      title: "核对勾选状态是否被脚本撤销",
+      actionFragment: "同组单选/复选",
+      reasonFragment: "互斥",
+    },
+  ])("对 $cause cause 输出专用修复建议", (scenario) => {
+    const suggestions = buildDiagnosticRepairSuggestions(
+      buildStep({
+        label: "更新字段状态",
+        message: scenario.message,
+        stepType: scenario.stepType as NonNullable<ExecutionStepLog["stepType"]>,
+        diagnostic: {
+          kind: "runtime-error",
+          stepId: "s3",
+          stepIndex: 2,
+          stepType: scenario.stepType as NonNullable<ExecutionStepLog["stepType"]>,
+          message: scenario.message,
+          errorCode: "RUNTIME_STEP_FAILED",
+          cause: scenario.cause,
+          url: "https://staging.example.com/orders/edit",
+          title: "订单编辑页",
+        } as unknown as ExecutionStepLog["diagnostic"],
+      }),
+    );
+
+    expect(suggestions[0]).toMatchObject({
+      source: "runtime-cause",
+      severity: "error",
+      title: scenario.title,
+    });
+    expect(suggestions[0]?.action).toContain(scenario.actionFragment);
+    expect(suggestions[0]?.reason).toContain(scenario.reasonFragment);
+    expect(suggestions[0]?.reason).toContain(scenario.message);
+  });
+
   it("把失败策略错误转成收窄范围和可见性修复动作", () => {
     const suggestions = buildDiagnosticRepairSuggestions(
       buildStep({

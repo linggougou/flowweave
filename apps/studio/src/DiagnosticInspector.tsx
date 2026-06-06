@@ -7,6 +7,8 @@ import type {
   StudioDiagnosticTargetHints,
 } from "./shared/studio-api-types.js";
 import {
+  formatStudioDiagnosticCause,
+  getStudioActionStateResetDescriptor,
   isRuntimeErrorDiagnostic,
   isTargetResolutionDiagnostic,
 } from "./shared/studio-api-types.js";
@@ -187,9 +189,12 @@ export function DiagnosticInspector({
   const runtimeErrorDiagnostic = isRuntimeErrorDiagnostic(diagnostic)
     ? diagnostic
     : undefined;
+  const actionStateResetDescriptor = runtimeErrorDiagnostic
+    ? getStudioActionStateResetDescriptor(runtimeErrorDiagnostic.cause)
+    : undefined;
   const insight = buildFailureInsight(activeStep);
   const summary = targetDiagnostic ? countStrategyAttempts(activeStep) : null;
-  const repairSuggestions = targetDiagnostic
+  const repairSuggestions = targetDiagnostic || actionStateResetDescriptor
     ? buildDiagnosticRepairSuggestions(activeStep)
     : [];
   const ambiguityClues = targetDiagnostic ? buildAmbiguityClues(activeStep) : [];
@@ -363,7 +368,7 @@ export function DiagnosticInspector({
               {diagnostic.cause ? (
                 <tr>
                   <th>原因</th>
-                  <td>{diagnostic.cause}</td>
+                  <td>{formatStudioDiagnosticCause(diagnostic.cause) ?? "—"}</td>
                 </tr>
               ) : null}
               <tr>

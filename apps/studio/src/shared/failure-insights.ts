@@ -1,5 +1,6 @@
 import { buildDiagnosticRepairSuggestions } from "./repair-suggestions.js";
 import {
+  getStudioActionStateResetDescriptor,
   isRuntimeErrorDiagnostic,
   isTargetResolutionDiagnostic,
   type ExecutionStepLog,
@@ -13,7 +14,8 @@ export type FailureInsightCategory =
   | "page-state"
   | "fallback-success"
   | "page-snapshot"
-  | "execution-error";
+  | "execution-error"
+  | "action-state-reset";
 
 export type FailureInsightArtifact = {
   kind: "diagnostic" | "page-snapshot" | "screenshot";
@@ -109,14 +111,19 @@ function resolveRuntimeErrorSummary(step: ExecutionStepLog): string {
     );
   }
 
+  const resetDescriptor = getStudioActionStateResetDescriptor(diagnostic.cause);
   const title = diagnostic.title?.trim();
   const pageLabel =
     title && diagnostic.url
       ? `${title}（${diagnostic.url}）`
       : title ?? diagnostic.url;
-  const errorCode = diagnostic.errorCode ? `（${diagnostic.errorCode}）` : "";
   const pageContext = pageLabel ? ` 当前页：${pageLabel}。` : "";
 
+  if (resetDescriptor) {
+    return `${resetDescriptor.label}：${diagnostic.message}。${resetDescriptor.explanation}。${pageContext}`;
+  }
+
+  const errorCode = diagnostic.errorCode ? `（${diagnostic.errorCode}）` : "";
   return `${diagnostic.stepType} 步骤执行失败${errorCode}：${diagnostic.message}。${pageContext}`;
 }
 
@@ -175,6 +182,15 @@ function resolveInsightCategory(step: ExecutionStepLog): {
   }
 
   if (isRuntimeErrorDiagnostic(step.diagnostic)) {
+    const resetDescriptor = getStudioActionStateResetDescriptor(step.diagnostic.cause);
+    if (resetDescriptor) {
+      return {
+        category: "action-state-reset",
+        categoryLabel: resetDescriptor.label,
+        summary: resolveRuntimeErrorSummary(step),
+      };
+    }
+
     return {
       category: "execution-error",
       categoryLabel: "执行报错",
@@ -207,19 +223,26 @@ function resolveInsightCategory(step: ExecutionStepLog): {
   };
 }
 
-function resolveInsightTitle(step: ExecutionStepLog): string {
+function resolveInsightTitle(
+  step: ExecutionStepLog,
+  repairSuggestion?: { title: string },
+): string {
   if (resolveFallbackSuccess(step)) {
     return "备用策略兜底成功";
   }
 
   if (isRuntimeErrorDiagnostic(step.diagnostic)) {
+    const resetDescriptor = getStudioActionStateResetDescriptor(step.diagnostic.cause);
+    if (resetDescriptor && repairSuggestion) {
+      return repairSuggestion.title;
+    }
+
     return "先查看当前错误反馈";
   }
 
   if (isTargetResolutionDiagnostic(step.diagnostic)) {
-    const topSuggestion = buildDiagnosticRepairSuggestions(step)[0];
-    if (topSuggestion) {
-      return topSuggestion.title;
+    if (repairSuggestion) {
+      return repairSuggestion.title;
     }
   }
   if (step.pageSnapshot) {
@@ -243,7 +266,11 @@ export function buildFailureInsight(step: ExecutionStepLog): FailureInsight | nu
     return null;
   }
 
-  const repairSuggestion = isTargetResolutionDiagnostic(step.diagnostic)
+  const resetDescriptor = isRuntimeErrorDiagnostic(step.diagnostic)
+    ? getStudioActionStateResetDescriptor(step.diagnostic.cause)
+    : undefined;
+  const repairSuggestion =
+    isTargetResolutionDiagnostic(step.diagnostic) || resetDescriptor
     ? buildDiagnosticRepairSuggestions(step)[0]
     : undefined;
   const { category, categoryLabel, summary } = resolveInsightCategory(step);
@@ -251,7 +278,7 @@ export function buildFailureInsight(step: ExecutionStepLog): FailureInsight | nu
   return {
     category,
     categoryLabel,
-    title: resolveInsightTitle(step),
+    title: resolveInsightTitle(step, repairSuggestion),
     summary,
     pageSummary: formatPageSnapshotSummary(step),
     recommendedAction: repairSuggestion?.action,

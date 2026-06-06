@@ -67,6 +67,63 @@ describe("buildFailureInsight", () => {
     expect(insight?.recommendedAction).toBeUndefined();
   });
 
+  it.each([
+    {
+      cause: "fill-value-reset",
+      stepType: "fill",
+      message: "fill 后目标值未稳定写入",
+      categoryLabel: "输入值被页面重置",
+      title: "核对输入后是否被页面回写",
+      actionFragment: "blur",
+      summaryFragment: "受控字段",
+    },
+    {
+      cause: "select-value-reset",
+      stepType: "select",
+      message: "select 后选中值未稳定保留",
+      categoryLabel: "下拉选项被页面重置",
+      title: "核对下拉值是否被联动改回",
+      actionFragment: "option value",
+      summaryFragment: "默认值",
+    },
+    {
+      cause: "checked-state-reset",
+      stepType: "setChecked",
+      message: "setChecked 后勾选状态未稳定保留",
+      categoryLabel: "勾选状态被页面重置",
+      title: "核对勾选状态是否被脚本撤销",
+      actionFragment: "同组单选/复选",
+      summaryFragment: "互斥",
+    },
+  ])("对 $cause cause 输出更可行动的失败洞察", (scenario) => {
+    const insight = buildFailureInsight(
+      buildStep({
+        label: "更新表单字段",
+        message: scenario.message,
+        diagnostic: {
+          kind: "runtime-error",
+          stepId: "s3",
+          stepIndex: 2,
+          stepType: scenario.stepType as NonNullable<ExecutionStepLog["stepType"]>,
+          message: scenario.message,
+          errorCode: "RUNTIME_STEP_FAILED",
+          cause: scenario.cause,
+          url: "https://staging.example.com/orders/edit",
+          title: "订单编辑页",
+        } as unknown as ExecutionStepLog["diagnostic"],
+      }),
+    );
+
+    expect(insight).toMatchObject({
+      category: "action-state-reset",
+      categoryLabel: scenario.categoryLabel,
+      title: scenario.title,
+    });
+    expect(insight?.summary).toContain(scenario.message);
+    expect(insight?.summary).toContain(scenario.summaryFragment);
+    expect(insight?.recommendedAction).toContain(scenario.actionFragment);
+  });
+
   it("对先失败后成功的通过步骤降级为备用策略告警语义", () => {
     const insight = buildFailureInsight(
       buildStep({
