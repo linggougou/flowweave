@@ -790,7 +790,7 @@ async function isSuggestLikeTarget(locator: Locator): Promise<boolean> {
         role === "combobox" ||
         autocomplete === "list" ||
         autocomplete === "both" ||
-        (!!controls && autocomplete !== "none")
+        !!controls
       );
     })
     .catch(() => false);
