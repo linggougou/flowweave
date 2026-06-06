@@ -3825,3 +3825,61 @@
     - `session-dashboard`: `3` 步
     - `drawer-double-save`: `9` 步
     - 总结：录制回放 smoke baseline 已从 `7` 条稳定扩展到 `11` 条
+
+## 2026-06-07 Wave 7 轨道回收与统一验收
+
+- 时间：2026-06-07 03:46:30 CST
+- 扩展导出 follow-up 回收：
+  - reviewer：`Wegener / 019e9e40-7ca5-72e3-909d-6ca5e326f29c`
+  - 审查结论：无阻塞问题，可以回收合并
+  - 关键确认：
+    - 已补 listener 级 callback / `return true` / reject -> `{ ok: false, error }`
+    - 已补 `MSG_SYNC_KNOWLEDGE` 的 `message.apiBase` 优先与 stored 缺失回退默认值
+    - 变更范围仅限 `apps/extension/lib/background-contract.test.ts`
+  - 回收方式：主线执行 `git merge --no-ff codex/real-page-wave7-extension-export -m "merge: 合并 Wave 7 扩展导出补强轨道"`
+- 主线复验（Node 20）：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension test -- background-contract.test.ts content-contract.test.ts`
+    - 结果：通过，`11/11`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension typecheck`
+    - 结果：通过
+- Wave 7 统一验收（Node 20）：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test -- normalize.test.ts`
+    - 结果：通过，`30/30`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts recorded-replay-matrix.test.ts`
+    - 结果：通过，`26/26`
+    - 关键信息：
+      - `playwright-runner.test.ts` 已覆盖 `11` 条 recorded replay 用例与 `19` 条真实页面矩阵
+      - `recorded-replay-matrix.test.ts` 已锁住 baseline `11` 条 summary 契约
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:recorded-pages`
+    - 结果：通过，`11/11`
+    - 关键信息：新增 `repeated-row-actions`、`linked-filters`、`session-dashboard`、`drawer-double-save` 全部稳定通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+    - 结果：通过，`19/19`
+    - 关键信息：
+      - 档位：`p7`
+      - 新纳入 Wave 7 重点场景的 `linked-filters`、`session-dashboard`、`drawer-double-save`、`repeated-row-actions` 全部继续保持通过
+- 本轮主线新增提交：
+  - `4ef37f5 feat: 扩展录制回放烟测基线矩阵`
+  - `merge: 合并 Wave 7 扩展导出补强轨道`
+- 当前结论：
+  - Wave 7 计划中的三条轨道均已完成并回收到协调分支。
+  - “真实录制回放闭环 + recorded replay 矩阵”主目标已具备完整验证证据。
+
+## 2026-06-07 Wave 7 资源回收
+
+- 时间：2026-06-07 03:51:10 CST
+- 已关闭子代理：
+  - `Rawls / 019e9e3a-3887-7743-94a3-9fd064381b32`
+  - `Pascal / 019e9e3a-38dd-7aa2-80cf-92f9366f7a53`
+  - `Boyle / 019e9e3a-3929-7be0-8bd5-3547a08a0d70`
+  - `Wegener / 019e9e40-7ca5-72e3-909d-6ca5e326f29c`
+- 已删除 worktree：
+  - `.worktrees/codex-real-page-wave7-extension-export`
+  - `.worktrees/codex-real-page-wave7-recorded-replay`
+  - `.worktrees/codex-real-page-wave7-recorded-smoke`
+- 已删除本地分支：
+  - `codex/real-page-wave7-extension-export`
+  - `codex/real-page-wave7-recorded-replay`
+  - `codex/real-page-wave7-recorded-smoke`
+- 回收后工作树状态：
+  - `git worktree list` 仅剩主工作区 `/Users/ling/codeHome/A_Mine/flowweave`

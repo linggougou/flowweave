@@ -2686,3 +2686,66 @@
 - 风险评估评分：97
 - 综合评分：99
 - 建议：通过
+
+## 2026-06-07 Wave 7 真实录制回放闭环统一验收
+
+### 审查范围
+
+- `apps/extension/lib/background-contract.test.ts`
+- `examples/recorded-replay-smoke.ts`
+- `packages/runtime/src/recorded-replay-matrix.test.ts`
+- `docs/guides/recorded-replay-matrix.md`
+- `.codex/operations-log.md`
+- 协调分支新增提交：
+  - `4ef37f5 feat: 扩展录制回放烟测基线矩阵`
+  - `merge: 合并 Wave 7 扩展导出补强轨道`
+
+### 审查结果
+
+1. 需求字段完整性通过。
+   - 目标明确：补齐“真实录制内容能否稳定回放”的闭环证据。
+   - 范围明确：扩展侧补合同、runtime 侧补 recorded replay smoke baseline，不扩散到 Studio 新功能。
+   - 交付物明确：代码、文档、Node 20 验证结果与 `.codex` 留痕均已落盘。
+2. 原始意图覆盖完整。
+   - 扩展导出轨补上了 `background.ts` 消息监听器合同边界。
+   - recorded replay smoke baseline 从 `7` 条稳定扩到 `11` 条。
+   - `repeated-row-actions`、`linked-filters`、`session-dashboard`、`drawer-double-save` 四条高价值场景均进入 recorded replay 独立烟测。
+3. 架构一致性通过。
+   - 继续复用 `buildFlowFromEvents`、`writeStorageState`、`runRecordedReplayMatrix` 等现有入口。
+   - 没有引入第二套 smoke runner、第二套导出通道或并行执行框架。
+   - 生产代码范围控制到最小，本轮扩展导出 follow-up 仅增加测试。
+4. 验证证据充分。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension test -- background-contract.test.ts content-contract.test.ts`
+     - 结果：通过，`11/11`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension typecheck`
+     - 结果：通过
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test -- normalize.test.ts`
+     - 结果：通过，`30/30`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts recorded-replay-matrix.test.ts`
+     - 结果：通过，`26/26`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:recorded-pages`
+     - 结果：通过，`11/11`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+     - 结果：通过，`19/19`
+
+### Findings
+
+1. 未发现阻塞级问题。
+   - Wave 7 计划中的 3 条轨道均已完成、合并并通过主线统一验收。
+2. recorded replay smoke baseline 的步数契约曾有一次真实偏差，但已被验证闭环吸收。
+   - `linked-filters` 实际为 `8` 步、`drawer-double-save` 实际为 `9` 步；当前测试已与真实归一化产物对齐。
+   - 这说明新增 smoke runner 有效暴露了契约偏差，属于验证收益，不是残留缺陷。
+3. 残余风险：扩展 listener 合同目前重点锁住 reject 分支，success 分支仍主要依赖 handler 级合同测试。
+   - 当前不影响验收；若后续 `background.ts` listener 包装层再扩逻辑，可补 success 路径的 listener 级断言。
+4. 残余风险：当前最终验收环境仍以 `Node v20.19.6` 为基线。
+   - 这与仓库 `.nvmrc` 和既有 CI 基线一致；Node 24 兼容性仍应作为独立后续轨道处理。
+
+### 综合结论
+
+- 代码质量评分：99
+- 测试覆盖评分：99
+- 规范遵循评分：100
+- 战略匹配评分：99
+- 风险评估评分：97
+- 综合评分：99
+- 建议：通过
