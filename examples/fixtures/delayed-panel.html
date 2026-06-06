@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowWeave 延迟面板 Fixture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui,
+          sans-serif;
+        --bg: #eef4f1;
+        --panel: #fcfffd;
+        --border: #bfd4c7;
+        --text: #1f3528;
+        --muted: #52715f;
+        --accent: #246344;
+        --accent-soft: rgba(36, 99, 68, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at top right, rgba(36, 99, 68, 0.16), transparent 32%),
+          linear-gradient(180deg, #f8fcfa 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      main {
+        max-width: 780px;
+        margin: 0 auto;
+        padding: 40px 20px 72px;
+      }
+
+      .shell,
+      .card,
+      .report {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 22px;
+        box-shadow: 0 16px 36px rgba(31, 53, 40, 0.08);
+      }
+
+      .shell {
+        padding: 28px;
+      }
+
+      .card {
+        padding: 24px;
+      }
+
+      .report {
+        margin-top: 18px;
+        padding: 24px;
+      }
+
+      .report[hidden] {
+        display: none;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 14px;
+        margin: 18px 0;
+      }
+
+      button {
+        border: none;
+        border-radius: 14px;
+        padding: 12px 18px;
+        background: var(--accent);
+        color: #f7fffb;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        cursor: progress;
+        opacity: 0.55;
+      }
+
+      .loading {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .loading[hidden] {
+        display: none;
+      }
+
+      .loading-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: currentColor;
+        animation: pulse 1s infinite ease-in-out;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          transform: scale(0.9);
+          opacity: 0.55;
+        }
+
+        50% {
+          transform: scale(1.15);
+          opacity: 1;
+        }
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 14px;
+        margin-top: 16px;
+      }
+
+      .metric {
+        padding: 14px;
+        border-radius: 16px;
+        background: rgba(36, 99, 68, 0.08);
+      }
+
+      .metric strong {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--muted);
+      }
+
+      .metric span {
+        font-size: 1.2rem;
+        font-weight: 700;
+      }
+
+      #load-status {
+        min-height: 24px;
+        color: var(--muted);
+      }
+
+      ul {
+        margin: 14px 0 0;
+        padding-left: 1.2rem;
+      }
+
+      @media (max-width: 640px) {
+        main {
+          padding-inline: 14px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="shell" aria-labelledby="page-title">
+        <p>Fixture 目标：验证延迟渲染、loading 消失、可见性等待与点击后的稳定态。</p>
+        <h1 id="page-title">异步数据面板</h1>
+        <p>
+          推荐后续自动化步骤：点击加载按钮，等待 loading 提示隐藏，再断言结果面板显示和指标数字。
+        </p>
+      </section>
+
+      <section id="panel-shell" class="card" data-loading="false">
+        <div class="toolbar">
+          <button id="load-panel" type="button">加载运行概览</button>
+          <div id="loading-indicator" class="loading" hidden aria-live="polite">
+            <span class="loading-dot" aria-hidden="true"></span>
+            <span>面板生成中，请稍候...</span>
+          </div>
+        </div>
+        <p id="load-status">结果尚未生成。</p>
+
+        <section
+          id="report-panel"
+          class="report"
+          hidden
+          data-ready="false"
+          aria-labelledby="report-title"
+        >
+          <p id="report-badge">面板状态：等待加载</p>
+          <h2 id="report-title">运行概览已就绪</h2>
+          <div class="metrics">
+            <div class="metric">
+              <strong>已完成步骤</strong>
+              <span id="completed-steps">0</span>
+            </div>
+            <div class="metric">
+              <strong>待人工确认</strong>
+              <span id="manual-checks">0</span>
+            </div>
+            <div class="metric">
+              <strong>失败重试次数</strong>
+              <span id="retry-count">0</span>
+            </div>
+          </div>
+          <ul id="report-points">
+            <li>等待真实结果填充。</li>
+          </ul>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const shell = document.getElementById("panel-shell");
+      const loadButton = document.getElementById("load-panel");
+      const loadingIndicator = document.getElementById("loading-indicator");
+      const loadStatus = document.getElementById("load-status");
+      const reportPanel = document.getElementById("report-panel");
+      const reportBadge = document.getElementById("report-badge");
+      const completedSteps = document.getElementById("completed-steps");
+      const manualChecks = document.getElementById("manual-checks");
+      const retryCount = document.getElementById("retry-count");
+      const reportPoints = document.getElementById("report-points");
+
+      function fillReport() {
+        reportPanel.hidden = false;
+        reportPanel.dataset.ready = "true";
+        reportBadge.textContent = "面板状态：数据已就绪";
+        completedSteps.textContent = "12";
+        manualChecks.textContent = "2";
+        retryCount.textContent = "1";
+        reportPoints.innerHTML = `
+          <li>已检测到 3 个可复用定位策略。</li>
+          <li>主区域渲染耗时 1.2 秒，适合验证 wait visible。</li>
+          <li>loading 提示已隐藏，可验证 wait hidden。</li>
+        `;
+      }
+
+      loadButton.addEventListener("click", () => {
+        if (shell.dataset.loading === "true") {
+          return;
+        }
+
+        shell.dataset.loading = "true";
+        shell.setAttribute("aria-busy", "true");
+        loadButton.disabled = true;
+        reportPanel.hidden = true;
+        reportPanel.dataset.ready = "false";
+        loadingIndicator.hidden = false;
+        loadStatus.textContent = "正在生成结果面板...";
+
+        window.setTimeout(() => {
+          fillReport();
+          shell.dataset.loading = "false";
+          shell.removeAttribute("aria-busy");
+          loadingIndicator.hidden = true;
+          loadButton.disabled = false;
+          loadButton.textContent = "重新加载运行概览";
+          loadStatus.textContent = "数据已就绪，可继续断言结果。";
+        }, 1200);
+      });
+    </script>
+  </body>
+</html>

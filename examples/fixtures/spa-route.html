@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowWeave SPA 路由 Fixture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui,
+          sans-serif;
+        --bg: #f2f1ee;
+        --panel: #fffdfa;
+        --border: #d8d1c4;
+        --text: #2d2922;
+        --muted: #6a6255;
+        --accent: #8d5d33;
+        --accent-soft: rgba(141, 93, 51, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top left, rgba(141, 93, 51, 0.16), transparent 36%),
+          linear-gradient(180deg, #fbfaf7 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      main {
+        max-width: 840px;
+        margin: 0 auto;
+        padding: 40px 20px 72px;
+      }
+
+      .hero,
+      .app-shell {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 22px;
+        box-shadow: 0 16px 36px rgba(45, 41, 34, 0.08);
+      }
+
+      .hero,
+      .app-shell {
+        padding: 26px;
+      }
+
+      .hero {
+        margin-bottom: 20px;
+      }
+
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      nav button {
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 10px 16px;
+        background: #fff;
+        color: var(--text);
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      nav button[aria-current="page"] {
+        border-color: transparent;
+        background: var(--accent);
+        color: #fffdfa;
+      }
+
+      .route-loading {
+        margin-top: 18px;
+        padding: 10px 12px;
+        border-radius: 14px;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .route-loading[hidden] {
+        display: none;
+      }
+
+      .route-card {
+        margin-top: 18px;
+        padding: 22px;
+        border-radius: 18px;
+        background: rgba(141, 93, 51, 0.08);
+      }
+
+      .route-card ul {
+        margin: 14px 0 0;
+        padding-left: 1.2rem;
+      }
+
+      .meta-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+        margin-top: 18px;
+      }
+
+      .meta-box {
+        padding: 14px;
+        border-radius: 16px;
+        background: #fff;
+        border: 1px solid rgba(141, 93, 51, 0.14);
+      }
+
+      .meta-box strong {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--muted);
+      }
+
+      .meta-box span {
+        font-weight: 700;
+      }
+
+      #route-status {
+        min-height: 24px;
+        margin-top: 18px;
+        color: var(--muted);
+      }
+
+      @media (max-width: 640px) {
+        main {
+          padding-inline: 14px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <p>Fixture 目标：验证同页路由切换、URL hash 变化、延迟渲染与路由就绪断言。</p>
+        <h1 id="page-title">本地路由工作台</h1>
+        <p>
+          推荐后续自动化步骤：点击不同导航按钮，等待 loading 消失，再断言 hash、标题和列表内容已切到目标路由。
+        </p>
+      </section>
+
+      <section id="spa-shell" class="app-shell" data-route="dashboard" data-loading="false">
+        <nav aria-label="路由导航">
+          <button id="nav-dashboard" type="button" data-route="dashboard">概览</button>
+          <button id="nav-orders" type="button" data-route="orders">订单</button>
+          <button id="nav-settings" type="button" data-route="settings">设置</button>
+        </nav>
+
+        <div id="route-loading" class="route-loading" hidden aria-live="polite">
+          正在切换路由，请稍候...
+        </div>
+
+        <p id="route-status">当前路由尚未渲染。</p>
+
+        <section
+          id="route-card"
+          class="route-card"
+          data-ready="false"
+          aria-labelledby="route-title"
+        >
+          <p id="route-badge">路由状态：等待初始化</p>
+          <h2 id="route-title">-</h2>
+          <p id="route-description">-</p>
+          <ul id="route-items">
+            <li>暂无内容</li>
+          </ul>
+        </section>
+
+        <div class="meta-grid">
+          <div class="meta-box">
+            <strong>当前 hash</strong>
+            <span id="route-hash">-</span>
+          </div>
+          <div class="meta-box">
+            <strong>断言标记</strong>
+            <span id="route-token">route:none</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const shell = document.getElementById("spa-shell");
+      const buttons = Array.from(document.querySelectorAll("nav button"));
+      const routeLoading = document.getElementById("route-loading");
+      const routeStatus = document.getElementById("route-status");
+      const routeCard = document.getElementById("route-card");
+      const routeBadge = document.getElementById("route-badge");
+      const routeTitle = document.getElementById("route-title");
+      const routeDescription = document.getElementById("route-description");
+      const routeItems = document.getElementById("route-items");
+      const routeHash = document.getElementById("route-hash");
+      const routeToken = document.getElementById("route-token");
+
+      const routeContent = {
+        dashboard: {
+          title: "概览",
+          description: "适合验证默认落点和初始渲染状态。",
+          items: [
+            "今日运行 6 次",
+            "等待人工确认 2 项",
+            "最近一次回放在 10 分钟前完成",
+          ],
+        },
+        orders: {
+          title: "订单",
+          description: "适合验证按钮点击后的 hash 变化和异步内容切换。",
+          items: [
+            "FW-1024 等待发货",
+            "FW-1025 需要上传补充凭证",
+            "FW-1026 已完成对账",
+          ],
+        },
+        settings: {
+          title: "设置",
+          description: "适合验证 route ready 标记和配置项渲染。",
+          items: [
+            "默认环境：staging",
+            "会话注入：本地 storage state",
+            "失败诊断：保留截图与页面摘要",
+          ],
+        },
+      };
+
+      function applyRoute(route) {
+        const content = routeContent[route] ?? routeContent.dashboard;
+        shell.dataset.route = route;
+        routeCard.dataset.ready = "true";
+        routeBadge.textContent = `路由状态：${content.title} 已就绪`;
+        routeTitle.textContent = content.title;
+        routeDescription.textContent = content.description;
+        routeItems.innerHTML = content.items.map((item) => `<li>${item}</li>`).join("");
+        routeHash.textContent = window.location.hash || "#dashboard";
+        routeToken.textContent = `route:${route}`;
+        routeStatus.textContent = `已切换到 ${content.title} 路由。`;
+
+        buttons.forEach((button) => {
+          button.setAttribute(
+            "aria-current",
+            button.dataset.route === route ? "page" : "false",
+          );
+        });
+      }
+
+      function startNavigation(route) {
+        if (shell.dataset.loading === "true") {
+          return;
+        }
+
+        shell.dataset.loading = "true";
+        shell.setAttribute("aria-busy", "true");
+        routeLoading.hidden = false;
+        routeStatus.textContent = `正在切换到 ${route} 路由...`;
+
+        window.setTimeout(() => {
+          window.location.hash = route;
+          applyRoute(route);
+          shell.dataset.loading = "false";
+          shell.removeAttribute("aria-busy");
+          routeLoading.hidden = true;
+        }, 450);
+      }
+
+      buttons.forEach((button) => {
+        button.addEventListener("click", () => {
+          startNavigation(button.dataset.route ?? "dashboard");
+        });
+      });
+
+      window.addEventListener("hashchange", () => {
+        const route = window.location.hash.replace(/^#/, "") || "dashboard";
+        applyRoute(route);
+      });
+
+      if (!window.location.hash) {
+        window.location.hash = "dashboard";
+      } else {
+        applyRoute(window.location.hash.replace(/^#/, ""));
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowWeave 上传表单 Fixture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui,
+          sans-serif;
+        --bg: #f1f2f8;
+        --panel: #fcfcff;
+        --border: #cbd0e3;
+        --text: #20263a;
+        --muted: #5d6685;
+        --accent: #4055b5;
+        --accent-soft: rgba(64, 85, 181, 0.12);
+        --success: #245d86;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top center, rgba(64, 85, 181, 0.16), transparent 34%),
+          linear-gradient(180deg, #f8f9ff 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 40px 20px 72px;
+      }
+
+      .hero,
+      .panel,
+      .result {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 22px;
+        box-shadow: 0 18px 36px rgba(32, 38, 58, 0.08);
+      }
+
+      .hero,
+      .panel,
+      .result {
+        padding: 26px;
+      }
+
+      .hero {
+        margin-bottom: 20px;
+      }
+
+      form {
+        display: grid;
+        gap: 18px;
+      }
+
+      label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+
+      input,
+      button {
+        width: 100%;
+        border-radius: 14px;
+        border: 1px solid var(--border);
+        padding: 12px 14px;
+        font: inherit;
+        background: #fff;
+        color: var(--text);
+      }
+
+      input[type="file"] {
+        padding-block: 10px;
+      }
+
+      button {
+        border: none;
+        background: var(--accent);
+        color: #fcfcff;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+      }
+
+      .preview,
+      .result {
+        margin-top: 18px;
+      }
+
+      .preview {
+        padding: 16px;
+        border-radius: 18px;
+        background: var(--accent-soft);
+      }
+
+      .preview[hidden],
+      .result[hidden] {
+        display: none;
+      }
+
+      .file-list {
+        margin: 12px 0 0;
+        padding-left: 1.2rem;
+        color: var(--muted);
+      }
+
+      .result-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+        margin-top: 16px;
+      }
+
+      .result-box {
+        border-radius: 16px;
+        padding: 14px;
+        background: rgba(36, 93, 134, 0.08);
+      }
+
+      .result-box strong {
+        display: block;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      .result-box span {
+        color: var(--success);
+        font-size: 1.08rem;
+        font-weight: 700;
+      }
+
+      #form-status {
+        min-height: 24px;
+        color: var(--muted);
+      }
+
+      @media (max-width: 640px) {
+        main {
+          padding-inline: 14px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <p>Fixture 目标：验证 file input、表单启用条件、文件预览与提交结果断言。</p>
+        <h1 id="page-title">素材上传单</h1>
+        <p>
+          推荐后续自动化步骤：填写提交人、上传一个或多个文件、点击提交，然后断言文件预览和结果区。
+        </p>
+      </section>
+
+      <section class="panel">
+        <form id="upload-form">
+          <div>
+            <label for="operator-name">提交人</label>
+            <input
+              id="operator-name"
+              name="operatorName"
+              type="text"
+              autocomplete="name"
+              placeholder="请输入提交人姓名"
+            />
+          </div>
+
+          <div>
+            <label for="evidence-files">上传素材</label>
+            <input
+              id="evidence-files"
+              name="evidenceFiles"
+              type="file"
+              multiple
+              data-testid="evidence-files"
+            />
+          </div>
+
+          <p id="form-status">请先填写提交人并选择文件。</p>
+          <button id="submit-upload" type="submit" disabled>提交上传</button>
+        </form>
+
+        <section
+          id="file-preview"
+          class="preview"
+          hidden
+          data-ready="false"
+          aria-labelledby="preview-title"
+        >
+          <h2 id="preview-title">文件预览</h2>
+          <p>
+            已选择 <strong id="selected-count">0</strong> 个文件，以下名称可用于后续断言。
+          </p>
+          <ul id="selected-files" class="file-list">
+            <li>暂无文件</li>
+          </ul>
+        </section>
+      </section>
+
+      <section
+        id="upload-result"
+        class="result"
+        hidden
+        data-ready="false"
+        aria-labelledby="result-title"
+      >
+        <p id="upload-status">尚未提交</p>
+        <h2 id="result-title">上传请求已接收</h2>
+        <div class="result-grid">
+          <div class="result-box">
+            <strong>提交人</strong>
+            <span id="result-operator">-</span>
+          </div>
+          <div class="result-box">
+            <strong>文件数量</strong>
+            <span id="result-file-count">0</span>
+          </div>
+          <div class="result-box">
+            <strong>批次标记</strong>
+            <span id="result-batch">upload-0</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const form = document.getElementById("upload-form");
+      const operatorInput = document.getElementById("operator-name");
+      const fileInput = document.getElementById("evidence-files");
+      const formStatus = document.getElementById("form-status");
+      const submitButton = document.getElementById("submit-upload");
+      const preview = document.getElementById("file-preview");
+      const selectedCount = document.getElementById("selected-count");
+      const selectedFiles = document.getElementById("selected-files");
+      const result = document.getElementById("upload-result");
+      const uploadStatus = document.getElementById("upload-status");
+      const resultOperator = document.getElementById("result-operator");
+      const resultFileCount = document.getElementById("result-file-count");
+      const resultBatch = document.getElementById("result-batch");
+
+      function listFiles() {
+        return Array.from(fileInput.files ?? []);
+      }
+
+      function updatePreview() {
+        const files = listFiles();
+        const hasFiles = files.length > 0;
+        preview.hidden = !hasFiles;
+        preview.dataset.ready = hasFiles ? "true" : "false";
+        selectedCount.textContent = String(files.length);
+
+        if (!hasFiles) {
+          selectedFiles.innerHTML = "<li>暂无文件</li>";
+          return;
+        }
+
+        selectedFiles.innerHTML = files
+          .map((file) => `<li>${file.name}（${file.type || "未知类型"}）</li>`)
+          .join("");
+      }
+
+      function updateFormState() {
+        const files = listFiles();
+        const canSubmit = operatorInput.value.trim() !== "" && files.length > 0;
+        submitButton.disabled = !canSubmit;
+
+        if (canSubmit) {
+          formStatus.textContent = `已准备提交 ${files.length} 个文件。`;
+          return;
+        }
+
+        if (files.length === 0) {
+          formStatus.textContent = "请先填写提交人并选择文件。";
+          return;
+        }
+
+        formStatus.textContent = "已选择文件，请继续填写提交人。";
+      }
+
+      operatorInput.addEventListener("input", updateFormState);
+      fileInput.addEventListener("change", () => {
+        updatePreview();
+        updateFormState();
+      });
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const files = listFiles();
+        result.hidden = false;
+        result.dataset.ready = "true";
+        uploadStatus.textContent = "上传请求已接收，结果可供后续断言。";
+        resultOperator.textContent = operatorInput.value.trim();
+        resultFileCount.textContent = String(files.length);
+        resultBatch.textContent = `upload-${files.length}`;
+      });
+    </script>
+  </body>
+</html>

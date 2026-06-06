@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowWeave Checkbox 与 Select Fixture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui,
+          sans-serif;
+        --bg: #f5f3ed;
+        --panel: #fffdf8;
+        --border: #d6c8b5;
+        --text: #2f2418;
+        --muted: #6a5844;
+        --accent: #956b2d;
+        --accent-soft: rgba(149, 107, 45, 0.12);
+        --success: #1f6b3b;
+        --success-soft: rgba(31, 107, 59, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top left, rgba(149, 107, 45, 0.14), transparent 38%),
+          linear-gradient(180deg, #f9f7f2 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      main {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 40px 20px 64px;
+      }
+
+      .hero,
+      .panel,
+      .result {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        box-shadow: 0 16px 40px rgba(47, 36, 24, 0.08);
+      }
+
+      .hero {
+        padding: 28px;
+        margin-bottom: 20px;
+      }
+
+      .hero p,
+      .panel p,
+      .result p {
+        color: var(--muted);
+      }
+
+      .panel {
+        padding: 24px;
+      }
+
+      form {
+        display: grid;
+        gap: 18px;
+      }
+
+      label,
+      .fieldset-label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+
+      select,
+      button {
+        width: 100%;
+        border-radius: 14px;
+        border: 1px solid var(--border);
+        padding: 12px 14px;
+        font: inherit;
+        background: #fff;
+        color: var(--text);
+      }
+
+      button {
+        border: none;
+        background: var(--accent);
+        color: #fffdf8;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.45;
+      }
+
+      fieldset {
+        margin: 0;
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .checkbox-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+      }
+
+      .checkbox-row input {
+        width: 18px;
+        height: 18px;
+        margin-top: 2px;
+        accent-color: var(--accent);
+      }
+
+      .hint,
+      .status-line {
+        font-size: 0.95rem;
+      }
+
+      .status-line {
+        min-height: 24px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: var(--accent-soft);
+        color: var(--text);
+      }
+
+      .result {
+        margin-top: 20px;
+        padding: 24px;
+      }
+
+      .result[hidden] {
+        display: none;
+      }
+
+      .result-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+        margin-top: 16px;
+      }
+
+      .metric {
+        padding: 14px;
+        border-radius: 16px;
+        background: var(--success-soft);
+      }
+
+      .metric strong {
+        display: block;
+        font-size: 0.9rem;
+        color: var(--muted);
+        margin-bottom: 4px;
+      }
+
+      .metric span {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: var(--success);
+      }
+
+      @media (max-width: 640px) {
+        main {
+          padding-inline: 14px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <p>Fixture 目标：验证 select、checkbox、动态按钮可用态与提交结果断言。</p>
+        <h1 id="page-title">配送偏好配置</h1>
+        <p>
+          推荐后续自动化步骤：选择城市、勾选必填同意项、可选勾选到货提醒、点击保存，然后断言结果面板。
+        </p>
+      </section>
+
+      <section class="panel">
+        <form id="preferences-form">
+          <div>
+            <label class="fieldset-label" for="city">配送城市</label>
+            <select id="city" name="city" data-testid="city-select">
+              <option value="">请选择一个城市</option>
+              <option value="shanghai">上海</option>
+              <option value="hangzhou">杭州</option>
+              <option value="shenzhen">深圳</option>
+            </select>
+            <p class="hint">未选择城市前不会激活保存按钮。</p>
+          </div>
+
+          <fieldset>
+            <legend class="fieldset-label">服务确认</legend>
+            <label class="checkbox-row" for="agree">
+              <input
+                id="agree"
+                name="agree"
+                type="checkbox"
+                data-testid="agree-checkbox"
+              />
+              <span>我已确认允许工作流修改当前配送偏好</span>
+            </label>
+            <label class="checkbox-row" for="arrivalNotice">
+              <input
+                id="arrivalNotice"
+                name="arrivalNotice"
+                type="checkbox"
+                data-testid="arrival-notice-checkbox"
+              />
+              <span>接收当日到货提醒（可选项）</span>
+            </label>
+          </fieldset>
+
+          <div
+            id="live-summary"
+            class="status-line"
+            data-state="incomplete"
+            aria-live="polite"
+          >
+            当前未满足保存条件。
+          </div>
+
+          <button id="save-preferences" type="submit" disabled>保存配置</button>
+        </form>
+      </section>
+
+      <section
+        id="result-panel"
+        class="result"
+        hidden
+        data-ready="false"
+        aria-labelledby="result-title"
+      >
+        <p id="result-status">尚未提交</p>
+        <h2 id="result-title">配置已保存</h2>
+        <div class="result-grid">
+          <div class="metric">
+            <strong>已选城市</strong>
+            <span id="result-city">-</span>
+          </div>
+          <div class="metric">
+            <strong>执行授权</strong>
+            <span id="result-agree">-</span>
+          </div>
+          <div class="metric">
+            <strong>到货提醒</strong>
+            <span id="result-notice">-</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const cityInput = document.getElementById("city");
+      const agreeInput = document.getElementById("agree");
+      const arrivalNoticeInput = document.getElementById("arrivalNotice");
+      const saveButton = document.getElementById("save-preferences");
+      const liveSummary = document.getElementById("live-summary");
+      const resultPanel = document.getElementById("result-panel");
+      const resultStatus = document.getElementById("result-status");
+      const resultCity = document.getElementById("result-city");
+      const resultAgree = document.getElementById("result-agree");
+      const resultNotice = document.getElementById("result-notice");
+      const form = document.getElementById("preferences-form");
+
+      const cityLabels = {
+        shanghai: "上海",
+        hangzhou: "杭州",
+        shenzhen: "深圳",
+      };
+
+      function updateFormState() {
+        const hasCity = cityInput.value !== "";
+        const canSubmit = hasCity && agreeInput.checked;
+        saveButton.disabled = !canSubmit;
+
+        if (canSubmit) {
+          liveSummary.dataset.state = "ready";
+          liveSummary.textContent = `已选择${cityLabels[cityInput.value]}，可以保存配置。`;
+          return;
+        }
+
+        liveSummary.dataset.state = "incomplete";
+        if (!hasCity) {
+          liveSummary.textContent = "请选择配送城市后继续。";
+          return;
+        }
+
+        liveSummary.textContent = "请勾选执行授权复选框后继续。";
+      }
+
+      cityInput.addEventListener("change", updateFormState);
+      agreeInput.addEventListener("change", updateFormState);
+      arrivalNoticeInput.addEventListener("change", updateFormState);
+
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+
+        resultPanel.hidden = false;
+        resultPanel.dataset.ready = "true";
+        resultStatus.textContent = "保存成功，结果可供后续断言。";
+        resultCity.textContent = cityLabels[cityInput.value] ?? "未知城市";
+        resultAgree.textContent = agreeInput.checked ? "已授权" : "未授权";
+        resultNotice.textContent = arrivalNoticeInput.checked ? "已开启" : "未开启";
+      });
+
+      updateFormState();
+    </script>
+  </body>
+</html>
