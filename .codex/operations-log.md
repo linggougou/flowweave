@@ -3883,3 +3883,27 @@
   - `codex/real-page-wave7-recorded-smoke`
 - 回收后工作树状态：
   - `git worktree list` 仅剩主工作区 `/Users/ling/codeHome/A_Mine/flowweave`
+
+## 2026-06-07 Wave 8 键盘驱动录制回放规划启动
+
+- 时间：2026-06-07 04:08:20 CST
+- 任务目标：在 Wave 7 完成后，继续缩小“真实用户录制内容”和“主线 recorded replay 证明范围”之间的差距，优先补齐键盘导航型录制回放。
+- 所用技能：
+  - `brainstorming`：先比较方案，再把下一波收敛成可执行设计
+  - `writing-plans`：把设计拆成可并行执行的实现计划
+  - `using-git-worktrees`：为下一波 worktree / 分支 / 子代理准备隔离基线
+- 工具与环境说明：
+  - 当前环境仍未提供 `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code`，继续使用结构化分析、本地命令、CodeGraph 与仓库既有测试替代。
+  - 由于用户已明确授权“自主规划任务、持续开发、无需指示”，本轮按该授权视作 design review 通过，不等待额外交互确认。
+- 新增上下文与规划文档：
+  - `.codex/context-summary-real-page-stability-wave8-keyboard-replay.md`
+  - `docs/superpowers/specs/2026-06-07-real-page-stability-wave8-keyboard-replay-design.md`
+  - `docs/superpowers/plans/2026-06-07-real-page-stability-wave8-keyboard-replay-plan.md`
+  - `docs/superpowers/plans/2026-06-07-real-page-stability-wave8-keyboard-replay-orchestration.md`
+- 方案对比结论：
+  - 放弃“录所有方向键”的宽放开方案，避免噪声。
+  - 放弃“把方向键语义化成 select/click”的重建模方案，避免范围失控。
+  - 采用推荐方案：继续复用 `keypress -> press` 既有协议，只在组合框 / suggest / 命令面板类目标上放开 `ArrowDown / ArrowUp`，并新增 `keyboard-command-palette` 真实页面风格 fixture 进入 runtime recorded replay、recorded smoke 与 real-pages smoke。
+- 推荐并行轨道：
+  1. `Keyboard Capture Contract`
+  2. `Keyboard Replay Matrix`
