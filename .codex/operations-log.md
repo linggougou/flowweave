@@ -166,3 +166,72 @@
     - Recorder：`Planck` / `019e9bc2-28d0-7852-87c5-b1ee7fe13742`
     - Runtime：`Faraday` / `019e9bc2-76c9-7a33-8fa2-ae2f26a4eedf`
     - Environment：`Galileo` / `019e9bc2-b90a-7250-b8ca-90e4c28416c0`
+
+## 2026-06-06 真实页面稳定性第一轮集成收口
+
+- 时间：2026-06-06 15:35:05 CST
+- 任务目标：完成 Recorder / Runtime / Environment 三条主轨道回收，统一并回协调分支，并在 Node 20 下完成仓库级集成验收。
+- 上下文依据：
+  - `.codex/context-summary-real-page-stability-program.md`
+  - `docs/superpowers/specs/2026-06-06-real-page-stability-design.md`
+  - `docs/superpowers/plans/2026-06-06-real-page-stability-implementation-plan.md`
+  - `docs/superpowers/plans/2026-06-06-real-page-stability-orchestration.md`
+  - `packages/recorder/src/normalize.ts`
+  - `packages/runtime/src/playwright-runner.ts`
+  - `packages/project-knowledge/src/repository.ts`
+  - `apps/studio/electron/services.ts`
+- 工具与环境说明：
+  - 当前环境仍未提供 `sequential-thinking`、`desktop-commander`、`context7`，继续以结构化分解、本地命令、CodeGraph 与仓库测试替代。
+  - 统一使用 `Node v20.19.6` 验收，原因是仓库 `.nvmrc` 与既有 `smoke` 基线均指向 Node 20，且 Node 24 仍存在 `better-sqlite3` ABI 漂移。
+- 轨道回收结果：
+  - Recorder 轨道已完成并并入协调分支：
+    - 子代理提交：`5cded6014730a0c6c0ed7c54e7ab12d181a29665`
+    - 协调分支提交：`8228aae feat: 增强 Recorder 真实页面语义与去噪`
+    - 主代理复验：`PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test`
+  - Runtime 轨道已完成并并入协调分支：
+    - 子代理提交：`f8ab81898b3b57a6cfa4758b2672833331708e38`
+    - 协调分支提交：`07d4d02 增强真实页面 runtime 稳定执行能力`
+    - 主代理复验：
+      - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/shared --filter @flowweave/flow-dsl --filter @flowweave/page-intelligence build`
+      - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime typecheck`
+      - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test`
+  - Environment 轨道已完成并并入协调分支：
+    - 原 worktree 分支提交：`343afe1 feat: 打通 Studio 运行环境与变量注入`
+    - 协调分支提交：`1051e10 feat: 打通 Studio 运行环境与变量注入`
+    - 说明：Environment 原子代理已回收，剩余工作仅为 worktree 已有改动的主代理复验、提交与并回，未再重新派发新子代理，避免重复写入同一批文件。
+    - 主代理复验：
+      - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/ui build`
+      - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/project-knowledge build`
+      - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime build`
+      - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/project-knowledge test`
+      - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+- 编码后声明：
+  - 本轮新增并回的能力集中在 Studio 环境与变量链路：
+    - `apps/studio/electron/services.ts`：运行环境解析、默认环境回落、执行缓存补齐。
+    - `apps/studio/src/App.tsx`：环境切换、`baseUrl`/`storageStatePath` 输入、运行变量注入。
+    - `apps/studio/src/flow-step-format.ts`：补齐 `select`、`setChecked`、`press`、`upload`、增强版 `wait` 的展示。
+    - `packages/project-knowledge/src/repository.ts`：`storageStatePath` 持久化与旧库列兼容。
+  - 复用了以下既有组件与模式：
+    - `ProjectKnowledgeRepository` 作为环境持久化单一入口。
+    - `RunFlowOptions` 作为 Studio → Electron → Runtime 的运行参数桥接。
+    - `playwright-runner.ts` 既有执行主链路，不新建平行执行器。
+- 统一验收结果：
+  - 分层验证通过：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/flow-dsl test`
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test`
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test`
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/page-intelligence test`
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/project-knowledge test`
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+  - 仓库级验证通过：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm typecheck`
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm test`
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm build`
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+  - `pnpm smoke` 最终 `e2e:login` 成功：
+    - 项目 ID：`dd27be49-18ea-46e8-9f93-5de8eea0aa10`
+    - 执行 ID：`81ee4ad6-c3f3-4a71-8ac3-fb77beec6f98`
+    - 共 `4` 个步骤，全部 `success`
+- 当前结论：
+  - 真实页面稳定性第一轮主线已完成基础接口冻结、录制增强、执行增强、环境注入贯通、脆弱性静态分析增强与真实页面基准夹具落盘。
+  - 当前协调分支与 Environment worktree 均已恢复干净状态，可继续进入 Diagnostics 第二阶段或 Benchmarks 第二阶段。

@@ -1,6 +1,6 @@
 # 真实页面稳定性增强并行编排板
 
-更新时间：2026-06-06 15:08 CST
+更新时间：2026-06-06 15:35 CST
 
 ## 1. 主目标
 
@@ -32,9 +32,9 @@
 | Foundation | `Kepler` | `019e9bb4-15c4-7d61-bd88-c9632921efc7` | completed | 已提交 `7d54477` 与返修 `d8a3618`，主代理复验通过并并入协调分支 |
 | Benchmarks（第一阶段） | `Halley` | `019e9bb4-4cd4-7931-a911-c2f8c7521167` | completed | 已提交 `c04e27a`，主代理审查后已并入协调分支 |
 | Diagnostics（第一阶段） | `Kuhn` | `019e9bb4-8113-7092-b538-a6e7ef66d76c` | completed | 已提交 `adf388e`，主代理审查后已并入协调分支 |
-| Recorder | `Planck` | `019e9bc2-28d0-7852-87c5-b1ee7fe13742` | running | 基于 Foundation 最新基线，负责录制语义与去噪增强 |
-| Runtime | `Faraday` | `019e9bc2-76c9-7a33-8fa2-ae2f26a4eedf` | running | 基于 Foundation 最新基线，负责执行步骤、等待与定位增强 |
-| Environment | `Galileo` | `019e9bc2-b90a-7250-b8ca-90e4c28416c0` | running | 基于 Foundation 最新基线，负责环境、变量与会话注入贯通 |
+| Recorder | `Planck` | `019e9bc2-28d0-7852-87c5-b1ee7fe13742` | completed | 已提交 `5cded60`，主代理复验后并入协调分支提交 `8228aae` |
+| Runtime | `Faraday` | `019e9bc2-76c9-7a33-8fa2-ae2f26a4eedf` | completed | 已提交 `f8ab818`，主代理复验后并入协调分支提交 `07d4d02` |
+| Environment | `Galileo` | `019e9bc2-b90a-7250-b8ca-90e4c28416c0` | completed | 原子代理已回收，主代理基于 worktree 改动完成复验、提交 `343afe1` 并并回协调分支 `1051e10` |
 
 ## 4. 执行顺序
 
@@ -58,13 +58,40 @@
    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/project-knowledge typecheck`
 2. Benchmarks 第一阶段已完成，4 个本地 fixture 与矩阵文档已并回协调分支。
 3. Diagnostics 第一阶段已完成并通过主代理复验：`pnpm --filter @flowweave/page-intelligence test`。
-4. Recorder / Runtime / Environment 已从协调分支最新提交 `c517035` 快进同步后启动正式开发。
+4. Recorder 已完成并通过主代理复验：`pnpm --filter @flowweave/recorder test`。
+5. Runtime 已完成并通过主代理复验：
+   - `pnpm --filter @flowweave/shared --filter @flowweave/flow-dsl --filter @flowweave/page-intelligence build`
+   - `pnpm --filter @flowweave/runtime typecheck`
+   - `pnpm --filter @flowweave/runtime test`
+6. Environment 已完成并通过主代理复验：
+   - `pnpm --filter @flowweave/ui build`
+   - `pnpm --filter @flowweave/project-knowledge build`
+   - `pnpm --filter @flowweave/runtime build`
+   - `pnpm --filter @flowweave/project-knowledge test`
+   - `pnpm --filter @flowweave/app-studio typecheck`
+7. 统一集成验收已完成：
+   - `pnpm typecheck`
+   - `pnpm test`
+   - `pnpm build`
+   - `pnpm smoke`
 
 ### 阶段 C：统一集成
 
 1. 按顺序合并五轨道。
 2. 解决冲突后运行 `pnpm smoke`。
 3. 通过后更新 `.codex/verification-report.md` 与本编排板。
+
+当前状态：已完成。
+  - 协调分支当前已包含：
+    - `5be3cc7 增强页面脆弱性静态分析规则`
+    - `5d00cc2 新增真实页面基准页面与矩阵文档`
+    - `871ee25 feat: 冻结真实页面稳定性基础接口`
+    - `c517035 fix: 调整 wait 步骤校验挂载方式`
+    - `8228aae feat: 增强 Recorder 真实页面语义与去噪`
+    - `25eef55 fix: 修正 Flow DSL 步骤类型导出`
+    - `07d4d02 增强真实页面 runtime 稳定执行能力`
+    - `1051e10 feat: 打通 Studio 运行环境与变量注入`
+  - Node 20 统一验收结果：全部通过。
 
 ## 5. 验收门槛
 
@@ -97,6 +124,12 @@
 
 ## 7. 风险清单
 
-- Foundation 未先冻结即并行开工，会导致 schema 冲突。
-- Runtime 与 Diagnostics 同时改 `playwright-runner.ts`，必须通过阶段顺序避免直接并发写入。
-- Environment 与 Diagnostics 都会碰 Studio UI，必须把 Diagnostics 限制为脆弱性与路径展示，不提前改运行表单。
+- `Node 24` 仍存在 `better-sqlite3` ABI 漂移风险，因此当前本地与 CI 继续以 `Node 20` 作为稳定基线。
+- Diagnostics 第二阶段若深入 Studio 调试 UI，仍需避免与后续 Environment 演进再次并发写同一区域。
+- Benchmarks 第二阶段若引入更重的真实站点 smoke，需单独控制运行时长与外部依赖波动。
+
+## 8. 下一轮候选
+
+1. Diagnostics 第二阶段：把 fragility 与定位诊断结果在 Studio 中做更可读的调试展示。
+2. Benchmarks 第二阶段：补更多异步加载、列表筛选、登录态页面基准，并形成更细的成功率矩阵。
+3. Node 24 兼容排查：单独评估 `better-sqlite3` ABI 与安装策略，决定是否支持双 Node 基线。

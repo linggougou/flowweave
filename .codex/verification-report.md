@@ -100,3 +100,54 @@
 - 风险评估评分：93
 - 综合评分：94
 - 建议：通过
+
+## 2026-06-06 真实页面稳定性第一轮集成验收
+
+### 验证范围
+
+- Recorder / Runtime / Environment 三条主轨道是否已完整并回协调分支。
+- `flow-dsl`、`recorder`、`runtime`、`page-intelligence`、`project-knowledge` 局部验证是否全部通过。
+- `app-studio` 类型检查、仓库级 `typecheck / test / build / smoke` 是否在 Node 20 基线下通过。
+- Studio 环境注入与变量链路是否已具备端到端可运行状态。
+
+### 验证结果
+
+1. 轨道并回检查通过。
+   - Recorder 已并入 `8228aae feat: 增强 Recorder 真实页面语义与去噪`。
+   - Runtime 已并入 `07d4d02 增强真实页面 runtime 稳定执行能力`。
+   - Environment 已并入 `1051e10 feat: 打通 Studio 运行环境与变量注入`。
+2. Environment 轨道局部验收通过。
+   - 先执行依赖构建：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/ui build`
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/project-knowledge build`
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime build`
+   - 再执行：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/project-knowledge test`，`10/10` 通过。
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`，退出码为 `0`。
+3. 分层包级验证通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/flow-dsl test`，`4/4` 通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test`，`25/25` 通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test`，`7/7` 通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/page-intelligence test`，`7/7` 通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/project-knowledge test`，`10/10` 通过。
+4. 仓库级集成验证通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm typecheck`，通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm test`，通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm build`，通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`，通过。
+5. 端到端登录烟测通过。
+   - `pnpm smoke` 内部执行 `tsx examples/run-login-flow.ts`。
+   - 结果为 `status: success`，共 `4` 个步骤全部成功。
+6. 残余风险已识别。
+   - `Node 24` 仍有 `better-sqlite3` ABI 漂移风险，本轮不作为验收阻塞，继续以仓库既定 `Node 20` 作为真实运行基线。
+   - Diagnostics 第二阶段与 Benchmarks 第二阶段尚未展开，当前验收范围不覆盖更深入的调试 UI 与更大规模真实站点基准。
+
+### 综合结论
+
+- 代码质量评分：96
+- 测试覆盖评分：95
+- 规范遵循评分：97
+- 战略匹配评分：96
+- 风险评估评分：93
+- 综合评分：95
+- 建议：通过
