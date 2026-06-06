@@ -83,12 +83,12 @@ export function StepLogTable({
               )}
             </td>
             <td className="fw-step-screenshot">
-              {step.diagnosticPath ? (
+              {step.diagnosticPath || step.pageSnapshotPath ? (
                 onInspectDiagnostic ? (
                   <button
                     type="button"
                     className="fw-step-screenshot-btn"
-                    title={step.diagnosticPath}
+                    title={step.diagnosticPath ?? step.pageSnapshotPath}
                     onClick={() => onInspectDiagnostic(step)}
                   >
                     查看诊断
@@ -97,13 +97,15 @@ export function StepLogTable({
                   <button
                     type="button"
                     className="fw-step-screenshot-btn"
-                    title={step.diagnosticPath}
-                    onClick={() => onOpenDiagnostic(step.diagnosticPath!)}
+                    title={step.diagnosticPath ?? step.pageSnapshotPath}
+                    onClick={() => onOpenDiagnostic(step.diagnosticPath ?? step.pageSnapshotPath!)}
                   >
-                    {shortenPath(step.diagnosticPath)}
+                    {shortenPath(step.diagnosticPath ?? step.pageSnapshotPath!)}
                   </button>
                 ) : (
-                  <span title={step.diagnosticPath}>{shortenPath(step.diagnosticPath)}</span>
+                  <span title={step.diagnosticPath ?? step.pageSnapshotPath}>
+                    {shortenPath(step.diagnosticPath ?? step.pageSnapshotPath!)}
+                  </span>
                 )
               ) : (
                 "—"

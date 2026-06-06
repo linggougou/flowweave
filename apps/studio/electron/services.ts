@@ -5,7 +5,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import type { FlowDocument } from "@flowweave/flow-dsl";
-import type { FragilityIssue, PageSnapshotSummary } from "@flowweave/page-intelligence";
+import type {
+  FragilityAnalysisContext,
+  FragilityIssue,
+  PageSnapshotSummary,
+} from "@flowweave/page-intelligence";
 import {
   ProjectKnowledgeRepository,
   type ExecutionResult as KnowledgeExecutionResult,
@@ -336,11 +340,14 @@ function toKnowledgeExecution(
   };
 }
 
-function buildFragilityIssues(flow?: FlowDocument): FragilityIssue[] | undefined {
+function buildFragilityIssues(
+  flow?: FlowDocument,
+  context: FragilityAnalysisContext = {},
+): FragilityIssue[] | undefined {
   if (!flow) {
     return undefined;
   }
-  return analyzeFlowFragility(flow);
+  return analyzeFlowFragility(flow, context);
 }
 
 export type RunFlowServiceOptions = RunFlowOptions;
@@ -387,7 +394,10 @@ export async function runFlow(
     startedAt,
     finishedAt: new Date().toISOString(),
     environmentName: environment.name,
-    fragilityIssues: buildFragilityIssues(flow),
+    fragilityIssues: buildFragilityIssues(flow, {
+      baseUrl: environment.baseUrl,
+      variables: options.variables,
+    }),
   };
 
   if (runtimeResult.error) {

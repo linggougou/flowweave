@@ -125,6 +125,25 @@ function parseVariableInput(
   }
 }
 
+function buildFragilityVariableContext(
+  flow: FlowDocument | null,
+  variableInputs: VariableInputs,
+): Record<string, string> | undefined {
+  if (!flow) {
+    return undefined;
+  }
+
+  const entries = flow.variables.flatMap((variable) => {
+    const rawValue = variableInputs[variable.name];
+    if (!rawValue || rawValue.trim().length === 0) {
+      return [];
+    }
+    return [[variable.name, rawValue] as const];
+  });
+
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
 export function App() {
   const [tab, setTab] = useState<MainTab>("flow");
   const [projects, setProjects] = useState<StudioProject[]>([]);
@@ -449,7 +468,12 @@ export function App() {
   };
 
   const flowFragilityIssues =
-    currentFlow !== null ? analyzeFlowFragility(currentFlow) : [];
+    currentFlow !== null
+      ? analyzeFlowFragility(currentFlow, {
+          baseUrl: baseUrlDraft.trim(),
+          variables: buildFragilityVariableContext(currentFlow, variableInputs),
+        })
+      : [];
 
   const flowStepRows = currentFlow ? flowStepsToRows(currentFlow.steps) : [];
 
