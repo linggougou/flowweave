@@ -2574,3 +2574,95 @@
   - 残余风险：
     - `wait visible` 仍是启发式规则，极少数“用户自己停顿后再操作”的同页场景可能插入保守 wait。
     - 如果最后一次提交后没有后继事件，导出侧仍无法自动补尾部 wait，后续需要 recorded replay 继续兜底。
+
+## 2026-06-06 Wave 5 轨道回收 - Runtime Recorded Replay Expansion
+
+- 时间：2026-06-06 23:43:30 CST
+- 轨道信息：
+  - worktree：`.worktrees/codex-real-page-runtime-recorded-replay`
+  - 分支：`codex/real-page-runtime-recorded-replay`
+  - 子代理：`Fermat / 019e9d84-1c47-7cf0-a3a8-1d2e8e3a78bd`
+  - 子代理提交：`384db3a26af3231a13440247ecf13f8c16938fbb`
+- 主代理边界复核：
+  - 实际集成文件仅保留：
+    - `packages/runtime/src/playwright-runner.test.ts`
+  - 未带入 worktree 私有 `.codex` 留痕文件。
+  - 未改动 runtime 生产实现、Recorder、Benchmarks 或 Studio 文件，符合 Runtime 轨道边界。
+- 新增 recorded replay 场景：
+  - `contenteditable-editor`
+  - `session-expired-retry`
+  - `bulk-cross-page-selection`
+- 审查结论：
+  - 只读审查结论：无阻塞问题，建议合并。
+  - reviewer 提醒的低风险点：
+    - `contenteditable-editor` 仍可补最终内容值 / 摘要断言。
+    - `session-expired-retry` 仍可补 storage state 是否被页面消费的断言。
+    - `bulk-cross-page-selection` 仍可补最终批次集合断言。
+- Node 20 主代理复验：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+    - 结果：通过，`16/16`
+    - 关键耗时：约 `47.29s`
+- 主代理结论：
+  - 无阻塞问题，允许并回协调分支。
+  - 残余风险：
+    - 当前新增用例更偏“整链可跑通”的闭环回归，最终业务语义断言仍偏弱。
+
+## 2026-06-06 提交审查 - Recorder 轨 ed7a78dd7087eef8d80c72e1c35041eec4a19c3b
+
+- 时间：2026-06-06 23:46:00 CST
+- 任务：对 `ed7a78d` 做只读代码审查，重点检查：
+  - 是否符合 Recorder Async Stabilization 规划边界
+  - `keypress` flush 与 wait 推断是否存在行为回归风险
+  - 测试是否足够覆盖
+- 工具与替代说明：
+  - `sequential-thinking`：当前环境不可用；改为主代理显式分阶段分析并把证据落盘。
+  - `desktop-commander` / `context7` / `github.search_code`：当前环境不可用；改用 `codegraph_*`、`git show`、`rg` 与本地命令完成同等核查。
+- 编码前/审查前上下文：
+  - 已生成上下文摘要：`.codex/context-summary-review-recorder-async-stability-ed7a78d.md`
+  - 已核对必读文档：
+    - `docs/architecture/overview.md`
+    - `docs/domain/flow-dsl.md`
+    - `docs/adr/README.md`
+    - `docs/superpowers/specs/2026-05-25-web-automation-platform-design.md`
+    - `docs/superpowers/plans/2026-05-26-run-first-roadmap.md`
+    - `docs/superpowers/specs/2026-06-06-real-page-stability-wave5-design.md`
+    - `docs/superpowers/plans/2026-06-06-real-page-stability-wave5-plan.md`
+    - `docs/superpowers/plans/2026-06-06-real-page-stability-wave5-orchestration.md`
+- 结构化检索结果：
+  - 目标提交文件：
+    - `apps/extension/entrypoints/content.ts`
+    - `apps/extension/lib/content-contract.test.ts`
+    - `packages/recorder/src/normalize.ts`
+    - `packages/recorder/src/normalize.test.ts`
+  - 相似/依赖实现：
+    - `packages/recorder/src/step-filter.ts`
+    - `packages/recorder/src/step-filter.test.ts`
+    - `packages/runtime/src/playwright-runner.test.ts`
+- 审查证据：
+  - 直接读取 `ed7a78d` 与父提交源码，确认 Recorder 轨未改动 `runtime/examples/studio`，文件边界符合 orchestration 授权范围。
+  - 发现 `packages/recorder/src/normalize.ts` 的 `inferWaitStep()` 在 `currentEvent.url !== nextEvent.url` 时无时间间隔门槛，任何 URL 变化都会插入 `wait urlIncludes`。
+  - 与计划对照：
+    - 计划 Task 1 明确要求“当相邻事件存在明显异步间隔且下一目标发生变化时”再补 wait。
+    - 当前实现仅对同页 `visible` wait 使用 `500ms` 门槛；跨 URL 分支没有同等收敛。
+- 本地验证：
+  - 提交快照目录：`/tmp/flowweave-ed7a78d-eXfijC`
+  - 验证命令：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --dir /tmp/flowweave-ed7a78d-eXfijC --filter @flowweave/app-extension test -- lib/content-contract.test.ts`
+      - 结果：通过，`4/4`
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --dir /tmp/flowweave-ed7a78d-eXfijC --filter @flowweave/recorder test -- src/normalize.test.ts src/step-filter.test.ts`
+      - 结果：通过，`37/37`
+    - 为运行 runtime recorded replay，补建依赖包：
+      - `pnpm --dir /tmp/flowweave-ed7a78d-eXfijC install --offline --frozen-lockfile`
+      - `pnpm --dir /tmp/flowweave-ed7a78d-eXfijC --filter @flowweave/shared --filter @flowweave/flow-dsl --filter @flowweave/recorder build`
+      - `pnpm --dir /tmp/flowweave-ed7a78d-eXfijC --filter @flowweave/page-intelligence build`
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --dir /tmp/flowweave-ed7a78d-eXfijC --filter @flowweave/runtime test -- playwright-runner.test.ts`
+      - 结果：失败，`12/13` 通过
+      - 失败点：`packages/runtime/src/playwright-runner.test.ts:567`
+      - 现象：`spa-route` recorded replay 结果从 `["navigate","click","click"]` 变为 `["navigate","click","wait","click"]`
+- 审查结论摘要：
+  - 阻塞问题已确认：
+    - 这次 wait 推断不仅覆盖“明显异步间隔”，还会覆盖现有快速 SPA 路由跳转，导致 recorded replay 产物形状变化并打破现有 runtime 测试契约。
+  - `keypress` flush 本身未发现直接阻塞回归：
+    - 提交型按键前 flush、`change/blur` 优先消费 pending fill 的基本顺序已被单测覆盖。
+  - 测试覆盖不足：
+    - 新增单测只覆盖 extension / recorder 层，没有覆盖本次已经实测暴露出来的 runtime recorded replay 回归面。

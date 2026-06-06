@@ -332,6 +332,46 @@
 - 风险评估评分：90
 - 综合评分：94
 - 建议：通过
+
+## 2026-06-06 Runtime Recorded Replay Expansion 集成验收
+
+### 验证范围
+
+- 验证 `384db3a26af3231a13440247ecf13f8c16938fbb` 的 Runtime 轨道实现是否严格停留在 recorded replay 测试扩展边界。
+- 验证新增 `contenteditable-editor`、`session-expired-retry`、`bulk-cross-page-selection` 三条 recorded replay 回归在协调分支与 Recorder 新能力共同存在时仍通过。
+- 结合只读审查结果，判断是否存在阻塞级回归风险。
+
+### 验证结果
+
+1. 轨道边界符合预期。
+   - 实际并入的文件只有 `packages/runtime/src/playwright-runner.test.ts`。
+   - 没有改动 runtime 生产实现和其它轨道文件。
+
+2. Node 20 主代理复测通过。
+   - `pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`：通过，`16/16`
+   - 新增 3 条 recorded replay 用例全部通过，且与刚并入的 Recorder 异步稳定化能力兼容。
+
+3. 只读审查无阻塞问题。
+   - reviewer 结论为“建议合并”。
+   - 主要建议是后续补强 3 条新增场景的最终页面语义断言，而非阻止本次并回。
+
+### Findings
+
+1. 无阻塞问题。
+   - 当前实现满足 Wave 5 Runtime 轨道目标，主代理复测通过，且 reviewer 未发现边界或行为回归问题。
+2. 低风险断言不足：`contenteditable-editor` 还未校验最终保存内容是否与输入变量完全一致。
+3. 低风险断言不足：`session-expired-retry` 还未显式证明 storage state 已被页面消费。
+4. 低风险断言不足：`bulk-cross-page-selection` 还未核对最终批次集合，只核对了计数与结果文案。
+
+### 综合结论
+
+- 代码质量评分：94
+- 测试覆盖评分：90
+- 规范遵循评分：97
+- 战略匹配评分：96
+- 风险评估评分：91
+- 综合评分：94
+- 建议：通过
 - 建议：通过
 
 ## 2026-06-06 旧历史执行兼容提示验收（复核补修）

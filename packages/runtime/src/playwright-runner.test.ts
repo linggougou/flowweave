@@ -25,6 +25,15 @@ const delayedPanelFixtureUrl = pathToFileURL(
 const spaRouteFixtureUrl = pathToFileURL(join(fixturesDir, "spa-route.html")).href;
 const filterableListFixtureUrl = pathToFileURL(join(fixturesDir, "filterable-list.html")).href;
 const uploadFormFixtureUrl = pathToFileURL(join(fixturesDir, "upload-form.html")).href;
+const contenteditableEditorFixtureUrl = pathToFileURL(
+  join(fixturesDir, "contenteditable-editor.html"),
+).href;
+const sessionExpiredRetryFixtureUrl = pathToFileURL(
+  join(fixturesDir, "session-expired-retry.html"),
+).href;
+const bulkCrossPageSelectionFixtureUrl = pathToFileURL(
+  join(fixturesDir, "bulk-cross-page-selection.html"),
+).href;
 
 const baseMeta = {
   createdAt: "2026-05-26T00:00:00.000Z",
@@ -653,6 +662,314 @@ describe("executeFlow", () => {
       "navigate",
       "fill",
       "select",
+      "click",
+      "click",
+    ]);
+  });
+
+  it("支持将录制事件构建出的 contenteditable-editor Flow 直接回放", async () => {
+    const flow = buildFlowFromEvents(
+      [
+        parseRecordedEvent({
+          id: "evt_nav_contenteditable",
+          type: "navigate",
+          timestamp: 0,
+          url: contenteditableEditorFixtureUrl,
+          payload: {
+            url: "{{fixture.file}}",
+            waitUntil: "domcontentloaded",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_focus_editor",
+          type: "click",
+          timestamp: 100,
+          url: contenteditableEditorFixtureUrl,
+          payload: {
+            selector: "#editor-body",
+            role: "textbox",
+            name: "交接备注",
+            tagName: "div",
+            textSample: "已补齐截图与重试说明",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_fill_editor",
+          type: "fill",
+          timestamp: 180,
+          url: contenteditableEditorFixtureUrl,
+          payload: {
+            selector: "#editor-body",
+            role: "textbox",
+            name: "交接备注",
+            value: "{{noteContent}}",
+            tagName: "div",
+            textSample: "已补齐截图与重试说明",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_save_note",
+          type: "click",
+          timestamp: 260,
+          url: contenteditableEditorFixtureUrl,
+          payload: {
+            selector: "#save-note",
+            role: "button",
+            name: "保存备注",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_note_status",
+          type: "click",
+          timestamp: 340,
+          url: contenteditableEditorFixtureUrl,
+          payload: {
+            selector: "#note-status",
+            text: "已保存",
+          },
+        }),
+      ],
+      buildRecordedFlowMeta("flow_recorded_contenteditable_editor", "录制富文本备注流程"),
+    );
+
+    expect(flow.variables).toEqual([
+      { name: "fixture.file", type: "string", required: true },
+      { name: "noteContent", type: "string", required: true },
+    ]);
+    expect(flow.steps.map((step) => step.type)).toEqual([
+      "navigate",
+      "fill",
+      "click",
+      "click",
+    ]);
+
+    const result = await executeFlow(flow, {
+      headless: true,
+      baseUrl: fixturesBaseUrl,
+      variables: {
+        "fixture.file": "contenteditable-editor.html",
+        noteContent: "已补齐截图与重试说明，待值班同学二次复核。",
+      },
+    });
+
+    expect(result.status).toBe("success");
+    expect(result.steps.map((step) => step.type)).toEqual([
+      "navigate",
+      "fill",
+      "click",
+      "click",
+    ]);
+  });
+
+  it("支持将录制事件构建出的 session-expired-retry Flow 直接回放", async () => {
+    const { server, baseUrl } = await startStaticServer(fixturesDir);
+    cleanupServers.add(server);
+    const sessionExpiredRetryUrl = new URL("session-expired-retry.html", baseUrl).toString();
+
+    const storageDir = mkdtempSync(join(tmpdir(), "fw-runtime-recorded-session-expired-"));
+    cleanupPaths.add(storageDir);
+    const storageStatePath = join(storageDir, "storage-state.json");
+    writeFileSync(
+      storageStatePath,
+      JSON.stringify(
+        {
+          cookies: [],
+          origins: [
+            {
+              origin: new URL(baseUrl).origin,
+              localStorage: [
+                {
+                  name: "flowweave:session-user",
+                  value: "测试用户",
+                },
+                {
+                  name: "flowweave:session-status",
+                  value: "expired",
+                },
+              ],
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+
+    const flow = buildFlowFromEvents(
+      [
+        parseRecordedEvent({
+          id: "evt_nav_session_retry",
+          type: "navigate",
+          timestamp: 0,
+          url: sessionExpiredRetryUrl,
+          payload: {
+            url: "{{fixture.file}}",
+            waitUntil: "domcontentloaded",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_refresh_session",
+          type: "click",
+          timestamp: 100,
+          url: sessionExpiredRetryUrl,
+          payload: {
+            selector: "#refresh-session",
+            role: "button",
+            name: "恢复会话",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_retry_session",
+          type: "click",
+          timestamp: 220,
+          url: sessionExpiredRetryUrl,
+          payload: {
+            selector: "#retry-session",
+            role: "button",
+            name: "再次重试",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_refresh_result",
+          type: "click",
+          timestamp: 340,
+          url: sessionExpiredRetryUrl,
+          payload: {
+            selector: "#refresh-result",
+            text: "第 2 次重试成功",
+          },
+        }),
+      ],
+      buildRecordedFlowMeta("flow_recorded_session_expired_retry", "录制会话恢复重试流程"),
+    );
+
+    expect(flow.variables).toEqual([{ name: "fixture.file", type: "string", required: true }]);
+    expect(flow.steps.map((step) => step.type)).toEqual([
+      "navigate",
+      "click",
+      "click",
+      "click",
+    ]);
+
+    const result = await executeFlow(flow, {
+      headless: true,
+      baseUrl,
+      storageStatePath,
+      variables: {
+        "fixture.file": "session-expired-retry.html",
+      },
+    });
+
+    expect(result.status).toBe("success");
+    expect(result.steps.map((step) => step.type)).toEqual([
+      "navigate",
+      "click",
+      "click",
+      "click",
+    ]);
+  });
+
+  it("支持将录制事件构建出的 bulk-cross-page-selection Flow 直接回放", async () => {
+    const flow = buildFlowFromEvents(
+      [
+        parseRecordedEvent({
+          id: "evt_nav_bulk_cross_page",
+          type: "navigate",
+          timestamp: 0,
+          url: bulkCrossPageSelectionFixtureUrl,
+          payload: {
+            url: "{{fixture.file}}",
+            waitUntil: "domcontentloaded",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_check_batch_301",
+          type: "click",
+          timestamp: 100,
+          url: bulkCrossPageSelectionFixtureUrl,
+          payload: {
+            selector: "#select-batch-301",
+            inputType: "checkbox",
+            checked: true,
+            tagName: "input",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_next_page",
+          type: "click",
+          timestamp: 180,
+          url: bulkCrossPageSelectionFixtureUrl,
+          payload: {
+            selector: "#next-page",
+            role: "button",
+            name: "下一页",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_check_batch_304",
+          type: "click",
+          timestamp: 260,
+          url: bulkCrossPageSelectionFixtureUrl,
+          payload: {
+            selector: "#select-batch-304",
+            inputType: "checkbox",
+            checked: true,
+            tagName: "input",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_submit_selection",
+          type: "click",
+          timestamp: 340,
+          url: bulkCrossPageSelectionFixtureUrl,
+          payload: {
+            selector: "#submit-selection",
+            role: "button",
+            name: "提交批量归档",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_result_status",
+          type: "click",
+          timestamp: 420,
+          url: bulkCrossPageSelectionFixtureUrl,
+          payload: {
+            selector: "#result-status",
+            text: "已跨 2 页提交 2 条归档",
+          },
+        }),
+      ],
+      buildRecordedFlowMeta(
+        "flow_recorded_bulk_cross_page_selection",
+        "录制跨页批量选择流程",
+      ),
+    );
+
+    expect(flow.variables).toEqual([{ name: "fixture.file", type: "string", required: true }]);
+    expect(flow.steps.map((step) => step.type)).toEqual([
+      "navigate",
+      "setChecked",
+      "click",
+      "setChecked",
+      "click",
+      "click",
+    ]);
+
+    const result = await executeFlow(flow, {
+      headless: true,
+      baseUrl: fixturesBaseUrl,
+      variables: {
+        "fixture.file": "bulk-cross-page-selection.html",
+      },
+    });
+
+    expect(result.status).toBe("success");
+    expect(result.steps.map((step) => step.type)).toEqual([
+      "navigate",
+      "setChecked",
+      "click",
+      "setChecked",
       "click",
       "click",
     ]);
