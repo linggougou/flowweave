@@ -35,6 +35,12 @@ type BackgroundModule = {
   ) => (message: ExtensionMessage) => Promise<unknown>;
 };
 
+type RuntimeMessageListener = (
+  message: ExtensionMessage,
+  sender: unknown,
+  sendResponse: (response?: unknown) => void,
+) => boolean;
+
 async function loadBackgroundModule(): Promise<BackgroundModule> {
   vi.resetModules();
   vi.stubGlobal("defineBackground", (callback: () => void) => callback());
@@ -49,6 +55,30 @@ async function loadBackgroundModule(): Promise<BackgroundModule> {
     },
   });
   return (await import("../entrypoints/background.js")) as BackgroundModule;
+}
+
+async function loadBackgroundModuleWithRegisteredListener(browserStub: Record<string, unknown>): Promise<{
+  listener: RuntimeMessageListener;
+}> {
+  vi.resetModules();
+  vi.stubGlobal("defineBackground", (callback: () => void) => callback());
+  const addListener = vi.fn();
+  vi.stubGlobal("browser", {
+    sidePanel: {
+      setPanelBehavior: vi.fn().mockResolvedValue(undefined),
+    },
+    runtime: {
+      onMessage: {
+        addListener,
+      },
+    },
+    ...browserStub,
+  });
+  await import("../entrypoints/background.js");
+  expect(addListener).toHaveBeenCalledTimes(1);
+  const listener = addListener.mock.calls[0]?.[0] as RuntimeMessageListener | undefined;
+  expect(listener).toBeTypeOf("function");
+  return { listener: listener as RuntimeMessageListener };
 }
 
 function createSession(overrides?: {
@@ -233,6 +263,115 @@ describe("background extension contract", () => {
     });
   });
 
+  it("同步知识库消息优先使用 message.apiBase，而不是存储中的 API 地址", async () => {
+    const backgroundModule = await loadBackgroundModule();
+
+    expect(backgroundModule.createBackgroundMessageHandler).toBeTypeOf("function");
+
+    const session = createSession({
+      events: [
+        {
+          id: "evt-1",
+          type: "fill",
+          timestamp: 1710000000000,
+          url: "https://example.com/form",
+          payload: {
+            selector: "#name",
+            value: "FlowWeave",
+          },
+        },
+      ],
+    });
+    const flow = {
+      id: "flow-session-12345678",
+      name: "录制流程",
+      steps: [{ type: "fill" }],
+    };
+    const getStoredApiBase = vi.fn().mockResolvedValue("http://127.0.0.1:4010");
+    const saveFlowToKnowledge = vi.fn().mockResolvedValue({
+      flowId: "flow-0002",
+      name: "录制流程",
+      projectId: "project-target",
+    });
+
+    const handleMessage = backgroundModule.createBackgroundMessageHandler?.({
+      loadSession: vi.fn().mockResolvedValue(session),
+      buildFlowFromEvents: vi.fn().mockReturnValue(flow),
+      saveFlowToKnowledge,
+      getStoredApiBase,
+      defaultKnowledgeApiBase: "http://127.0.0.1:3847",
+    });
+
+    await handleMessage?.({
+      type: MSG_SYNC_KNOWLEDGE,
+      projectId: "project-target",
+      apiBase: "http://127.0.0.1:9999",
+      changeMessage: "扩展侧栏同步",
+    });
+
+    expect(getStoredApiBase).not.toHaveBeenCalled();
+    expect(saveFlowToKnowledge).toHaveBeenCalledWith(
+      "http://127.0.0.1:9999",
+      "project-target",
+      flow,
+      "扩展侧栏同步",
+    );
+  });
+
+  it("同步知识库消息在存储中没有 API 地址时回退默认值", async () => {
+    const backgroundModule = await loadBackgroundModule();
+
+    expect(backgroundModule.createBackgroundMessageHandler).toBeTypeOf("function");
+
+    const session = createSession({
+      events: [
+        {
+          id: "evt-1",
+          type: "fill",
+          timestamp: 1710000000000,
+          url: "https://example.com/form",
+          payload: {
+            selector: "#name",
+            value: "FlowWeave",
+          },
+        },
+      ],
+    });
+    const flow = {
+      id: "flow-session-12345678",
+      name: "录制流程",
+      steps: [{ type: "fill" }],
+    };
+    const getStoredApiBase = vi.fn().mockResolvedValue(undefined);
+    const saveFlowToKnowledge = vi.fn().mockResolvedValue({
+      flowId: "flow-0003",
+      name: "录制流程",
+      projectId: "project-target",
+    });
+
+    const handleMessage = backgroundModule.createBackgroundMessageHandler?.({
+      loadSession: vi.fn().mockResolvedValue(session),
+      buildFlowFromEvents: vi.fn().mockReturnValue(flow),
+      saveFlowToKnowledge,
+      getStoredApiBase,
+      defaultKnowledgeApiBase: "http://127.0.0.1:3847",
+    });
+
+    await handleMessage?.({
+      type: MSG_SYNC_KNOWLEDGE,
+      projectId: "project-target",
+      changeMessage: "扩展侧栏同步",
+    });
+
+    expect(getStoredApiBase).toHaveBeenCalledTimes(1);
+    expect(saveFlowToKnowledge).toHaveBeenCalledWith(
+      "http://127.0.0.1:3847",
+      "project-target",
+      flow,
+      "扩展侧栏同步",
+    );
+  });
+
   it("同步知识库消息在会话为空时返回稳定错误", async () => {
     const backgroundModule = await loadBackgroundModule();
 
@@ -254,5 +393,40 @@ describe("background extension contract", () => {
       error: "暂无录制事件",
     });
     expect(saveFlowToKnowledge).not.toHaveBeenCalled();
+  });
+
+  it("background listener 会保持消息通道开启，并把 reject 包装成错误响应", async () => {
+    const { listener } = await loadBackgroundModuleWithRegisteredListener({
+      storage: {
+        session: {
+          get: vi.fn().mockRejectedValue(new Error("读取会话失败")),
+          set: vi.fn().mockResolvedValue(undefined),
+        },
+        local: {
+          get: vi.fn().mockResolvedValue({}),
+          set: vi.fn().mockResolvedValue(undefined),
+        },
+      },
+    });
+
+    let resolveResponse: ((response: unknown) => void) | undefined;
+    const responsePromise = new Promise<unknown>((resolve) => {
+      resolveResponse = resolve;
+    });
+    const sendResponse = vi.fn((response?: unknown) => {
+      resolveResponse?.(response);
+    });
+
+    const keepChannelOpen = listener(
+      { type: MSG_EXPORT_FLOW },
+      {},
+      sendResponse,
+    );
+
+    expect(keepChannelOpen).toBe(true);
+    await expect(responsePromise).resolves.toEqual({
+      ok: false,
+      error: "读取会话失败",
+    });
   });
 });
