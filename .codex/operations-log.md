@@ -3357,3 +3357,14 @@
 - 结论：
   - `tsx -> source import -> locator.evaluate` 真实入口已恢复，无需再保留临时调试输出。
   - Benchmarks P7 在协调分支最新 runtime 修复上完成最终验收，可进入 merge 提交与工作区清理阶段。
+- 收口动作：
+  - merge 提交：`494c34d merge: 合并重复行真实页面基准轨道`
+  - 已关闭子代理：
+    - `019e9dda-b11f-7f81-8fec-ea54ec84183a`（Runtime Disambiguation）
+    - `019e9dda-b1e4-70d0-9795-74304d6b46b1`（Benchmarks P7）
+  - 已删除 worktree：
+    - `.worktrees/codex-target-benchmarks-p7`
+    - `.worktrees/codex-target-runtime-disambiguation`
+  - 已删除分支：
+    - `codex/target-benchmarks-p7`
+    - `codex/target-runtime-disambiguation`
