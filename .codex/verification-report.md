@@ -3001,3 +3001,72 @@
 - 风险评估评分：93
 - 综合评分：97
 - 建议：通过（限 Wave 10 Runtime 首段）
+
+## 2026-06-07 Wave 10 Studio 动作回弹诊断与 Benchmarks 文档收口验收
+
+### 审查范围
+
+- `apps/studio/src/shared/studio-api-types.ts`
+- `apps/studio/src/shared/failure-insights.ts`
+- `apps/studio/src/shared/repair-suggestions.ts`
+- `apps/studio/src/DiagnosticInspector.tsx`
+- `apps/studio/src/shared/failure-insights.test.ts`
+- `apps/studio/src/shared/repair-suggestions.test.ts`
+- `apps/studio/src/DiagnosticInspector.test.tsx`
+- `docs/guides/fixture-matrix.md`
+- `.codex/context-summary-wave10-studio-runtime-cause.md`
+- `.codex/operations-log.md`
+- 关键提交：
+  - Benchmarks 文档轨：`4d440df 文档：收口 fixture 矩阵单一真相总表`
+  - Benchmarks 文档并回：`a33c8a1 Merge branch 'codex/real-page-wave10-benchmarks-p8' into codex/real-page-stability-program`
+  - Studio cause 轨：`ab9cf74 feat: 细化 Studio 动作回弹诊断`
+  - Studio cause 并回：`4b1293c Merge branch 'codex/real-page-wave10-studio-runtime-cause' into codex/real-page-stability-program`
+
+### 审查结果
+
+1. Wave 10 的第三条主线改进已经落地。
+   - runtime 首段新增的 `fill-value-reset`、`select-value-reset`、`checked-state-reset` 不再被 Studio 统称为“执行报错”。
+   - 当前 Studio 会把这三类 cause 升级成更可操作的失败类别、标题与修复建议，直接服务真实页面回放排障。
+2. 改动边界收敛合理。
+   - 数据链路没有扩协议、没有改知识库存储，也没有引入新的 UI 面板。
+   - 改动集中在 `apps/studio/src/shared/*` 与 `DiagnosticInspector.tsx`，属于对现有 diagnostic 消费层的增强。
+3. Benchmarks 文档单一真相已补齐。
+   - `docs/guides/fixture-matrix.md` 现在明确区分：
+     - `21` 条 Benchmarks fixture
+     - `1` 条登录专用 `login.html`
+     - `1` 条仅供 recorded replay 的运行期临时页 `placeholder-disambiguation`
+   - 文档口径与 `real-page` / `recorded replay` 基线数量保持一致。
+4. 主线并回后的 Node 20 验证充分。
+   - `pnpm --filter @flowweave/app-studio test -- src/shared/failure-insights.test.ts src/shared/repair-suggestions.test.ts src/DiagnosticInspector.test.tsx`
+     - 结果：通过，`21/21`
+   - `pnpm --filter @flowweave/app-studio test`
+     - 结果：通过，`52/52`
+   - `pnpm --filter @flowweave/app-studio typecheck`
+     - 结果：通过
+   - `pnpm --filter @flowweave/app-studio lint`
+     - 结果：通过
+   - `pnpm exec prettier --check docs/guides/fixture-matrix.md`
+     - 结果：通过
+5. 对“根 Vitest config 不覆盖 apps/studio”已做复核。
+   - `@flowweave/app-studio` 包级测试脚本会在 `apps/studio` 目录下按默认发现规则执行，新增测试已真实运行。
+   - 根 `vitest.config.ts` 的 include 规则确实不覆盖 `apps/studio/src`，但它不是当前包级测试的实际入口，因此不构成本轮阻塞。
+
+### Findings
+
+1. 未发现阻塞级问题。
+   - Studio 侧已经成功消费 Wave 10 首段新增的三类动作回弹 cause，且主线验证通过。
+2. 残余风险：`apps/studio` 仍缺少显式 `vitest.config.ts`。
+   - 当前测试依赖 Vitest 默认发现规则，行为可用，但未来若团队统一调整 Vitest 入口，可能再次引发“apps 测试是否被执行”的歧义。
+   - 这更像工程清晰度问题，不影响本轮功能正确性与并回。
+3. 残余风险：Studio 目前只细化了动作回弹类 runtime-error。
+   - detached、overlay interception、控件不可操作等更广泛的 runtime 执行根因，仍可继续在后续波次扩充。
+
+### 综合结论
+
+- 代码质量评分：97
+- 测试覆盖评分：95
+- 规范遵循评分：100
+- 战略匹配评分：98
+- 风险评估评分：94
+- 综合评分：97
+- 建议：通过

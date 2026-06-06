@@ -4444,3 +4444,173 @@
 - 当前状态：
   - Wave 10 已完成第一条主线改进。
   - Benchmarks / Docs 侧轨仍在进行中。
+
+## 2026-06-07 Wave 10 续跑接手状态
+
+- 时间：2026-06-07 06:21:16 CST
+- 当前主线：
+  - 分支：`codex/real-page-stability-program`
+  - 相对 `origin/codex/real-page-stability-program`：`ahead 17`
+  - 工作区状态：干净
+- 当前 Wave 10 worktree：
+  - `codex-real-page-wave10-benchmarks-p8`
+    - 分支：`codex/real-page-wave10-benchmarks-p8`
+    - 状态：存在未提交改动
+    - 当前文件：
+      - `examples/real-page-smoke.ts`
+      - `examples/recorded-replay-smoke.ts`
+      - `examples/run-real-page-smoke.ts`
+      - `packages/runtime/src/real-page-matrix.test.ts`
+      - `packages/runtime/src/recorded-replay-matrix.test.ts`
+  - `codex-real-page-wave10-runtime-resilience`
+    - 分支：`codex/real-page-wave10-runtime-resilience`
+    - 状态：业务提交已并回主线，待后续回收
+  - `codex-real-page-wave10-studio-runtime-cause`
+    - 分支：`codex/real-page-wave10-studio-runtime-cause`
+    - 状态：尚未开始写入
+- 当前继续策略：
+  1. 先审阅 Benchmarks 轨现有改动并做 Node 20 验收。
+  2. 若通过，则提交并回收 Benchmarks 轨。
+  3. 随后根据 runtime 首段现状，推进 Studio 轨对动作失败根因的消费。
+
+## 2026-06-07 Wave 10 Benchmarks 单一真相收口并回
+
+- 时间：2026-06-07 06:27:00 CST
+- Benchmarks 轨道：
+  - worktree：`.worktrees/codex-real-page-wave10-benchmarks-p8`
+  - 分支：`codex/real-page-wave10-benchmarks-p8`
+- 本轮关键改动：
+  - `examples/real-page-smoke.ts`
+    - 新增 `LATEST_REAL_PAGE_PROFILE`
+    - 新增 `getRealPageFixtureCatalog()`
+    - 抽出 `buildRealPageCaseSets()`，让 real-page profile 与 fixture catalog 共用同一份 case 集合
+  - `examples/recorded-replay-smoke.ts`
+    - 新增 recorded replay case catalog
+    - baseline 从 `13` 扩容到 `22`
+    - 补齐此前未覆盖的真实 fixture 家族：
+      - `checkbox-select`
+      - `delayed-panel`
+      - `modal-bulk-action`
+      - `session-expired-dashboard`
+      - `paginated-list`
+      - `drawer-edit-form`
+      - `toast-popconfirm`
+      - `tabbed-workspace`
+      - `empty-results-retry`
+  - `packages/runtime/src/real-page-matrix.test.ts`
+    - 改为基于 catalog 断言场景顺序与步数
+  - `packages/runtime/src/recorded-replay-matrix.test.ts`
+    - 改为基于 catalog 断言 recorded replay 全量口径
+  - `examples/run-real-page-smoke.ts`
+    - CLI 输出增加 fixture catalog 口径
+- 轨道 Node 20 验证（worktree 内）：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/shared --filter @flowweave/flow-dsl --filter @flowweave/recorder --filter @flowweave/page-intelligence --filter @flowweave/runtime build`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- recorded-replay-matrix.test.ts`
+    - 结果：通过，`1/1`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- real-page-matrix.test.ts`
+    - 结果：通过，`4/4`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:recorded-pages`
+    - 结果：通过，`22/22`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+    - 结果：通过，`21/21`
+- 轨道提交与并回：
+  - 轨道提交：`d94200c feat: 收敛真实页面矩阵单一真相`
+  - 主线合并：`Merge branch 'codex/real-page-wave10-benchmarks-p8' into codex/real-page-stability-program`
+- 主线并回后 Node 20 复核：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- recorded-replay-matrix.test.ts real-page-matrix.test.ts`
+    - 结果：通过，`5/5`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:recorded-pages`
+    - 结果：通过，`22/22`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+    - 结果：通过，`21/21`
+- 当前状态：
+  - Wave 10 已完成两条主线改进：
+    - Runtime 首段动作韧性
+    - Benchmarks 单一真相与 recorded gap 收口
+  - 下一步集中到 Studio 轨对 runtime `cause` 的消费与验收。
+
+## 2026-06-07 Wave 10 Studio runtime cause 续跑
+
+- 时间：2026-06-07 07:00:00 CST
+- 本轮目标：
+  - 在 Studio 侧消费 runtime-error diagnostic 的 `cause / errorCode / message`，把真实页面执行失败进一步整理成可操作的失败类别与修复建议。
+- 本轮已完成的上下文检索：
+  - 阅读 `apps/studio/src/shared/failure-insights.ts`
+  - 阅读 `apps/studio/src/shared/repair-suggestions.ts`
+  - 阅读 `apps/studio/src/DiagnosticInspector.tsx`
+  - 阅读 `apps/studio/src/shared/execution-history.ts`
+  - 阅读 `apps/studio/src/studio-client.ts`
+  - 阅读 `apps/studio/src/shared/failure-insights.test.ts`
+  - 阅读 `apps/studio/src/shared/repair-suggestions.test.ts`
+  - 阅读 `apps/studio/src/DiagnosticInspector.test.tsx`
+  - 阅读 `packages/runtime/src/playwright-runner.ts`
+- 本轮上下文摘要：
+  - 新建 `.codex/context-summary-wave10-studio-runtime-cause.md`
+- 编码前检查：
+  - 已查阅上下文摘要文件：`.codex/context-summary-wave10-studio-runtime-cause.md`
+  - 将复用以下组件：
+    - `buildFailureInsight()`：承接顶部失败洞察
+    - `buildDiagnosticRepairSuggestions()` 的排序与文案模式：保持 Studio 建议风格一致
+    - `isRuntimeErrorDiagnostic()`：作为 runtime-error 分类入口
+  - 将遵循命名约定：Studio 共享层逻辑放在 `apps/studio/src/shared/`
+  - 将遵循代码风格：中文摘要与建议标题短句化，测试与实现同目录
+  - 确认不重复造轮子：现有 diagnostic 数据链路已经可用，本轮只补消费逻辑与测试
+- 并行分工：
+  - 子代理 `Lorentz`：只读梳理 runtime-error 的 `cause/errorCode` 证据与推荐分类口径
+  - 子代理 `McClintock`：在 Benchmarks worktree 独立收口 `docs/guides/fixture-matrix.md` 并做最小 Node 20 校验
+
+## 2026-06-07 Wave 10 Studio cause 与 Benchmarks 文档并回
+
+- 时间：2026-06-07 07:20:00 CST
+- Benchmarks 文档轨：
+  - worktree：`.worktrees/codex-real-page-wave10-benchmarks-p8`
+  - 轨道提交：`4d440df 文档：收口 fixture 矩阵单一真相总表`
+  - 并回提交：`a33c8a1 Merge branch 'codex/real-page-wave10-benchmarks-p8' into codex/real-page-stability-program`
+  - 改动重点：
+    - `docs/guides/fixture-matrix.md`
+    - 明确 `examples/fixtures/` 共 `22` 个 HTML，其中 `21` 个属于 Benchmarks fixture，`login.html` 仅服务 `pnpm e2e:login`
+    - 明确 recorded replay `baseline` = `21` 个真实 fixture + `1` 个运行期临时页 `placeholder-disambiguation`
+    - 明确 `keyboard-command-palette` 已进入 real-page / recorded replay 基线口径
+- Studio cause 轨：
+  - worktree：`.worktrees/codex-real-page-wave10-studio-runtime-cause`
+  - 轨道提交：`ab9cf74 feat: 细化 Studio 动作回弹诊断`
+  - 并回提交：`4b1293c Merge branch 'codex/real-page-wave10-studio-runtime-cause' into codex/real-page-stability-program`
+  - 改动重点：
+    - `apps/studio/src/shared/studio-api-types.ts`
+      - 新增 `fill-value-reset` / `select-value-reset` / `checked-state-reset` 的共享 descriptor 与展示格式化函数
+    - `apps/studio/src/shared/failure-insights.ts`
+      - 新增 `action-state-reset` 分类，把动作回弹类 runtime-error 从笼统 `execution-error` 提升为可行动洞察
+    - `apps/studio/src/shared/repair-suggestions.ts`
+      - 让 runtime-error 在命中动作回弹 cause 时输出专用修复建议
+    - `apps/studio/src/DiagnosticInspector.tsx`
+      - 动作回弹 cause 显示友好中文说明，并展示对应修复建议
+    - `apps/studio/src/shared/failure-insights.test.ts`
+    - `apps/studio/src/shared/repair-suggestions.test.ts`
+    - `apps/studio/src/DiagnosticInspector.test.tsx`
+- 主线 Node 20 复核：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- src/shared/failure-insights.test.ts src/shared/repair-suggestions.test.ts src/DiagnosticInspector.test.tsx`
+    - 结果：通过，`21/21`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
+    - 结果：通过，`52/52`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio lint`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm exec prettier --check docs/guides/fixture-matrix.md`
+    - 结果：通过
+- 评审复核：
+  - 只读评审曾提示根 `vitest.config.ts` 不覆盖 `apps/studio/src`
+  - 复核结论：不构成当前阻塞
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio exec vitest run src/shared/failure-insights.test.ts`
+      - 结果：通过，说明 `@flowweave/app-studio` 包级测试脚本在应用目录下按默认发现规则执行，新增测试已真实运行
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio exec vitest --config ../../vitest.config.ts run apps/studio/src/shared/failure-insights.test.ts`
+      - 结果：`No test files found`
+      - 说明：这是强制套用仓库根 config 的对照实验，不是 `@flowweave/app-studio` 实际测试入口
+  - 残余风险：
+    - `apps/studio` 当前没有独立 `vitest.config.ts`，测试发现行为依赖 Vitest 默认规则；后续若要进一步降低歧义，可单独补本地 config，但不阻塞本轮并回
+- 当前状态：
+  - Wave 10 已完成三条并回主线：
+    - Runtime 首段动作韧性
+    - Benchmarks 单一真相与 recorded gap 收口
+    - Studio 对动作回弹 cause 的消费
