@@ -1805,3 +1805,91 @@
 - 额外观察：
   - GitHub 页面提示 `actions/checkout@v4`、`actions/setup-node@v4`、`pnpm/action-setup@v4` 仍带有“Node.js 20 actions are deprecated”警告
   - 这不是本轮功能阻塞，但意味着后续应单独评估 GitHub Actions 运行时升级策略
+
+## 2026-06-06 下一轮自主并行规划启动
+
+- 时间：2026-06-06 23:48:00 CST
+- 任务目标：在用户已授权“自主规划任务、持续开发、依托 worktree 分派 subagent 并行开发”的前提下，产出下一轮完整设计、实施计划与并行编排板，并准备进入实际分派。
+- 所用技能：
+  - `using-superpowers`
+  - `brainstorming`
+  - `writing-plans`
+  - `using-git-worktrees`
+  - `subagent-driven-development`
+- 工具与环境说明：
+  - 当前环境仍未提供 `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code`。
+  - 本轮改用 CodeGraph、本地文档、近期提交与只读子代理探索补证。
+  - 已创建新的自主推进目标：`自主规划并推进 FlowWeave 下一轮真实页面稳定性增强，先产出完整开发计划与 worktree / 子代理编排，再按轨道并行开发并逐步验收回收。`
+- 上下文检索结果：
+  - 已分析的主要实现与文档：
+    - `docs/superpowers/plans/2026-06-06-real-page-stability-orchestration.md`
+    - `docs/guides/fixture-matrix.md`
+    - `docs/guides/real-page-stability.md`
+    - `docs/superpowers/specs/2026-06-06-real-page-stability-design.md`
+    - `apps/studio/src/App.tsx`
+    - `packages/runtime/src/types.ts`
+  - 已生成上下文摘要：
+    - `.codex/context-summary-autonomous-wave3-planning.md`
+
+## 规划结论 - 下一轮 4 轨并行
+
+- Recorder Contract：
+  - 目标：统一变量占位符契约，扩大 RecordedEvent -> Flow -> runtime 整链回归
+- Studio Experience：
+  - 目标：复用最近一次运行输入、补 preflight 阻塞提示、增强诊断修复建议
+- Benchmarks P5：
+  - 目标：补 Tab、contenteditable、空结果重试、联动筛选等高价值 fixture
+- CI Runtime Refresh：
+  - 目标：消除远端 GitHub Actions deprecated runtime 警告，同时保持 Node 20 / 24 双基线与当前 smoke 门槛
+
+## 产物落盘 - 下一轮规划
+
+- 设计文档：
+  - `docs/superpowers/specs/2026-06-06-real-page-stability-autonomous-wave-design.md`
+- 实施计划：
+  - `docs/superpowers/plans/2026-06-06-real-page-stability-autonomous-wave-plan.md`
+- 并行编排板：
+  - `docs/superpowers/plans/2026-06-06-real-page-stability-autonomous-wave-orchestration.md`
+
+## 规划修正 - 只读子代理回流与 5 轨升级
+
+- 时间：2026-06-07 00:05:00 CST
+- 回流来源：
+  - `Lovelace / 019e9d03-6903-77f2-90e2-4c6067e49708`
+  - `Ampere / 019e9d03-b80d-74c0-842b-9f621b475cf4`
+  - `Locke / 019e9d03-8a65-7a83-9004-ac7df7bbb324`
+- 关键结论：
+  - `Lovelace` 建议把原 `Recorder Contract` 拆成两条轨道：
+    - `Recorder Placeholder Contract`
+    - `Runtime Replay Contract`
+  - `Lovelace` 同时指出 3 个必须补的 recorder 缺口：
+    - upload token 可能碰撞
+    - 字面量 `{{...}}` 边界仍会误伤
+    - `fileNames` 在 normalize 后可能丢失
+  - `Ampere` 建议 Benchmarks 下一轮优先补：
+    - 会话恢复双态
+    - 批量跨页选择并提交
+    - 联动筛选 + 空结果态
+    - Drawer 首次失败后二次成功
+    - 同页 Tab 切换
+  - `Ampere` 同时确认 CI 的主要风险在 GitHub Actions runtime 版本陈旧，而不是本地 Node 20 门槛本身。
+  - `Locke` 指出当前 Studio 还有一条 P0 断链：
+    - `apps/studio/electron/main.ts` 的 `IPC_CHANNELS.runFlow` 当前只从 `options` 中读取 `showBrowser`
+    - `App.tsx` 收集的 `environmentName / baseUrl / storageStatePath / variables` 还没有完整进入真实执行链路
+    - 执行页虽然已有 `runContext` 数据结构，但展示仍不足，诊断面板也更像原始 JSON 查看器而不是排障工作台
+- 主代理快速核对：
+  - 已直接核对 `apps/studio/electron/main.ts`，确认 `runFlow` IPC 处理器确实仍只透传 `showBrowser`。
+  - 已核对 `.github/workflows/ci.yml`，确认当前仍使用：
+    - `actions/checkout@v4`
+    - `pnpm/action-setup@v4`
+    - `actions/setup-node@v4`
+  - 已通过 `tool_search` 找到 `multi_agent_v1` 工具，可进入正式 worker 分派。
+- 决策调整：
+  - 将“下一轮 4 轨并行”升级为“Foundation 先行 + 5 轨并行”。
+  - Foundation 由主代理先串行补齐共享占位符协议，避免 Recorder 与 Runtime 在 `packages/shared` 上抢写。
+  - 并行轨道调整为：
+    - `Recorder Placeholder Contract`
+    - `Runtime Replay Contract`
+    - `Studio Experience`
+    - `Benchmarks P5`
+    - `CI Runtime Refresh`
