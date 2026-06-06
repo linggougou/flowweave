@@ -60,6 +60,8 @@ type CandidateResolution =
     };
 
 const MIN_DISAMBIGUATION_SCORE = 4;
+const SUGGEST_READY_TIMEOUT_MS = 1_200;
+const NAVIGATION_PRESS_KEYS = new Set(["ArrowDown", "ArrowUp"]);
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -778,6 +780,161 @@ async function waitForPageSettled(page: Page, timeoutMs = 12_000): Promise<void>
     .catch(() => undefined);
 }
 
+async function isSuggestLikeTarget(locator: Locator): Promise<boolean> {
+  return locator
+    .evaluate((node) => {
+      const role = node.getAttribute("role")?.trim().toLowerCase();
+      const autocomplete = node.getAttribute("aria-autocomplete")?.trim().toLowerCase();
+      const controls = node.getAttribute("aria-controls")?.trim();
+      return (
+        role === "combobox" ||
+        autocomplete === "list" ||
+        autocomplete === "both" ||
+        (!!controls && autocomplete !== "none")
+      );
+    })
+    .catch(() => false);
+}
+
+async function waitForSuggestTargetReady(
+  page: Page,
+  locator: Locator,
+  timeoutMs = SUGGEST_READY_TIMEOUT_MS,
+): Promise<void> {
+  if (!(await isSuggestLikeTarget(locator))) {
+    return;
+  }
+
+  const inputHandle = await locator.elementHandle().catch(() => null);
+  if (!inputHandle) {
+    return;
+  }
+
+  await page
+    .waitForFunction(
+      (input) => {
+        if (!(input instanceof HTMLElement)) {
+          return true;
+        }
+
+        const isVisible = (element: Element | null): boolean => {
+          if (!(element instanceof HTMLElement) || element.hidden) {
+            return false;
+          }
+
+          const style = window.getComputedStyle(element);
+          if (style.display === "none" || style.visibility === "hidden") {
+            return false;
+          }
+
+          return element.getClientRects().length > 0;
+        };
+
+        const controlsId = input.getAttribute("aria-controls");
+        const popup = controlsId ? document.getElementById(controlsId) : null;
+        const busyTarget = input.closest("[aria-busy='true'], [data-loading='true']");
+        const busyPopup = popup?.closest("[aria-busy='true'], [data-loading='true']");
+        if (busyTarget || busyPopup) {
+          return false;
+        }
+
+        const visibleOptions = popup
+          ? Array.from(popup.querySelectorAll("[role='option'], option, li, button")).filter((option) =>
+              isVisible(option),
+            )
+          : [];
+        if (visibleOptions.length > 0) {
+          return true;
+        }
+
+        return input.getAttribute("aria-expanded") === "true" && isVisible(popup);
+      },
+      inputHandle,
+      { timeout: timeoutMs },
+    )
+    .catch(() => undefined);
+
+  await inputHandle.dispose().catch(() => undefined);
+}
+
+async function waitForActiveSuggestionOption(
+  page: Page,
+  locator: Locator,
+  timeoutMs = SUGGEST_READY_TIMEOUT_MS,
+): Promise<boolean> {
+  if (!(await isSuggestLikeTarget(locator))) {
+    return false;
+  }
+
+  const inputHandle = await locator.elementHandle().catch(() => null);
+  if (!inputHandle) {
+    return false;
+  }
+
+  const result = await page
+    .waitForFunction(
+      (input) => {
+        if (!(input instanceof HTMLElement)) {
+          return true;
+        }
+
+        const isVisible = (element: Element | null): boolean => {
+          if (!(element instanceof HTMLElement) || element.hidden) {
+            return false;
+          }
+
+          const style = window.getComputedStyle(element);
+          if (style.display === "none" || style.visibility === "hidden") {
+            return false;
+          }
+
+          return element.getClientRects().length > 0;
+        };
+
+        const activeDescendantId = input.getAttribute("aria-activedescendant");
+        if (activeDescendantId) {
+          const activeDescendant = document.getElementById(activeDescendantId);
+          if (isVisible(activeDescendant)) {
+            return true;
+          }
+        }
+
+        const controlsId = input.getAttribute("aria-controls");
+        const popup = controlsId ? document.getElementById(controlsId) : null;
+        const activeOption = popup?.querySelector(
+          "[data-active='true'], [aria-selected='true'], .is-active, .active",
+        );
+        return isVisible(activeOption ?? null);
+      },
+      inputHandle,
+      { timeout: timeoutMs },
+    )
+    .then(() => true)
+    .catch(() => false);
+
+  await inputHandle.dispose().catch(() => undefined);
+  return result;
+}
+
+async function waitForNavigationPressSettled(
+  page: Page,
+  locator: Locator,
+  key: string,
+  timeoutMs = SUGGEST_READY_TIMEOUT_MS,
+): Promise<void> {
+  if (!NAVIGATION_PRESS_KEYS.has(key) || !(await isSuggestLikeTarget(locator))) {
+    return;
+  }
+
+  if (await waitForActiveSuggestionOption(page, locator, Math.min(timeoutMs, 400))) {
+    return;
+  }
+
+  await waitForSuggestTargetReady(page, locator, Math.min(timeoutMs, SUGGEST_READY_TIMEOUT_MS));
+  await locator.press(key).catch(() => undefined);
+  await waitForActiveSuggestionOption(page, locator, Math.min(timeoutMs, SUGGEST_READY_TIMEOUT_MS));
+}
+
 async function resolveTarget(
   page: Page,
   target: Target,
@@ -1038,6 +1195,7 @@ async function runStep(
           await locator.clear();
         }
         await locator.fill(resolvedStep.value);
+        await waitForSuggestTargetReady(page, locator, Math.min(timeoutMs, SUGGEST_READY_TIMEOUT_MS));
         break;
       }
       case "select": {
@@ -1056,6 +1214,12 @@ async function runStep(
         if (resolvedStep.target) {
           const locator = await resolveTarget(page, resolvedStep.target, timeoutMs);
           await locator.press(resolvedStep.key);
+          await waitForNavigationPressSettled(
+            page,
+            locator,
+            resolvedStep.key,
+            Math.min(timeoutMs, SUGGEST_READY_TIMEOUT_MS),
+          );
         } else {
           await page.keyboard.press(resolvedStep.key);
         }

@@ -4043,3 +4043,133 @@
 - 当前结论：
   - Wave 8 已把“键盘驱动录制回放”纳入主线稳定证据。
   - `ArrowDown / ArrowUp` 录制与 `fill -> ArrowDown -> Enter` recorded replay 闭环均已具备 Node 20 验证证据。
+
+## 2026-06-07 Wave 9 异步 Suggest / Active-Descendant 上下文收敛与规划
+
+- 时间：2026-06-07 03:54:29 CST
+- 目标：
+  - 在 Wave 8 同步命令面板闭环之后，继续补“输入后异步 suggestions 准备，再用 `ArrowDown` / `Enter` 完成选择”的真实页面稳定性缺口。
+- 所用技能：
+  - `using-superpowers`
+  - `brainstorming`
+  - `writing-plans`
+  - `subagent-driven-development`
+  - `using-git-worktrees`
+- 工具与环境说明：
+  - 当前环境未提供 `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code`。
+  - 本轮以 CodeGraph、本地 `rg/sed/git`、并行子代理与本地验证替代，并在此留痕。
+- 工作区检查：
+  - 当前分支：`codex/real-page-stability-program`
+  - `git status --short`：空
+  - `git worktree list`：仅剩主工作区 `/Users/ling/codeHome/A_Mine/flowweave`
+  - `.worktrees/` ignore 状态：`git check-ignore -v .worktrees` 返回 `.gitignore:22:.worktrees/`
+- 上下文检索结果：
+  - 已分析：
+    - `apps/extension/entrypoints/content.ts:103-183`
+    - `apps/extension/lib/content-contract.test.ts:291-427`
+    - `packages/recorder/src/normalize.ts:427-505`
+    - `packages/recorder/src/normalize.test.ts:809-946`
+    - `packages/runtime/src/playwright-runner.ts:748-1072`
+    - `packages/runtime/src/playwright-runner.test.ts:1441-1545`
+    - `examples/fixtures/keyboard-command-palette.html:268-336`
+    - `examples/fixtures/linked-filters.html:196-266`
+    - `examples/fixtures/filterable-list.html:214-296`
+    - `examples/recorded-replay-smoke.ts:726-781`
+    - `examples/real-page-smoke.ts:463-501`
+    - `packages/runtime/src/recorded-replay-matrix.test.ts:1-68`
+    - `packages/runtime/src/real-page-matrix.test.ts:1-214`
+  - 关键结论：
+    - recorder 的 `isAsyncWaitTriggerStep()` 当前只把 `click / select / setChecked / 提交型 press` 视为自动 wait 触发器，`ArrowDown / ArrowUp` 不在内。
+    - runtime 的 `waitForPageSettled()` 当前只观察 loading mask、`aria-busy`、`data-loading`、`networkidle`，还不会专门等待 `aria-activedescendant` 或 suggest options ready。
+    - `keyboard-command-palette` 现有 fixture 是同步过滤，只能证明同步命令面板，不足以覆盖 debounce / 异步 suggestions。
+    - `linked-filters` 与 `filterable-list` 已经提供了本地 fixture 中模拟异步 loading 的既有模式，可复用到新的 async suggest fixture。
+    - `packages/runtime/src/real-page-matrix.test.ts` 与文档中的矩阵计数已出现落后于主线实跑数量的漂移，Wave 9 需要顺手对齐。
+- 产出文件：
+  - `.codex/context-summary-real-page-stability-wave9-async-suggest.md`
+  - `docs/superpowers/specs/2026-06-07-real-page-stability-wave9-async-suggest-design.md`
+  - `docs/superpowers/plans/2026-06-07-real-page-stability-wave9-async-suggest-plan.md`
+  - `docs/superpowers/plans/2026-06-07-real-page-stability-wave9-async-suggest-orchestration.md`
+- 并行准备：
+  - 已启动只读子代理：
+    - `Locke / 019e9e7e-1f3f-74a2-b284-8a9d608167e9`
+      - 任务：梳理 recorder/runtime 等待链路与最小改动面
+    - `Hooke / 019e9e7e-3b54-7252-8175-2a171544fccb`
+      - 任务：梳理 fixture / smoke 覆盖缺口与基线增量
+- 规划结论：
+  - Wave 9 主题定为：`异步 Suggest / Active-Descendant 键盘稳定性`
+  - 推荐并行轨道：
+    1. `Capture Heuristic Tightening`
+    2. `Press Wait Stabilization`
+    3. `Async Suggest Replay Matrix`
+
+## 2026-06-07 Wave 9 worktree 冷启动与轨道派发
+
+- 时间：2026-06-07 04:03:30 CST
+- worktree 创建：
+  - `.worktrees/codex-real-page-wave9-capture-tightening`
+    - 分支：`codex/real-page-wave9-capture-tightening`
+  - `.worktrees/codex-real-page-wave9-press-wait`
+    - 分支：`codex/real-page-wave9-press-wait`
+  - `.worktrees/codex-real-page-wave9-async-suggest-matrix`
+    - 分支：`codex/real-page-wave9-async-suggest-matrix`
+- 冷启动首次阻塞：
+  - 在新 worktree 直接执行轨道基线测试时，三条轨道都报 `vitest: command not found`
+  - 根因：worktree 初始没有本地 `node_modules`
+  - 补救：分别执行
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm install --frozen-lockfile`
+  - 结果：三条 worktree 都在约 `8s` 内完成安装
+- 冷启动第二次阻塞：
+  - 安装后继续跑基线，出现 workspace 包入口解析失败：
+    - capture 轨：`@flowweave/recorder` entry 未解析
+    - press-wait 轨：`@flowweave/recorder` entry 未解析
+    - matrix 轨：`@flowweave/shared` entry 未解析
+  - 根因：worktree 内 workspace 包尚未执行最小构建，`dist` 缺失
+  - 补救：
+    - capture 轨执行：
+      - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/shared --filter @flowweave/recorder build`
+    - press-wait 轨执行：
+      - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/shared --filter @flowweave/flow-dsl --filter @flowweave/recorder --filter @flowweave/page-intelligence --filter @flowweave/runtime build`
+    - matrix 轨执行：
+      - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/shared --filter @flowweave/flow-dsl --filter @flowweave/recorder --filter @flowweave/page-intelligence --filter @flowweave/runtime build`
+- 冷启动补救后 Node 20 基线：
+  - capture 轨：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension test -- content-contract.test.ts`
+    - 结果：通过，`7/7`
+  - press-wait 轨：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+    - 结果：通过，`26/26`
+  - matrix 轨：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test -- normalize.test.ts`
+    - 结果：通过，`30/30`
+- 子代理只读结论收口：
+  - `Hooke / 019e9e7e-3b54-7252-8175-2a171544fccb`
+    - 结论：
+      - `keyboard-command-palette` 当前是同步过滤，不是异步 suggest
+      - `recorded-replay-matrix.md`、`fixture-matrix.md`、`real-page-matrix.test.ts` 都存在不同程度的数量漂移
+  - `Locke / 019e9e7e-1f3f-74a2-b284-8a9d608167e9`
+    - 结论：
+      - recorder 自动 wait 推断当前只覆盖 `click / select / setChecked / 提交型 press`
+      - runtime `press` 后只走通用 `waitForPageSettled()`，确实没有 `aria-activedescendant` / listbox ready 专门等待
+      - 最小改动面优先落在 `packages/runtime/src/playwright-runner.ts` 与 `packages/runtime/src/playwright-runner.test.ts`
+- 已派发实现子代理：
+  - `Nietzsche / 019e9e89-7c7d-7821-b0a9-5f83fdd15ff3`
+    - 轨道：`Capture Heuristic Tightening`
+    - 写入边界：
+      - `apps/extension/entrypoints/content.ts`
+      - `apps/extension/lib/content-contract.test.ts`
+  - `Volta / 019e9e89-c979-7b61-8159-4281f3e5eb85`
+    - 轨道：`Press Wait Stabilization`
+    - 写入边界：
+      - `packages/runtime/src/playwright-runner.ts`
+      - `packages/runtime/src/playwright-runner.test.ts`
+  - `Sartre / 019e9e8a-2480-7523-bdfb-5d89728ab7ab`
+    - 轨道：`Async Suggest Replay Matrix`
+    - 写入边界：
+      - `packages/recorder/src/normalize.test.ts`
+      - `examples/fixtures/async-command-palette.html`
+      - `examples/recorded-replay-smoke.ts`
+      - `packages/runtime/src/recorded-replay-matrix.test.ts`
+      - `examples/real-page-smoke.ts`
+      - `packages/runtime/src/real-page-matrix.test.ts`
+      - `docs/guides/recorded-replay-matrix.md`
+      - `docs/guides/fixture-matrix.md`
