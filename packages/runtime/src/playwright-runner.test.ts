@@ -31,6 +31,9 @@ const contenteditableEditorFixtureUrl = pathToFileURL(
 const bulkCrossPageSelectionFixtureUrl = pathToFileURL(
   join(fixturesDir, "bulk-cross-page-selection.html"),
 ).href;
+const linkedFiltersFixtureUrl = new URL("linked-filters.html", fixturesBaseUrl).toString();
+const drawerDoubleSaveFixtureUrl = new URL("drawer-double-save.html", fixturesBaseUrl).toString();
+const repeatedRowActionsFixtureUrl = new URL("repeated-row-actions.html", fixturesBaseUrl).toString();
 
 const baseMeta = {
   createdAt: "2026-05-26T00:00:00.000Z",
@@ -1047,6 +1050,331 @@ describe("executeFlow", () => {
       "click",
       "click",
     ]);
+  });
+
+  it("支持将录制事件构建出的 repeated-row-actions Flow 直接回放", async () => {
+    const flow = buildFlowFromEvents(
+      [
+        parseRecordedEvent({
+          id: "evt_nav_repeated_row_actions",
+          type: "navigate",
+          timestamp: 0,
+          url: repeatedRowActionsFixtureUrl,
+          payload: {
+            url: "{{fixture.file}}",
+            waitUntil: "domcontentloaded",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_target_row_action",
+          type: "click",
+          timestamp: 100,
+          url: repeatedRowActionsFixtureUrl,
+          payload: {
+            strategies: [
+              { kind: "role", role: "button", name: "编辑" },
+              { kind: "text", text: "编辑", exact: true },
+            ],
+            tagName: "button",
+            textSample: "编辑",
+            scopeText: "华东运营日报",
+            scopeKind: "row",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_ready_repeated_row_result",
+          type: "click",
+          timestamp: 200,
+          url: repeatedRowActionsFixtureUrl,
+          payload: {
+            selector: "#result-panel[data-ready='true'][data-target-row='campaign-204']",
+          },
+        }),
+      ],
+      buildRecordedFlowMeta("flow_recorded_repeated_row_actions", "录制重复行同文案按钮流程"),
+    );
+
+    expect(flow.variables).toEqual([{ name: "fixture.file", type: "string", required: true }]);
+    expect(flow.steps[1]).toMatchObject({
+      type: "click",
+      target: {
+        hints: {
+          scopeText: "华东运营日报",
+          scopeKind: "row",
+        },
+      },
+    });
+
+    const result = await executeFlow(flow, {
+      headless: true,
+      baseUrl: fixturesBaseUrl,
+      variables: {
+        "fixture.file": "repeated-row-actions.html",
+      },
+    });
+
+    expect(result.status).toBe("success");
+  });
+
+  it("支持将录制事件构建出的 linked-filters Flow 直接回放", async () => {
+    const flow = buildFlowFromEvents(
+      [
+        parseRecordedEvent({
+          id: "evt_nav_linked_filters",
+          type: "navigate",
+          timestamp: 0,
+          url: linkedFiltersFixtureUrl,
+          payload: {
+            url: "{{fixture.file}}",
+            waitUntil: "domcontentloaded",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_select_business_unit",
+          type: "select",
+          timestamp: 100,
+          url: linkedFiltersFixtureUrl,
+          payload: {
+            selector: "#business-unit",
+            values: ["growth"],
+            tagName: "select",
+            nameAttr: "businessUnit",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_team_filter",
+          type: "click",
+          timestamp: 900,
+          url: linkedFiltersFixtureUrl,
+          payload: {
+            role: "combobox",
+            name: "团队",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_select_team_filter",
+          type: "select",
+          timestamp: 950,
+          url: linkedFiltersFixtureUrl,
+          payload: {
+            selector: "#team-filter",
+            values: ["growth-east"],
+            tagName: "select",
+            nameAttr: "teamFilter",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_apply_linked_filters",
+          type: "click",
+          timestamp: 1100,
+          url: linkedFiltersFixtureUrl,
+          payload: {
+            selector: "#apply-linked-filters",
+            role: "button",
+            name: "应用联动筛选",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_linked_result",
+          type: "click",
+          timestamp: 1900,
+          url: linkedFiltersFixtureUrl,
+          payload: {
+            selector: "#linked-result[data-ready='true'][data-team='growth-east']",
+          },
+        }),
+      ],
+      buildRecordedFlowMeta("flow_recorded_linked_filters", "录制联动筛选流程"),
+    );
+
+    expect(flow.variables).toEqual([{ name: "fixture.file", type: "string", required: true }]);
+    expect(flow.steps.filter((step) => step.type === "select")).toHaveLength(2);
+
+    const result = await executeFlow(flow, {
+      headless: true,
+      baseUrl: fixturesBaseUrl,
+      variables: {
+        "fixture.file": "linked-filters.html",
+      },
+    });
+
+    expect(result.status).toBe("success");
+  });
+
+  it("支持将录制事件构建出的 session-dashboard Flow 直接回放", async () => {
+    const { server, baseUrl } = await startStaticServer(fixturesDir);
+    cleanupServers.add(server);
+    const sessionDashboardFixtureUrl = new URL("session-dashboard.html", baseUrl).toString();
+
+    const storageDir = mkdtempSync(join(tmpdir(), "fw-runtime-recorded-session-dashboard-"));
+    cleanupPaths.add(storageDir);
+    const storageStatePath = join(storageDir, "storage-state.json");
+    writeFileSync(
+      storageStatePath,
+      JSON.stringify(
+        {
+          cookies: [],
+          origins: [
+            {
+              origin: new URL(baseUrl).origin,
+              localStorage: [
+                {
+                  name: "flowweave:session-user",
+                  value: "录制回放用户",
+                },
+              ],
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+
+    const flow = buildFlowFromEvents(
+      [
+        parseRecordedEvent({
+          id: "evt_nav_session_dashboard",
+          type: "navigate",
+          timestamp: 0,
+          url: sessionDashboardFixtureUrl,
+          payload: {
+            url: "{{fixture.file}}",
+            waitUntil: "domcontentloaded",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_open_report",
+          type: "click",
+          timestamp: 100,
+          url: sessionDashboardFixtureUrl,
+          payload: {
+            selector: "#open-report",
+            role: "button",
+            name: "打开日报",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_report_owner",
+          type: "click",
+          timestamp: 200,
+          url: sessionDashboardFixtureUrl,
+          payload: {
+            strategies: [{ kind: "text", text: "当前负责人：录制回放用户", exact: true }],
+          },
+        }),
+      ],
+      buildRecordedFlowMeta("flow_recorded_session_dashboard", "录制登录态仪表盘流程"),
+    );
+
+    expect(flow.variables).toEqual([{ name: "fixture.file", type: "string", required: true }]);
+
+    const result = await executeFlow(flow, {
+      headless: true,
+      baseUrl,
+      storageStatePath,
+      variables: {
+        "fixture.file": "session-dashboard.html",
+      },
+    });
+
+    expect(result.status).toBe("success");
+  });
+
+  it("支持将录制事件构建出的 drawer-double-save Flow 直接回放", async () => {
+    const flow = buildFlowFromEvents(
+      [
+        parseRecordedEvent({
+          id: "evt_nav_drawer_double_save",
+          type: "navigate",
+          timestamp: 0,
+          url: drawerDoubleSaveFixtureUrl,
+          payload: {
+            url: "{{fixture.file}}",
+            waitUntil: "domcontentloaded",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_open_drawer",
+          type: "click",
+          timestamp: 100,
+          url: drawerDoubleSaveFixtureUrl,
+          payload: {
+            selector: "#edit-rule-720",
+            role: "button",
+            name: "打开 Drawer",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_save_drawer_first",
+          type: "click",
+          timestamp: 200,
+          url: drawerDoubleSaveFixtureUrl,
+          payload: {
+            selector: "#save-drawer",
+            role: "button",
+            name: "保存修改",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_save_alert",
+          type: "click",
+          timestamp: 1000,
+          url: drawerDoubleSaveFixtureUrl,
+          payload: {
+            selector: "#save-alert[data-state='error']",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_fill_review_note",
+          type: "fill",
+          timestamp: 1100,
+          url: drawerDoubleSaveFixtureUrl,
+          payload: {
+            selector: "#drawer-review-note",
+            role: "textbox",
+            name: "复核备注",
+            value: "已补充失败原因与修正动作，允许二次保存。",
+            tagName: "textarea",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_save_drawer_second",
+          type: "click",
+          timestamp: 1200,
+          url: drawerDoubleSaveFixtureUrl,
+          payload: {
+            selector: "#save-drawer",
+            role: "button",
+            name: "保存修改",
+          },
+        }),
+        parseRecordedEvent({
+          id: "evt_click_result_status",
+          type: "click",
+          timestamp: 2200,
+          url: drawerDoubleSaveFixtureUrl,
+          payload: {
+            strategies: [{ kind: "text", text: "第二次保存成功并已回填列表", exact: true }],
+          },
+        }),
+      ],
+      buildRecordedFlowMeta("flow_recorded_drawer_double_save", "录制抽屉二次保存流程"),
+    );
+
+    expect(flow.variables).toEqual([{ name: "fixture.file", type: "string", required: true }]);
+    expect(flow.steps.some((step) => step.type === "fill")).toBe(true);
+
+    const result = await executeFlow(flow, {
+      headless: true,
+      baseUrl: fixturesBaseUrl,
+      variables: {
+        "fixture.file": "drawer-double-save.html",
+      },
+    });
+
+    expect(result.status).toBe("success");
   });
 
   it("支持 press 与 wait attached / detached", async () => {

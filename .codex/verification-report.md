@@ -2644,3 +2644,45 @@
 - 风险评估评分：95
 - 综合评分：97
 - 建议：通过
+
+## 2026-06-07 Wave 7 Recorded Replay Coverage Expansion 审查
+
+### 审查范围
+
+- `packages/runtime/src/playwright-runner.test.ts`
+- `.codex/context-summary-wave7-recorded-replay.md`
+- `.codex/operations-log.md`
+
+### 审查结果
+
+1. 需求字段完整性通过。
+   - 目标明确：为 4 个 `p7` 真实页面场景补 recorded replay 整链回归。
+   - 范围明确：主写 `packages/runtime/src/playwright-runner.test.ts`；仅当红灯证明缺口时才允许动 `packages/recorder/**`。
+   - 交付物明确：新增 runtime 回归、Node 20 验证结果、`.codex` 留痕。
+2. 原始意图覆盖完整。
+   - 新增用例全部走 `parseRecordedEvent() -> buildFlowFromEvents() -> executeFlow()`。
+   - `repeated-row-actions` 覆盖 `scopeText / scopeKind`。
+   - `session-dashboard` 覆盖 `storageStatePath`。
+   - `linked-filters` 与 `drawer-double-save` 覆盖真实异步交互链路。
+3. 文件边界遵守到位。
+   - 未修改 `examples/**`、`package.json`、`apps/**`。
+   - 未在没有红灯证据的情况下扩写 `packages/recorder/**`。
+4. 验证证据充分。
+   - Node 20 下 `runtime` 定向测试通过，`25/25`。
+   - Node 20 下 `recorder` 定向测试通过，`30/30`。
+
+### Findings
+
+1. 未发现阻塞级问题。
+2. 残余风险：本轮只扩 recorded replay 回归，不会自动提升 `examples/recorded-replay-smoke.ts` 之类独立烟测入口的可观测性。
+   - 该风险不在当前轨道范围内，且已由 Wave 7 其他轨道承接。
+
+### 综合结论
+
+- 代码质量评分：99
+- 测试覆盖评分：98
+- 规范遵循评分：100
+- 战略匹配评分：99
+- 风险评估评分：97
+- 综合评分：99
+- 建议：通过
