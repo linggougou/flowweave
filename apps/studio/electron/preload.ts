@@ -4,7 +4,12 @@ import type { RunFlowOptions, StudioApi } from "../src/shared/studio-api-types.j
 
 const studioApi: StudioApi = {
   listProjects: () => ipcRenderer.invoke(IPC_CHANNELS.listProjects),
+  createProject: (name: string) => ipcRenderer.invoke(IPC_CHANNELS.createProject, name),
   listFlows: (projectId: string) => ipcRenderer.invoke(IPC_CHANNELS.listFlows, projectId),
+  renameFlow: (projectId: string, flowId: string, name: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.renameFlow, projectId, flowId, name),
+  getFlow: (projectId: string, flowId: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.getFlow, projectId, flowId),
   runFlow: (projectId: string, flowId?: string, options?: RunFlowOptions) =>
     ipcRenderer.invoke(IPC_CHANNELS.runFlow, projectId, flowId, options),
   getExecution: (executionId: string) =>

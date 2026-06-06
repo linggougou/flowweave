@@ -21,6 +21,7 @@
     "@flowweave/shared": "workspace:*"
   },
   "devDependencies": {
+    "happy-dom": "^20.0.11",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

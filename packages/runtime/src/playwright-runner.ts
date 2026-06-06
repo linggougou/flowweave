@@ -41,21 +41,54 @@ function strategyToLocator(page: Page, strategy: LocatorStrategy): Locator {
   }
 }
 
-async function resolveTarget(page: Page, target: Target): Promise<Locator> {
+async function waitForPageSettled(page: Page, timeoutMs = 12_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  const remaining = () => Math.max(0, deadline - Date.now());
+
+  const loadingMask = page.locator(
+    ".el-loading-mask, .el-loading-parent--relative .el-loading-mask, [class*='loading-mask']",
+  );
+  if ((await loadingMask.count()) > 0) {
+    await loadingMask
+      .first()
+      .waitFor({ state: "hidden", timeout: remaining() })
+      .catch(() => undefined);
+  }
+
+  await page
+    .waitForLoadState("networkidle", { timeout: Math.min(remaining(), 8_000) })
+    .catch(() => undefined);
+}
+
+async function resolveTarget(page: Page, target: Target, timeoutMs = 12_000): Promise<Locator> {
+  const tried: string[] = [];
   let lastError: unknown;
+  const perStrategyTimeout = Math.max(
+    2_000,
+    Math.floor(timeoutMs / Math.max(target.strategies.length, 1)),
+  );
   for (const strategy of target.strategies) {
+    const label =
+      strategy.kind === "css"
+        ? strategy.selector
+        : strategy.kind === "role"
+          ? `role=${strategy.role}${strategy.name ? ` name="${strategy.name}"` : ""}`
+          : strategy.kind === "text"
+            ? `text="${strategy.text}"`
+            : strategy.kind;
+    tried.push(label);
     try {
       const locator = strategyToLocator(page, strategy);
-      if ((await locator.count()) > 0) {
-        return locator.first();
-      }
+      const first = locator.first();
+      await first.waitFor({ state: "visible", timeout: perStrategyTimeout });
+      return first;
     } catch (error) {
       lastError = error;
     }
   }
   throw new FlowWeaveError(
     "RUNTIME_STEP_FAILED",
-    "无法根据 Target 策略定位元素",
+    `无法根据 Target 策略定位元素（已尝试：${tried.join("；")}）`,
     lastError,
   );
 }
@@ -94,6 +127,7 @@ async function runStep(
   stepIndex: number,
   artifactDir?: string,
   pageSnapshots?: RuntimePageSnapshot[],
+  timeoutMs = 30_000,
 ): Promise<StepLog> {
   const startedAt = nowIso();
   const startMs = Date.now();
@@ -104,19 +138,24 @@ async function runStep(
         await page.goto(step.url, {
           waitUntil: step.waitUntil ?? "load",
         });
+        if (step.url.includes("#")) {
+          await page.waitForLoadState("domcontentloaded").catch(() => undefined);
+          await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => undefined);
+        }
         if (artifactDir && pageSnapshots) {
           pageSnapshots.push(await capturePageSummary(page, artifactDir, stepIndex));
         }
         break;
       case "click": {
-        const locator = await resolveTarget(page, step.target);
+        const locator = await resolveTarget(page, step.target, timeoutMs);
         await locator.click({
           button: step.button ?? "left",
         });
+        await waitForPageSettled(page, Math.min(timeoutMs, 15_000));
         break;
       }
       case "fill": {
-        const locator = await resolveTarget(page, step.target);
+        const locator = await resolveTarget(page, step.target, timeoutMs);
         if (step.clear !== false) {
           await locator.clear();
         }
@@ -220,7 +259,7 @@ export async function executeFlow(
       if (!step) {
         continue;
       }
-      const log = await runStep(page, step, stepIndex, artifactDir, pageSnapshots);
+      const log = await runStep(page, step, stepIndex, artifactDir, pageSnapshots, timeoutMs);
       stepLogs.push(log);
       if (log.status === "failed") {
         await context.close();

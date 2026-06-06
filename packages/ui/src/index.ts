@@ -4,6 +4,11 @@ export const APP_DISPLAY_NAME = "织流";
 
 export { StepLogTable, type StepLogRow, type StepLogTableProps } from "./StepLogTable.js";
 export {
+  FlowStepsTable,
+  type FlowStepRow,
+  type FlowStepsTableProps,
+} from "./FlowStepsTable.js";
+export {
   FlowVersionList,
   type FlowVersionRow,
   type FlowVersionListProps,

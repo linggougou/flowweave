@@ -4,3 +4,12 @@ export {
   normalizeRecordedEvent,
   type BuildFlowFromEventsMeta,
 } from "./normalize.js";
+export {
+  buildInteractionPayload,
+  isVisibleElement,
+  resolveClickTarget,
+  shouldRecordClick,
+  shouldRecordFill,
+  type InteractionRecordingPayload,
+} from "./target-from-dom.js";
+export { filterNoisyInteractionSteps, mergeConsecutiveFillSteps } from "./step-filter.js";

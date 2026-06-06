@@ -44,7 +44,7 @@ async function handleApi(
   if (method === "OPTIONS") {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type",
     });
     res.end();
@@ -130,6 +130,28 @@ async function handleApi(
         return true;
       }
       sendJson(res, 200, flow);
+      return true;
+    }
+
+    if (segments[3] === "flows" && segments.length === 5 && method === "PATCH") {
+      const flowId = segments[4];
+      if (!flowId) {
+        sendJson(res, 400, { error: "缺少 flowId" });
+        return true;
+      }
+      try {
+        const body = (await readJsonBody(req)) as { name?: string };
+        if (!body.name?.trim()) {
+          sendJson(res, 400, { error: "缺少 name" });
+          return true;
+        }
+        const flow = repo.renameFlow(projectId, flowId, body.name);
+        sendJson(res, 200, { flowId: flow.id, name: flow.name, createdAt: flow.meta.createdAt });
+      } catch (err: unknown) {
+        sendJson(res, 400, {
+          error: err instanceof Error ? err.message : "重命名失败",
+        });
+      }
       return true;
     }
 

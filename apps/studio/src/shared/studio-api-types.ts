@@ -57,6 +57,7 @@ export type ExecutionSummary = {
 export type StudioFlowRef = {
   id: string;
   name: string;
+  createdAt: string;
 };
 
 export type StudioFlowVersion = {
@@ -71,7 +72,14 @@ export type StudioFlowVersion = {
 
 export type StudioApi = {
   listProjects: () => Promise<StudioProject[]>;
+  createProject: (name: string) => Promise<StudioProject>;
   listFlows: (projectId: string) => Promise<StudioFlowRef[]>;
+  renameFlow: (
+    projectId: string,
+    flowId: string,
+    name: string,
+  ) => Promise<StudioFlowRef>;
+  getFlow: (projectId: string, flowId: string) => Promise<FlowDocument>;
   runFlow: (
     projectId: string,
     flowId?: string,

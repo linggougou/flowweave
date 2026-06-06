@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent, type MouseEvent } from "react";
 import type { FlowDocument } from "@flowweave/flow-dsl";
+import { analyzeFlowFragility } from "@flowweave/page-intelligence";
 import {
   APP_DISPLAY_NAME,
+  FlowStepsTable,
   FlowVersionList,
   StepLogTable,
   type StepLogRow,
 } from "@flowweave/ui";
+import { FragilityNotice } from "./FragilityNotice.js";
+import { flowStepsToRows } from "./flow-step-format.js";
 import type {
   ExecutionSummary,
   StudioExecution,
@@ -15,6 +19,7 @@ import type {
 } from "./shared/studio-api-types.js";
 
 const SHOW_BROWSER_STORAGE_KEY = "flowweave:studio-show-browser";
+const SIDEBAR_EXECUTIONS_MAX = 5;
 
 function readShowBrowserPreference(): boolean {
   try {
@@ -28,11 +33,18 @@ function readShowBrowserPreference(): boolean {
   }
 }
 
-function getStudioApi() {
-  if (!window.flowweaveStudio) {
-    throw new Error("未找到 flowweaveStudio API，请确认 preload 已加载");
+import { FlowEmptyGuide } from "./FlowEmptyGuide.js";
+import { getStudioApi } from "./studio-client.js";
+
+function formatStudioError(err: unknown): string {
+  if (!(err instanceof Error)) {
+    return "操作失败";
   }
-  return window.flowweaveStudio;
+  return err.message.replace(/^Error invoking remote method '[^']+':\s*/i, "");
+}
+
+function isFlowNotFoundMessage(message: string): boolean {
+  return /flow\s*不存在/i.test(message) || /flow not found/i.test(message);
 }
 
 function formatExecutionTime(iso?: string): string {
@@ -51,8 +63,10 @@ function formatExecutionTime(iso?: string): string {
   }
 }
 
+type MainTab = "flow" | "executions" | "versions";
+
 export function App() {
-  const [tab, setTab] = useState<"executions" | "versions">("executions");
+  const [tab, setTab] = useState<MainTab>("flow");
   const [projects, setProjects] = useState<StudioProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [flows, setFlows] = useState<StudioFlowRef[]>([]);
@@ -60,12 +74,21 @@ export function App() {
   const [versions, setVersions] = useState<StudioFlowVersion[]>([]);
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [previewVersion, setPreviewVersion] = useState<FlowDocument | null>(null);
+  const [currentFlow, setCurrentFlow] = useState<FlowDocument | null>(null);
+  const [flowLoading, setFlowLoading] = useState(false);
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [executionHistory, setExecutionHistory] = useState<ExecutionSummary[]>([]);
   const [execution, setExecution] = useState<StudioExecution | null>(null);
   const [loading, setLoading] = useState(false);
   const [showBrowser, setShowBrowser] = useState(readShowBrowserPreference);
   const [error, setError] = useState<string | null>(null);
+  const [showNewProjectForm, setShowNewProjectForm] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
+  const [creatingProject, setCreatingProject] = useState(false);
+  const [executionsExpanded, setExecutionsExpanded] = useState(false);
+  const [renamingFlowId, setRenamingFlowId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [renaming, setRenaming] = useState(false);
 
   const refreshProjects = useCallback(async () => {
     const api = getStudioApi();
@@ -88,6 +111,7 @@ export function App() {
     setFlows(list);
     if (list.length === 0) {
       setSelectedFlowId(null);
+      setCurrentFlow(null);
       setVersions([]);
       return;
     }
@@ -106,9 +130,33 @@ export function App() {
     setPreviewVersion(null);
   }, []);
 
+  const loadFlowDocument = useCallback(
+    async (projectId: string, flowId: string) => {
+      setFlowLoading(true);
+      setError(null);
+      try {
+        const api = getStudioApi();
+        const doc = await api.getFlow(projectId, flowId);
+        setCurrentFlow(doc);
+      } catch (err: unknown) {
+        const message = formatStudioError(err);
+        if (isFlowNotFoundMessage(message)) {
+          setCurrentFlow(null);
+          setSelectedFlowId(null);
+          return;
+        }
+        setCurrentFlow(null);
+        setError(message);
+      } finally {
+        setFlowLoading(false);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     void refreshProjects().catch((err: unknown) => {
-      setError(err instanceof Error ? err.message : "加载项目失败");
+      setError(formatStudioError(err));
     });
   }, [refreshProjects]);
 
@@ -117,30 +165,138 @@ export function App() {
       setExecutionHistory([]);
       setFlows([]);
       setVersions([]);
+      setCurrentFlow(null);
+      setSelectedFlowId(null);
       return;
     }
+    setError(null);
     void refreshExecutionHistory(selectedProjectId).catch((err: unknown) => {
-      setError(err instanceof Error ? err.message : "加载执行历史失败");
+      setError(formatStudioError(err));
     });
     void refreshFlows(selectedProjectId).catch((err: unknown) => {
-      setError(err instanceof Error ? err.message : "加载 Flow 列表失败");
+      setError(formatStudioError(err));
     });
   }, [selectedProjectId, refreshExecutionHistory, refreshFlows]);
 
   useEffect(() => {
     if (!selectedProjectId || !selectedFlowId) {
       setVersions([]);
+      if (!selectedFlowId) {
+        setCurrentFlow(null);
+      }
+      return;
+    }
+    if (!flows.some((flow) => flow.id === selectedFlowId)) {
       return;
     }
     void refreshVersions(selectedProjectId, selectedFlowId).catch((err: unknown) => {
-      setError(err instanceof Error ? err.message : "加载版本历史失败");
+      setError(formatStudioError(err));
     });
-  }, [selectedProjectId, selectedFlowId, refreshVersions]);
+    void loadFlowDocument(selectedProjectId, selectedFlowId);
+  }, [selectedProjectId, selectedFlowId, flows, refreshVersions, loadFlowDocument]);
 
   const loadExecution = async (executionId: string) => {
     const api = getStudioApi();
     const detail = await api.getExecution(executionId);
     setExecution(detail);
+    return detail;
+  };
+
+  const handleSelectFlow = (flowId: string) => {
+    if (renamingFlowId) {
+      return;
+    }
+    setSelectedFlowId(flowId);
+    setTab("flow");
+  };
+
+  const handleStartRenameFlow = (flow: StudioFlowRef, event: MouseEvent) => {
+    event.stopPropagation();
+    event.preventDefault();
+    setRenamingFlowId(flow.id);
+    setRenameDraft(flow.name);
+  };
+
+  const handleCancelRenameFlow = () => {
+    setRenamingFlowId(null);
+    setRenameDraft("");
+  };
+
+  const handleSubmitRenameFlow = async (event: FormEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!selectedProjectId || !renamingFlowId) {
+      return;
+    }
+    const name = renameDraft.trim();
+    if (!name) {
+      setError("Flow 名称不能为空");
+      return;
+    }
+    setRenaming(true);
+    setError(null);
+    try {
+      const api = getStudioApi();
+      const updated = await api.renameFlow(selectedProjectId, renamingFlowId, name);
+      setFlows((prev) =>
+        prev.map((flow) => (flow.id === updated.id ? { ...flow, name: updated.name } : flow)),
+      );
+      if (currentFlow?.id === updated.id) {
+        setCurrentFlow({ ...currentFlow, name: updated.name });
+      }
+      setRenamingFlowId(null);
+      setRenameDraft("");
+    } catch (err: unknown) {
+      setError(formatStudioError(err));
+    } finally {
+      setRenaming(false);
+    }
+  };
+
+  const handleSelectExecution = (executionId: string, flowId: string) => {
+    setSelectedFlowId(flowId);
+    setTab("executions");
+    void loadExecution(executionId);
+  };
+
+  const handleSelectProject = (projectId: string) => {
+    setSelectedProjectId(projectId);
+    setSelectedFlowId(null);
+    setCurrentFlow(null);
+    setVersions([]);
+    setPreviewVersion(null);
+    setError(null);
+    setExecution(null);
+    setTab("flow");
+  };
+
+  const handleCreateProject = async (event: FormEvent) => {
+    event.preventDefault();
+    const name = newProjectName.trim();
+    if (!name) {
+      setError("请输入项目名称");
+      return;
+    }
+    setCreatingProject(true);
+    setError(null);
+    try {
+      const api = getStudioApi();
+      const project = await api.createProject(name);
+      await refreshProjects();
+      setSelectedProjectId(project.id);
+      setSelectedFlowId(null);
+      setCurrentFlow(null);
+      setFlows([]);
+      setExecutionHistory([]);
+      setExecution(null);
+      setShowNewProjectForm(false);
+      setNewProjectName("");
+      setTab("flow");
+    } catch (err: unknown) {
+      setError(formatStudioError(err));
+    } finally {
+      setCreatingProject(false);
+    }
   };
 
   const handleRun = async () => {
@@ -156,13 +312,30 @@ export function App() {
       });
       const detail = await api.getExecution(result.executionId);
       setExecution(detail);
+      setTab("executions");
+      setExecutionsExpanded(true);
       await refreshExecutionHistory(selectedProjectId);
+      await loadFlowDocument(selectedProjectId, selectedFlowId);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "运行失败");
+      setError(formatStudioError(err));
     } finally {
       setLoading(false);
     }
   };
+
+  const flowFragilityWarnings =
+    currentFlow !== null ? analyzeFlowFragility(currentFlow) : [];
+
+  const flowStepRows = currentFlow ? flowStepsToRows(currentFlow.steps) : [];
+
+  const selectedProjectName =
+    projects.find((p) => p.id === selectedProjectId)?.name ?? undefined;
+
+  const hasFlowsInProject = flows.length > 0;
+  const projectHasNoFlows = Boolean(selectedProjectId) && !hasFlowsInProject;
+
+  const selectedFlowName =
+    flows.find((f) => f.id === selectedFlowId)?.name ?? selectedFlowId ?? "—";
 
   const steps: StepLogRow[] = (execution?.steps ?? []).map((step) => ({
     stepIndex: step.stepIndex,
@@ -180,7 +353,7 @@ export function App() {
     void getStudioApi()
       .openPath(filePath)
       .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : "无法打开截图");
+        setError(formatStudioError(err));
       });
   };
 
@@ -201,7 +374,7 @@ export function App() {
       await api.restoreFlowVersion(selectedProjectId, versionId);
       await refreshVersions(selectedProjectId, selectedFlowId);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "恢复版本失败");
+      setError(formatStudioError(err));
     } finally {
       setRestoringId(null);
     }
@@ -210,93 +383,240 @@ export function App() {
   return (
     <div className="app">
       <aside className="sidebar">
-        <h1>{APP_DISPLAY_NAME} Studio</h1>
-        <p>P2 工作台：执行历史与流程运行</p>
-        <ul className="project-list">
-          {projects.map((project) => (
-            <li key={project.id}>
+        <div className="sidebar-header">
+          <h1>{APP_DISPLAY_NAME} Studio</h1>
+          <p>P2 工作台：录制、回放与执行历史</p>
+        </div>
+
+        <section className="sidebar-section sidebar-section-projects">
+          <div className="sidebar-section-head">
+            <h2>项目</h2>
+            <button
+              type="button"
+              className="sidebar-icon-btn"
+              title="新建项目"
+              aria-label="新建项目"
+              onClick={() => {
+                setShowNewProjectForm((v) => !v);
+                setError(null);
+              }}
+            >
+              +
+            </button>
+          </div>
+          {showNewProjectForm ? (
+            <form className="new-project-form" onSubmit={(e) => void handleCreateProject(e)}>
+              <input
+                type="text"
+                value={newProjectName}
+                placeholder="项目名称"
+                maxLength={64}
+                autoFocus
+                disabled={creatingProject}
+                onChange={(e) => setNewProjectName(e.target.value)}
+              />
+              <div className="new-project-actions">
+                <button type="submit" disabled={creatingProject || !newProjectName.trim()}>
+                  {creatingProject ? "创建中…" : "创建"}
+                </button>
+                <button
+                  type="button"
+                  className="sidebar-text-btn"
+                  disabled={creatingProject}
+                  onClick={() => {
+                    setShowNewProjectForm(false);
+                    setNewProjectName("");
+                  }}
+                >
+                  取消
+                </button>
+              </div>
+            </form>
+          ) : null}
+          <ul className="project-list">
+            {projects.map((project) => (
+              <li key={project.id}>
+                <button
+                  type="button"
+                  className={
+                    project.id === selectedProjectId
+                      ? "project-item active"
+                      : "project-item"
+                  }
+                  onClick={() => handleSelectProject(project.id)}
+                >
+                  <span className="project-item-name">{project.name}</span>
+                  {project.baseUrl ? (
+                    <span className="project-item-env" title={project.baseUrl}>
+                      {project.baseUrl.length > 36
+                        ? `…${project.baseUrl.slice(-32)}`
+                        : project.baseUrl}
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <div className="sidebar-scroll">
+          {selectedProjectId ? (
+            <section className="sidebar-section sidebar-section-primary">
+              <h2>Flow 列表</h2>
+              {flows.length === 0 ? (
+                <p className="execution-history-empty sidebar-flow-hint">
+                  本项目尚无 Flow。请用浏览器扩展录制操作，并在扩展侧栏选择<strong>同名项目</strong>
+                  后点击「同步到知识库」。
+                </p>
+              ) : (
+                <ul className="execution-history-list flow-list">
+                  {flows.map((flow) => (
+                    <li key={flow.id}>
+                      {renamingFlowId === flow.id ? (
+                        <form
+                          className="flow-list-rename-form"
+                          onSubmit={(event) => void handleSubmitRenameFlow(event)}
+                        >
+                          <input
+                            type="text"
+                            className="flow-list-rename-input"
+                            value={renameDraft}
+                            onChange={(event) => setRenameDraft(event.target.value)}
+                            autoFocus
+                            disabled={renaming}
+                            onKeyDown={(event) => {
+                              if (event.key === "Escape") {
+                                event.preventDefault();
+                                handleCancelRenameFlow();
+                              }
+                            }}
+                          />
+                          <div className="flow-list-rename-actions">
+                            <button type="submit" disabled={renaming}>
+                              保存
+                            </button>
+                            <button
+                              type="button"
+                              className="flow-list-rename-cancel"
+                              disabled={renaming}
+                              onClick={handleCancelRenameFlow}
+                            >
+                              取消
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <button
+                          type="button"
+                          className={
+                            selectedFlowId === flow.id
+                              ? "execution-history-item flow-list-item active"
+                              : "execution-history-item flow-list-item"
+                          }
+                          onClick={() => handleSelectFlow(flow.id)}
+                        >
+                          <span className="flow-list-item-row">
+                            <span className="flow-list-name">{flow.name}</span>
+                            <span
+                              className="flow-list-rename-btn"
+                              role="button"
+                              tabIndex={0}
+                              title="重命名"
+                              aria-label={`重命名 ${flow.name}`}
+                              onClick={(event) => handleStartRenameFlow(flow, event)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  handleStartRenameFlow(flow, event as unknown as MouseEvent);
+                                }
+                              }}
+                            >
+                              ✎
+                            </span>
+                          </span>
+                          <span className="execution-history-meta">
+                            添加于 {formatExecutionTime(flow.createdAt)}
+                          </span>
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ) : null}
+
+          {selectedProjectId ? (
+            <section className="sidebar-section sidebar-section-executions">
               <button
                 type="button"
-                className={
-                  project.id === selectedProjectId
-                    ? "project-item active"
-                    : "project-item"
-                }
-                onClick={() => setSelectedProjectId(project.id)}
+                className="sidebar-section-toggle"
+                onClick={() => setExecutionsExpanded((v) => !v)}
+                aria-expanded={executionsExpanded}
               >
-                <span className="project-item-name">{project.name}</span>
-                {project.baseUrl ? (
-                  <span className="project-item-env" title={project.baseUrl}>
-                    {project.baseUrl.length > 36
-                      ? `…${project.baseUrl.slice(-32)}`
-                      : project.baseUrl}
-                  </span>
-                ) : null}
+                <span>最近执行</span>
+                <span className="sidebar-section-toggle-meta">
+                  {executionHistory.length > 0 ? `${executionHistory.length} 条` : "无"}
+                  <span className="sidebar-chevron">{executionsExpanded ? "▾" : "▸"}</span>
+                </span>
               </button>
-            </li>
-          ))}
-        </ul>
-        {selectedProjectId ? (
-          <section className="execution-history">
-            <h2>最近执行</h2>
-            {executionHistory.length === 0 ? (
-              <p className="execution-history-empty">暂无执行记录</p>
-            ) : (
-              <ul className="execution-history-list">
-                {executionHistory.map((item) => (
-                  <li key={item.executionId}>
-                    <button
-                      type="button"
-                      className={
-                        execution?.executionId === item.executionId
-                          ? "execution-history-item active"
-                          : "execution-history-item"
-                      }
-                      onClick={() => void loadExecution(item.executionId)}
-                    >
-                      <span className="execution-history-id">
-                        {item.executionId.slice(0, 8)}…
-                      </span>
-                      <span className="execution-history-meta">
-                        {item.status} · {formatExecutionTime(item.startedAt)}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        ) : null}
-        {selectedProjectId ? (
-          <section className="execution-history">
-            <h2>Flow 列表</h2>
-            {flows.length === 0 ? (
-              <p className="execution-history-empty">暂无 Flow</p>
-            ) : (
-              <ul className="execution-history-list">
-                {flows.map((flow) => (
-                  <li key={flow.id}>
-                    <button
-                      type="button"
-                      className={
-                        selectedFlowId === flow.id
-                          ? "execution-history-item active"
-                          : "execution-history-item"
-                      }
-                      onClick={() => setSelectedFlowId(flow.id)}
-                    >
-                      <span className="execution-history-id">{flow.name}</span>
-                      <span className="execution-history-meta">{flow.id}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        ) : null}
+              {executionsExpanded ? (
+                executionHistory.length === 0 ? (
+                  <p className="execution-history-empty">暂无执行记录</p>
+                ) : (
+                  <>
+                    <ul className="execution-history-list">
+                      {executionHistory.map((item) => (
+                        <li key={item.executionId}>
+                          <button
+                            type="button"
+                            className={
+                              execution?.executionId === item.executionId
+                                ? "execution-history-item active"
+                                : "execution-history-item"
+                            }
+                            onClick={() => handleSelectExecution(item.executionId, item.flowId)}
+                          >
+                            <span className="execution-history-id">
+                              {item.executionId.slice(0, 8)}…
+                            </span>
+                            <span
+                              className={
+                                item.status === "failed"
+                                  ? "execution-history-meta execution-history-status-failed"
+                                  : item.status === "passed"
+                                    ? "execution-history-meta execution-history-status-passed"
+                                    : "execution-history-meta"
+                              }
+                            >
+                              {item.status === "failed"
+                                ? "失败"
+                                : item.status === "passed"
+                                  ? "通过"
+                                  : item.status}{" "}
+                              · {formatExecutionTime(item.startedAt)}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="sidebar-hint">仅显示最近 {SIDEBAR_EXECUTIONS_MAX} 条</p>
+                  </>
+                )
+              ) : null}
+            </section>
+          ) : null}
+        </div>
       </aside>
       <main className="main">
         <div className="toolbar">
+          <button
+            type="button"
+            className={tab === "flow" ? "tab-btn active" : "tab-btn"}
+            onClick={() => setTab("flow")}
+          >
+            录制内容
+          </button>
           <button
             type="button"
             className={tab === "executions" ? "tab-btn active" : "tab-btn"}
@@ -330,38 +650,101 @@ export function App() {
           </label>
           <button
             type="button"
-            disabled={!selectedProjectId || !selectedFlowId || loading}
-            title={!selectedFlowId ? "请先在侧栏选择一个 Flow" : undefined}
+            disabled={!selectedProjectId || !selectedFlowId || loading || projectHasNoFlows}
+            title={
+              projectHasNoFlows
+                ? "请先用扩展录制并同步 Flow"
+                : !selectedFlowId
+                  ? "请先在侧栏选择一个 Flow"
+                  : undefined
+            }
             onClick={() => void handleRun()}
           >
             {loading ? "运行中…" : "运行流程"}
           </button>
-          {!selectedFlowId && selectedProjectId ? (
-            <span className="status">请先在侧栏选择一个 Flow</span>
+          {projectHasNoFlows ? (
+            <span className="status status-hint">本项目还没有 Flow，无法运行</span>
+          ) : !selectedFlowId && selectedProjectId ? (
+            <span className="status status-hint">请在左侧 Flow 列表中选择一个流程</span>
           ) : null}
-          <span className="status">
+          <span className="status" title={selectedFlowId ?? undefined}>
+            {selectedFlowId
+              ? `Flow：${selectedFlowName}${currentFlow ? ` · ${currentFlow.steps.length} 步` : ""}`
+              : "未选择 Flow"}
             {execution
-              ? `执行 ${execution.executionId.slice(0, 8)}… · ${execution.status}`
-              : "尚未运行"}
+              ? ` · 执行 ${execution.executionId.slice(0, 8)}… ${execution.status}`
+              : ""}
           </span>
         </div>
-        {error ? <p className="error">{error}</p> : null}
-        {execution?.fragilityWarnings && execution.fragilityWarnings.length > 0 ? (
-          <ul className="fragility-warnings">
-            {execution.fragilityWarnings.map((w) => (
-              <li key={w.stepId}>
-                <strong>{w.stepId}</strong>：{w.message}
-              </li>
-            ))}
-          </ul>
+        {error ? <p className="error" role="alert">{error}</p> : null}
+        {tab === "flow" ? (
+          <section className="flow-content-panel">
+            {projectHasNoFlows ? (
+              <FlowEmptyGuide projectName={selectedProjectName} />
+            ) : flowLoading ? (
+              <p className="execution-history-empty">正在加载 Flow…</p>
+            ) : currentFlow ? (
+              <>
+                <header className="flow-content-header">
+                  <h2>{currentFlow.name}</h2>
+                  <p className="flow-content-meta">
+                    ID：<code>{currentFlow.id}</code>
+                    {currentFlow.meta?.source ? ` · 来源：${currentFlow.meta.source}` : ""}
+                    {currentFlow.meta?.updatedAt
+                      ? ` · 更新：${formatExecutionTime(currentFlow.meta.updatedAt)}`
+                      : ""}
+                  </p>
+                </header>
+                {currentFlow.steps.length === 0 ? (
+                  <p className="flow-steps-empty-hint">
+                    该 Flow 已同步但<strong>没有录制步骤</strong>。请在扩展中重新录制页面操作后再同步。
+                  </p>
+                ) : null}
+                <FragilityNotice warnings={flowFragilityWarnings} />
+                <FlowStepsTable
+                  steps={flowStepRows}
+                  emptyMessage="该 Flow 没有步骤，请在扩展中录制后重新同步"
+                />
+                <details className="flow-preview">
+                  <summary>查看原始 JSON</summary>
+                  <pre>{JSON.stringify(currentFlow, null, 2)}</pre>
+                </details>
+              </>
+            ) : (
+              <p className="execution-history-empty">
+                在左侧「Flow 列表」中选择一个流程，查看录制步骤与定位策略
+              </p>
+            )}
+          </section>
         ) : null}
         {tab === "executions" ? (
-          <StepLogTable
-            steps={steps}
-            emptyMessage="选择项目并点击「运行流程」查看步骤日志"
-            onOpenScreenshot={openScreenshot}
-          />
-        ) : (
+          <>
+            {execution?.fragilityWarnings && execution.fragilityWarnings.length > 0 ? (
+              <FragilityNotice
+                warnings={execution.fragilityWarnings.map((w) => {
+                  const stepIndex = execution.steps.findIndex((s) => s.stepId === w.stepId);
+                  return {
+                    stepId: w.stepId,
+                    stepIndex: stepIndex >= 0 ? stepIndex : 0,
+                    code: "CSS_ONLY" as const,
+                    message: w.message,
+                    severity: "warning" as const,
+                  };
+                })}
+              />
+            ) : null}
+            <StepLogTable
+              steps={steps}
+              emptyMessage={
+                selectedFlowId
+                  ? "点击「运行流程」或从左侧选择一条执行记录"
+                  : "请先在侧栏选择一个 Flow"
+              }
+              onOpenScreenshot={openScreenshot}
+            />
+          </>
+        ) : null}
+        {tab === "versions" ? (
           <section className="flow-version-panel">
             {selectedFlowId ? (
               <>
@@ -389,11 +772,13 @@ export function App() {
                   </details>
                 ) : null}
               </>
+            ) : projectHasNoFlows ? (
+              <FlowEmptyGuide projectName={selectedProjectName} />
             ) : (
-              <p className="execution-history-empty">当前项目暂无 Flow</p>
+              <p className="execution-history-empty">请在左侧 Flow 列表中选择一个流程</p>
             )}
           </section>
-        )}
+        ) : null}
       </main>
     </div>
   );

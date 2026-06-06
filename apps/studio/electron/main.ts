@@ -1,24 +1,61 @@
+import "./env-setup.js";
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import path from "node:path";
 import { IPC_CHANNELS } from "./ipc-channels.js";
 import {
+  createProject,
   getExecution,
+  getFlow,
   getFlowVersion,
   listExecutions,
   listFlows,
   listFlowVersions,
   listProjects,
+  renameFlow,
   restoreFlowVersion,
   runFlow,
 } from "./services.js";
 
 function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.listProjects, () => listProjects());
+
+  ipcMain.handle(IPC_CHANNELS.createProject, (_event, name: string) => {
+    if (typeof name !== "string") {
+      throw new Error("项目名称无效");
+    }
+    return createProject(name);
+  });
   ipcMain.handle(IPC_CHANNELS.listFlows, (_event, projectId: string) => {
     if (typeof projectId !== "string" || projectId.length === 0) {
       throw new Error("projectId 无效");
     }
     return listFlows(projectId);
+  });
+
+  ipcMain.handle(
+    IPC_CHANNELS.renameFlow,
+    (_event, projectId: string, flowId: string, name: string) => {
+      if (typeof projectId !== "string" || projectId.length === 0) {
+        throw new Error("projectId 无效");
+      }
+      if (typeof flowId !== "string" || flowId.length === 0) {
+        throw new Error("flowId 无效");
+      }
+      if (typeof name !== "string") {
+        throw new Error("name 无效");
+      }
+      return renameFlow(projectId, flowId, name);
+    },
+  );
+
+  ipcMain.handle(IPC_CHANNELS.getFlow, (_event, projectId: string, flowId: string) => {
+    if (typeof projectId !== "string" || projectId.length === 0) {
+      throw new Error("projectId 无效");
+    }
+    if (typeof flowId !== "string" || flowId.length === 0) {
+      throw new Error("flowId 无效");
+    }
+    return getFlow(projectId, flowId);
   });
 
   ipcMain.handle(

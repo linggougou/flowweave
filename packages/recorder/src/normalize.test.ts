@@ -206,7 +206,9 @@ describe("buildFlowFromEvents", () => {
       type: "navigate",
       url: "https://app.example.com/login",
     });
-    expect(flow.steps).toHaveLength(3);
+    // click(#email) + fill(#email) 合并为 fill
+    expect(flow.steps).toHaveLength(2);
+    expect(flow.steps.map((s) => s.type)).toEqual(["navigate", "fill"]);
   });
 
   it("无有效步骤时抛出校验错误", () => {

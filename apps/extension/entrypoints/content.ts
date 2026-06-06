@@ -1,6 +1,11 @@
 import type { RecordedEvent } from "@flowweave/shared";
-import { buildCssSelector } from "../lib/dom.js";
-import { MSG_RECORD_EVENT, type RecordEventMessage } from "../lib/messages.js";
+import {
+  buildInteractionPayload,
+  resolveClickTarget,
+  shouldRecordClick,
+  shouldRecordFill,
+} from "@flowweave/recorder";
+import { MSG_PING_CONTENT, MSG_RECORD_EVENT, type RecordEventMessage } from "../lib/messages.js";
 
 function sendEvent(event: Omit<RecordedEvent, "id"> & { id?: string }): void {
   const payload: RecordEventMessage = {
@@ -28,25 +33,71 @@ function recordNavigate(url: string): void {
   });
 }
 
+function readFillValue(element: Element): string {
+  if (element instanceof HTMLSelectElement) {
+    return element.value;
+  }
+  if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+    return element.value;
+  }
+  return "";
+}
+
+let lastFillSignature = "";
+
+function recordFillFromElement(element: Element): void {
+  if (!shouldRecordFill(element)) {
+    return;
+  }
+  const value = readFillValue(element);
+  const payload = buildInteractionPayload(element, "fill", {
+    value,
+    inputType: element instanceof HTMLInputElement ? element.type : undefined,
+  });
+  const signature = `${payload.selector ?? ""}:${value}:${payload.role ?? ""}`;
+  if (signature === lastFillSignature) {
+    return;
+  }
+  lastFillSignature = signature;
+  sendEvent({
+    type: "fill",
+    timestamp: Date.now(),
+    url: window.location.href,
+    payload,
+  });
+}
+
 export default defineContentScript({
   matches: ["<all_urls>"],
   runAt: "document_idle",
   main() {
     recordNavigate(window.location.href);
 
+    browser.runtime.onMessage.addListener(
+      (message: unknown, _sender: unknown, sendResponse: (response?: unknown) => void) => {
+      if (message && typeof message === "object" && "type" in message) {
+        if ((message as { type: string }).type === MSG_PING_CONTENT) {
+          sendResponse({ ok: true, url: window.location.href });
+          return true;
+        }
+      }
+      return undefined;
+    },
+    );
+
     document.addEventListener(
       "click",
       (ev) => {
         const target = ev.target;
         if (!(target instanceof Element)) return;
+        const actionable = resolveClickTarget(target);
+        if (!shouldRecordClick(actionable)) return;
+        const payload = buildInteractionPayload(actionable, "click");
         sendEvent({
           type: "click",
           timestamp: Date.now(),
           url: window.location.href,
-          payload: {
-            selector: buildCssSelector(target),
-            tagName: target.tagName.toLowerCase(),
-          },
+          payload,
         });
       },
       true,
@@ -56,23 +107,32 @@ export default defineContentScript({
       "change",
       (ev) => {
         const target = ev.target;
-        if (
-          !(target instanceof HTMLInputElement) &&
-          !(target instanceof HTMLTextAreaElement) &&
-          !(target instanceof HTMLSelectElement)
-        ) {
-          return;
-        }
-        sendEvent({
-          type: "fill",
-          timestamp: Date.now(),
-          url: window.location.href,
-          payload: {
-            selector: buildCssSelector(target),
-            value: target instanceof HTMLSelectElement ? target.value : target.value,
-            inputType: target instanceof HTMLInputElement ? target.type : undefined,
-          },
-        });
+        if (!(target instanceof Element)) return;
+        recordFillFromElement(target);
+      },
+      true,
+    );
+
+    document.addEventListener(
+      "blur",
+      (ev) => {
+        const target = ev.target;
+        if (!(target instanceof Element)) return;
+        recordFillFromElement(target);
+      },
+      true,
+    );
+
+    let inputDebounce: ReturnType<typeof setTimeout> | undefined;
+    document.addEventListener(
+      "input",
+      (ev) => {
+        const target = ev.target;
+        if (!(target instanceof Element) || !shouldRecordFill(target)) return;
+        clearTimeout(inputDebounce);
+        inputDebounce = setTimeout(() => {
+          recordFillFromElement(target);
+        }, 400);
       },
       true,
     );

@@ -5,6 +5,7 @@ import {
   type RecorderSessionMeta,
 } from "@flowweave/shared";
 import type { FlowDocument, NormalizedStep, Target } from "@flowweave/flow-dsl";
+import { filterNoisyInteractionSteps, mergeConsecutiveFillSteps } from "./step-filter.js";
 
 type LocatorStrategy = Target["strategies"][number];
 
@@ -78,15 +79,15 @@ function buildTargetFromPayload(payload: Record<string, unknown>): Target | null
   }
 
   const strategies: LocatorStrategy[] = [];
+  const testId = readString(payload, "testId");
+  if (testId) {
+    strategies.push({ kind: "testId", testId });
+  }
+
   const role = readString(payload, "role");
   const name = readString(payload, "name");
   if (role) {
     strategies.push(name ? { kind: "role", role, name } : { kind: "role", role });
-  }
-
-  const testId = readString(payload, "testId");
-  if (testId) {
-    strategies.push({ kind: "testId", testId });
   }
 
   const selector = readString(payload, "selector");
@@ -213,11 +214,15 @@ export function buildFlowFromEvents(
   events: RecordedEvent[],
   meta: BuildFlowFromEventsMeta,
 ): FlowDocument {
-  const steps = ensureLeadingNavigate(
-    events
-      .map((event) => normalizeRecordedEvent(event))
-      .filter((step): step is NormalizedStep => step !== null),
-    events,
+  const steps = mergeConsecutiveFillSteps(
+    filterNoisyInteractionSteps(
+      ensureLeadingNavigate(
+        events
+          .map((event) => normalizeRecordedEvent(event))
+          .filter((step): step is NormalizedStep => step !== null),
+        events,
+      ),
+    ),
   );
 
   if (steps.length === 0) {

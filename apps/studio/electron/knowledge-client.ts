@@ -44,8 +44,19 @@ export async function apiCreateProject(name: string): Promise<ProjectRef> {
 
 export async function apiListFlows(
   projectId: string,
-): Promise<Array<{ id: string; name: string }>> {
+): Promise<Array<{ id: string; name: string; createdAt: string }>> {
   return request(`/api/projects/${projectId}/flows`);
+}
+
+export async function apiRenameFlow(
+  projectId: string,
+  flowId: string,
+  name: string,
+): Promise<{ flowId: string; name: string; createdAt: string }> {
+  return request(`/api/projects/${projectId}/flows/${flowId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
 }
 
 export async function apiGetFlow(

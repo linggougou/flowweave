@@ -6,6 +6,7 @@ export const MSG_EXPORT_FLOW = "flowweave:export-flow" as const;
 export const MSG_SYNC_KNOWLEDGE = "flowweave:sync-knowledge" as const;
 export const MSG_SET_PROJECT = "flowweave:set-project" as const;
 export const MSG_CLEAR_SESSION = "flowweave:clear-session" as const;
+export const MSG_PING_CONTENT = "flowweave:ping-content" as const;
 
 export type RecordEventMessage = {
   type: typeof MSG_RECORD_EVENT;
@@ -42,7 +43,8 @@ export type ExtensionMessage =
   | ExportFlowMessage
   | SyncKnowledgeMessage
   | SetProjectMessage
-  | ClearSessionMessage;
+  | ClearSessionMessage
+  | { type: typeof MSG_PING_CONTENT };
 
 export type SessionState = {
   eventCount: number;

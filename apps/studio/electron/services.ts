@@ -1,3 +1,4 @@
+import "./env-setup.js";
 import { randomUUID } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -7,6 +8,7 @@ import type { ExecutionResult as KnowledgeExecutionResult } from "@flowweave/pro
 import { analyzeFlowFragility } from "@flowweave/page-intelligence";
 import { executeFlow, type ExecutionResult as RuntimeExecutionResult } from "@flowweave/runtime";
 import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
+import { isChromiumInstalled } from "./env-setup.js";
 import type {
   ExecutionStepLog,
   ExecutionSummary,
@@ -24,6 +26,7 @@ import {
   apiListFlowVersions,
   apiListFlows,
   apiListProjects,
+  apiRenameFlow,
   apiRestoreFlowVersion,
   apiSaveExecution,
   apiSaveFlow,
@@ -117,6 +120,19 @@ export async function listProjects(): Promise<StudioProject[]> {
   }));
 }
 
+export async function createProject(name: string): Promise<StudioProject> {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    throw new Error("项目名称不能为空");
+  }
+  const project = await apiCreateProject(trimmed);
+  return {
+    id: project.id,
+    name: project.name,
+    createdAt: project.createdAt,
+  };
+}
+
 async function resolveFlowForRun(projectId: string, flowId?: string): Promise<FlowDocument> {
   if (flowId) {
     return apiGetFlow(projectId, flowId);
@@ -183,6 +199,12 @@ export async function runFlow(
   const executionId = randomUUID();
   const artifactDir = await apiAllocateRunDirectory(projectId, executionId);
   const showBrowser = options.showBrowser ?? true;
+
+  if (!isChromiumInstalled()) {
+    throw new Error(
+      "未检测到 Playwright Chromium。请在项目根目录执行：\npnpm --filter @flowweave/runtime exec playwright install chromium\n完成后请完全退出并重新打开 Studio。",
+    );
+  }
 
   const runtimeResult = await executeFlow(flow, {
     headless: !showBrowser,
@@ -272,8 +294,27 @@ export async function listExecutions(projectId: string): Promise<ExecutionSummar
   }));
 }
 
-export async function listFlows(projectId: string): Promise<Array<{ id: string; name: string }>> {
+export async function listFlows(
+  projectId: string,
+): Promise<Array<{ id: string; name: string; createdAt: string }>> {
   return apiListFlows(projectId);
+}
+
+export async function renameFlow(
+  projectId: string,
+  flowId: string,
+  name: string,
+): Promise<{ id: string; name: string; createdAt: string }> {
+  const result = await apiRenameFlow(projectId, flowId, name);
+  return {
+    id: result.flowId,
+    name: result.name,
+    createdAt: result.createdAt,
+  };
+}
+
+export async function getFlow(projectId: string, flowId: string): Promise<FlowDocument> {
+  return apiGetFlow(projectId, flowId);
 }
 
 export async function listFlowVersions(

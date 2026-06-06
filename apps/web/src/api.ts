@@ -16,7 +16,9 @@ export function listProjects(): Promise<WebProject[]> {
   return request<WebProject[]>("/api/projects");
 }
 
-export function listFlows(projectId: string): Promise<Array<{ id: string; name: string }>> {
+export function listFlows(
+  projectId: string,
+): Promise<Array<{ id: string; name: string; createdAt: string }>> {
   return request(`/api/projects/${projectId}/flows`);
 }
 

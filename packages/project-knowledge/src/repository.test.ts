@@ -61,6 +61,28 @@ describe("ProjectKnowledgeRepository", () => {
     const flows = repo.listFlows(project.id);
     expect(flows).toHaveLength(1);
     expect(flows[0]?.id).toBe(flowId);
+    expect(flows[0]?.createdAt).toBeTruthy();
+  });
+
+  it("renameFlow 更新名称且不新增版本", () => {
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-pk-"));
+    const repo = new ProjectKnowledgeRepository({ dataDir });
+
+    const project = repo.createProject("重命名项目");
+    const flowId = "flow_rename_1";
+    repo.saveFlow(project.id, sampleFlow(project.id, flowId));
+
+    const renamed = repo.renameFlow(project.id, flowId, "新名称");
+    expect(renamed.name).toBe("新名称");
+
+    const loaded = repo.getFlowInProject(project.id, flowId);
+    expect(loaded?.name).toBe("新名称");
+
+    const flows = repo.listFlows(project.id);
+    expect(flows[0]?.name).toBe("新名称");
+
+    const versions = repo.listFlowVersions(project.id, flowId);
+    expect(versions).toHaveLength(0);
   });
 
   it("saveExecution 持久化步骤日志且截图仅存路径", () => {

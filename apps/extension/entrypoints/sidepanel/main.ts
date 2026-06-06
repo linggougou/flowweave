@@ -9,6 +9,7 @@ import {
   MSG_CLEAR_SESSION,
   MSG_EXPORT_FLOW,
   MSG_GET_SESSION,
+  MSG_PING_CONTENT,
   MSG_SET_PROJECT,
   MSG_SYNC_KNOWLEDGE,
   type ExportFlowMessage,
@@ -30,6 +31,8 @@ const syncBtn = document.getElementById("sync-btn") as HTMLButtonElement | null;
 const statusEl = document.getElementById("status");
 const projectSelect = document.getElementById("project-select") as HTMLSelectElement | null;
 const refreshProjectsBtn = document.getElementById("refresh-projects-btn") as HTMLButtonElement | null;
+const recordingPageEl = document.getElementById("recording-page");
+const reloadPageBtn = document.getElementById("reload-page-btn") as HTMLButtonElement | null;
 
 let projects: KnowledgeProject[] = [];
 let apiOnline = false;
@@ -95,12 +98,42 @@ async function persistProjectSelection(projectId: string): Promise<void> {
 }
 
 async function refreshSession(): Promise<void> {
-  const message: GetSessionMessage = { type: MSG_GET_SESSION };
-  const state = (await browser.runtime.sendMessage(message)) as SessionState;
-  if (!selectedProjectId && state.projectId !== "pending") {
-    selectedProjectId = state.projectId;
+  try {
+    const message: GetSessionMessage = { type: MSG_GET_SESSION };
+    const state = (await browser.runtime.sendMessage(message)) as SessionState;
+    if (!selectedProjectId && state.projectId !== "pending") {
+      selectedProjectId = state.projectId;
+    }
+    renderSession(state);
+  } catch {
+    // background 未就绪
   }
-  renderSession(state);
+}
+
+async function checkRecordingPage(): Promise<void> {
+  if (!recordingPageEl) return;
+  try {
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    const url = tab?.url ?? "";
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      recordingPageEl.textContent = "请切换到要录制的网页标签（不能是扩展页或空白页）";
+      return;
+    }
+    if (!tab?.id) {
+      recordingPageEl.textContent = "无法获取当前标签页";
+      return;
+    }
+    const pong = (await browser.tabs.sendMessage(tab.id, { type: MSG_PING_CONTENT })) as {
+      ok?: boolean;
+    };
+    if (pong?.ok) {
+      recordingPageEl.textContent = `当前页已就绪，可直接操作录制（${new URL(url).hostname}）`;
+      return;
+    }
+    recordingPageEl.textContent = "当前页未加载录制脚本，请点击下方「刷新当前页」后再操作";
+  } catch {
+    recordingPageEl.textContent = "当前页未加载录制脚本，请点击下方「刷新当前页」后再操作";
+  }
 }
 
 async function loadProjects(): Promise<void> {
@@ -147,6 +180,19 @@ projectSelect?.addEventListener("change", () => {
 
 refreshProjectsBtn?.addEventListener("click", () => {
   void loadProjects();
+});
+
+reloadPageBtn?.addEventListener("click", () => {
+  void (async () => {
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) {
+      setStatus("无法刷新：未找到当前标签页");
+      return;
+    }
+    await browser.tabs.reload(tab.id);
+    setStatus("已刷新当前页，请稍等加载完成后再操作");
+    window.setTimeout(() => void checkRecordingPage(), 1500);
+  })();
 });
 
 exportBtn?.addEventListener("click", () => {
@@ -201,6 +247,10 @@ syncBtn?.addEventListener("click", () => {
 void (async () => {
   await restoreSelectedProject();
   await loadProjects();
+  await checkRecordingPage();
 })();
-const timer = window.setInterval(() => void refreshSession(), 1000);
+const timer = window.setInterval(() => {
+  void refreshSession();
+  void checkRecordingPage();
+}, 1000);
 window.addEventListener("unload", () => window.clearInterval(timer));

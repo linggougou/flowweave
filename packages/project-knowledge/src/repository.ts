@@ -434,13 +434,62 @@ export class ProjectKnowledgeRepository {
     return projects.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
-  listFlows(projectId: string): Array<{ id: string; name: string }> {
+  listFlows(projectId: string): Array<{ id: string; name: string; createdAt: string }> {
     const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
     try {
       return db
-        .select({ id: dbSchema.flows.id, name: dbSchema.flows.name })
+        .select({
+          id: dbSchema.flows.id,
+          name: dbSchema.flows.name,
+          createdAt: dbSchema.flows.createdAt,
+        })
         .from(dbSchema.flows)
+        .orderBy(desc(dbSchema.flows.createdAt))
         .all();
+    } finally {
+      closeProjectDatabase(sqlite);
+    }
+  }
+
+  /** 仅更新 Flow 名称（不新增版本快照） */
+  renameFlow(projectId: string, flowId: string, name: string): FlowDocument {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      throw new Error("Flow 名称不能为空");
+    }
+
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    try {
+      const row = db
+        .select()
+        .from(dbSchema.flows)
+        .where(eq(dbSchema.flows.id, flowId))
+        .get();
+      if (!row) {
+        throw new Error("Flow 不存在");
+      }
+
+      const document = parseFlowDocument(JSON.parse(row.documentJson));
+      const now = new Date().toISOString();
+      const updated: FlowDocument = {
+        ...document,
+        name: trimmed,
+        meta: {
+          ...document.meta,
+          updatedAt: now,
+        },
+      };
+
+      db.update(dbSchema.flows)
+        .set({
+          name: trimmed,
+          documentJson: JSON.stringify(updated),
+          updatedAt: now,
+        })
+        .where(eq(dbSchema.flows.id, flowId))
+        .run();
+
+      return updated;
     } finally {
       closeProjectDatabase(sqlite);
     }

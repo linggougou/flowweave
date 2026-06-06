@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.electron.json",
     "lint": "eslint src electron",
     "test": "vitest run --passWithNoTests",
-    "dev": "pnpm build:electron && concurrently -k \"vite\" \"wait-on http://127.0.0.1:5173 && VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\""
+    "dev": "pnpm build:electron && concurrently -k \"node ./scripts/watch-electron.mjs\" \"vite\" \"wait-on http://127.0.0.1:5173 && node ./scripts/dev-electron.mjs\""
   },
   "dependencies": {
     "@flowweave/flow-dsl": "workspace:*",
@@ -19,6 +19,7 @@
     "@flowweave/runtime": "workspace:*",
     "@flowweave/shared": "workspace:*",
     "@flowweave/ui": "workspace:*",
+    "playwright": "^1.49.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
