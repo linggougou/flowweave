@@ -1284,3 +1284,151 @@
       - 项目 ID：`4d452a02-1606-4ba3-888e-e126d0607367`
       - 执行 ID：`3bcd83c9-b739-497b-a8dd-e81518ba8544`
       - `4` 个步骤全部 `success`
+
+## 2026-06-06 续跑记录 - 执行历史映射回归
+
+- 时间：2026-06-06 19:50:51 CST
+- 任务目标：把 Electron 与 HTTP fallback 的历史执行重建规则收敛到 shared 层，并补上服务层回归测试，防止后续再把 `flowSnapshot` / `runContext` 传丢。
+- 所用技能：
+  - `test-driven-development`
+  - `verification-before-completion`
+- 工具与环境说明：
+  - 当前环境仍未提供 `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code`。
+  - 本轮继续用 CodeGraph、本地命令、Vitest 与 Node 20 验证替代。
+- 上下文依据：
+  - `.codex/context-summary-execution-history-mapping-regression.md`
+  - `apps/studio/electron/services.ts`
+  - `apps/studio/src/studio-client.ts`
+  - `apps/studio/src/shared/execution-fragility.test.ts`
+  - `packages/project-knowledge/src/repository.test.ts`
+
+## 编码前检查 - 执行历史映射回归
+
+时间：2026-06-06 19:50:51 CST
+
+□ 已查阅上下文摘要文件：`.codex/context-summary-execution-history-mapping-regression.md`
+□ 将使用以下可复用组件：
+- `resolveExecutionFlow()`：继续作为“快照优先 / 当前 Flow 回退”的唯一入口
+- `buildExecutionFragilityIssues()`：继续作为历史执行 fragility 计算入口
+- `ExecutionWithProject`：继续作为 Electron / HTTP fallback 共享底层执行记录契约
+□ 将遵循命名约定：共享纯函数落在 `apps/studio/src/shared/`，IO 差异留在 `electron/` 与 `src/`
+□ 将遵循代码风格：先写红灯测试，再做最小重构，不引入额外测试基建
+□ 确认不重复造轮子，证明：已检查 `services.ts`、`studio-client.ts`、`execution-fragility.test.ts` 与 repository 测试，当前仓库没有统一的执行历史映射 helper
+
+## 单 agent 串行执行说明 - 执行历史映射回归
+
+- 时间：2026-06-06 19:50:51 CST
+- 不并行派发原因：
+  - 本轮改动会同时触达 `apps/studio/electron/services.ts`、`apps/studio/src/studio-client.ts` 与新的 shared helper，三者职责高度耦合。
+  - 若拆子代理并行，很容易在“公共 helper 放哪里、两端如何接入、测试覆盖哪个层级”上产生冲突。
+- 补偿措施：
+  - 严格走 TDD：先补 shared 层红灯测试，再做最小重构，最后在 Node 20 下跑定向与整仓验证。
+
+## 实现完成 - 执行历史映射回归
+
+- 时间：2026-06-06 20:01:12 CST
+- 红灯测试：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- execution-history`
+    - 失败点：`apps/studio/src/shared/execution-history.js` 不存在，说明仓库中尚无统一的执行历史映射 helper
+- 实现范围：
+  - `apps/studio/src/shared/execution-history.ts`
+    - 新增 `mapStoredExecutionToStudioExecution()`
+    - 新增 `shouldUseCachedExecution()`
+    - 把“快照优先、步骤标签、fragility、缓存命中条件”收敛到 shared 层
+  - `apps/studio/src/shared/execution-history.test.ts`
+    - 新增 `4` 条回归
+    - 覆盖：
+      - Flow 快照优先于 fallback Flow
+      - 调用方可补充步骤扩展字段
+      - 缺少 `flowSnapshot` 时不允许直接命中缓存
+      - Flow 不依赖环境 / 变量时，即使缺少 `runContext` 也允许复用缓存
+  - `apps/studio/electron/services.ts`
+    - 历史执行重建改为复用 shared helper
+    - 缓存命中判断改为复用 `shouldUseCachedExecution()`
+  - `apps/studio/src/studio-client.ts`
+    - HTTP fallback 的 `getExecution()` 改为复用 shared helper
+    - `diagnostic` / `pageSnapshot` 等链路特有字段通过 `decorateStep` 补回
+
+## 编码后声明 - 执行历史映射回归
+
+- 时间：2026-06-06 20:01:12 CST
+- 复用了以下既有组件与模式：
+  - `resolveExecutionFlow()`：继续作为快照优先规则源
+  - `buildExecutionFragilityIssues()`：继续作为历史执行 fragility 计算源
+  - `ExecutionWithProject`：继续作为 Electron / HTTP fallback 的底层输入契约
+- 遵循的项目约定：
+  - 共享纯函数留在 `apps/studio/src/shared/`
+  - Electron / HTTP fallback 仅保留各自的 IO 与步骤扩展差异
+  - 测试仍使用最小执行记录夹具，不引入额外 mock 基建
+- 未重复造轮子的证明：
+  - 没有新建第三套执行 DTO，也没有改 runtime / knowledge 契约，只是把现有两段重复映射收敛到 shared 层
+
+## 本轮验证结果 - 执行历史映射回归
+
+- 时间：2026-06-06 20:01:12 CST
+- Node 基线：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH`
+- 定向验证：
+  - `pnpm --filter @flowweave/app-studio test -- execution-history`
+    - 结果：通过，`4/4`
+  - `pnpm --filter @flowweave/app-studio test`
+    - 结果：通过，`17/17`
+  - `pnpm --filter @flowweave/app-studio lint`
+    - 结果：通过
+  - `pnpm --filter @flowweave/app-studio typecheck`
+    - 结果：通过
+  - `pnpm --filter @flowweave/app-studio build`
+    - 结果：通过
+- 仓库级统一验收：
+  - `pnpm smoke`
+    - 结果：通过
+    - `e2e:login`
+      - 项目 ID：`88a4298f-6bb1-4689-900e-522db03dcd9f`
+      - 执行 ID：`0e65b77b-58d0-4ce4-89c8-12474a51cea2`
+      - `4` 个步骤全部 `success`
+- 复核动作：
+  - 已派发 reviewer 子代理 `Carver` / `019e9cce-da77-7001-8472-1710b56d8fb9`
+  - 关注点：
+    - shared helper 是否真的让 Electron / HTTP fallback 共用同一映射规则
+    - 新 helper 是否改变字段语义
+    - 新测试是否覆盖缓存命中与快照优先
+
+## 复核补修 - 执行历史映射回归
+
+- 时间：2026-06-06 20:06:24 CST
+- reviewer 结论：
+  - 无阻塞级问题
+  - 中风险：
+    - 共享纯函数已测试，但还没直接打到 Electron `getExecution()` 的真实缓存命中路径
+  - 低风险：
+    - `decorateStep` 允许返回 `Partial<ExecutionStepLog>`，未来可能覆写核心字段语义
+    - `.codex/verification-report.md` 需补齐本轮验收条目
+- 对应修复：
+  - `apps/studio/electron/services.test.ts`
+    - 新增 `2` 条 Electron 服务层回归
+    - 覆盖：
+      - 缓存缺少 `flowSnapshot` 时继续回源 `apiGetExecution` / `apiGetFlow`
+      - Flow 不依赖环境 / 变量且 `runContext` 缺失时，第二次读取直接命中缓存
+  - `apps/studio/src/shared/execution-history.ts`
+    - 把 `decorateStep` 返回类型从宽泛的 `Partial<ExecutionStepLog>` 收窄为仅允许 artifact 相关字段：
+      - `diagnostic`
+      - `pageSnapshot`
+      - `pageSnapshotPath`
+  - `.codex/verification-report.md`
+    - 已补齐“执行历史映射回归验收”章节并更新最新验证结果
+- 复核后最新验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
+    - 结果：通过，`19/19`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio lint`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio build`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+    - 结果：通过
+    - `e2e:login`
+      - 项目 ID：`d87efb87-8259-4b57-8092-0b2ca043ea9c`
+      - 执行 ID：`c2c4d108-1959-4bbe-98f1-e894f6b20659`
+      - `4` 个步骤全部 `success`
+  - reviewer 子代理 `Carver` 已回收

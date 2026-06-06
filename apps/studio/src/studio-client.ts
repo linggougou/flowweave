@@ -13,9 +13,8 @@ import type {
   StudioProjectEnvironment,
 } from "./shared/studio-api-types.js";
 import {
-  buildExecutionFragilityIssues,
-  resolveExecutionFlow,
-} from "./shared/execution-fragility.js";
+  mapStoredExecutionToStudioExecution,
+} from "./shared/execution-history.js";
 
 const KNOWLEDGE_API =
   import.meta.env.VITE_FLOWWEAVE_KNOWLEDGE_API ?? "http://127.0.0.1:3847";
@@ -59,47 +58,6 @@ function mapExecutionStatus(status: ExecutionResult["status"]): StudioExecution[
     return "passed";
   }
   return "failed";
-}
-
-function toStudioExecution(
-  stored: ExecutionWithProject,
-  flow?: FlowDocument,
-): StudioExecution {
-  const startedAt = stored.startedAt ?? new Date(0).toISOString();
-  const executionFlow = resolveExecutionFlow(stored.flowSnapshot, flow);
-  return {
-    executionId: stored.executionId,
-    projectId: stored.projectId,
-    flowId: stored.flowId,
-    status: mapExecutionStatus(stored.status),
-    startedAt,
-    finishedAt: stored.finishedAt,
-    environmentName: stored.runContext?.environmentName,
-    flowSnapshot: stored.flowSnapshot,
-    runContext: stored.runContext,
-    steps: stored.steps.map((step) => {
-      const storedStep = step as ExecutionWithProject["steps"][number] & Partial<ExecutionStepLog>;
-      return {
-        stepIndex: step.stepIndex,
-        stepId: step.stepId,
-        label:
-          executionFlow?.steps[step.stepIndex]?.label ??
-          executionFlow?.steps[step.stepIndex]?.type ??
-          step.stepId,
-        status: step.status,
-        message: step.errorMessage,
-        durationMs: step.durationMs,
-        startedAt,
-        finishedAt: stored.finishedAt,
-        screenshotPath: step.screenshotPath,
-        diagnosticPath: step.diagnosticPath,
-        diagnostic: storedStep.diagnostic,
-        pageSnapshotPath: storedStep.pageSnapshotPath,
-        pageSnapshot: storedStep.pageSnapshot,
-      };
-    }),
-    fragilityIssues: buildExecutionFragilityIssues(executionFlow, stored.runContext),
-  };
 }
 
 function toExecutionSummary(item: ExecutionResult): ExecutionSummary {
@@ -213,7 +171,18 @@ const knowledgeHttpClient: Pick<StudioApi, HttpFallbackMethod> = {
           flow = undefined;
         }
       }
-      return toStudioExecution(stored, flow);
+      return mapStoredExecutionToStudioExecution(stored, {
+        fallbackFlow: flow,
+        decorateStep: (step) => {
+          const storedStep = step as ExecutionWithProject["steps"][number] &
+            Partial<ExecutionStepLog>;
+          return {
+            diagnostic: storedStep.diagnostic,
+            pageSnapshotPath: storedStep.pageSnapshotPath,
+            pageSnapshot: storedStep.pageSnapshot,
+          };
+        },
+      });
     } catch {
       return null;
     }

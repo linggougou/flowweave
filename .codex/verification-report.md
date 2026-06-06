@@ -253,7 +253,7 @@
        - 不依赖环境 / 变量的旧记录不应误报
        - 说明字段与 `target.hints` 中的字面 `{{...}}` 不应触发兼容提示
        - 变量已有默认值时，缺少运行上下文不应误报
-4. 最新 Node 20 验证通过。
+5. 最新 Node 20 验证通过。
    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- execution-fragility`
      - 结果：通过，`13/13`
    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
@@ -280,6 +280,87 @@
 
 - 代码质量评分：98
 - 测试覆盖评分：97
+- 规范遵循评分：98
+- 战略匹配评分：97
+- 风险评估评分：95
+- 综合评分：97
+- 建议：通过
+
+## 2026-06-06 执行历史映射回归验收
+
+### 验证范围
+
+- Electron 与 HTTP fallback 是否已经共用同一套历史执行映射规则，而不是继续各写一份快照 / fragility / 标签重建逻辑。
+- 新增 shared helper 是否正确保护以下关键行为：
+  - Flow 快照优先于 fallback Flow
+  - 缺少 `flowSnapshot` 时不允许直接命中缓存
+  - Flow 不依赖环境 / 变量时，即使缺少 `runContext` 也允许复用缓存
+- 当前主工作区是否在 `Node v20.19.6` 下通过 `app-studio` 定向验证与整仓 `pnpm smoke`。
+
+### 验证结果
+
+1. 历史执行映射规则已收敛到 shared 层。
+   - `apps/studio/src/shared/execution-history.ts` 新增：
+     - `mapStoredExecutionToStudioExecution()`
+     - `shouldUseCachedExecution()`
+   - `apps/studio/electron/services.ts` 与 `apps/studio/src/studio-client.ts` 均已改为调用这组 helper。
+   - 因此两条链路现在共享：
+     - Flow 快照优先规则
+     - 步骤标签回填规则
+     - 历史 fragility 计算规则
+     - 缓存命中充分性判断
+2. 链路差异仍被保留在正确边界内。
+   - Electron 侧继续通过 `readStepArtifacts()` 读取本地诊断与页面摘要文件。
+   - HTTP fallback 侧继续通过 `decorateStep` 补回 API 已经返回的 `diagnostic` / `pageSnapshot` 字段。
+   - 本轮没有引入第三套 DTO，也没有修改 runtime / knowledge 存储契约。
+3. reviewer 指出的回归缺口已补齐。
+   - `apps/studio/electron/services.test.ts`
+     - 新增 `2/2` Electron 服务层回归
+     - 覆盖：
+       - 缓存缺少 `flowSnapshot` 时继续回源 `apiGetExecution` / `apiGetFlow`
+       - Flow 不依赖环境 / 变量且 `runContext` 缺失时，第二次读取直接命中缓存
+   - `apps/studio/src/shared/execution-history.ts`
+     - `decorateStep` 返回类型已收窄为仅允许补 artifact 相关字段：
+       - `diagnostic`
+       - `pageSnapshot`
+       - `pageSnapshotPath`
+4. 新增回归测试通过。
+   - `apps/studio/src/shared/execution-history.test.ts`
+     - 共 `4/4` 通过
+     - 覆盖：
+       - Flow 快照优先于 fallback Flow
+       - 调用方可在公共映射后补 artifact 扩展字段
+       - 缺少 `flowSnapshot` 时禁止直接命中缓存
+       - Flow 不依赖环境 / 变量时允许复用无 `runContext` 缓存
+4. 最新 Node 20 验证通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- execution-history`
+     - 结果：通过，`4/4`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
+     - 结果：通过，`19/19`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio lint`
+     - 结果：通过
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+     - 结果：通过
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio build`
+     - 结果：通过
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+     - 结果：通过
+     - `e2e:login`
+       - 项目 ID：`d87efb87-8259-4b57-8092-0b2ca043ea9c`
+       - 执行 ID：`c2c4d108-1959-4bbe-98f1-e894f6b20659`
+       - 共 `4` 个步骤，全部 `success`
+
+### Findings
+
+1. 当前未发现阻塞级问题。
+   - 这轮把“规则收敛”和“回归保护”同时补齐，未来再改 Electron / HTTP 任一侧时，更不容易出现静默分叉。
+2. 残余风险：当前 Electron 缓存回归仍基于 mock 的知识库客户端，不是完整的 Electron 集成测试。
+   - 这已经足以守住 `getExecution()` 的调用顺序与缓存判断；若未来再扩展 preload / IPC 边界，可继续补更高层的集成覆盖。
+
+### 综合结论
+
+- 代码质量评分：97
+- 测试覆盖评分：96
 - 规范遵循评分：98
 - 战略匹配评分：97
 - 风险评估评分：95

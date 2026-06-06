@@ -28,9 +28,11 @@ import type {
 } from "../src/shared/studio-api-types.js";
 import {
   buildExecutionFragilityIssues,
-  hasFragilityRelevantRunContext,
-  resolveExecutionFlow,
 } from "../src/shared/execution-fragility.js";
+import {
+  mapStoredExecutionToStudioExecution,
+  shouldUseCachedExecution,
+} from "../src/shared/execution-history.js";
 import {
   apiAllocateRunDirectory,
   apiCreateProject,
@@ -426,53 +428,9 @@ function mapKnowledgeStatus(status: KnowledgeExecutionResult["status"]): StudioE
   return "failed";
 }
 
-function fromKnowledgeExecution(
-  stored: Awaited<ReturnType<typeof apiGetExecution>> & object,
-  flow?: FlowDocument,
-): StudioExecution {
-  const startedAt = stored.startedAt ?? new Date(0).toISOString();
-  const runContext = stored.runContext;
-  const executionFlow = resolveExecutionFlow(stored.flowSnapshot, flow);
-  return {
-    executionId: stored.executionId,
-    projectId: stored.projectId,
-    flowId: stored.flowId,
-    status: mapKnowledgeStatus(stored.status),
-    startedAt,
-    finishedAt: stored.finishedAt,
-    environmentName: runContext?.environmentName,
-    flowSnapshot: stored.flowSnapshot,
-    runContext,
-    steps: stored.steps.map((step) => {
-      const mappedStep: ExecutionStepLog = {
-        stepIndex: step.stepIndex,
-        stepId: step.stepId,
-        label: resolveStepLabel(executionFlow, step.stepIndex, step.stepId),
-        status: step.status,
-        message: step.errorMessage,
-        durationMs: step.durationMs,
-        startedAt,
-        finishedAt: stored.finishedAt,
-        screenshotPath: step.screenshotPath,
-        diagnosticPath: step.diagnosticPath,
-      };
-
-      return {
-        ...mappedStep,
-        ...readStepArtifacts(mappedStep),
-      };
-    }),
-    fragilityIssues: buildExecutionFragilityIssues(executionFlow, runContext),
-  };
-}
-
 export async function getExecution(executionId: string): Promise<StudioExecution | null> {
   const cached = executions.get(executionId);
-  if (
-    cached &&
-    cached.flowSnapshot &&
-    hasFragilityRelevantRunContext(cached.runContext, cached.flowSnapshot)
-  ) {
+  if (cached && shouldUseCachedExecution(cached)) {
     return cached;
   }
   const stored = await apiGetExecution(executionId);
@@ -486,7 +444,10 @@ export async function getExecution(executionId: string): Promise<StudioExecution
       }
     }
 
-    const record = fromKnowledgeExecution(stored, flow);
+    const record = mapStoredExecutionToStudioExecution(stored, {
+      fallbackFlow: flow,
+      decorateStep: (_step, mappedStep) => readStepArtifacts(mappedStep),
+    });
     executions.set(executionId, record);
     return record;
   }
