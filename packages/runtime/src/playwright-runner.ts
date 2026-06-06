@@ -780,27 +780,116 @@ async function waitForPageSettled(page: Page, timeoutMs = 12_000): Promise<void>
     .catch(() => undefined);
 }
 
-async function isSuggestLikeTarget(locator: Locator): Promise<boolean> {
+async function waitForBrowserFrame(page: Page): Promise<void> {
+  await page
+    .evaluate(
+      () =>
+        new Promise<boolean>((resolve) => {
+          window.requestAnimationFrame(() => resolve(true));
+        }),
+    )
+    .catch(() => undefined);
+}
+
+type SuggestTargetSnapshot = {
+  expanded: string | null;
+  activeDescendantId: string | null;
+  visibleOptionCount: number;
+  visibleOptionSignature: string;
+  visibleActiveOptionKey: string | null;
+};
+
+type SuggestTargetWaitOptions = {
+  baseline?: SuggestTargetSnapshot | null;
+  expectedValue?: string;
+  timeoutMs?: number;
+};
+
+async function captureSuggestTargetSnapshot(
+  locator: Locator,
+): Promise<SuggestTargetSnapshot | null> {
   return locator
-    .evaluate((node) => {
-      const role = node.getAttribute("role")?.trim().toLowerCase();
-      const autocomplete = node.getAttribute("aria-autocomplete")?.trim().toLowerCase();
-      const controls = node.getAttribute("aria-controls")?.trim();
-      return (
-        role === "combobox" ||
-        autocomplete === "list" ||
-        autocomplete === "both" ||
-        !!controls
-      );
+    .evaluate((input) => {
+      if (!(input instanceof HTMLElement)) {
+        return null;
+      }
+
+      const controlsId = input.getAttribute("aria-controls");
+      const role = input.getAttribute("role")?.trim().toLowerCase();
+      const autocomplete = input.getAttribute("aria-autocomplete")?.trim().toLowerCase();
+      if (
+        role !== "combobox" &&
+        autocomplete !== "list" &&
+        autocomplete !== "both" &&
+        !controlsId?.trim()
+      ) {
+        return null;
+      }
+
+      const popup = controlsId ? document.getElementById(controlsId) : null;
+      const visibleOptions: HTMLElement[] = [];
+      if (popup) {
+        for (const candidate of Array.from(
+          popup.querySelectorAll("[role='option'], option, li, button"),
+        )) {
+          if (!(candidate instanceof HTMLElement) || candidate.hidden) {
+            continue;
+          }
+          const style = window.getComputedStyle(candidate);
+          if (style.display === "none" || style.visibility === "hidden") {
+            continue;
+          }
+          if (candidate.getClientRects().length === 0) {
+            continue;
+          }
+          visibleOptions.push(candidate);
+        }
+      }
+
+      const visibleOptionKeys = visibleOptions.map((option) => {
+        const dataCommandId = option.getAttribute("data-command-id");
+        const elementId = option.getAttribute("id");
+        const text = option.textContent?.replace(/\s+/g, " ").trim();
+        return dataCommandId || elementId || text || "";
+      });
+
+      let visibleActiveOptionKey: string | null = null;
+      for (const option of visibleOptions) {
+        if (
+          option.getAttribute("data-active") === "true" ||
+          option.getAttribute("aria-selected") === "true" ||
+          option.classList.contains("is-active") ||
+          option.classList.contains("active")
+        ) {
+          const dataCommandId = option.getAttribute("data-command-id");
+          const elementId = option.getAttribute("id");
+          const text = option.textContent?.replace(/\s+/g, " ").trim();
+          visibleActiveOptionKey = dataCommandId || elementId || text || "";
+          break;
+        }
+      }
+
+      return {
+        expanded: input.getAttribute("aria-expanded"),
+        activeDescendantId: input.getAttribute("aria-activedescendant"),
+        visibleOptionCount: visibleOptions.length,
+        visibleOptionSignature: visibleOptionKeys.join("||"),
+        visibleActiveOptionKey,
+      } satisfies SuggestTargetSnapshot;
     })
-    .catch(() => false);
+    .catch(() => null);
+}
+
+async function isSuggestLikeTarget(locator: Locator): Promise<boolean> {
+  return (await captureSuggestTargetSnapshot(locator)) != null;
 }
 
 async function waitForSuggestTargetReady(
   page: Page,
   locator: Locator,
-  timeoutMs = SUGGEST_READY_TIMEOUT_MS,
+  options: SuggestTargetWaitOptions = {},
 ): Promise<void> {
+  const timeoutMs = options.timeoutMs ?? SUGGEST_READY_TIMEOUT_MS;
   if (!(await isSuggestLikeTarget(locator))) {
     return;
   }
@@ -812,23 +901,25 @@ async function waitForSuggestTargetReady(
 
   await page
     .waitForFunction(
-      (input) => {
+      (
+        payload: {
+          input: Element | null;
+          waitOptions: { baseline: SuggestTargetSnapshot | null; expectedValue?: string };
+        },
+      ) => {
+        const { input, waitOptions } = payload;
         if (!(input instanceof HTMLElement)) {
           return true;
         }
 
-        const isVisible = (element: Element | null): boolean => {
-          if (!(element instanceof HTMLElement) || element.hidden) {
-            return false;
-          }
-
-          const style = window.getComputedStyle(element);
-          if (style.display === "none" || style.visibility === "hidden") {
-            return false;
-          }
-
-          return element.getClientRects().length > 0;
-        };
+        if (
+          typeof waitOptions.expectedValue === "string" &&
+          "value" in input &&
+          typeof input.value === "string" &&
+          input.value !== waitOptions.expectedValue
+        ) {
+          return false;
+        }
 
         const controlsId = input.getAttribute("aria-controls");
         const popup = controlsId ? document.getElementById(controlsId) : null;
@@ -838,18 +929,65 @@ async function waitForSuggestTargetReady(
           return false;
         }
 
-        const visibleOptions = popup
-          ? Array.from(popup.querySelectorAll("[role='option'], option, li, button")).filter((option) =>
-              isVisible(option),
-            )
-          : [];
+        const visibleOptions: HTMLElement[] = [];
+        if (popup) {
+          for (const candidate of Array.from(
+            popup.querySelectorAll("[role='option'], option, li, button"),
+          )) {
+            if (!(candidate instanceof HTMLElement) || candidate.hidden) {
+              continue;
+            }
+            const style = window.getComputedStyle(candidate);
+            if (style.display === "none" || style.visibility === "hidden") {
+              continue;
+            }
+            if (candidate.getClientRects().length === 0) {
+              continue;
+            }
+            visibleOptions.push(candidate);
+          }
+        }
+
+        const visibleOptionSignature = visibleOptions
+          .map((option) => {
+            const dataCommandId = option.getAttribute("data-command-id");
+            const elementId = option.getAttribute("id");
+            const text = option.textContent?.replace(/\s+/g, " ").trim();
+            return dataCommandId || elementId || text || "";
+          })
+          .join("||");
+        const baseline = waitOptions.baseline;
+        if (baseline) {
+          const stateChanged =
+            input.getAttribute("aria-expanded") !== baseline.expanded ||
+            input.getAttribute("aria-activedescendant") !== baseline.activeDescendantId ||
+            visibleOptions.length !== baseline.visibleOptionCount ||
+            visibleOptionSignature !== baseline.visibleOptionSignature;
+          if (!stateChanged) {
+            return false;
+          }
+        }
+
         if (visibleOptions.length > 0) {
           return true;
         }
 
-        return input.getAttribute("aria-expanded") === "true" && isVisible(popup);
+        if (!(popup instanceof HTMLElement) || popup.hidden) {
+          return false;
+        }
+        const style = window.getComputedStyle(popup);
+        if (style.display === "none" || style.visibility === "hidden") {
+          return false;
+        }
+        return input.getAttribute("aria-expanded") === "true" && popup.getClientRects().length > 0;
       },
-      inputHandle,
+      {
+        input: inputHandle,
+        waitOptions: {
+          baseline: options.baseline ?? null,
+          expectedValue: options.expectedValue,
+        },
+      },
       { timeout: timeoutMs },
     )
     .catch(() => undefined);
@@ -860,8 +998,9 @@ async function waitForSuggestTargetReady(
 async function waitForActiveSuggestionOption(
   page: Page,
   locator: Locator,
-  timeoutMs = SUGGEST_READY_TIMEOUT_MS,
+  options: SuggestTargetWaitOptions = {},
 ): Promise<boolean> {
+  const timeoutMs = options.timeoutMs ?? SUGGEST_READY_TIMEOUT_MS;
   if (!(await isSuggestLikeTarget(locator))) {
     return false;
   }
@@ -873,40 +1012,87 @@ async function waitForActiveSuggestionOption(
 
   const result = await page
     .waitForFunction(
-      (input) => {
+      (
+        payload: {
+          input: Element | null;
+          waitOptions: { baseline: SuggestTargetSnapshot | null };
+        },
+      ) => {
+        const { input, waitOptions } = payload;
         if (!(input instanceof HTMLElement)) {
           return true;
         }
 
-        const isVisible = (element: Element | null): boolean => {
-          if (!(element instanceof HTMLElement) || element.hidden) {
-            return false;
-          }
-
-          const style = window.getComputedStyle(element);
-          if (style.display === "none" || style.visibility === "hidden") {
-            return false;
-          }
-
-          return element.getClientRects().length > 0;
-        };
-
         const activeDescendantId = input.getAttribute("aria-activedescendant");
+        let hasVisibleActiveDescendant = false;
         if (activeDescendantId) {
           const activeDescendant = document.getElementById(activeDescendantId);
-          if (isVisible(activeDescendant)) {
-            return true;
+          if (
+            activeDescendant instanceof HTMLElement &&
+            !activeDescendant.hidden &&
+            window.getComputedStyle(activeDescendant).display !== "none" &&
+            window.getComputedStyle(activeDescendant).visibility !== "hidden" &&
+            activeDescendant.getClientRects().length > 0
+          ) {
+            hasVisibleActiveDescendant = true;
           }
         }
 
         const controlsId = input.getAttribute("aria-controls");
         const popup = controlsId ? document.getElementById(controlsId) : null;
-        const activeOption = popup?.querySelector(
-          "[data-active='true'], [aria-selected='true'], .is-active, .active",
+        const visibleOptions: HTMLElement[] = [];
+        if (popup) {
+          for (const candidate of Array.from(
+            popup.querySelectorAll("[role='option'], option, li, button"),
+          )) {
+            if (!(candidate instanceof HTMLElement) || candidate.hidden) {
+              continue;
+            }
+            const style = window.getComputedStyle(candidate);
+            if (style.display === "none" || style.visibility === "hidden") {
+              continue;
+            }
+            if (candidate.getClientRects().length === 0) {
+              continue;
+            }
+            visibleOptions.push(candidate);
+          }
+        }
+
+        let visibleActiveOptionKey: string | null = null;
+        for (const option of visibleOptions) {
+          if (
+            option.getAttribute("data-active") === "true" ||
+            option.getAttribute("aria-selected") === "true" ||
+            option.classList.contains("is-active") ||
+            option.classList.contains("active")
+          ) {
+            const dataCommandId = option.getAttribute("data-command-id");
+            const elementId = option.getAttribute("id");
+            const text = option.textContent?.replace(/\s+/g, " ").trim();
+            visibleActiveOptionKey = dataCommandId || elementId || text || "";
+            break;
+          }
+        }
+        const hasVisibleActiveOption = hasVisibleActiveDescendant || visibleActiveOptionKey != null;
+        const baseline = waitOptions.baseline;
+        if (!baseline) {
+          return hasVisibleActiveOption;
+        }
+
+        if (!hasVisibleActiveOption) {
+          return false;
+        }
+
+        return (
+          activeDescendantId !== baseline.activeDescendantId ||
+          visibleActiveOptionKey !== baseline.visibleActiveOptionKey
         );
-        return isVisible(activeOption ?? null);
       },
-      inputHandle,
+      {
+        input: inputHandle,
+        waitOptions: { baseline: options.baseline ?? null },
+      },
       { timeout: timeoutMs },
     )
     .then(() => true)
@@ -920,19 +1106,31 @@ async function waitForNavigationPressSettled(
   page: Page,
   locator: Locator,
   key: string,
-  timeoutMs = SUGGEST_READY_TIMEOUT_MS,
+  options: SuggestTargetWaitOptions = {},
 ): Promise<void> {
+  const timeoutMs = options.timeoutMs ?? SUGGEST_READY_TIMEOUT_MS;
   if (!NAVIGATION_PRESS_KEYS.has(key) || !(await isSuggestLikeTarget(locator))) {
     return;
   }
 
-  if (await waitForActiveSuggestionOption(page, locator, Math.min(timeoutMs, 400))) {
+  if (
+    await waitForActiveSuggestionOption(page, locator, {
+      baseline: options.baseline,
+      timeoutMs: Math.min(timeoutMs, 400),
+    })
+  ) {
     return;
   }
 
-  await waitForSuggestTargetReady(page, locator, Math.min(timeoutMs, SUGGEST_READY_TIMEOUT_MS));
+  await waitForSuggestTargetReady(page, locator, {
+    baseline: options.baseline,
+    timeoutMs: Math.min(timeoutMs, SUGGEST_READY_TIMEOUT_MS),
+  });
   await locator.press(key).catch(() => undefined);
-  await waitForActiveSuggestionOption(page, locator, Math.min(timeoutMs, SUGGEST_READY_TIMEOUT_MS));
+  await waitForActiveSuggestionOption(page, locator, {
+    baseline: options.baseline,
+    timeoutMs: Math.min(timeoutMs, SUGGEST_READY_TIMEOUT_MS),
+  });
 }
 
 async function resolveTarget(
@@ -1191,11 +1389,17 @@ async function runStep(
       }
       case "fill": {
         const locator = await resolveTarget(page, resolvedStep.target, timeoutMs);
+        const suggestBaseline = await captureSuggestTargetSnapshot(locator);
         if (resolvedStep.clear !== false) {
           await locator.clear();
         }
         await locator.fill(resolvedStep.value);
-        await waitForSuggestTargetReady(page, locator, Math.min(timeoutMs, SUGGEST_READY_TIMEOUT_MS));
+        await waitForBrowserFrame(page);
+        await waitForSuggestTargetReady(page, locator, {
+          baseline: suggestBaseline,
+          expectedValue: resolvedStep.value,
+          timeoutMs: Math.min(timeoutMs, SUGGEST_READY_TIMEOUT_MS),
+        });
         break;
       }
       case "select": {
@@ -1213,12 +1417,19 @@ async function runStep(
       case "press": {
         if (resolvedStep.target) {
           const locator = await resolveTarget(page, resolvedStep.target, timeoutMs);
+          const suggestBaseline = NAVIGATION_PRESS_KEYS.has(resolvedStep.key)
+            ? await captureSuggestTargetSnapshot(locator)
+            : null;
           await locator.press(resolvedStep.key);
+          await waitForBrowserFrame(page);
           await waitForNavigationPressSettled(
             page,
             locator,
             resolvedStep.key,
-            Math.min(timeoutMs, SUGGEST_READY_TIMEOUT_MS),
+            {
+              baseline: suggestBaseline,
+              timeoutMs: Math.min(timeoutMs, SUGGEST_READY_TIMEOUT_MS),
+            },
           );
         } else {
           await page.keyboard.press(resolvedStep.key);

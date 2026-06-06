@@ -70,6 +70,8 @@ describe("runRealPageFixtureMatrix P7", () => {
       "upload-form",
       "spa-route",
       "session-dashboard",
+      "keyboard-command-palette",
+      "async-command-palette",
       "filterable-list",
       "modal-bulk-action",
       "session-expired-dashboard",
@@ -107,15 +109,15 @@ describe("runRealPageFixtureMatrix P7", () => {
 
     if (repeatedRowResult?.status === "success") {
       expect(summary.failed).toHaveLength(0);
-      expect(summary.successCount).toBe(19);
+      expect(summary.successCount).toBe(21);
       expect(summary.failureCount).toBe(0);
       expect(summary.failureTypeCounts).toEqual({});
       expect(summary.successCoverage).toEqual([
         {
           failureType: "core-interaction",
           label: "基础交互",
-          caseCount: 5,
-          successCount: 5,
+          caseCount: 7,
+          successCount: 7,
           failureCount: 0,
         },
         {
@@ -185,7 +187,7 @@ describe("runRealPageFixtureMatrix P7", () => {
     } else {
       expect(summary.failed).toHaveLength(1);
       expect(summary.failed[0]?.name).toBe("repeated-row-actions");
-      expect(summary.successCount).toBe(18);
+      expect(summary.successCount).toBe(20);
       expect(summary.failureCount).toBe(1);
       expect(summary.failureTypeCounts).toEqual({
         "core-interaction": 1,
@@ -193,8 +195,8 @@ describe("runRealPageFixtureMatrix P7", () => {
       expect(coreInteractionCoverage).toEqual({
         failureType: "core-interaction",
         label: "基础交互",
-        caseCount: 5,
-        successCount: 4,
+        caseCount: 7,
+        successCount: 6,
         failureCount: 1,
       });
     }
@@ -206,7 +208,7 @@ describe("runRealPageFixtureMatrix P7", () => {
     expect(matrixModule.summarizeRealPageSuccessCoverage(summary.results)).toEqual(
       summary.successCoverage,
     );
-  });
+  }, 120_000);
 
   it("按场景族汇总失败类型", async () => {
     const matrixModule = (await import(matrixModuleUrl)) as {

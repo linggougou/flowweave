@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowWeave 异步命令面板 Fixture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+        --bg: #eff5f2;
+        --panel: #ffffff;
+        --border: #c8d7cf;
+        --text: #203128;
+        --muted: #5f786a;
+        --accent: #2b8d67;
+        --accent-soft: rgba(43, 141, 103, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top right, rgba(43, 141, 103, 0.15), transparent 34%),
+          linear-gradient(180deg, #fbfffd 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      main {
+        max-width: 840px;
+        margin: 0 auto;
+        padding: 40px 20px 72px;
+      }
+
+      .hero,
+      .shell,
+      .result {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: 0 18px 42px rgba(32, 49, 40, 0.08);
+      }
+
+      .hero,
+      .shell,
+      .result {
+        padding: 24px;
+      }
+
+      .hero,
+      .shell {
+        margin-bottom: 18px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 700;
+      }
+
+      input {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 14px 16px;
+        font: inherit;
+        color: inherit;
+      }
+
+      .hint,
+      .loading {
+        margin-top: 12px;
+        color: var(--muted);
+      }
+
+      .loading {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .loading[hidden],
+      .commands[hidden],
+      .result[hidden] {
+        display: none;
+      }
+
+      .commands {
+        list-style: none;
+        padding: 0;
+        margin: 16px 0 0;
+        display: grid;
+        gap: 10px;
+      }
+
+      .command-option {
+        width: 100%;
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: #fff;
+        padding: 14px 16px;
+        text-align: left;
+        font: inherit;
+        color: inherit;
+      }
+
+      .command-option[data-active="true"] {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(43, 141, 103, 0.12);
+      }
+
+      .command-meta {
+        display: block;
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .result {
+        margin-top: 18px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <p>Fixture 目标：验证异步 suggestions、`aria-activedescendant` 与键盘命令选择稳定性。</p>
+        <h1 id="page-title">异步命令面板</h1>
+        <p>推荐步骤：输入“账单”，等待建议刷新，再按 `ArrowDown` 选中“同步账单明细”，最后按 `Enter`。</p>
+      </section>
+
+      <section id="command-shell" class="shell" data-loading="false">
+        <label for="async-command-search">搜索命令</label>
+        <input
+          id="async-command-search"
+          type="text"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-controls="async-command-options"
+          aria-expanded="false"
+          autocomplete="off"
+          placeholder="例如：账单异常"
+        />
+
+        <p class="hint">支持键盘：等待建议加载后，使用 `ArrowDown` 切换高亮，`Enter` 执行当前命令。</p>
+        <div id="command-loading" class="loading" hidden aria-live="polite">正在刷新命令建议，请稍候...</div>
+
+        <ul id="async-command-options" class="commands" role="listbox" hidden></ul>
+
+        <section
+          id="async-command-toast"
+          class="result"
+          hidden
+          data-ready="false"
+          data-command-id=""
+        >
+          尚未执行命令
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const commandShell = document.getElementById("command-shell");
+      const searchInput = document.getElementById("async-command-search");
+      const loading = document.getElementById("command-loading");
+      const commandList = document.getElementById("async-command-options");
+      const commandToast = document.getElementById("async-command-toast");
+
+      const allCommands = [
+        {
+          id: "command-billing-overview",
+          commandId: "billing-overview",
+          name: "查看账单概览",
+          meta: "打开近七天账单总览与异常波动摘要",
+        },
+        {
+          id: "command-sync-billing",
+          commandId: "sync-billing",
+          name: "同步账单明细",
+          meta: "重新拉取外部账单并回填差异明细",
+        },
+        {
+          id: "command-billing-reconcile",
+          commandId: "billing-reconcile",
+          name: "对账账单异常",
+          meta: "进入对账队列并预填异常批次筛选",
+        },
+      ];
+
+      let filteredCommands = [];
+      let activeIndex = -1;
+      let filterTimer = 0;
+      let highlightTimer = 0;
+
+      function normalizeText(value) {
+        return value.trim().toLowerCase();
+      }
+
+      function setLoading(active) {
+        commandShell.dataset.loading = active ? "true" : "false";
+        loading.hidden = !active;
+      }
+
+      function renderCommands() {
+        commandList.innerHTML = "";
+
+        if (filteredCommands.length === 0) {
+          commandList.hidden = true;
+          searchInput.setAttribute("aria-expanded", "false");
+          searchInput.removeAttribute("aria-activedescendant");
+          return;
+        }
+
+        commandList.hidden = false;
+        searchInput.setAttribute("aria-expanded", "true");
+
+        filteredCommands.forEach((command, index) => {
+          const item = document.createElement("li");
+          const button = document.createElement("button");
+          button.id = command.id;
+          button.type = "button";
+          button.className = "command-option";
+          button.setAttribute("role", "option");
+          button.dataset.active = index === activeIndex ? "true" : "false";
+          button.setAttribute("aria-selected", index === activeIndex ? "true" : "false");
+          button.dataset.commandId = command.commandId;
+          button.dataset.commandName = command.name;
+          button.innerHTML =
+            "<span>" +
+            command.name +
+            "</span><span class=\"command-meta\">" +
+            command.meta +
+            "</span>";
+          button.addEventListener("click", () => executeCommand(command));
+          item.appendChild(button);
+          commandList.appendChild(item);
+        });
+
+        if (activeIndex >= 0 && filteredCommands[activeIndex]) {
+          searchInput.setAttribute("aria-activedescendant", filteredCommands[activeIndex].id);
+        } else {
+          searchInput.removeAttribute("aria-activedescendant");
+        }
+      }
+
+      function executeCommand(command) {
+        commandToast.hidden = false;
+        commandToast.dataset.ready = "true";
+        commandToast.dataset.commandId = command.commandId;
+        commandToast.textContent = "已执行命令：" + command.name;
+      }
+
+      function scheduleFilter() {
+        window.clearTimeout(filterTimer);
+        setLoading(true);
+        commandList.hidden = true;
+        searchInput.setAttribute("aria-expanded", "false");
+        searchInput.removeAttribute("aria-activedescendant");
+        activeIndex = -1;
+
+        filterTimer = window.setTimeout(() => {
+          const keyword = normalizeText(searchInput.value);
+          filteredCommands = allCommands.filter((command) =>
+            normalizeText(command.name).includes(keyword),
+          );
+          activeIndex = filteredCommands.length > 0 ? 0 : -1;
+          setLoading(false);
+          renderCommands();
+        }, 220);
+      }
+
+      function scheduleHighlight(step) {
+        if (commandList.hidden || filteredCommands.length === 0) {
+          return;
+        }
+
+        window.clearTimeout(highlightTimer);
+        highlightTimer = window.setTimeout(() => {
+          if (activeIndex < 0) {
+            activeIndex = step > 0 ? 0 : filteredCommands.length - 1;
+          } else {
+            activeIndex = (activeIndex + step + filteredCommands.length) % filteredCommands.length;
+          }
+          renderCommands();
+        }, 180);
+      }
+
+      searchInput.addEventListener("input", () => {
+        commandToast.hidden = true;
+        commandToast.dataset.ready = "false";
+        commandToast.dataset.commandId = "";
+        scheduleFilter();
+      });
+
+      searchInput.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          scheduleHighlight(1);
+          return;
+        }
+
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          scheduleHighlight(-1);
+          return;
+        }
+
+        if (event.key !== "Enter") {
+          return;
+        }
+
+        event.preventDefault();
+        if (activeIndex < 0 || !filteredCommands[activeIndex]) {
+          return;
+        }
+
+        executeCommand(filteredCommands[activeIndex]);
+      });
+    </script>
+  </body>
+</html>

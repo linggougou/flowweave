@@ -987,4 +987,68 @@ describe("buildFlowFromEvents", () => {
 
     expect(flow.steps.map((step) => step.type)).toEqual(["navigate", "click", "click"]);
   });
+
+  it("构建 Flow 时不会为命令面板导航按键自动插入 wait", () => {
+    const flow = buildFlowFromEvents(
+      [
+        event({
+          id: "n1",
+          type: "navigate",
+          timestamp: 0,
+          url: "https://app.example.com/command-palette",
+        }),
+        event({
+          id: "f1",
+          type: "fill",
+          timestamp: 100,
+          url: "https://app.example.com/command-palette",
+          payload: {
+            selector: "#command-search",
+            role: "combobox",
+            name: "搜索命令",
+            value: "账单",
+            tagName: "input",
+            inputType: "text",
+            placeholder: "例如：账单异常",
+            labelText: "搜索命令",
+          },
+        }),
+        event({
+          id: "p1",
+          type: "keypress",
+          timestamp: 160,
+          url: "https://app.example.com/command-palette",
+          payload: {
+            selector: "#command-search",
+            role: "combobox",
+            name: "搜索命令",
+            key: "ArrowDown",
+            tagName: "input",
+            inputType: "text",
+            placeholder: "例如：账单异常",
+            labelText: "搜索命令",
+          },
+        }),
+        event({
+          id: "p2",
+          type: "keypress",
+          timestamp: 220,
+          url: "https://app.example.com/command-palette",
+          payload: {
+            selector: "#command-search",
+            role: "combobox",
+            name: "搜索命令",
+            key: "ArrowUp",
+            tagName: "input",
+            inputType: "text",
+            placeholder: "例如：账单异常",
+            labelText: "搜索命令",
+          },
+        }),
+      ],
+      baseMeta,
+    );
+
+    expect(flow.steps.map((step) => step.type)).toEqual(["navigate", "fill", "press", "press"]);
+  });
 });

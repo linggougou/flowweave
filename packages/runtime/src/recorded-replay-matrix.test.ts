@@ -45,6 +45,7 @@ describe("runRecordedReplayMatrix baseline", () => {
       "repeated-row-actions",
       "linked-filters",
       "keyboard-command-palette",
+      "async-command-palette",
       "session-dashboard",
       "drawer-double-save",
       "placeholder-disambiguation",
@@ -59,6 +60,7 @@ describe("runRecordedReplayMatrix baseline", () => {
       ["repeated-row-actions", 3],
       ["linked-filters", 8],
       ["keyboard-command-palette", 5],
+      ["async-command-palette", 5],
       ["session-dashboard", 3],
       ["drawer-double-save", 9],
       ["placeholder-disambiguation", 4],
@@ -69,9 +71,9 @@ describe("runRecordedReplayMatrix baseline", () => {
       true,
     );
     expect(summary.failed).toHaveLength(0);
-    expect(summary.successCount).toBe(12);
+    expect(summary.successCount).toBe(13);
     expect(summary.failureCount).toBe(0);
     expect(summary.totalDurationMs).toBeGreaterThan(0);
     expect(summary.averageDurationMs).toBeGreaterThan(0);
-  });
+  }, 120_000);
 });

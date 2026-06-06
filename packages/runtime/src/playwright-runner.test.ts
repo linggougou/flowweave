@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { buildFlowFromEvents } from "@flowweave/recorder";
 import { FLOW_SCHEMA_VERSION, parseRecordedEvent } from "@flowweave/shared";
 import type { FlowDocument } from "@flowweave/flow-dsl";
+import { executeFlow as executeFlowFromIndex } from "./index.ts";
 import { executeFlow } from "./playwright-runner.js";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -1734,6 +1735,201 @@ describe("executeFlow", () => {
     expect(result.status).toBe("success");
   });
 
+  it("通过 runtime src index 入口时也会命中最新 suggest 等待实现", async () => {
+    const keyboardResult = await executeFlowFromIndex(
+      buildFlow("flow_keyboard_command_palette_from_index", "命令面板键盘回放流程（index 入口）", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: keyboardCommandPaletteFixtureUrl,
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "fill",
+          target: { strategies: [{ kind: "css", selector: "#command-search" }] },
+          value: "导出",
+        },
+        {
+          id: "s3",
+          type: "press",
+          target: { strategies: [{ kind: "css", selector: "#command-search" }] },
+          key: "ArrowDown",
+        },
+        {
+          id: "s4",
+          type: "press",
+          target: { strategies: [{ kind: "css", selector: "#command-search" }] },
+          key: "Enter",
+        },
+        {
+          id: "s5",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#command-toast[data-ready='true'][data-command-id='export-daily']",
+              },
+            ],
+          },
+        },
+      ]),
+      {
+        headless: true,
+      },
+    );
+
+    const asyncResult = await executeFlowFromIndex(
+      buildFlow("flow_async_command_palette_from_index", "异步命令面板键盘回放流程（index 入口）", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: new URL("async-command-palette.html", fixturesBaseUrl).toString(),
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "fill",
+          target: { strategies: [{ kind: "css", selector: "#async-command-search" }] },
+          value: "账单",
+        },
+        {
+          id: "s3",
+          type: "press",
+          target: { strategies: [{ kind: "css", selector: "#async-command-search" }] },
+          key: "ArrowDown",
+        },
+        {
+          id: "s4",
+          type: "press",
+          target: { strategies: [{ kind: "css", selector: "#async-command-search" }] },
+          key: "Enter",
+        },
+        {
+          id: "s5",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#async-command-toast[data-ready='true'][data-command-id='sync-billing']",
+              },
+            ],
+          },
+        },
+      ]),
+      {
+        headless: true,
+      },
+    );
+
+    expect(keyboardResult.status).toBe("success");
+    expect(asyncResult.status).toBe("success");
+  });
+
+  it("在 HTTP fixture 上也会等待命令面板筛选与异步 suggest 稳定后再执行", async () => {
+    const { server, baseUrl } = await startStaticServer(fixturesDir);
+    cleanupServers.add(server);
+
+    const keyboardResult = await executeFlow(
+      buildFlow("flow_keyboard_command_palette_http", "命令面板键盘回放流程（HTTP）", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "keyboard-command-palette.html",
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "fill",
+          target: { strategies: [{ kind: "css", selector: "#command-search" }] },
+          value: "导出",
+        },
+        {
+          id: "s3",
+          type: "press",
+          target: { strategies: [{ kind: "css", selector: "#command-search" }] },
+          key: "ArrowDown",
+        },
+        {
+          id: "s4",
+          type: "press",
+          target: { strategies: [{ kind: "css", selector: "#command-search" }] },
+          key: "Enter",
+        },
+        {
+          id: "s5",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#command-toast[data-ready='true'][data-command-id='export-daily']",
+              },
+            ],
+          },
+        },
+      ]),
+      {
+        headless: true,
+        baseUrl,
+      },
+    );
+
+    const asyncResult = await executeFlow(
+      buildFlow("flow_async_command_palette_http", "异步命令面板键盘回放流程（HTTP）", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "async-command-palette.html",
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "fill",
+          target: { strategies: [{ kind: "css", selector: "#async-command-search" }] },
+          value: "账单",
+        },
+        {
+          id: "s3",
+          type: "press",
+          target: { strategies: [{ kind: "css", selector: "#async-command-search" }] },
+          key: "ArrowDown",
+        },
+        {
+          id: "s4",
+          type: "press",
+          target: { strategies: [{ kind: "css", selector: "#async-command-search" }] },
+          key: "Enter",
+        },
+        {
+          id: "s5",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#async-command-toast[data-ready='true'][data-command-id='sync-billing']",
+              },
+            ],
+          },
+        },
+      ]),
+      {
+        headless: true,
+        baseUrl,
+      },
+    );
+
+    expect(keyboardResult.status).toBe("success");
+    expect(asyncResult.status).toBe("success");
+  });
+
   it("支持 wait hidden 与 wait urlIncludes", async () => {
     const delayedResult = await executeFlow(
       buildFlow("flow_delayed_panel", "延迟面板等待流程", [
@@ -2063,7 +2259,7 @@ describe("executeFlow", () => {
     };
 
     const summary = await matrixModule.runRealPageFixtureMatrix({ headless: true });
-    expect(summary.results).toHaveLength(12);
+    expect(summary.results).toHaveLength(13);
     expect(summary.results.map((item) => item.name)).toEqual([
       "checkbox-select",
       "delayed-panel",
@@ -2071,6 +2267,7 @@ describe("executeFlow", () => {
       "spa-route",
       "session-dashboard",
       "keyboard-command-palette",
+      "async-command-palette",
       "filterable-list",
       "modal-bulk-action",
       "session-expired-dashboard",
