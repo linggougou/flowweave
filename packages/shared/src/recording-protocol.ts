@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { getSingleTemplateVariableName } from "./template-variables.js";
 
 export const recordedEventTypeSchema = z.enum([
   "click",
@@ -17,7 +18,7 @@ function isStringArray(value: unknown): value is string[] {
 
 function isReplayableUploadInput(value: string): boolean {
   return (
-    /^\{\{\s*[A-Za-z0-9_]+\s*\}\}$/.test(value) ||
+    getSingleTemplateVariableName(value) !== null ||
     /^(?:file:\/\/|\/|\.{1,2}\/|[A-Za-z]:[\\/]|\\\\)/.test(value)
   );
 }
@@ -44,6 +45,7 @@ export const recordedEventSchema = z.object({
   }
 
   const files = event.payload.files;
+  let parsedFiles: string[] | undefined;
   if (files !== undefined) {
     if (!isStringArray(files)) {
       ctx.addIssue({
@@ -57,16 +59,26 @@ export const recordedEventSchema = z.object({
         path: ["payload", "files"],
         message: "upload 事件的 files 必须是可回放的文件路径或变量占位符，不能使用裸文件名",
       });
+    } else {
+      parsedFiles = files;
     }
   }
 
   const fileNames = event.payload.fileNames;
-  if (fileNames !== undefined && !isStringArray(fileNames)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["payload", "fileNames"],
-      message: "upload 事件的 fileNames 必须是非空字符串数组",
-    });
+  if (fileNames !== undefined) {
+    if (!isStringArray(fileNames)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["payload", "fileNames"],
+        message: "upload 事件的 fileNames 必须是非空字符串数组",
+      });
+    } else if (parsedFiles && fileNames.length !== parsedFiles.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["payload", "fileNames"],
+        message: "upload 事件的 fileNames 数量必须与 files 一致",
+      });
+    }
   }
 });
 

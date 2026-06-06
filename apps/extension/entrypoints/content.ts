@@ -53,10 +53,34 @@ function normalizeUploadTokenPart(value: string): string {
   return normalized.length > 0 ? normalized : "file";
 }
 
-function buildUploadReplayInputs(element: HTMLInputElement, fileNames: string[]): string[] {
-  const tokenSeed = normalizeUploadTokenPart(
-    element.name || element.id || element.getAttribute("aria-label") || "upload",
-  );
+type UploadReplayInputSource = {
+  selector?: string;
+  testId?: string;
+  nameAttr?: string;
+  labelText?: string;
+  ariaLabel?: string;
+  id?: string;
+};
+
+export function buildUploadReplayInputs(
+  source: UploadReplayInputSource,
+  fileNames: string[],
+): string[] {
+  const tokenSeed = Array.from(
+    new Set(
+      [
+        source.testId,
+        source.nameAttr,
+        source.id,
+        source.selector,
+        source.labelText,
+        source.ariaLabel,
+      ]
+        .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+        .map(normalizeUploadTokenPart),
+    ),
+  ).join("_") || "upload";
+
   return fileNames.map((_name, index) => `{{upload_${tokenSeed}_${index + 1}}}`);
 }
 
@@ -143,11 +167,22 @@ function recordInteractionFromElement(element: Element): void {
       if (fileNames.length === 0) {
         return;
       }
+      const basePayload = buildInteractionPayload(element, "upload", {
+        inputType,
+      });
       const payload = {
-        ...buildInteractionPayload(element, "upload", {
-          inputType,
-        }),
-        files: buildUploadReplayInputs(element, fileNames),
+        ...basePayload,
+        files: buildUploadReplayInputs(
+          {
+            selector: basePayload.selector,
+            testId: basePayload.testId,
+            nameAttr: basePayload.nameAttr,
+            labelText: basePayload.labelText,
+            ariaLabel: element.getAttribute("aria-label") ?? undefined,
+            id: element.id || undefined,
+          },
+          fileNames,
+        ),
         fileNames,
       };
       sendEvent({

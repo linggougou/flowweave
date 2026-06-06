@@ -3,13 +3,17 @@ import {
   FlowWeaveError,
   type RecordedEvent,
   type RecorderSessionMeta,
+  extractTemplateVariables,
+  getSingleTemplateVariableName,
 } from "@flowweave/shared";
 import type { FlowDocument, NormalizedStep, Target } from "@flowweave/flow-dsl";
 import { filterNoisyInteractionSteps, mergeConsecutiveFillSteps } from "./step-filter.js";
 
 type LocatorStrategy = Target["strategies"][number];
 type FlowVariableDefinition = FlowDocument["variables"][number];
-const variablePattern = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g;
+type UploadStepWithMetadata = Extract<NormalizedStep, { type: "upload" }> & {
+  fileNames?: string[];
+};
 
 /** 构建 Flow 时除会话元数据外需要的字段 */
 export interface BuildFlowFromEventsMeta extends RecorderSessionMeta {
@@ -36,6 +40,7 @@ type InteractionPayload = {
   value?: string;
   values?: string[];
   files?: string[];
+  fileNames?: string[];
   checked?: boolean;
   clear?: boolean;
   inputType?: string;
@@ -91,7 +96,7 @@ function readStringArray(payload: Record<string, unknown>, key: string): string[
 
 function isReplayableUploadInput(value: string): boolean {
   return (
-    /^\{\{\s*[A-Za-z0-9_]+\s*\}\}$/.test(value) ||
+    getSingleTemplateVariableName(value) !== null ||
     /^(?:file:\/\/|\/|\.{1,2}\/|[A-Za-z]:[\\/]|\\\\)/.test(value)
   );
 }
@@ -173,11 +178,14 @@ function buildTargetFromPayload(payload: Record<string, unknown>): Target | null
 }
 
 function extractVariableNames(value: unknown): string[] {
-  if (typeof value !== "string") {
-    return [];
-  }
+  return extractTemplateVariables(value);
+}
 
-  return Array.from(value.matchAll(variablePattern), (match) => match[1]?.trim() ?? "").filter(Boolean);
+function extractUploadVariableNames(values: string[]): string[] {
+  return values.flatMap((value) => {
+    const variableName = getSingleTemplateVariableName(value);
+    return variableName ? [variableName] : [];
+  });
 }
 
 function extractTargetVariableNames(target: Target | undefined): string[] {
@@ -218,7 +226,7 @@ function collectStepVariableNames(step: NormalizedStep): string[] {
     case "press":
       return [...extractTargetVariableNames(step.target), ...extractVariableNames(step.key)];
     case "upload":
-      return [...extractTargetVariableNames(step.target), ...step.files.flatMap(extractVariableNames)];
+      return [...extractTargetVariableNames(step.target), ...extractUploadVariableNames(step.files)];
     case "wait":
       return [
         ...extractTargetVariableNames(step.target),
@@ -306,16 +314,21 @@ function normalizeFill(event: RecordedEvent): NormalizedStep | null {
   const payload = event.payload as InteractionPayload;
   const target = buildTargetFromPayload(event.payload);
   const files = readStringArray(event.payload, "files");
+  const fileNames = readStringArray(event.payload, "fileNames");
   if (target && payload.inputType === "file" && files) {
     if (!files.every(isReplayableUploadInput)) {
       return null;
     }
-    return {
+    const step: UploadStepWithMetadata = {
       id: event.id,
       type: "upload",
       target,
       files,
     };
+    if (fileNames) {
+      step.fileNames = fileNames;
+    }
+    return step as NormalizedStep;
   }
 
   const value = payload.value;

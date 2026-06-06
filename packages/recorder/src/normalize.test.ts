@@ -280,6 +280,35 @@ describe("normalizeRecordedEvent", () => {
         },
       },
       files: ["{{upload_resume_1}}"],
+      fileNames: ["resume.pdf"],
+    });
+  });
+
+  it("将宽字符 upload 占位符归一化为 upload 步骤并保留 fileNames", () => {
+    const step = normalizeRecordedEvent(
+      parseRecordedEvent({
+        id: "evt_upload_wide_placeholder",
+        type: "fill",
+        timestamp: 2305,
+        url: "https://example.com/upload",
+        payload: {
+          selector: "#evidence-files",
+          testId: "evidence-files",
+          inputType: "file",
+          files: ["{{tenant-id}}", "{{profile.name}}", "{{中文变量}}"],
+          fileNames: ["tenant.txt", "profile.txt", "zh.txt"],
+          tagName: "input",
+          nameAttr: "evidenceFiles",
+          labelText: "上传素材",
+        },
+      }),
+    );
+
+    expect(step).toMatchObject({
+      id: "evt_upload_wide_placeholder",
+      type: "upload",
+      files: ["{{tenant-id}}", "{{profile.name}}", "{{中文变量}}"],
+      fileNames: ["tenant.txt", "profile.txt", "zh.txt"],
     });
   });
 
@@ -319,6 +348,40 @@ describe("normalizeRecordedEvent", () => {
         },
       }),
     ).toThrow(/可回放.*裸文件名/);
+  });
+
+  it("拒绝 files 与 fileNames 数量不一致的 upload 事件", () => {
+    expect(() =>
+      parseRecordedEvent({
+        id: "evt_upload_length_mismatch",
+        type: "fill",
+        timestamp: 2325,
+        url: "https://example.com/upload",
+        payload: {
+          selector: "#resume",
+          inputType: "file",
+          files: ["{{upload_resume_1}}", "{{upload_resume_2}}"],
+          fileNames: ["resume.pdf"],
+        },
+      }),
+    ).toThrow(/fileNames.*数量/);
+  });
+
+  it("拒绝把包含说明文字的 {{...}} 文本当作 upload 回放输入", () => {
+    expect(() =>
+      parseRecordedEvent({
+        id: "evt_upload_literal_boundary",
+        type: "fill",
+        timestamp: 2326,
+        url: "https://example.com/upload",
+        payload: {
+          selector: "#resume",
+          inputType: "file",
+          files: ["说明 {{tenant-id}}"],
+          fileNames: ["resume.pdf"],
+        },
+      }),
+    ).toThrow(/可回放/);
   });
 
   it("将 navigate 事件转为 navigate 步骤", () => {
@@ -569,6 +632,54 @@ describe("buildFlowFromEvents", () => {
       },
       {
         name: "upload_evidencefiles_2",
+        type: "string",
+        required: true,
+      },
+    ]);
+  });
+
+  it("构建 Flow 时自动声明宽字符 upload 占位符变量", () => {
+    const flow = buildFlowFromEvents(
+      [
+        event({
+          id: "n1",
+          type: "navigate",
+          timestamp: 0,
+          url: "https://app.example.com/upload",
+        }),
+        parseRecordedEvent({
+          id: "u1",
+          type: "fill",
+          timestamp: 10,
+          url: "https://app.example.com/upload",
+          payload: {
+            selector: "#evidence-files",
+            testId: "evidence-files",
+            inputType: "file",
+            files: ["{{tenant-id}}", "{{profile.name}}", "{{中文变量}}"],
+            fileNames: ["tenant.txt", "profile.txt", "zh.txt"],
+            tagName: "input",
+            nameAttr: "evidenceFiles",
+            labelText: "上传素材",
+          },
+        }),
+      ],
+      baseMeta,
+    );
+
+    expect(flow.variables).toEqual([
+      {
+        name: "tenant-id",
+        type: "string",
+        required: true,
+      },
+      {
+        name: "profile.name",
+        type: "string",
+        required: true,
+      },
+      {
+        name: "中文变量",
         type: "string",
         required: true,
       },
