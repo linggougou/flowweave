@@ -5,6 +5,7 @@ import type {
   StudioDiagnosticStrategyAttempt,
   StudioDiagnosticTargetHints,
 } from "./studio-api-types.js";
+import { isTargetResolutionDiagnostic } from "./studio-api-types.js";
 
 export type RepairSuggestion = {
   id: string;
@@ -319,8 +320,12 @@ export function buildDiagnosticRepairSuggestions(
 ): RepairSuggestion[] {
   const ranked: RankedRepairSuggestion[] = [];
   const diagnostic = step.diagnostic;
-  const failedAttempts = diagnostic?.strategyAttempts.filter((attempt) => !attempt.success) ?? [];
-  const targetHints = diagnostic?.targetHints;
+  if (!isTargetResolutionDiagnostic(diagnostic)) {
+    return [];
+  }
+
+  const failedAttempts = diagnostic.strategyAttempts.filter((attempt) => !attempt.success);
+  const targetHints = diagnostic.targetHints;
   const targetHintSummary = describeTargetHints(targetHints);
 
   const broadAttempt = failedAttempts.find(

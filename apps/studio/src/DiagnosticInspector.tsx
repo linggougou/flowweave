@@ -3,7 +3,12 @@ import { buildFailureInsight } from "./shared/failure-insights.js";
 import { buildDiagnosticRepairSuggestions } from "./shared/repair-suggestions.js";
 import type {
   ExecutionStepLog,
+  StudioStepDiagnostic,
   StudioDiagnosticTargetHints,
+} from "./shared/studio-api-types.js";
+import {
+  isRuntimeErrorDiagnostic,
+  isTargetResolutionDiagnostic,
 } from "./shared/studio-api-types.js";
 
 type DiagnosticInspectorProps = {
@@ -39,7 +44,9 @@ function countStrategyAttempts(
   failureCount: number;
   visibleCandidateCount: number;
 } {
-  const attempts = step.diagnostic?.strategyAttempts ?? [];
+  const attempts = isTargetResolutionDiagnostic(step.diagnostic)
+    ? step.diagnostic.strategyAttempts
+    : [];
   return {
     successCount: attempts.filter((attempt) => attempt.success).length,
     failureCount: attempts.filter((attempt) => !attempt.success).length,
@@ -48,6 +55,20 @@ function countStrategyAttempts(
       0,
     ),
   };
+}
+
+function resolveDiagnosticStepType(
+  step: ExecutionStepLog,
+  diagnostic?: StudioStepDiagnostic,
+): string {
+  return diagnostic?.stepType ?? step.stepType ?? "—";
+}
+
+function resolveDiagnosticMessage(
+  step: ExecutionStepLog,
+  diagnostic?: StudioStepDiagnostic,
+): string {
+  return diagnostic?.message ?? step.message ?? "—";
 }
 
 function includesKeyword(value: string | undefined, keywords: string[]): boolean {
@@ -77,7 +98,10 @@ function formatScopeKind(
 }
 
 function buildAmbiguityClues(step: ExecutionStepLog): string[] {
-  const attempts = step.diagnostic?.strategyAttempts ?? [];
+  const diagnostic = isTargetResolutionDiagnostic(step.diagnostic)
+    ? step.diagnostic
+    : undefined;
+  const attempts = diagnostic?.strategyAttempts ?? [];
   const ambiguousAttempt = attempts.find(
     (attempt) =>
       !attempt.success &&
@@ -106,8 +130,8 @@ function buildAmbiguityClues(step: ExecutionStepLog): string[] {
         : ""
     }。`,
   ];
-  const scopeText = step.diagnostic?.targetHints?.scopeText?.trim();
-  const scopeKind = step.diagnostic?.targetHints?.scopeKind;
+  const scopeText = diagnostic?.targetHints?.scopeText?.trim();
+  const scopeKind = diagnostic?.targetHints?.scopeKind;
   const scopeKindLabel = scopeKind ? formatScopeKind(scopeKind) : undefined;
 
   if (scopeText) {
@@ -159,10 +183,16 @@ export function DiagnosticInspector({
     diagnosticSteps.find((step) => step.diagnosticPath) ??
     diagnosticSteps[0]!;
   const diagnostic = activeStep.diagnostic;
+  const targetDiagnostic = isTargetResolutionDiagnostic(diagnostic) ? diagnostic : undefined;
+  const runtimeErrorDiagnostic = isRuntimeErrorDiagnostic(diagnostic)
+    ? diagnostic
+    : undefined;
   const insight = buildFailureInsight(activeStep);
-  const summary = countStrategyAttempts(activeStep);
-  const repairSuggestions = buildDiagnosticRepairSuggestions(activeStep);
-  const ambiguityClues = buildAmbiguityClues(activeStep);
+  const summary = targetDiagnostic ? countStrategyAttempts(activeStep) : null;
+  const repairSuggestions = targetDiagnostic
+    ? buildDiagnosticRepairSuggestions(activeStep)
+    : [];
+  const ambiguityClues = targetDiagnostic ? buildAmbiguityClues(activeStep) : [];
 
   return (
     <section className="flow-preview">
@@ -178,7 +208,7 @@ export function DiagnosticInspector({
         <div>
           <h3 style={{ marginBottom: 4 }}>诊断工作台</h3>
           <p className="flow-content-meta">
-            聚焦命中策略、失败原因与页面快照，帮助快速定位回放异常
+            聚焦失败原因、定位线索与页面快照，帮助快速定位回放异常
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -254,27 +284,29 @@ export function DiagnosticInspector({
         </div>
       ) : null}
 
-      <div
-        style={{
-          display: "grid",
-          gap: 12,
-          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-          marginBottom: 16,
-        }}
-      >
-        <div className="flow-preview" style={{ margin: 0 }}>
-          <strong>成功策略</strong>
-          <div>{summary.successCount}</div>
+      {summary ? (
+        <div
+          style={{
+            display: "grid",
+            gap: 12,
+            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+            marginBottom: 16,
+          }}
+        >
+          <div className="flow-preview" style={{ margin: 0 }}>
+            <strong>成功策略</strong>
+            <div>{summary.successCount}</div>
+          </div>
+          <div className="flow-preview" style={{ margin: 0 }}>
+            <strong>失败策略</strong>
+            <div>{summary.failureCount}</div>
+          </div>
+          <div className="flow-preview" style={{ margin: 0 }}>
+            <strong>可见候选</strong>
+            <div>{summary.visibleCandidateCount}</div>
+          </div>
         </div>
-        <div className="flow-preview" style={{ margin: 0 }}>
-          <strong>失败策略</strong>
-          <div>{summary.failureCount}</div>
-        </div>
-        <div className="flow-preview" style={{ margin: 0 }}>
-          <strong>可见候选</strong>
-          <div>{summary.visibleCandidateCount}</div>
-        </div>
-      </div>
+      ) : null}
 
       {repairSuggestions.length > 0 ? (
         <div className="flow-preview" style={{ margin: "0 0 16px" }}>
@@ -313,87 +345,115 @@ export function DiagnosticInspector({
           <table className="fw-step-log-table">
             <tbody>
               <tr>
+                <th>诊断类型</th>
+                <td>{runtimeErrorDiagnostic ? "运行时错误" : "目标定位"}</td>
+              </tr>
+              <tr>
+                <th>步骤类型</th>
+                <td>{resolveDiagnosticStepType(activeStep, diagnostic)}</td>
+              </tr>
+              <tr>
+                <th>错误码</th>
+                <td>{diagnostic.errorCode ?? "—"}</td>
+              </tr>
+              <tr>
+                <th>诊断消息</th>
+                <td>{resolveDiagnosticMessage(activeStep, diagnostic)}</td>
+              </tr>
+              {diagnostic.cause ? (
+                <tr>
+                  <th>原因</th>
+                  <td>{diagnostic.cause}</td>
+                </tr>
+              ) : null}
+              <tr>
                 <th>URL</th>
-                <td>{diagnostic.url}</td>
+                <td>{diagnostic.url ?? "—"}</td>
               </tr>
               <tr>
                 <th>标题</th>
-                <td>{diagnostic.title || "—"}</td>
+                <td>{diagnostic.title?.trim() || "—"}</td>
               </tr>
-              <tr>
-                <th>策略尝试数</th>
-                <td>{diagnostic.strategyAttempts.length}</td>
-              </tr>
-            </tbody>
-          </table>
-
-          <h4 style={{ margin: "16px 0 8px" }}>定位策略尝试</h4>
-          <table className="fw-step-log-table">
-            <thead>
-              <tr>
-                <th>策略</th>
-                <th>匹配数</th>
-                <th>可见数</th>
-                <th>结果</th>
-                <th>错误</th>
-              </tr>
-            </thead>
-            <tbody>
-              {diagnostic.strategyAttempts.map((attempt, index) => (
-                <tr key={`${attempt.label}-${index}`}>
-                  <td>{attempt.label}</td>
-                  <td>{attempt.matchedCount}</td>
-                  <td>{formatCount(attempt.visibleCount)}</td>
-                  <td>{attempt.success ? "成功" : "失败"}</td>
-                  <td>{attempt.error ?? "—"}</td>
+              {targetDiagnostic ? (
+                <tr>
+                  <th>策略尝试数</th>
+                  <td>{targetDiagnostic.strategyAttempts.length}</td>
                 </tr>
-              ))}
+              ) : null}
             </tbody>
           </table>
 
-          {diagnostic.targetHints ? (
+          {targetDiagnostic ? (
             <>
-              <h4 style={{ margin: "16px 0 8px" }}>目标提示</h4>
+              <h4 style={{ margin: "16px 0 8px" }}>定位策略尝试</h4>
               <table className="fw-step-log-table">
+                <thead>
+                  <tr>
+                    <th>策略</th>
+                    <th>匹配数</th>
+                    <th>可见数</th>
+                    <th>结果</th>
+                    <th>错误</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  <tr>
-                    <th>标签</th>
-                    <td>{diagnostic.targetHints.tagName ?? "—"}</td>
-                  </tr>
-                  <tr>
-                    <th>输入类型</th>
-                    <td>{diagnostic.targetHints.inputType ?? "—"}</td>
-                  </tr>
-                  <tr>
-                    <th>name 属性</th>
-                    <td>{diagnostic.targetHints.nameAttr ?? "—"}</td>
-                  </tr>
-                  <tr>
-                    <th>占位提示</th>
-                    <td>{diagnostic.targetHints.placeholder ?? "—"}</td>
-                  </tr>
-                  <tr>
-                    <th>关联文案</th>
-                    <td>{diagnostic.targetHints.labelText ?? "—"}</td>
-                  </tr>
-                  <tr>
-                    <th>文本样本</th>
-                    <td>{diagnostic.targetHints.textSample ?? "—"}</td>
-                  </tr>
-                  <tr>
-                    <th>作用域类型</th>
-                    <td>
-                      {diagnostic.targetHints.scopeKind
-                        ? formatScopeKind(diagnostic.targetHints.scopeKind)
-                        : "—"}
-                    </td>
-                  </tr>
-                  <tr>
-                    <th>作用域文本</th>
-                    <td>{diagnostic.targetHints.scopeText ?? "—"}</td>
-                  </tr>
+                  {targetDiagnostic.strategyAttempts.map((attempt, index) => (
+                    <tr key={`${attempt.label}-${index}`}>
+                      <td>{attempt.label}</td>
+                      <td>{attempt.matchedCount}</td>
+                      <td>{formatCount(attempt.visibleCount)}</td>
+                      <td>{attempt.success ? "成功" : "失败"}</td>
+                      <td>{attempt.error ?? "—"}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
+
+              {targetDiagnostic.targetHints ? (
+                <>
+                  <h4 style={{ margin: "16px 0 8px" }}>目标提示</h4>
+                  <table className="fw-step-log-table">
+                    <tbody>
+                      <tr>
+                        <th>标签</th>
+                        <td>{targetDiagnostic.targetHints.tagName ?? "—"}</td>
+                      </tr>
+                      <tr>
+                        <th>输入类型</th>
+                        <td>{targetDiagnostic.targetHints.inputType ?? "—"}</td>
+                      </tr>
+                      <tr>
+                        <th>name 属性</th>
+                        <td>{targetDiagnostic.targetHints.nameAttr ?? "—"}</td>
+                      </tr>
+                      <tr>
+                        <th>占位提示</th>
+                        <td>{targetDiagnostic.targetHints.placeholder ?? "—"}</td>
+                      </tr>
+                      <tr>
+                        <th>关联文案</th>
+                        <td>{targetDiagnostic.targetHints.labelText ?? "—"}</td>
+                      </tr>
+                      <tr>
+                        <th>文本样本</th>
+                        <td>{targetDiagnostic.targetHints.textSample ?? "—"}</td>
+                      </tr>
+                      <tr>
+                        <th>作用域类型</th>
+                        <td>
+                          {targetDiagnostic.targetHints.scopeKind
+                            ? formatScopeKind(targetDiagnostic.targetHints.scopeKind)
+                            : "—"}
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>作用域文本</th>
+                        <td>{targetDiagnostic.targetHints.scopeText ?? "—"}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </>
+              ) : null}
             </>
           ) : null}
         </>

@@ -1,5 +1,5 @@
 /** 渲染进程与 preload 共享的 Studio API 类型 */
-import type { FlowDocument } from "@flowweave/flow-dsl";
+import type { FlowDocument, NormalizedStep } from "@flowweave/flow-dsl";
 import type { FragilityIssue, PageSnapshotSummary } from "@flowweave/page-intelligence";
 
 export type RunFlowVariableValue = string | number | boolean;
@@ -54,6 +54,7 @@ export type ExecutionStepLog = {
   stepIndex: number;
   stepId: string;
   label: string;
+  stepType?: NormalizedStep["type"];
   status: "pending" | "running" | "passed" | "failed" | "skipped";
   message?: string;
   durationMs?: number;
@@ -85,14 +86,46 @@ export type StudioDiagnosticStrategyAttempt = {
   error?: string;
 };
 
-export type StudioStepDiagnostic = {
+export type StudioDiagnosticKind = "target-resolution" | "runtime-error";
+
+export type StudioStepDiagnosticBase = {
   stepId: string;
   stepIndex: number;
-  url: string;
-  title: string;
+  stepType?: NormalizedStep["type"];
+  message?: string;
+  errorCode?: string;
+  cause?: string;
+  url?: string;
+  title?: string;
+};
+
+export type StudioTargetResolutionDiagnostic = StudioStepDiagnosticBase & {
+  kind?: "target-resolution";
   strategyAttempts: StudioDiagnosticStrategyAttempt[];
   targetHints?: StudioDiagnosticTargetHints;
 };
+
+export type StudioRuntimeErrorDiagnostic = StudioStepDiagnosticBase & {
+  kind: "runtime-error";
+  stepType: NormalizedStep["type"];
+  message: string;
+};
+
+export type StudioStepDiagnostic =
+  | StudioTargetResolutionDiagnostic
+  | StudioRuntimeErrorDiagnostic;
+
+export function isRuntimeErrorDiagnostic(
+  diagnostic: StudioStepDiagnostic | undefined,
+): diagnostic is StudioRuntimeErrorDiagnostic {
+  return diagnostic?.kind === "runtime-error";
+}
+
+export function isTargetResolutionDiagnostic(
+  diagnostic: StudioStepDiagnostic | undefined,
+): diagnostic is StudioTargetResolutionDiagnostic {
+  return Boolean(diagnostic && diagnostic.kind !== "runtime-error");
+}
 
 export type StudioExecution = {
   executionId: string;

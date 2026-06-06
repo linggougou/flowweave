@@ -55,6 +55,47 @@ function buildStep(overrides?: Partial<ExecutionStepLog>): ExecutionStepLog {
 }
 
 describe("DiagnosticInspector", () => {
+  it("对 runtime-error 诊断展示通用步骤错误元信息", () => {
+    const html = renderToStaticMarkup(
+      <DiagnosticInspector
+        steps={[
+          buildStep({
+            stepIndex: 2,
+            stepId: "s3",
+            label: "等待支付弹层",
+            message: "wait 条件 visible 需要 target",
+            diagnostic: {
+              kind: "runtime-error",
+              stepId: "s3",
+              stepIndex: 2,
+              stepType: "wait",
+              message: "wait 条件 visible 需要 target",
+              errorCode: "WAIT_TARGET_REQUIRED",
+              cause: "缺少 target",
+              url: "https://staging.example.com/orders",
+              title: "订单页",
+            } as unknown as ExecutionStepLog["diagnostic"],
+          }),
+        ]}
+        selectedStepIndex={2}
+        onSelectStepIndex={() => {}}
+        onOpenPath={() => {}}
+      />,
+    );
+
+    expect(html).toContain("诊断工作台");
+    expect(html).toContain("步骤类型");
+    expect(html).toContain("wait");
+    expect(html).toContain("错误码");
+    expect(html).toContain("WAIT_TARGET_REQUIRED");
+    expect(html).toContain("诊断消息");
+    expect(html).toContain("wait 条件 visible 需要 target");
+    expect(html).toContain("https://staging.example.com/orders");
+    expect(html).toContain("订单页");
+    expect(html).not.toContain("定位策略尝试");
+    expect(html).not.toContain("目标提示");
+  });
+
   it("把诊断信息提升为更适合排障的工作台视图", () => {
     const html = renderToStaticMarkup(
       <DiagnosticInspector
