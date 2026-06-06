@@ -3496,3 +3496,25 @@
   - 提交主线 `.codex` 收口留痕。
   - 回收已验收 worktree / 分支 / 子代理。
   - 推送 `codex/real-page-stability-program` 到 `origin`。
+
+## 2026-06-07 Wave 6 资源回收完成
+
+- 时间：2026-06-07 02:19:00 CST
+- 回收结果：
+  - 已关闭子代理：
+    - `Linnaeus` / `019e9e15-4e93-7191-99d7-324ce52569cb`
+    - `Heisenberg` / `019e9e15-a645-7d60-bc55-07eac806e702`
+    - `Singer` / `019e9e16-052b-72d0-873f-3f2dba2b5e3e`
+    - `Gauss` / `019e9e1e-234c-73e0-b59d-7fc5ec3665b6`
+  - 已删除 worktree：
+    - `.worktrees/codex-real-page-wave6-fragility`
+    - `.worktrees/codex-real-page-wave6-runtime-diagnostic`
+    - `.worktrees/codex-real-page-wave6-studio-diagnostic`
+  - 已删除分支：
+    - `codex/real-page-wave6-fragility`
+    - `codex/real-page-wave6-runtime-diagnostic`
+    - `codex/real-page-wave6-studio-diagnostic`
+- 当前仓库状态：
+  - `git worktree list` 仅剩主工作区 `/Users/ling/codeHome/A_Mine/flowweave`
+  - 当前协调分支：`codex/real-page-stability-program`
+  - 下一步：推送到 `origin`，作为后续自主续跑的新基线
