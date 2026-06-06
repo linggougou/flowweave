@@ -45,45 +45,15 @@ const waitConditionSchema = z.enum([
   "urlIncludes",
 ]);
 
-const waitStepSchema = stepBaseSchema
-  .extend({
-    type: z.literal("wait"),
-    ms: z.number().int().positive().optional(),
-    condition: waitConditionSchema.optional(),
-    target: targetSchema.optional(),
-    urlIncludes: z.string().min(1).optional(),
-  })
-  .superRefine((step, ctx) => {
-    if (step.ms === undefined && step.condition === undefined) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["condition"],
-        message: "wait 步骤必须至少提供 ms 或 condition",
-      });
-    }
+const waitStepSchema = stepBaseSchema.extend({
+  type: z.literal("wait"),
+  ms: z.number().int().positive().optional(),
+  condition: waitConditionSchema.optional(),
+  target: targetSchema.optional(),
+  urlIncludes: z.string().min(1).optional(),
+});
 
-    if (
-      step.condition !== undefined &&
-      waitTargetConditions.includes(step.condition as (typeof waitTargetConditions)[number]) &&
-      step.target === undefined
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["target"],
-        message: `wait condition=${step.condition} 时必须提供 target`,
-      });
-    }
-
-    if (step.condition === "urlIncludes" && step.urlIncludes === undefined) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["urlIncludes"],
-        message: "wait condition=urlIncludes 时必须提供 urlIncludes",
-      });
-    }
-  });
-
-export const normalizedStepSchema = z.discriminatedUnion("type", [
+const normalizedStepBaseSchema = z.discriminatedUnion("type", [
   stepBaseSchema.extend({
     type: z.literal("navigate"),
     url: z.string().min(1),
@@ -122,6 +92,40 @@ export const normalizedStepSchema = z.discriminatedUnion("type", [
   }),
   waitStepSchema,
 ]);
+
+export const normalizedStepSchema = normalizedStepBaseSchema.superRefine((step, ctx) => {
+  if (step.type !== "wait") {
+    return;
+  }
+
+  if (step.ms === undefined && step.condition === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["condition"],
+      message: "wait 步骤必须至少提供 ms 或 condition",
+    });
+  }
+
+  if (
+    step.condition !== undefined &&
+    waitTargetConditions.includes(step.condition as (typeof waitTargetConditions)[number]) &&
+    step.target === undefined
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["target"],
+      message: `wait condition=${step.condition} 时必须提供 target`,
+    });
+  }
+
+  if (step.condition === "urlIncludes" && step.urlIncludes === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["urlIncludes"],
+      message: "wait condition=urlIncludes 时必须提供 urlIncludes",
+    });
+  }
+});
 
 export const flowDocumentSchema = z.object({
   schemaVersion: z.literal(FLOW_SCHEMA_VERSION),
