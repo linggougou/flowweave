@@ -4614,3 +4614,31 @@
     - Runtime 首段动作韧性
     - Benchmarks 单一真相与 recorded gap 收口
     - Studio 对动作回弹 cause 的消费
+
+## 2026-06-07 Studio 测试发现规则显式化
+
+- 时间：2026-06-07 07:32:00 CST
+- 背景：
+  - 只读评审提出 `apps/studio` 缺少显式 `vitest.config.ts`，测试发现依赖 Vitest 默认规则，容易在未来造成“测试是否真正跑到”的歧义。
+- 本轮改动：
+  - 新增 `apps/studio/vitest.config.ts`
+  - 显式覆盖：
+    - `src/**/*.test.ts`
+    - `src/**/*.test.tsx`
+    - `src/**/*.spec.ts`
+    - `src/**/*.spec.tsx`
+    - `electron/**/*.test.ts`
+    - `electron/**/*.test.tsx`
+    - `electron/**/*.spec.ts`
+    - `electron/**/*.spec.tsx`
+- Node 20 复核：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
+    - 结果：通过，`52/52`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio exec vitest --config vitest.config.ts run src/shared/failure-insights.test.ts src/shared/repair-suggestions.test.ts src/DiagnosticInspector.test.tsx`
+    - 结果：通过，`21/21`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm exec prettier --check apps/studio/vitest.config.ts`
+    - 结果：通过
+- 结论：
+  - `apps/studio` 的测试入口现在不再依赖默认发现规则，Wave 10 新增的 Studio 诊断测试具备显式配置保护。

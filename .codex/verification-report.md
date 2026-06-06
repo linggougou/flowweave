@@ -3070,3 +3070,40 @@
 - 风险评估评分：94
 - 综合评分：97
 - 建议：通过
+
+## 2026-06-07 Studio 测试发现规则显式化验收
+
+### 审查范围
+
+- `apps/studio/vitest.config.ts`
+- `.codex/operations-log.md`
+
+### 审查结果
+
+1. 评审提出的工程歧义已被收口。
+   - `apps/studio` 新增本地 `vitest.config.ts`，显式声明了 `src/` 与 `electron/` 下的 `test/spec` 文件模式。
+   - 这样即使未来根仓库的 Vitest 配置继续收紧，也不会再影响 Studio 包级测试发现。
+2. 本地 Node 20 验证通过。
+   - `pnpm --filter @flowweave/app-studio test`
+     - 结果：通过，`52/52`
+   - `pnpm --filter @flowweave/app-studio exec vitest --config vitest.config.ts run src/shared/failure-insights.test.ts src/shared/repair-suggestions.test.ts src/DiagnosticInspector.test.tsx`
+     - 结果：通过，`21/21`
+   - `pnpm --filter @flowweave/app-studio typecheck`
+     - 结果：通过
+   - `pnpm exec prettier --check apps/studio/vitest.config.ts`
+     - 结果：通过
+
+### Findings
+
+1. 未发现阻塞级问题。
+   - 这次是工程清晰度增强，不改变运行时行为，但显著降低了“新增 Studio 测试被静默遗漏”的风险。
+
+### 综合结论
+
+- 代码质量评分：98
+- 测试覆盖评分：97
+- 规范遵循评分：100
+- 战略匹配评分：97
+- 风险评估评分：96
+- 综合评分：98
+- 建议：通过
