@@ -2,7 +2,7 @@
 
 本矩阵起始于 `Benchmarks` 轨道第一阶段，用于沉淀稳定、可复现的本地 HTML fixture。
 
-当前 Wave 10 的收口目标，是把 `examples/fixtures/`、`examples/real-page-smoke.ts`、`examples/recorded-replay-smoke.ts` 与 runtime 矩阵测试的场景口径统一到一份总表里。
+当前 Wave 11 的收口目标，是把 `examples/fixtures/`、`examples/real-page-smoke.ts`、`examples/recorded-replay-smoke.ts` 与 runtime 矩阵测试的场景口径统一到一份总表里，并为动作韧性新增独立 `p8` 档位。
 
 - `examples/real-page-smoke.ts`
 - `examples/run-real-page-smoke.ts`
@@ -13,23 +13,23 @@
 
 ## 单一真相口径
 
-- `examples/fixtures/` 当前共有 `22` 个 HTML。
-- 其中 `21` 个属于 Benchmarks fixture 矩阵，会被 `examples/real-page-smoke.ts` 的 `p7` 最新档位完整覆盖。
+- `examples/fixtures/` 当前共有 `24` 个 HTML。
+- 其中 `23` 个属于 Benchmarks fixture 矩阵，会被 `examples/real-page-smoke.ts` 的 `p8` 最新档位完整覆盖。
 - `examples/fixtures/login.html` 只服务 `pnpm e2e:login`，不纳入 real-page / recorded replay 矩阵总数。
 - `placeholder-disambiguation` 属于 recorded replay 的运行期临时页，不在 `examples/fixtures/` 目录内，也不计入 fixture 总数。
-- `examples/recorded-replay-smoke.ts` 当前 `baseline` 会执行 `21` 个真实 fixture 场景，再补 `1` 个运行期临时页，总数 `22`。
+- `examples/recorded-replay-smoke.ts` 当前 `baseline` 会执行 `23` 个真实 fixture 场景，再补 `1` 个运行期临时页，总数 `24`。
 
 | 分类               | 数量 | 覆盖口径                                                                             |
 | ------------------ | ---- | ------------------------------------------------------------------------------------ |
-| Benchmarks fixture | `21` | `real-page p7` 完整覆盖；`recorded replay baseline` 也完整覆盖这 `21` 条真实 fixture |
+| Benchmarks fixture | `23` | `real-page p8` 完整覆盖；`recorded replay baseline` 也完整覆盖这 `23` 条真实 fixture |
 | 登录专用 fixture   | `1`  | `examples/fixtures/login.html` 仅供 `pnpm e2e:login`                                 |
 | 运行期临时页       | `1`  | `placeholder-disambiguation` 仅供 `recorded replay baseline`                         |
 
-Benchmarks `21` 条真实 fixture 名单如下：`checkbox-select`、`delayed-panel`、`upload-form`、`spa-route`、`session-dashboard`、`keyboard-command-palette`、`async-command-palette`、`filterable-list`、`modal-bulk-action`、`session-expired-dashboard`、`paginated-list`、`drawer-edit-form`、`toast-popconfirm`、`tabbed-workspace`、`contenteditable-editor`、`empty-results-retry`、`linked-filters`、`session-expired-retry`、`bulk-cross-page-selection`、`drawer-double-save`、`repeated-row-actions`。
+Benchmarks `23` 条真实 fixture 名单如下：`checkbox-select`、`delayed-panel`、`upload-form`、`spa-route`、`session-dashboard`、`keyboard-command-palette`、`async-command-palette`、`filterable-list`、`modal-bulk-action`、`session-expired-dashboard`、`paginated-list`、`drawer-edit-form`、`toast-popconfirm`、`tabbed-workspace`、`contenteditable-editor`、`empty-results-retry`、`linked-filters`、`session-expired-retry`、`bulk-cross-page-selection`、`drawer-double-save`、`repeated-row-actions`、`rerender-action-panel`、`dialog-save-surface`。
 
 其中 `keyboard-command-palette` 已正式列入基线矩阵，同时出现在 real-page `baseline` 与 recorded replay `baseline`。
 
-真实页面矩阵仍保留四个档位：
+真实页面矩阵当前保留五个档位：
 
 - `baseline`
   - 当前包含 `13` 个稳定真实 fixture。
@@ -38,7 +38,9 @@ Benchmarks `21` 条真实 fixture 名单如下：`checkbox-select`、`delayed-pa
 - `p6`
   - 在 `p5` 之上新增 `3` 个 fixture，总数 `20`，并输出失败类型统计、最慢场景排行与成功态覆盖摘要。
 - `p7`
-  - 在 `p6` 之上新增 `1` 个“重复行同文案按钮” fixture，总数 `21`，也是 `examples/run-real-page-smoke.ts` 当前显式执行的最新档位。
+  - 在 `p6` 之上新增 `1` 个“重复行同文案按钮” fixture，总数 `21`，作为 Wave 10 口径保留。
+- `p8`
+  - 在 `p7` 之上新增 `2` 个动作韧性 fixture，总数 `23`，也是 `examples/run-real-page-smoke.ts` 当前默认执行的最新档位。
 
 所有页面都满足以下约束：
 
@@ -72,6 +74,8 @@ Benchmarks `21` 条真实 fixture 名单如下：`checkbox-select`、`delayed-pa
 | `bulk-cross-page-selection`  | `examples/fixtures/bulk-cross-page-selection.html` | `p6`       | `baseline`      | 跨页批量选择                            |
 | `drawer-double-save`         | `examples/fixtures/drawer-double-save.html`        | `p6`       | `baseline`      | 首次失败后二次保存                      |
 | `repeated-row-actions`       | `examples/fixtures/repeated-row-actions.html`      | `p7`       | `baseline`      | 行级消歧                                |
+| `rerender-action-panel`      | `examples/fixtures/rerender-action-panel.html`     | `p8`       | `baseline`      | 动作面板重挂载                          |
+| `dialog-save-surface`        | `examples/fixtures/dialog-save-surface.html`       | `p8`       | `baseline`      | Dialog 二段式保存表面                   |
 | `login`                      | `examples/fixtures/login.html`                     | 不纳入     | 不纳入          | 专供 `pnpm e2e:login`                   |
 | `placeholder-disambiguation` | 运行期临时生成                                     | 不纳入     | `baseline`      | 非仓库 fixture，仅验证 placeholder 消歧 |
 
@@ -99,6 +103,8 @@ Benchmarks `21` 条真实 fixture 名单如下：`checkbox-select`、`delayed-pa
 | `examples/fixtures/bulk-cross-page-selection.html` | 跨页保留勾选、换页后继续选择、最终批量提交          | 第 1 页勾选一条 -> 下一页 -> 第 2 页再勾选一条 -> 提交批量归档                             | `#selection-loading`、`#selection-summary[data-count]`、`#submit-selection`、`#bulk-result[data-ready="true"][data-count]`                                                                  | 跨页状态保持、分页与批量选择复合流程、最终批量提交                    |
 | `examples/fixtures/drawer-double-save.html`        | Drawer 第一次保存失败、修正备注后二次保存成功       | 打开 Drawer -> 直接保存触发失败提醒 -> 补备注 -> 再次保存 -> 等待结果区 ready              | `#edit-drawer[data-ready="true"]`、`#save-alert[data-state="error"]`、`#drawer-review-note`、`#save-result[data-ready="true"]`                                                              | 抽屉内失败后修正、二次保存、错误态与成功态切换                        |
 | `examples/fixtures/repeated-row-actions.html`      | 重复行共享同文案按钮、命中正确行后结果区 ready      | 直接点击同文案“编辑”按钮 -> 仅目标行成功后才等待 `#result-panel[data-ready="true"]` 可见   | `#result-panel[data-ready="true"][data-target-row="campaign-204"]`、`#result-row-title`、`#result-owner`、`#result-anchor`                                                                  | 重复按钮歧义、列表行作用域、错误命中第一条记录                        |
+| `examples/fixtures/rerender-action-panel.html`     | 动作面板重挂载、发布表面 ready 后再执行动作         | 切到发布动作 -> 等待 `#action-loading` 消失 -> 执行动作 -> 等待 `#result-panel` ready      | `#action-panel[data-ready="true"][data-surface="publish"]`、`#run-panel-action`、`#result-panel[data-ready="true"][data-surface="publish"]`                                                  | 动作表面重挂载、按钮重解析、动作后结果面稳定回填                      |
+| `examples/fixtures/dialog-save-surface.html`       | Dialog 从编辑表面切到确认表面，再关闭并回填结果     | 打开 Dialog -> 填备注 -> 保存修改 -> 等待确认表面 -> 确认保存 -> 等待结果 ready            | `#save-dialog[data-ready="true"][data-surface="editor"]`、`#dialog-save-action`、`#save-dialog[data-ready="true"][data-surface="confirm"]`、`#confirm-save-action`、`#save-result[data-ready="true"]` | Dialog 表面切换、二段式保存、确认后关闭与结果回填                     |
 | `examples/fixtures/async-command-palette.html`     | 异步 suggestions、`aria-activedescendant`、命令执行 | 输入“账单” -> 等待 suggestions 准备 -> `ArrowDown` -> `Enter` -> 断言命令执行结果          | `#command-shell[data-loading="false"]`、`#async-command-options`、`#async-command-search[aria-activedescendant]`、`#async-command-toast[data-ready="true"][data-command-id="sync-billing"]` | 输入后 debounce、异步候选加载、键盘高亮更新、active-descendant 稳定性 |
 
 ## 页面细节
@@ -345,6 +351,32 @@ Benchmarks `21` 条真实 fixture 名单如下：`checkbox-select`、`delayed-pa
   - 适合覆盖重复按钮、多命中 locator 和列表行作用域缩小。
   - 适合作为 Runtime 消歧策略并回后的长期回归基线。
 
+### `rerender-action-panel.html`
+
+- 交互目的：
+  - 模拟后台动作区在切换策略后整体重挂载，旧表面销毁、新表面重建的真实时序。
+  - 为 runtime 与 recorded replay 提供“切换后重新解析动作按钮，再执行最终动作”的动作韧性基准。
+- 关键断言：
+  - 点击 `#switch-publish-surface` 后，`#action-loading` 先出现再消失，随后 `#action-panel[data-ready="true"][data-surface="publish"]` 可见。
+  - 在发布表面点击 `#run-panel-action` 后，`#result-panel[data-ready="true"][data-surface="publish"]` 可见。
+  - 若误在复核表面执行动作，结果区会保持 `data-ready="false"`，不会误报成功。
+- 后续自动化价值：
+  - 适合覆盖动作表面重挂载、按钮重解析、动作后结果回填。
+  - 适合作为“点击没问题，但动作表面被重建后定位失效”这类问题的长期回归基线。
+
+### `dialog-save-surface.html`
+
+- 交互目的：
+  - 模拟 Dialog 保存并非一步完成，而是先从编辑表面切到确认表面，再二次确认后关闭并回填结果。
+  - 为 runtime 与 recorded replay 提供更贴近真实后台的二段式保存动作韧性基准。
+- 关键断言：
+  - 打开 Dialog 后，`#save-dialog[data-ready="true"][data-surface="editor"]` 可见。
+  - 填写 `#dialog-save-note` 并点击 `#dialog-save-action` 后，Dialog 会切到 `#save-dialog[data-ready="true"][data-surface="confirm"]`。
+  - 点击 `#confirm-save-action` 后，Dialog 关闭，`#save-result[data-ready="true"]` 可见并回填备注摘要。
+- 后续自动化价值：
+  - 适合覆盖 Dialog 表面切换、二段式保存、确认后关闭与结果回填。
+  - 适合作为“第一次保存只是切换表面，不应误判为最终成功”的长期回归基线。
+
 ## 当前观测输出
 
 - `examples/real-page-smoke.ts`
@@ -371,14 +403,14 @@ Benchmarks `21` 条真实 fixture 名单如下：`checkbox-select`、`delayed-pa
 ## 当前回归入口
 
 - `examples/real-page-smoke.ts`
-  - 统一定义 `baseline` / `p5` / `p6` / `p7` 四档矩阵，负责 Flow、上传测试文件、`storageStatePath` 注入，以及观测字段汇总。
-  - 底层仍兼容旧的 `p6` 调用，并映射到最新 `p7` 档位。
+  - 统一定义 `baseline` / `p5` / `p6` / `p7` / `p8` 五档矩阵，负责 Flow、上传测试文件、`storageStatePath` 注入，以及观测字段汇总。
+  - 底层仍兼容旧的 `p6` / `p7` 调用，并映射到最新 `p8` 档位。
 - `examples/run-real-page-smoke.ts`
-  - 当前显式执行 `p7` 档位，并打印成功数、失败数、总耗时、平均耗时、成功态摘要、最慢场景排行、失败类型统计与每个 case 的产物目录。
+  - 当前默认执行 `p8` 档位，并打印成功数、失败数、总耗时、平均耗时、成功态摘要、最慢场景排行、失败类型统计与每个 case 的产物目录。
 - `examples/recorded-replay-smoke.ts`
-  - 当前统一执行 `baseline` recorded replay 矩阵，覆盖 `21` 个真实 fixture 与 `1` 个运行期临时页。
+  - 当前统一执行 `baseline` recorded replay 矩阵，覆盖 `23` 个真实 fixture 与 `1` 个运行期临时页。
 - `pnpm e2e:real-pages`
-  - 独立执行当前最新的 `p7` 增强矩阵，适合局部回归 Benchmarks 轨道。
+  - 独立执行当前最新的 `p8` 增强矩阵，适合局部回归 Benchmarks 轨道。
 - `pnpm e2e:recorded-pages`
   - 独立执行 recorded replay 基线矩阵，适合验证 `RecordedEvent -> buildFlowFromEvents() -> executeFlow()` 闭环。
 - `pnpm smoke:full`
@@ -386,15 +418,15 @@ Benchmarks `21` 条真实 fixture 名单如下：`checkbox-select`、`delayed-pa
 
 ## 后续扩展建议
 
-1. 当矩阵继续扩容时，评估是否需要独立的 `p8` 档位，而不是继续挤压当前默认矩阵时长。
+1. `p8` 已经独立承接动作韧性扩容；如果未来继续增长，应优先评估是否再拆新的档位，而不是继续挤压默认矩阵时长。
 2. 如果未来要从“业务场景族”继续下钻，可在失败类型统计之外再补一层技术根因分类，例如 `locator`、`timeout`、`detached`。
 
 ## 备注
 
 - 当前权威口径是：
-  - `examples/fixtures/` 共 `22` 个 HTML。
-  - 其中 `21` 个属于 Benchmarks fixture 矩阵，`login.html` 单独服务登录 E2E。
+  - `examples/fixtures/` 共 `24` 个 HTML。
+  - 其中 `23` 个属于 Benchmarks fixture 矩阵，`login.html` 单独服务登录 E2E。
   - recorded replay 额外包含 `placeholder-disambiguation` 这 `1` 个运行期临时页。
 - `keyboard-command-palette` 与 `async-command-palette` 已回灌到 `baseline`，因此 real-page `baseline` 当前固定为 `13` 条，而不是早期文档里的 `11` 条。
-- Wave 10 收口后，real-page 最新档位固定为 `21` 条，recorded replay 基线固定为 `22` 条（`21` 真实 fixture + `1` 运行期临时页）。
+- Wave 11 收口后，real-page 最新档位固定为 `23` 条，recorded replay 基线固定为 `24` 条（`23` 真实 fixture + `1` 运行期临时页）。
 - 矩阵脚本直接从 `packages/*/src/index.ts` 导入 live implementation，避免脚本误吃旧 `dist` 产物，导致基准结果与当前源码脱节。

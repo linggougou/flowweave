@@ -25,8 +25,8 @@ type MatrixRuntimeAssets = {
   expiredStorageStatePath: string;
 };
 
-export type RealPageMatrixProfile = "baseline" | "p5" | "p6" | "p7";
-export const LATEST_REAL_PAGE_PROFILE: RealPageMatrixProfile = "p7";
+export type RealPageMatrixProfile = "baseline" | "p5" | "p6" | "p7" | "p8";
+export const LATEST_REAL_PAGE_PROFILE: RealPageMatrixProfile = "p8";
 
 export type RealPageFailureType =
   | "core-interaction"
@@ -79,6 +79,8 @@ const CASE_FAILURE_TYPE_MAP: Record<string, RealPageFailureType> = {
   "empty-results-retry": "retry-recovery",
   "bulk-cross-page-selection": "bulk-selection",
   "repeated-row-actions": "core-interaction",
+  "rerender-action-panel": "core-interaction",
+  "dialog-save-surface": "confirmation",
 };
 
 export type RealPageFixtureCaseResult = {
@@ -1260,6 +1262,134 @@ function buildP7MatrixCases(): MatrixCase[] {
   ];
 }
 
+function buildP8MatrixCases(): MatrixCase[] {
+  return [
+    {
+      name: "rerender-action-panel",
+      flow: buildFlow("flow_rerender_action_panel", "动作面板重挂载流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "rerender-action-panel.html",
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#switch-publish-surface" }] },
+        },
+        {
+          id: "s3",
+          type: "wait",
+          condition: "hidden",
+          target: { strategies: [{ kind: "css", selector: "#action-loading" }] },
+        },
+        {
+          id: "s4",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#action-panel[data-ready='true'][data-surface='publish']",
+              },
+            ],
+          },
+        },
+        {
+          id: "s5",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#run-panel-action" }] },
+        },
+        {
+          id: "s6",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#result-panel[data-ready='true'][data-surface='publish']",
+              },
+            ],
+          },
+        },
+      ]),
+    },
+    {
+      name: "dialog-save-surface",
+      flow: buildFlow("flow_dialog_save_surface", "Dialog 二段式保存流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "dialog-save-surface.html",
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#open-save-dialog" }] },
+        },
+        {
+          id: "s3",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#save-dialog[data-ready='true'][data-surface='editor']",
+              },
+            ],
+          },
+        },
+        {
+          id: "s4",
+          type: "fill",
+          target: { strategies: [{ kind: "css", selector: "#dialog-save-note" }] },
+          value: "已补充动作重挂载后的复核说明，允许进入确认保存。",
+        },
+        {
+          id: "s5",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#dialog-save-action" }] },
+        },
+        {
+          id: "s6",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#save-dialog[data-ready='true'][data-surface='confirm']",
+              },
+            ],
+          },
+        },
+        {
+          id: "s7",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#confirm-save-action" }] },
+        },
+        {
+          id: "s8",
+          type: "wait",
+          condition: "hidden",
+          target: { strategies: [{ kind: "css", selector: "#save-dialog" }] },
+        },
+        {
+          id: "s9",
+          type: "wait",
+          condition: "visible",
+          target: { strategies: [{ kind: "css", selector: "#save-result[data-ready='true']" }] },
+        },
+      ]),
+    },
+  ];
+}
+
 function buildRealPageCaseSets(
   assets: MatrixRuntimeAssets,
 ): Record<RealPageMatrixProfile, MatrixCase[]> {
@@ -1267,12 +1397,14 @@ function buildRealPageCaseSets(
   const p5 = [...baseline, ...buildP5MatrixCases()];
   const p6 = [...p5, ...buildP6MatrixCases(assets)];
   const p7 = [...p6, ...buildP7MatrixCases()];
+  const p8 = [...p7, ...buildP8MatrixCases()];
 
   return {
     baseline,
     p5,
     p6,
     p7,
+    p8,
   };
 }
 
@@ -1296,8 +1428,8 @@ export function getRealPageFixtureCatalog(
 }
 
 function normalizeRealPageMatrixProfile(profile?: RealPageMatrixProfile): RealPageMatrixProfile {
-  // 兼容现有 CLI 仍传入 p6；Benchmarks P7 起这里统一执行最新矩阵。
-  if (profile === "p6") {
+  // 兼容现有 CLI 仍传入 p6 / p7；Benchmarks P8 起这里统一执行最新矩阵。
+  if (profile === "p6" || profile === "p7") {
     return LATEST_REAL_PAGE_PROFILE;
   }
 

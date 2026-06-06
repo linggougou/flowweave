@@ -33,8 +33,8 @@ type MatrixSuccessCoverageShape = {
   failureCount: number;
 };
 
-describe("runRealPageFixtureMatrix P7", () => {
-  it("执行 P7 增强矩阵并返回汇总统计", async () => {
+describe("runRealPageFixtureMatrix P8", () => {
+  it("执行 P8 增强矩阵并保留 p7 旧调用兼容", async () => {
     const matrixModule = (await import(matrixModuleUrl)) as {
       getRealPageFixtureCatalog: (
         profile?: string,
@@ -67,16 +67,18 @@ describe("runRealPageFixtureMatrix P7", () => {
     });
 
     const p7Catalog = matrixModule.getRealPageFixtureCatalog("p7");
+    const p8Catalog = matrixModule.getRealPageFixtureCatalog("p8");
 
-    expect(summary.profile).toBe("p7");
+    expect(summary.profile).toBe("p8");
     expect(matrixModule.getRealPageFixtureCatalog("baseline")).toHaveLength(13);
     expect(matrixModule.getRealPageFixtureCatalog("p5")).toHaveLength(17);
     expect(matrixModule.getRealPageFixtureCatalog("p6")).toHaveLength(20);
     expect(p7Catalog).toHaveLength(21);
-    expect(p7Catalog.every((item) => item.fixtureFile === `${item.name}.html`)).toBe(true);
-    expect(summary.results.map((item) => item.name)).toEqual(p7Catalog.map((item) => item.name));
+    expect(p8Catalog).toHaveLength(23);
+    expect(p8Catalog.every((item) => item.fixtureFile === `${item.name}.html`)).toBe(true);
+    expect(summary.results.map((item) => item.name)).toEqual(p8Catalog.map((item) => item.name));
     expect(summary.results.map((item) => [item.name, item.stepCount])).toEqual(
-      p7Catalog.map((item) => [item.name, item.stepCount]),
+      p8Catalog.map((item) => [item.name, item.stepCount]),
     );
     expect(summary.totalDurationMs).toBeGreaterThan(0);
     expect(summary.averageDurationMs).toBeGreaterThan(0);
@@ -100,15 +102,15 @@ describe("runRealPageFixtureMatrix P7", () => {
 
     if (repeatedRowResult?.status === "success") {
       expect(summary.failed).toHaveLength(0);
-      expect(summary.successCount).toBe(21);
+      expect(summary.successCount).toBe(23);
       expect(summary.failureCount).toBe(0);
       expect(summary.failureTypeCounts).toEqual({});
       expect(summary.successCoverage).toEqual([
         {
           failureType: "core-interaction",
           label: "基础交互",
-          caseCount: 7,
-          successCount: 7,
+          caseCount: 8,
+          successCount: 8,
           failureCount: 0,
         },
         {
@@ -135,8 +137,8 @@ describe("runRealPageFixtureMatrix P7", () => {
         {
           failureType: "confirmation",
           label: "确认提交流程",
-          caseCount: 2,
-          successCount: 2,
+          caseCount: 3,
+          successCount: 3,
           failureCount: 0,
         },
         {
@@ -178,7 +180,7 @@ describe("runRealPageFixtureMatrix P7", () => {
     } else {
       expect(summary.failed).toHaveLength(1);
       expect(summary.failed[0]?.name).toBe("repeated-row-actions");
-      expect(summary.successCount).toBe(20);
+      expect(summary.successCount).toBe(22);
       expect(summary.failureCount).toBe(1);
       expect(summary.failureTypeCounts).toEqual({
         "core-interaction": 1,
@@ -186,8 +188,8 @@ describe("runRealPageFixtureMatrix P7", () => {
       expect(coreInteractionCoverage).toEqual({
         failureType: "core-interaction",
         label: "基础交互",
-        caseCount: 7,
-        successCount: 6,
+        caseCount: 8,
+        successCount: 7,
         failureCount: 1,
       });
     }

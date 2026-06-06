@@ -84,6 +84,8 @@ const RECORDED_REPLAY_CASE_ORDER = [
   "bulk-cross-page-selection",
   "drawer-double-save",
   "repeated-row-actions",
+  "rerender-action-panel",
+  "dialog-save-surface",
   "placeholder-disambiguation",
 ] as const satisfies readonly string[];
 
@@ -283,6 +285,8 @@ function buildBaselineMatrixCases(baseUrl: string, assets: MatrixRuntimeAssets):
   const linkedFiltersFixtureUrl = new URL("linked-filters.html", baseUrl).toString();
   const drawerDoubleSaveFixtureUrl = new URL("drawer-double-save.html", baseUrl).toString();
   const repeatedRowActionsFixtureUrl = new URL("repeated-row-actions.html", baseUrl).toString();
+  const rerenderActionPanelFixtureUrl = new URL("rerender-action-panel.html", baseUrl).toString();
+  const dialogSaveSurfaceFixtureUrl = new URL("dialog-save-surface.html", baseUrl).toString();
 
   return [
     {
@@ -1179,6 +1183,129 @@ function buildBaselineMatrixCases(baseUrl: string, assets: MatrixRuntimeAssets):
           }),
         ],
         buildRecordedFlowMeta("flow_recorded_repeated_row_actions", "录制重复行同文案按钮流程"),
+      ),
+    },
+    {
+      name: "rerender-action-panel",
+      flow: buildFlowFromEvents(
+        [
+          parseRecordedEvent({
+            id: "evt_nav_rerender_action_panel",
+            type: "navigate",
+            timestamp: 0,
+            url: rerenderActionPanelFixtureUrl,
+            payload: {
+              url: "rerender-action-panel.html",
+              waitUntil: "domcontentloaded",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_switch_publish_surface",
+            type: "click",
+            timestamp: 100,
+            url: rerenderActionPanelFixtureUrl,
+            payload: {
+              selector: "#switch-publish-surface",
+              role: "button",
+              name: "切换为发布动作",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_run_publish_action",
+            type: "click",
+            timestamp: 980,
+            url: rerenderActionPanelFixtureUrl,
+            payload: {
+              selector: "#run-panel-action",
+              role: "button",
+              name: "执行动作",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_publish_result",
+            type: "click",
+            timestamp: 1700,
+            url: rerenderActionPanelFixtureUrl,
+            payload: {
+              selector: "#result-panel[data-ready='true'][data-surface='publish']",
+            },
+          }),
+        ],
+        buildRecordedFlowMeta("flow_recorded_rerender_action_panel", "录制动作面板重挂载流程"),
+      ),
+    },
+    {
+      name: "dialog-save-surface",
+      flow: buildFlowFromEvents(
+        [
+          parseRecordedEvent({
+            id: "evt_nav_dialog_save_surface",
+            type: "navigate",
+            timestamp: 0,
+            url: dialogSaveSurfaceFixtureUrl,
+            payload: {
+              url: "dialog-save-surface.html",
+              waitUntil: "domcontentloaded",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_open_save_dialog",
+            type: "click",
+            timestamp: 100,
+            url: dialogSaveSurfaceFixtureUrl,
+            payload: {
+              selector: "#open-save-dialog",
+              role: "button",
+              name: "打开保存 Dialog",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_fill_dialog_save_note",
+            type: "fill",
+            timestamp: 200,
+            url: dialogSaveSurfaceFixtureUrl,
+            payload: {
+              selector: "#dialog-save-note",
+              role: "textbox",
+              name: "复核备注",
+              value: "已补充动作重挂载后的复核说明，允许进入确认保存。",
+              tagName: "textarea",
+              placeholder: "请补充动作重挂载后的复核说明",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_dialog_save_action",
+            type: "click",
+            timestamp: 300,
+            url: dialogSaveSurfaceFixtureUrl,
+            payload: {
+              selector: "#dialog-save-action",
+              role: "button",
+              name: "保存修改",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_confirm_save_action",
+            type: "click",
+            timestamp: 1300,
+            url: dialogSaveSurfaceFixtureUrl,
+            payload: {
+              selector: "#confirm-save-action",
+              role: "button",
+              name: "确认保存",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_dialog_save_result",
+            type: "click",
+            timestamp: 2100,
+            url: dialogSaveSurfaceFixtureUrl,
+            payload: {
+              selector: "#save-result[data-ready='true']",
+            },
+          }),
+        ],
+        buildRecordedFlowMeta("flow_recorded_dialog_save_surface", "录制 Dialog 二段式保存流程"),
       ),
     },
     {

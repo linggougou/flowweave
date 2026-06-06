@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowWeave Dialog 保存表面 Fixture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+        --bg: #f6f2fb;
+        --panel: #fffefe;
+        --border: #d9cde8;
+        --text: #302444;
+        --muted: #6f5f84;
+        --accent: #7c4eb3;
+        --accent-soft: rgba(124, 78, 179, 0.12);
+        --success: #2e6c57;
+        --success-soft: rgba(46, 108, 87, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top left, rgba(124, 78, 179, 0.16), transparent 30%),
+          linear-gradient(180deg, #fcfaff 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      body[data-dialog-open="true"] {
+        overflow: hidden;
+      }
+
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 40px 20px 72px;
+      }
+
+      .hero,
+      .shell,
+      .result,
+      .dialog-card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: 0 20px 44px rgba(48, 36, 68, 0.08);
+      }
+
+      .hero,
+      .shell,
+      .result {
+        padding: 24px;
+      }
+
+      .hero {
+        margin-bottom: 20px;
+      }
+
+      .hero p,
+      .shell p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      button,
+      textarea {
+        font: inherit;
+      }
+
+      button {
+        border: none;
+        border-radius: 14px;
+        padding: 11px 18px;
+        background: var(--accent);
+        color: #fff;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      button.ghost {
+        background: #fff;
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .meta-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      .meta-grid div {
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: rgba(111, 95, 132, 0.08);
+      }
+
+      .meta-grid strong {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--muted);
+      }
+
+      .result {
+        margin-top: 18px;
+      }
+
+      .result[hidden],
+      .backdrop[hidden],
+      .dialog-surface[hidden] {
+        display: none;
+      }
+
+      .result[data-ready="true"] {
+        border-color: rgba(46, 108, 87, 0.28);
+      }
+
+      .backdrop {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: 20px;
+        background: rgba(45, 28, 66, 0.42);
+      }
+
+      .dialog-card {
+        width: min(100%, 560px);
+        padding: 24px;
+      }
+
+      .dialog-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 700;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 120px;
+        margin-top: 14px;
+        border-radius: 14px;
+        border: 1px solid var(--border);
+        padding: 12px 14px;
+        resize: vertical;
+      }
+
+      .dialog-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      .dialog-status {
+        min-height: 24px;
+        margin-top: 14px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <p>Fixture 目标：验证 Dialog 会从“编辑保存表面”切换到“确认保存表面”，最终再关闭并回填结果。</p>
+        <h1 id="page-title">Dialog 保存表面实验台</h1>
+        <p>推荐步骤：打开保存 Dialog、填写备注、先保存进入确认表面，再二次确认并等待结果回填。</p>
+      </section>
+
+      <section class="shell" aria-labelledby="rule-title">
+        <p id="rule-title">本页模拟真实后台中的二段式保存：第一次保存并不直接关闭 Dialog，而是切到确认表面。</p>
+
+        <div class="meta-grid">
+          <div>
+            <strong>当前规则</strong>
+            <span>FW-DIALOG-811</span>
+          </div>
+          <div>
+            <strong>目标负责人</strong>
+            <span id="expected-owner">闻溪</span>
+          </div>
+          <div>
+            <strong>保存路径</strong>
+            <span>编辑表面 -> 确认表面 -> 结果回填</span>
+          </div>
+        </div>
+
+        <div class="dialog-actions">
+          <button id="open-save-dialog" type="button">打开保存 Dialog</button>
+        </div>
+
+        <section
+          id="save-result"
+          class="result"
+          hidden
+          data-ready="false"
+          aria-labelledby="result-title"
+        >
+          <h2 id="result-title">保存结果</h2>
+          <div class="meta-grid">
+            <div>
+              <strong>结果表面</strong>
+              <span id="result-surface">surface:idle</span>
+            </div>
+            <div>
+              <strong>保存状态</strong>
+              <span id="result-status">未保存</span>
+            </div>
+            <div>
+              <strong>备注摘要</strong>
+              <span id="result-note">等待保存</span>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <div
+      id="save-dialog"
+      class="backdrop"
+      hidden
+      data-ready="false"
+      data-surface="closed"
+      aria-hidden="true"
+    >
+      <section class="dialog-card" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+        <span id="dialog-badge" class="dialog-badge">当前表面：编辑保存</span>
+        <h2 id="dialog-title">保存复核说明</h2>
+        <p id="dialog-copy">第一次保存会切换到确认表面，不会立刻关闭 Dialog。</p>
+
+        <section id="dialog-editor-surface" class="dialog-surface" data-surface="editor">
+          <label for="dialog-save-note">复核备注</label>
+          <textarea
+            id="dialog-save-note"
+            placeholder="请补充动作重挂载后的复核说明"
+          ></textarea>
+          <p id="dialog-status" class="dialog-status">备注至少需要 8 个字符。</p>
+          <div class="dialog-actions">
+            <button id="close-save-dialog" type="button" class="ghost">取消</button>
+            <button id="dialog-save-action" type="button" disabled>保存修改</button>
+          </div>
+        </section>
+
+        <section id="dialog-confirm-surface" class="dialog-surface" hidden data-surface="confirm">
+          <div class="meta-grid">
+            <div>
+              <strong>即将保存</strong>
+              <span>FW-DIALOG-811</span>
+            </div>
+            <div>
+              <strong>确认锚点</strong>
+              <span id="confirm-anchor">surface:confirm</span>
+            </div>
+            <div>
+              <strong>备注摘要</strong>
+              <span id="confirm-note">-</span>
+            </div>
+          </div>
+          <p class="dialog-status">确认表面已就绪。再次点击确认保存后，Dialog 会关闭并回填结果。</p>
+          <div class="dialog-actions">
+            <button id="confirm-save-action" type="button">确认保存</button>
+          </div>
+        </section>
+      </section>
+    </div>
+
+    <script>
+      const body = document.body;
+      const openDialogButton = document.getElementById("open-save-dialog");
+      const closeDialogButton = document.getElementById("close-save-dialog");
+      const saveDialog = document.getElementById("save-dialog");
+      const dialogBadge = document.getElementById("dialog-badge");
+      const dialogCopy = document.getElementById("dialog-copy");
+      const dialogEditorSurface = document.getElementById("dialog-editor-surface");
+      const dialogConfirmSurface = document.getElementById("dialog-confirm-surface");
+      const dialogSaveNote = document.getElementById("dialog-save-note");
+      const dialogStatus = document.getElementById("dialog-status");
+      const firstSaveButton = document.getElementById("dialog-save-action");
+      const confirmSaveButton = document.getElementById("confirm-save-action");
+      const confirmNote = document.getElementById("confirm-note");
+      const result = document.getElementById("save-result");
+      const resultSurface = document.getElementById("result-surface");
+      const resultStatus = document.getElementById("result-status");
+      const resultNote = document.getElementById("result-note");
+
+      let pending = false;
+
+      function showDialogSurface(surface) {
+        saveDialog.dataset.surface = surface;
+        saveDialog.dataset.ready = "true";
+        dialogEditorSurface.hidden = surface !== "editor";
+        dialogConfirmSurface.hidden = surface !== "confirm";
+        dialogBadge.textContent = `当前表面：${surface === "confirm" ? "确认保存" : "编辑保存"}`;
+        dialogCopy.textContent =
+          surface === "confirm"
+            ? "确认表面已经就绪，再次确认后会关闭 Dialog 并回填结果。"
+            : "第一次保存会切换到确认表面，不会立刻关闭 Dialog。";
+      }
+
+      function openDialog() {
+        pending = false;
+        saveDialog.hidden = false;
+        saveDialog.setAttribute("aria-hidden", "false");
+        body.dataset.dialogOpen = "true";
+        dialogSaveNote.value = "";
+        dialogStatus.textContent = "备注至少需要 8 个字符。";
+        firstSaveButton.disabled = true;
+        showDialogSurface("editor");
+      }
+
+      function closeDialog() {
+        saveDialog.hidden = true;
+        saveDialog.dataset.ready = "false";
+        saveDialog.dataset.surface = "closed";
+        saveDialog.setAttribute("aria-hidden", "true");
+        body.dataset.dialogOpen = "false";
+      }
+
+      function syncEditorState() {
+        const valid = dialogSaveNote.value.trim().length >= 8;
+        firstSaveButton.disabled = !valid || pending;
+        if (!pending) {
+          dialogStatus.textContent = valid ? "内容已达要求，可以进入确认表面。" : "备注至少需要 8 个字符。";
+        }
+      }
+
+      openDialogButton.addEventListener("click", openDialog);
+      closeDialogButton.addEventListener("click", closeDialog);
+      dialogSaveNote.addEventListener("input", syncEditorState);
+
+      firstSaveButton.addEventListener("click", () => {
+        if (firstSaveButton.disabled || pending) {
+          return;
+        }
+
+        pending = true;
+        saveDialog.dataset.ready = "false";
+        dialogStatus.textContent = "正在切换到确认表面...";
+        firstSaveButton.disabled = true;
+
+        window.setTimeout(() => {
+          pending = false;
+          confirmNote.textContent = dialogSaveNote.value.trim();
+          showDialogSurface("confirm");
+        }, 720);
+      });
+
+      confirmSaveButton.addEventListener("click", () => {
+        if (pending) {
+          return;
+        }
+
+        pending = true;
+        saveDialog.dataset.ready = "false";
+
+        window.setTimeout(() => {
+          const note = dialogSaveNote.value.trim();
+          closeDialog();
+          result.hidden = false;
+          result.dataset.ready = "true";
+          resultSurface.textContent = "surface:confirm";
+          resultStatus.textContent = "Dialog 已完成确认保存";
+          resultNote.textContent = note;
+          pending = false;
+        }, 640);
+      });
+    </script>
+  </body>
+</html>

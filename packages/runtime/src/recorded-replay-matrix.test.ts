@@ -44,8 +44,8 @@ describe("runRecordedReplayMatrix baseline", () => {
 
     expect(summary.profile).toBe("baseline");
     expect(summary.baseUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/$/);
-    expect(caseCatalog).toHaveLength(22);
-    expect(fixtureCases).toHaveLength(21);
+    expect(caseCatalog).toHaveLength(24);
+    expect(fixtureCases).toHaveLength(23);
     expect(runtimeOnlyCases).toEqual([
       {
         name: "placeholder-disambiguation",
@@ -53,6 +53,9 @@ describe("runRecordedReplayMatrix baseline", () => {
         sourceKind: "runtime-generated",
       },
     ]);
+    expect(fixtureCases.map((item) => item.name)).toEqual(
+      expect.arrayContaining(["rerender-action-panel", "dialog-save-surface"]),
+    );
     expect(fixtureCases.every((item) => item.fixtureFile === `${item.name}.html`)).toBe(true);
     expect(summary.results.map((item) => item.name)).toEqual(caseCatalog.map((item) => item.name));
     expect(summary.results.map((item) => [item.name, item.stepCount])).toEqual(
@@ -64,7 +67,7 @@ describe("runRecordedReplayMatrix baseline", () => {
       true,
     );
     expect(summary.failed).toHaveLength(0);
-    expect(summary.successCount).toBe(22);
+    expect(summary.successCount).toBe(24);
     expect(summary.failureCount).toBe(0);
     expect(summary.totalDurationMs).toBeGreaterThan(0);
     expect(summary.averageDurationMs).toBeGreaterThan(0);

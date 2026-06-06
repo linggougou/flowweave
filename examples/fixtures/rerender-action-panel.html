@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowWeave 动作面板重挂载 Fixture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+        --bg: #f5f8fd;
+        --panel: #fcfdff;
+        --border: #c8d4e8;
+        --text: #243447;
+        --muted: #64778d;
+        --accent: #1d6aae;
+        --accent-soft: rgba(29, 106, 174, 0.12);
+        --success: #1f7b57;
+        --success-soft: rgba(31, 123, 87, 0.12);
+        --warning: #9f6420;
+        --warning-soft: rgba(159, 100, 32, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top right, rgba(29, 106, 174, 0.16), transparent 30%),
+          linear-gradient(180deg, #fcfeff 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      main {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 40px 20px 72px;
+      }
+
+      .hero,
+      .shell,
+      .action-panel,
+      .result {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: 0 20px 44px rgba(36, 52, 71, 0.08);
+      }
+
+      .hero,
+      .shell,
+      .action-panel,
+      .result {
+        padding: 24px;
+      }
+
+      .hero {
+        margin-bottom: 20px;
+      }
+
+      .hero p,
+      .shell p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .mode-switches {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      button {
+        border: none;
+        border-radius: 14px;
+        padding: 11px 18px;
+        font: inherit;
+        font-weight: 700;
+        color: #fff;
+        background: var(--accent);
+        cursor: pointer;
+      }
+
+      button.ghost {
+        color: var(--text);
+        background: #fff;
+        border: 1px solid var(--border);
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .loading {
+        margin-top: 18px;
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: var(--accent-soft);
+        color: var(--muted);
+      }
+
+      .loading[hidden],
+      .result[hidden] {
+        display: none;
+      }
+
+      .action-panel {
+        margin-top: 18px;
+      }
+
+      .action-panel[data-ready="false"] {
+        opacity: 0.72;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-weight: 700;
+      }
+
+      .meta-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      .meta-grid div {
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: rgba(100, 119, 141, 0.08);
+      }
+
+      .meta-grid strong {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--muted);
+      }
+
+      .panel-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-top: 20px;
+      }
+
+      .result {
+        margin-top: 18px;
+      }
+
+      .result[data-ready="true"] {
+        border-color: rgba(31, 123, 87, 0.28);
+      }
+
+      .result[data-ready="false"] {
+        border-color: rgba(159, 100, 32, 0.24);
+      }
+
+      .result-tone {
+        margin-top: 14px;
+        padding: 12px 14px;
+        border-radius: 16px;
+      }
+
+      .result-tone[data-state="success"] {
+        background: var(--success-soft);
+        color: var(--success);
+      }
+
+      .result-tone[data-state="warning"] {
+        background: var(--warning-soft);
+        color: var(--warning);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <p>Fixture 目标：验证动作面板在切换策略后会整体重挂载，但后续动作仍能稳定命中新表面。</p>
+        <h1 id="page-title">动作面板重挂载实验台</h1>
+        <p>推荐步骤：切换到“发布动作”表面，等待重挂载完成，再执行动作并检查结果区。</p>
+      </section>
+
+      <section class="shell" aria-labelledby="surface-title">
+        <p id="surface-title">下方动作区会在切换策略时重新挂载。重挂载完成前，动作按钮不会处于 ready 态。</p>
+
+        <div class="mode-switches" role="group" aria-label="动作策略切换">
+          <button id="switch-review-surface" type="button" class="ghost">切换为复核动作</button>
+          <button id="switch-publish-surface" type="button">切换为发布动作</button>
+        </div>
+
+        <div id="action-loading" class="loading" hidden>正在重挂载动作面板，请稍候...</div>
+
+        <section
+          id="action-panel"
+          class="action-panel"
+          data-ready="true"
+          data-surface="review"
+          aria-labelledby="action-panel-title"
+        >
+          <span id="action-badge" class="badge">当前表面：复核动作</span>
+          <h2 id="action-panel-title">复核动作面板</h2>
+          <p id="action-panel-copy">当前表面会先做复核校验，切换到发布动作后会重新创建整个动作区。</p>
+
+          <div class="meta-grid">
+            <div>
+              <strong>当前锚点</strong>
+              <span id="panel-anchor">surface:review</span>
+            </div>
+            <div>
+              <strong>重挂载次数</strong>
+              <span id="rerender-count">0</span>
+            </div>
+            <div>
+              <strong>动作提示</strong>
+              <span id="panel-hint">请先切换到发布动作表面。</span>
+            </div>
+          </div>
+
+          <div class="panel-actions">
+            <p id="panel-status">当前表面可见，但还不是目标执行表面。</p>
+            <button id="run-panel-action" type="button">执行动作</button>
+          </div>
+        </section>
+
+        <section
+          id="result-panel"
+          class="result"
+          hidden
+          data-ready="false"
+          data-surface="idle"
+          aria-labelledby="result-title"
+        >
+          <strong id="result-title">动作结果区</strong>
+          <div id="result-tone" class="result-tone" data-state="warning">
+            尚未命中发布动作表面。
+          </div>
+
+          <div class="meta-grid">
+            <div>
+              <strong>结果表面</strong>
+              <span id="result-surface">surface:idle</span>
+            </div>
+            <div>
+              <strong>结果锚点</strong>
+              <span id="result-anchor">action:none</span>
+            </div>
+            <div>
+              <strong>执行摘要</strong>
+              <span id="result-summary">等待动作执行。</span>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const switchReviewButton = document.getElementById("switch-review-surface");
+      const switchPublishButton = document.getElementById("switch-publish-surface");
+      const actionLoading = document.getElementById("action-loading");
+      const actionPanel = document.getElementById("action-panel");
+      const actionBadge = document.getElementById("action-badge");
+      const actionPanelTitle = document.getElementById("action-panel-title");
+      const actionPanelCopy = document.getElementById("action-panel-copy");
+      const panelAnchor = document.getElementById("panel-anchor");
+      const rerenderCount = document.getElementById("rerender-count");
+      const panelHint = document.getElementById("panel-hint");
+      const panelStatus = document.getElementById("panel-status");
+      const runPanelActionButton = document.getElementById("run-panel-action");
+      const resultPanel = document.getElementById("result-panel");
+      const resultTone = document.getElementById("result-tone");
+      const resultSurface = document.getElementById("result-surface");
+      const resultAnchor = document.getElementById("result-anchor");
+      const resultSummary = document.getElementById("result-summary");
+
+      let currentSurface = "review";
+      let currentRerenderCount = 0;
+      let actionPending = false;
+
+      function renderSurface(surface) {
+        currentSurface = surface;
+        actionPanel.dataset.surface = surface;
+        actionPanel.dataset.ready = "true";
+        actionBadge.textContent = `当前表面：${surface === "publish" ? "发布动作" : "复核动作"}`;
+        actionPanelTitle.textContent = surface === "publish" ? "发布动作面板" : "复核动作面板";
+        actionPanelCopy.textContent =
+          surface === "publish"
+            ? "新的发布动作表面已经重挂载完成，可以执行最终发布动作。"
+            : "当前表面会先做复核校验，切换到发布动作后会重新创建整个动作区。";
+        panelAnchor.textContent = `surface:${surface}`;
+        rerenderCount.textContent = String(currentRerenderCount);
+        panelHint.textContent =
+          surface === "publish"
+            ? "目标表面已就绪，可以执行发布动作。"
+            : "请先切换到发布动作表面。";
+        panelStatus.textContent =
+          surface === "publish"
+            ? "发布动作表面已 ready。"
+            : "当前表面可见，但还不是目标执行表面。";
+        runPanelActionButton.textContent = surface === "publish" ? "执行动作" : "预检动作";
+        runPanelActionButton.disabled = actionPending;
+      }
+
+      function rerenderSurface(surface) {
+        if (actionPending || currentSurface === surface) {
+          return;
+        }
+
+        actionPending = true;
+        actionLoading.hidden = false;
+        actionPanel.dataset.ready = "false";
+        runPanelActionButton.disabled = true;
+        panelStatus.textContent = "动作面板正在重挂载...";
+
+        window.setTimeout(() => {
+          currentRerenderCount += 1;
+          actionLoading.hidden = true;
+          actionPending = false;
+          renderSurface(surface);
+        }, 760);
+      }
+
+      function writeResult(surface) {
+        actionPending = true;
+        runPanelActionButton.disabled = true;
+        panelStatus.textContent = "正在执行动作...";
+
+        window.setTimeout(() => {
+          const matched = surface === "publish";
+
+          resultPanel.hidden = false;
+          resultPanel.dataset.surface = surface;
+          resultPanel.dataset.ready = matched ? "true" : "false";
+          resultTone.dataset.state = matched ? "success" : "warning";
+          resultTone.textContent = matched
+            ? "已命中发布动作表面，结果区进入 ready 态。"
+            : "当前仅完成预检动作，结果区不会进入 ready 态。";
+          resultSurface.textContent = `surface:${surface}`;
+          resultAnchor.textContent = `action:${surface}`;
+          resultSummary.textContent = matched
+            ? "发布动作已完成并进入后续执行链路。"
+            : "预检动作已完成，请切换到发布动作表面后再执行。";
+
+          actionPending = false;
+          renderSurface(surface);
+        }, 620);
+      }
+
+      switchReviewButton.addEventListener("click", () => rerenderSurface("review"));
+      switchPublishButton.addEventListener("click", () => rerenderSurface("publish"));
+      runPanelActionButton.addEventListener("click", () => {
+        if (actionPending) {
+          return;
+        }
+
+        writeResult(currentSurface);
+      });
+
+      renderSurface("review");
+    </script>
+  </body>
+</html>
