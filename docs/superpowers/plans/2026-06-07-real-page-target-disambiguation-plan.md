@@ -230,7 +230,6 @@ git commit -m "feat: 强化 studio 歧义定位洞察"
 - Create: `examples/fixtures/repeated-row-actions.html`
 - Modify: `examples/real-page-smoke.ts`
 - Modify: `docs/guides/fixture-matrix.md`
-- Modify: `packages/runtime/src/playwright-runner.test.ts`
 - Modify: `packages/runtime/src/real-page-matrix.test.ts`
 - Test: `examples/**`、`packages/runtime/**`
 
@@ -239,12 +238,12 @@ git commit -m "feat: 强化 studio 歧义定位洞察"
 Run:
 
 ```bash
-PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- real-page-matrix.test.ts playwright-runner.test.ts
+PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- real-page-matrix.test.ts
 ```
 
 Expected:
 
-- 新增重复按钮场景的 matrix 或 recorded replay 断言先失败。
+- 新增重复按钮场景的 matrix 断言先失败。
 
 - [ ] **Step 2: 新增重复操作列 fixture**
 
@@ -254,20 +253,20 @@ Expected:
 - 只有目标行操作成功后才会写入正确结果区
 - 页面内不要依赖外部请求
 
-- [ ] **Step 3: 把新 fixture 接入 recorded replay 与 matrix**
+- [ ] **Step 3: 把新 fixture 接入 matrix 与真实页面 smoke**
 
 要求：
 
-- `playwright-runner.test.ts` 补 direct recorded replay
 - `real-page-matrix.test.ts` 和 `examples/real-page-smoke.ts` 补矩阵入口
 - `fixture-matrix.md` 同步记录场景说明
+- recorded replay 定向回归由 Runtime 轨单独维护，Benchmarks 不改 `playwright-runner.test.ts`
 
 - [ ] **Step 4: 跑 Benchmarks 绿灯验证**
 
 Run:
 
 ```bash
-PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- real-page-matrix.test.ts playwright-runner.test.ts
+PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- real-page-matrix.test.ts
 PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages
 ```
 
@@ -278,7 +277,7 @@ Expected:
 - [ ] **Step 5: 提交 Benchmarks 轨道**
 
 ```bash
-git add examples/fixtures/repeated-row-actions.html examples/real-page-smoke.ts docs/guides/fixture-matrix.md packages/runtime/src/playwright-runner.test.ts packages/runtime/src/real-page-matrix.test.ts
+git add examples/fixtures/repeated-row-actions.html examples/real-page-smoke.ts docs/guides/fixture-matrix.md packages/runtime/src/real-page-matrix.test.ts
 git commit -m "test: 新增歧义目标真实页面基准"
 ```
 

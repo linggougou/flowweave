@@ -38,7 +38,7 @@
 | Recorder Scope Hints | `codex/target-recorder-scope` | `.worktrees/codex-target-recorder-scope` | `packages/recorder/src/target-from-dom.ts`、`packages/recorder/src/target-from-dom.test.ts`、`packages/recorder/src/normalize.ts`、`packages/recorder/src/normalize.test.ts` | `packages/runtime`、`apps/studio`、`examples` |
 | Runtime Disambiguation | `codex/target-runtime-disambiguation` | `.worktrees/codex-target-runtime-disambiguation` | `packages/runtime/src/playwright-runner.ts`、`packages/runtime/src/playwright-runner.test.ts` | `packages/recorder`、`apps/studio`、`examples` |
 | Studio Ambiguity Insight | `codex/target-studio-ambiguity` | `.worktrees/codex-target-studio-ambiguity` | `apps/studio/src/DiagnosticInspector.tsx`、`apps/studio/src/DiagnosticInspector.test.tsx`、`apps/studio/src/shared/repair-suggestions.ts`、`apps/studio/src/shared/repair-suggestions.test.ts`、必要时 `apps/studio/src/shared/studio-api-types.ts` | `packages/runtime`、`examples` |
-| Benchmarks P7 | `codex/target-benchmarks-p7` | `.worktrees/codex-target-benchmarks-p7` | `examples/fixtures/repeated-row-actions.html`、`examples/real-page-smoke.ts`、`docs/guides/fixture-matrix.md`、`packages/runtime/src/real-page-matrix.test.ts`、必要时 `packages/runtime/src/playwright-runner.test.ts` | `packages/recorder`、`apps/studio` |
+| Benchmarks P7 | `codex/target-benchmarks-p7` | `.worktrees/codex-target-benchmarks-p7` | `examples/fixtures/repeated-row-actions.html`、`examples/real-page-smoke.ts`、`docs/guides/fixture-matrix.md`、`packages/runtime/src/real-page-matrix.test.ts` | `packages/recorder`、`apps/studio`、`packages/runtime/src/playwright-runner.test.ts` |
 
 ## 5. 轨道职责
 
@@ -69,10 +69,10 @@
 ### Benchmarks P7
 
 - 新增重复操作列 fixture
-- 把新场景接入 recorded replay 与 real-page matrix
+- 把新场景接入 real-page matrix 与真实页面 smoke
 - 保持 `p6` 已有观测输出不退化
 - 局部验收：
-  - `pnpm --filter @flowweave/runtime test -- real-page-matrix.test.ts playwright-runner.test.ts`
+  - `pnpm --filter @flowweave/runtime test -- real-page-matrix.test.ts`
   - `pnpm e2e:real-pages`
 
 ## 6. 合并顺序
@@ -87,7 +87,7 @@
 
 - Recorder / Runtime / Studio 都要消费同一份协议，Foundation 必须先并回。
 - Runtime 需要 Recorder 侧产生的新 hints 才能真正发挥价值。
-- Benchmarks 最后接入，能减少和 Runtime 测试文件的并发冲突。
+- Benchmarks 最后接入，能减少和 Runtime 轨 recorded replay 回归的并发冲突。
 
 ## 7. 统一验收
 
@@ -120,5 +120,5 @@ PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages
 
 - `packages/runtime/src/playwright-runner.ts` 是高冲突文件，Runtime 轨需避免顺手改等待策略或环境注入逻辑。
 - `apps/studio/src/shared/studio-api-types.ts` 既在 Foundation 也在 Studio 轨可能涉及，Foundation 只补协议；Studio 轨若需追加字段，必须先基于 Foundation 最新基线。
-- Benchmarks 若改 `playwright-runner.test.ts`，要在 Runtime 轨并回后再补，避免 recorded replay 用例冲突。
+- recorded replay 定向回归统一由 Runtime 轨维护，Benchmarks 只负责 fixture、matrix 与文档，避免并发冲突。
 - 候选打分策略必须控制复杂度，避免为了解歧义把每步执行时间拉高到不可接受。

@@ -3087,3 +3087,51 @@
 - 规划结论：
   - 推荐采用“Foundation + Recorder Scope Hints + Runtime Disambiguation + Studio Ambiguity Insight + Benchmarks P7”的并行方案。
   - 用户此前已明确授权“无需指示、全权自主规划任务、持续开发”，因此本轮设计与计划按自治流程直接落盘，不等待额外人工审批。
+
+## 2026-06-07 Foundation 实施补记与并行边界修正
+
+- 时间：2026-06-07 00:50:03 CST
+- 任务目标：
+  - 补记 `Foundation` 轨道的实际实施与验证结果。
+  - 修正 `Benchmarks P7` 在并行计划中的写入边界，避免与 `Runtime Disambiguation` 争用 `packages/runtime/src/playwright-runner.test.ts`。
+- 使用技能：
+  - `using-superpowers`
+  - `using-git-worktrees`
+  - `dispatching-parallel-agents`
+  - `subagent-driven-development`
+- 工具与替代说明：
+  - 当前环境仍未提供 `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code`。
+  - 本轮继续使用本地命令、CodeGraph、既有规划文档和结构化推演替代，并按要求落盘到 `.codex/operations-log.md`。
+- 当前仓库状态：
+  - `git status --short --branch`
+    - 结果：`## codex/real-page-stability-program...origin/codex/real-page-stability-program [ahead 2]`
+  - 结论：当前分支相对远端领先 2 个提交，工作区在本轮开始时保持干净。
+- Foundation 已完成补记：
+  - 提交：`00d1db8 feat: 扩展目标作用域提示协议`
+  - 涉及文件：
+    - `packages/flow-dsl/src/schema.ts`
+    - `packages/flow-dsl/src/schema.test.ts`
+    - `apps/studio/src/shared/studio-api-types.ts`
+  - 红灯设计：
+    - 先在 `packages/flow-dsl/src/schema.test.ts` 断言 `scopeText / scopeKind` 能 parse 且保真。
+    - 红灯现象：新增字段初始为 `undefined`。
+  - Foundation 绿灯验证：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/flow-dsl test`
+      - 结果：通过，`4/4`
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+      - 结果：通过
+- 并行边界修正：
+  - 为避免 `Runtime Disambiguation` 与 `Benchmarks P7` 同时修改 `packages/runtime/src/playwright-runner.test.ts`，现正式收窄 Benchmarks 轨道写入范围为：
+    - `examples/fixtures/repeated-row-actions.html`
+    - `examples/real-page-smoke.ts`
+    - `docs/guides/fixture-matrix.md`
+    - `packages/runtime/src/real-page-matrix.test.ts`
+  - Runtime 轨保留：
+    - `packages/runtime/src/playwright-runner.ts`
+    - `packages/runtime/src/playwright-runner.test.ts`
+  - 文档修正位置：
+    - `docs/superpowers/plans/2026-06-07-real-page-target-disambiguation-plan.md`
+    - `docs/superpowers/plans/2026-06-07-real-page-target-disambiguation-orchestration.md`
+- 下一步执行策略：
+  - 先用 Node 20 复跑 Foundation 相关验证，确认基线仍然稳定。
+  - 随后创建四个独立 worktree，并按修正后的文件边界派发 Recorder / Runtime / Studio / Benchmarks 四条并行轨道。
