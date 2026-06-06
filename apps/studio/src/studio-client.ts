@@ -3,7 +3,6 @@ import type { ExecutionResult, ExecutionWithProject, FlowVersionRecord } from "@
 
 import type {
   ExecutionSummary,
-  RunFlowOptions,
   RunFlowResult,
   StudioApi,
   StudioExecution,
