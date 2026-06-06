@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildInteractionPayload, resolveClickTarget } from "./target-from-dom.js";
+import { buildInteractionPayload, resolveClickTarget, shouldRecordFill } from "./target-from-dom.js";
 
 function createElement(html: string): Element {
   const template = document.createElement("template");
@@ -41,6 +41,41 @@ describe("buildInteractionPayload", () => {
     expect(payload.name).toBe("请输入密码");
     expect(payload.selector).toContain('[placeholder="请输入密码"]');
     expect(payload.value).toBe("secret");
+  });
+
+  it("将 contenteditable 识别为 fill 目标并保留文本 hints", () => {
+    const editor = mountElement(
+      '<div id="editor-body" contenteditable="true" role="textbox" aria-label="交接备注" style="width: 320px; height: 48px;">需要补充库存说明</div>',
+    );
+    Object.defineProperty(editor, "getBoundingClientRect", {
+      value: () => ({
+        width: 320,
+        height: 48,
+        top: 0,
+        right: 320,
+        bottom: 48,
+        left: 0,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }),
+    });
+
+    expect(shouldRecordFill(editor)).toBe(true);
+
+    const payload = buildInteractionPayload(editor, "fill", {
+      value: "需要补充库存说明",
+    });
+
+    expect(payload.strategies.map((strategy) => strategy.kind)).toEqual(["role", "css"]);
+    expect(payload).toMatchObject({
+      role: "textbox",
+      name: "交接备注",
+      selector: "#editor-body",
+      tagName: "div",
+      textSample: "需要补充库存说明",
+      value: "需要补充库存说明",
+    });
   });
 
   it("优先使用 data-testid", () => {

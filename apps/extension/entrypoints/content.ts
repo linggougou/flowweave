@@ -33,9 +33,25 @@ function recordNavigate(url: string): void {
   });
 }
 
-function readFillValue(element: Element): string {
+function isContentEditableElement(element: Element): element is HTMLElement {
+  if (!(element instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (element.isContentEditable) {
+    return true;
+  }
+
+  const contentEditable = element.getAttribute("contenteditable");
+  return contentEditable !== null && contentEditable.toLowerCase() !== "false";
+}
+
+export function readFillValue(element: Element): string {
   if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
     return element.value;
+  }
+  if (isContentEditableElement(element)) {
+    return element.innerText || element.textContent || "";
   }
   return "";
 }

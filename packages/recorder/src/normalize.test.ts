@@ -88,6 +88,41 @@ describe("normalizeRecordedEvent", () => {
     });
   });
 
+  it("将 contenteditable 的 fill 事件转为 fill 步骤并保留 hints", () => {
+    const step = normalizeRecordedEvent(
+      event({
+        id: "evt_fill_contenteditable",
+        type: "fill",
+        timestamp: 2050,
+        url: "https://example.com/editor",
+        payload: {
+          selector: "#editor-body",
+          role: "textbox",
+          name: "交接备注",
+          value: "需要补充库存说明",
+          tagName: "div",
+          textSample: "需要补充库存说明",
+        },
+      }),
+    );
+
+    expect(step).toEqual({
+      id: "evt_fill_contenteditable",
+      type: "fill",
+      target: {
+        strategies: [
+          { kind: "role", role: "textbox", name: "交接备注" },
+          { kind: "css", selector: "#editor-body" },
+        ],
+        hints: {
+          tagName: "div",
+          textSample: "需要补充库存说明",
+        },
+      },
+      value: "需要补充库存说明",
+    });
+  });
+
   it("将 checkbox 语义归一化为 setChecked 步骤并保留 hints", () => {
     const step = normalizeRecordedEvent(
       event({
@@ -559,6 +594,54 @@ describe("buildFlowFromEvents", () => {
 
     expect(flow.steps).toHaveLength(2);
     expect(flow.steps.map((step) => step.type)).toEqual(["navigate", "setChecked"]);
+  });
+
+  it("构建 Flow 时移除 contenteditable 前置 click 噪声，仅保留 fill", () => {
+    const events: RecordedEvent[] = [
+      event({
+        id: "n1",
+        type: "navigate",
+        timestamp: 0,
+        url: "https://app.example.com/editor",
+      }),
+      event({
+        id: "c1",
+        type: "click",
+        timestamp: 100,
+        url: "https://app.example.com/editor",
+        payload: {
+          selector: "#editor-body",
+          role: "textbox",
+          name: "交接备注",
+          tagName: "div",
+          textSample: "需要补充库存说明",
+        },
+      }),
+      event({
+        id: "f1",
+        type: "fill",
+        timestamp: 150,
+        url: "https://app.example.com/editor",
+        payload: {
+          selector: "#editor-body",
+          role: "textbox",
+          name: "交接备注",
+          value: "需要补充库存说明",
+          tagName: "div",
+          textSample: "需要补充库存说明",
+        },
+      }),
+    ];
+
+    const flow = buildFlowFromEvents(events, baseMeta);
+
+    expect(flow.steps).toHaveLength(2);
+    expect(flow.steps.map((step) => step.type)).toEqual(["navigate", "fill"]);
+    expect(flow.steps[1]).toMatchObject({
+      id: "f1",
+      type: "fill",
+      value: "需要补充库存说明",
+    });
   });
 
   it("构建 Flow 时去掉连续同 URL 的 navigate 噪声", () => {

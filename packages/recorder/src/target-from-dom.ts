@@ -53,6 +53,19 @@ function isSelectElement(value: Element): value is HTMLSelectElement {
   return typeof HTMLSelectElement !== "undefined" && value instanceof HTMLSelectElement;
 }
 
+function isContentEditableElement(value: Element): value is HTMLElement {
+  if (!isHtmlElement(value)) {
+    return false;
+  }
+
+  if (value.isContentEditable) {
+    return true;
+  }
+
+  const contentEditable = value.getAttribute("contenteditable");
+  return contentEditable !== null && contentEditable.toLowerCase() !== "false";
+}
+
 function isLabelElement(value: Element): value is HTMLLabelElement {
   return typeof HTMLLabelElement !== "undefined" && value instanceof HTMLLabelElement;
 }
@@ -138,6 +151,10 @@ export function resolveClickTarget(element: Element): Element {
 }
 
 function isTextLikeInput(element: Element): boolean {
+  if (isContentEditableElement(element)) {
+    return true;
+  }
+
   if (isTextAreaElement(element) || isSelectElement(element)) {
     return true;
   }
@@ -238,6 +255,9 @@ function inferRole(element: Element): string | undefined {
   }
   if (tag === "textarea" || tag === "select") {
     return tag === "select" ? "combobox" : "textbox";
+  }
+  if (isContentEditableElement(element)) {
+    return "textbox";
   }
   if (isInputElement(element)) {
     const type = (element.type || "text").toLowerCase();

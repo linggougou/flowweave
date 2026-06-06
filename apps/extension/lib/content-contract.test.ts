@@ -13,6 +13,7 @@ type UploadReplayInputsBuilder = (
 
 type ContentModule = {
   buildUploadReplayInputs?: UploadReplayInputsBuilder;
+  readFillValue?: (element: Element) => string;
 };
 
 async function loadContentModule(): Promise<ContentModule> {
@@ -59,5 +60,48 @@ describe("content upload placeholder contract", () => {
     expect(first[0]).toMatch(/^\{\{upload_[a-z0-9_]+_1\}\}$/);
     expect(second[0]).toMatch(/^\{\{upload_[a-z0-9_]+_1\}\}$/);
     expect(first[0]).not.toBe(second[0]);
+  });
+
+  it("读取 contenteditable 的文本内容作为 fill 值", async () => {
+    const contentModule = await loadContentModule();
+
+    expect(contentModule.readFillValue).toBeTypeOf("function");
+
+    class FakeHTMLElement {
+      textContent = "";
+      innerText = "";
+      isContentEditable = false;
+      #attributes = new Map<string, string>();
+
+      setAttribute(name: string, value: string): void {
+        this.#attributes.set(name, value);
+        if (name === "contenteditable" && value.toLowerCase() !== "false") {
+          this.isContentEditable = true;
+        }
+      }
+
+      getAttribute(name: string): string | null {
+        return this.#attributes.get(name) ?? null;
+      }
+    }
+
+    class FakeHTMLInputElement extends FakeHTMLElement {
+      value = "";
+    }
+
+    class FakeHTMLTextAreaElement extends FakeHTMLElement {
+      value = "";
+    }
+
+    vi.stubGlobal("HTMLElement", FakeHTMLElement);
+    vi.stubGlobal("HTMLInputElement", FakeHTMLInputElement);
+    vi.stubGlobal("HTMLTextAreaElement", FakeHTMLTextAreaElement);
+
+    const editor = new FakeHTMLElement();
+    editor.setAttribute("contenteditable", "true");
+    editor.textContent = "需要补充库存说明";
+
+    const readValue = contentModule.readFillValue as (element: Element) => string;
+    expect(readValue(editor as unknown as Element)).toBe("需要补充库存说明");
   });
 });
