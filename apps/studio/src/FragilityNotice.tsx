@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { FragilityIssue } from "@flowweave/page-intelligence";
+import { buildFragilityRepairSuggestions } from "./shared/repair-suggestions.js";
 
 type FragilitySummary = {
   code: FragilityIssue["code"];
@@ -51,6 +52,7 @@ export function FragilityNotice({ warnings }: FragilityNoticeProps): ReactNode {
   }
 
   const summaries = summarizeWarnings(warnings);
+  const repairSuggestions = buildFragilityRepairSuggestions(warnings);
   const total = warnings.length;
   const errorSummaries = summaries.filter((item) => item.severity === "error");
   const warningSummaries = summaries.filter((item) => item.severity === "warning");
@@ -93,6 +95,25 @@ export function FragilityNotice({ warnings }: FragilityNoticeProps): ReactNode {
                 </span>
                 <span className="fragility-notice-steps">
                   涉及步骤 {formatStepRange(item.stepNumbers)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+      {repairSuggestions.length > 0 ? (
+        <>
+          <p className="execution-history-meta">建议动作</p>
+          <ul className="fragility-notice-list">
+            {repairSuggestions.map((item) => (
+              <li key={item.id}>
+                <span className="fragility-notice-message">{item.title}</span>
+                <span className="fragility-notice-steps">{item.action}</span>
+                <span className="flow-content-meta" style={{ display: "block", marginTop: 4 }}>
+                  依据：{item.reason}
+                  {item.stepNumbers && item.stepNumbers.length > 0
+                    ? ` · 涉及步骤 ${formatStepRange(item.stepNumbers)}`
+                    : ""}
                 </span>
               </li>
             ))}

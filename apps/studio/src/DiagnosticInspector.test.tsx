@@ -69,6 +69,8 @@ describe("DiagnosticInspector", () => {
     expect(html).toContain("成功策略");
     expect(html).toContain("失败策略");
     expect(html).toContain("优先排查");
+    expect(html).toContain("修复建议");
+    expect(html).toContain("testId");
     expect(html).toContain("提交登录");
   });
 });

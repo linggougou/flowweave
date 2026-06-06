@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { ExecutionStepLog } from "./shared/studio-api-types.js";
+import { buildDiagnosticRepairSuggestions } from "./shared/repair-suggestions.js";
 
 type DiagnosticInspectorProps = {
   steps: ExecutionStepLog[];
@@ -78,6 +79,7 @@ export function DiagnosticInspector({
     diagnosticSteps[0]!;
   const diagnostic = activeStep.diagnostic;
   const summary = countStrategyAttempts(activeStep);
+  const repairSuggestions = buildDiagnosticRepairSuggestions(activeStep);
 
   return (
     <section className="flow-preview">
@@ -148,6 +150,25 @@ export function DiagnosticInspector({
           {resolvePrimaryDiagnosticHint(activeStep)}
         </p>
       </div>
+
+      {repairSuggestions.length > 0 ? (
+        <div className="flow-preview" style={{ margin: "0 0 16px" }}>
+          <strong>修复建议</strong>
+          <ul style={{ margin: "12px 0 0", paddingLeft: 20, display: "grid", gap: 12 }}>
+            {repairSuggestions.map((suggestion) => (
+              <li key={suggestion.id}>
+                <strong>{suggestion.title}</strong>
+                <p className="flow-content-meta" style={{ margin: "4px 0 0" }}>
+                  下一步：{suggestion.action}
+                </p>
+                <p className="flow-content-meta" style={{ margin: "4px 0 0" }}>
+                  依据：{suggestion.reason}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
         {activeStep.diagnosticPath ? (
