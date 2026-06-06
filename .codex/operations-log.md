@@ -148,3 +148,21 @@
   - 失败信息：`TypeError: Cannot read properties of undefined (reading 'type')`
   - 根因判断：`waitStepSchema` 带 `superRefine` 后成为 ZodEffects，当前 Zod 版本无法直接作为 `z.discriminatedUnion("type", ...)` 成员。
   - 已向 Foundation 子代理发回返修指令，限制在原授权文件范围内修正实现方式。
+  - Foundation 已返修完成。
+  - 返修提交：`d8a3618f3e1e32f7fca3ed818427df6e8a1dc4b9`
+  - 主代理复验：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/flow-dsl test`：通过
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime typecheck`：通过
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/project-knowledge typecheck`：通过
+  - 已并入协调分支提交：
+    - `871ee25 feat: 冻结真实页面稳定性基础接口`
+    - `c517035 fix: 调整 wait 步骤校验挂载方式`
+  - 已关闭 Foundation 子代理。
+  - 已将以下 worktree 快进到 Foundation 最新基线：
+    - `.worktrees/codex-real-page-recorder`
+    - `.worktrees/codex-real-page-runtime`
+    - `.worktrees/codex-real-page-environment`
+  - 已启动第二阶段正式轨道：
+    - Recorder：`Planck` / `019e9bc2-28d0-7852-87c5-b1ee7fe13742`
+    - Runtime：`Faraday` / `019e9bc2-76c9-7a33-8fa2-ae2f26a4eedf`
+    - Environment：`Galileo` / `019e9bc2-b90a-7250-b8ca-90e4c28416c0`
