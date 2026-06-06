@@ -10,7 +10,7 @@
 
 ## 它证明什么
 
-这条 smoke runner 当前覆盖 `11` 条 recorded replay 基线场景，既包含主线原有的 `7` 条 baseline，也包含 Wave 7 新增的 `4` 条高价值真实页面场景：
+这条 smoke runner 当前覆盖 `12` 条 recorded replay 基线场景，既包含主线原有的 `7` 条 baseline，也包含 Wave 7 与 Wave 8 逐步纳入的 `5` 条高价值真实页面场景：
 
 | 场景                         | 证明的链路                            |
 | ---------------------------- | ------------------------------------- |
@@ -21,6 +21,7 @@
 | `session-expired-retry`      | `storageStatePath` 驱动的会话恢复重试 |
 | `bulk-cross-page-selection`  | 跨页勾选与批量提交                    |
 | `repeated-row-actions`       | `scopeText / scopeKind` 行级消歧      |
+| `keyboard-command-palette`   | `fill -> ArrowDown -> Enter` 命令面板 |
 | `linked-filters`             | 联动筛选与异步结果稳定命中            |
 | `session-dashboard`          | 登录态仪表盘 recorded replay          |
 | `drawer-double-save`         | 首次失败后修正并二次保存              |

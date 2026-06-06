@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>键盘命令面板</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+        background:
+          radial-gradient(circle at top, rgba(59, 130, 246, 0.18), transparent 36%),
+          linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+        color: #0f172a;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 32px;
+      }
+
+      .shell {
+        width: min(680px, 100%);
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.9);
+        box-shadow:
+          0 24px 80px rgba(15, 23, 42, 0.12),
+          inset 0 1px 0 rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(12px);
+        overflow: hidden;
+      }
+
+      .header {
+        padding: 24px 24px 16px;
+        border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+      }
+
+      .eyebrow {
+        margin: 0 0 8px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #2563eb;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 24px;
+      }
+
+      .subtitle {
+        margin: 10px 0 0;
+        color: #475569;
+        line-height: 1.6;
+      }
+
+      .search {
+        padding: 20px 24px 12px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        color: #334155;
+      }
+
+      input {
+        width: 100%;
+        border: 1px solid #cbd5e1;
+        border-radius: 16px;
+        padding: 16px 18px;
+        font-size: 16px;
+        background: rgba(248, 250, 252, 0.9);
+        color: inherit;
+      }
+
+      input:focus {
+        outline: 2px solid rgba(37, 99, 235, 0.2);
+        border-color: #2563eb;
+      }
+
+      .hint {
+        margin: 10px 2px 0;
+        font-size: 13px;
+        color: #64748b;
+      }
+
+      .list {
+        padding: 12px 16px 20px;
+      }
+
+      .command-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 10px;
+      }
+
+      .command-option {
+        width: 100%;
+        border: 0;
+        border-radius: 18px;
+        padding: 16px 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: transparent;
+        text-align: left;
+        color: inherit;
+        cursor: pointer;
+      }
+
+      .command-option[data-active="true"] {
+        background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
+        box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.18);
+      }
+
+      .command-label {
+        display: block;
+        font-size: 15px;
+        font-weight: 700;
+      }
+
+      .command-meta {
+        display: block;
+        margin-top: 4px;
+        font-size: 13px;
+        color: #64748b;
+      }
+
+      .command-shortcut {
+        border-radius: 999px;
+        padding: 6px 10px;
+        background: rgba(15, 23, 42, 0.06);
+        font-size: 12px;
+        color: #334155;
+      }
+
+      #command-toast {
+        margin: 0 24px 24px;
+        width: calc(100% - 48px);
+        border: 1px solid rgba(14, 165, 233, 0.2);
+        border-radius: 16px;
+        padding: 14px 16px;
+        font-size: 14px;
+        font-weight: 600;
+        text-align: left;
+        color: #075985;
+        background: linear-gradient(135deg, #ecfeff 0%, #dbeafe 100%);
+      }
+
+      #command-toast[hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="header">
+        <p class="eyebrow">Ops Console</p>
+        <h1>全局命令面板</h1>
+        <p class="subtitle">输入命令名称，使用方向键选择，再按 Enter 执行最匹配的一项。</p>
+      </header>
+
+      <section class="search">
+        <label for="command-search">搜索命令</label>
+        <input
+          id="command-search"
+          type="text"
+          autocomplete="off"
+          placeholder="例如：导出日报"
+          aria-controls="command-results"
+          aria-activedescendant="command-export-weekly"
+        />
+        <p class="hint">支持键盘：ArrowDown 切换高亮，Enter 执行当前命令。</p>
+      </section>
+
+      <section class="list">
+        <ul id="command-results" class="command-list" aria-label="命令列表">
+          <li>
+            <button
+              id="command-sync-orders"
+              class="command-option"
+              type="button"
+              data-command-id="sync-orders"
+              data-command-name="同步订单"
+              data-active="false"
+            >
+              <span>
+                <span class="command-label">同步订单</span>
+                <span class="command-meta">拉取最新订单并刷新发货状态</span>
+              </span>
+              <span class="command-shortcut">Shift + S</span>
+            </button>
+          </li>
+          <li>
+            <button
+              id="command-export-weekly"
+              class="command-option"
+              type="button"
+              data-command-id="export-weekly"
+              data-command-name="导出周报"
+              data-active="false"
+            >
+              <span>
+                <span class="command-label">导出周报</span>
+                <span class="command-meta">生成本周运营周报并同步到管理层群组</span>
+              </span>
+              <span class="command-shortcut">Shift + W</span>
+            </button>
+          </li>
+          <li>
+            <button
+              id="command-export-daily"
+              class="command-option"
+              type="button"
+              data-command-id="export-daily"
+              data-command-name="导出日报"
+              data-active="false"
+            >
+              <span>
+                <span class="command-label">导出日报</span>
+                <span class="command-meta">生成今日运营日报并推送到共享盘</span>
+              </span>
+              <span class="command-shortcut">Shift + D</span>
+            </button>
+          </li>
+          <li>
+            <button
+              id="command-open-alerts"
+              class="command-option"
+              type="button"
+              data-command-id="open-alerts"
+              data-command-name="打开告警台"
+              data-active="false"
+            >
+              <span>
+                <span class="command-label">打开告警台</span>
+                <span class="command-meta">查看近一小时异常工单与失败重试</span>
+              </span>
+              <span class="command-shortcut">Shift + A</span>
+            </button>
+          </li>
+        </ul>
+      </section>
+
+      <button id="command-toast" type="button" hidden data-ready="false" data-command-id="">
+        尚未执行命令
+      </button>
+    </main>
+
+    <script>
+      const searchInput = document.getElementById("command-search");
+      const commandToast = document.getElementById("command-toast");
+      const commandButtons = Array.from(document.querySelectorAll(".command-option"));
+      let filteredCommands = commandButtons;
+      let activeIndex = 0;
+
+      function normalizeText(value) {
+        return value.trim().toLowerCase();
+      }
+
+      function renderActiveState() {
+        filteredCommands.forEach((button, index) => {
+          button.dataset.active = index === activeIndex ? "true" : "false";
+        });
+
+        const activeButton = filteredCommands[activeIndex];
+        if (activeButton) {
+          searchInput.setAttribute("aria-activedescendant", activeButton.id);
+          return;
+        }
+
+        searchInput.removeAttribute("aria-activedescendant");
+      }
+
+      function filterCommands() {
+        const keyword = normalizeText(searchInput.value);
+        filteredCommands = commandButtons.filter((button) => {
+          const matches = normalizeText(button.dataset.commandName || "").includes(keyword);
+          button.hidden = !matches;
+          return matches;
+        });
+
+        activeIndex = 0;
+        renderActiveState();
+      }
+
+      function executeCommand(button) {
+        commandToast.hidden = false;
+        commandToast.dataset.ready = "true";
+        commandToast.dataset.commandId = button.dataset.commandId || "";
+        commandToast.textContent = "已执行命令：" + (button.dataset.commandName || "未知命令");
+      }
+
+      searchInput.addEventListener("input", () => {
+        commandToast.hidden = true;
+        commandToast.dataset.ready = "false";
+        commandToast.dataset.commandId = "";
+        filterCommands();
+      });
+
+      searchInput.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          if (filteredCommands.length === 0) {
+            return;
+          }
+
+          activeIndex = (activeIndex + 1) % filteredCommands.length;
+          renderActiveState();
+          return;
+        }
+
+        if (event.key === "Enter") {
+          event.preventDefault();
+          const activeButton = filteredCommands[activeIndex];
+          if (!activeButton) {
+            return;
+          }
+
+          executeCommand(activeButton);
+        }
+      });
+
+      commandButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          executeCommand(button);
+        });
+      });
+
+      filterCommands();
+    </script>
+  </body>
+</html>

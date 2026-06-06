@@ -67,6 +67,7 @@ const CASE_FAILURE_TYPE_MAP: Record<string, RealPageFailureType> = {
   "session-expired-retry": "session-recovery",
   "filterable-list": "filtering",
   "linked-filters": "filtering",
+  "keyboard-command-palette": "core-interaction",
   "modal-bulk-action": "confirmation",
   "toast-popconfirm": "confirmation",
   "paginated-list": "pagination",
@@ -457,6 +458,48 @@ function buildBaselineMatrixCases({
       options: {
         storageStatePath,
       },
+    },
+    {
+      name: "keyboard-command-palette",
+      flow: buildFlow("flow_keyboard_command_palette", "命令面板键盘回放流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "keyboard-command-palette.html",
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "fill",
+          target: { strategies: [{ kind: "css", selector: "#command-search" }] },
+          value: "导出",
+        },
+        {
+          id: "s3",
+          type: "press",
+          target: { strategies: [{ kind: "css", selector: "#command-search" }] },
+          key: "ArrowDown",
+        },
+        {
+          id: "s4",
+          type: "press",
+          target: { strategies: [{ kind: "css", selector: "#command-search" }] },
+          key: "Enter",
+        },
+        {
+          id: "s5",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#command-toast[data-ready='true'][data-command-id='export-daily']",
+              },
+            ],
+          },
+        },
+      ]),
     },
     {
       name: "filterable-list",

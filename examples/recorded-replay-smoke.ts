@@ -221,6 +221,10 @@ function buildBaselineMatrixCases(baseUrl: string, assets: MatrixRuntimeAssets):
     "bulk-cross-page-selection.html",
     baseUrl,
   ).toString();
+  const keyboardCommandPaletteFixtureUrl = new URL(
+    "keyboard-command-palette.html",
+    baseUrl,
+  ).toString();
   const linkedFiltersFixtureUrl = new URL("linked-filters.html", baseUrl).toString();
   const drawerDoubleSaveFixtureUrl = new URL("drawer-double-save.html", baseUrl).toString();
   const repeatedRowActionsFixtureUrl = new URL("repeated-row-actions.html", baseUrl).toString();
@@ -716,6 +720,82 @@ function buildBaselineMatrixCases(baseUrl: string, assets: MatrixRuntimeAssets):
           }),
         ],
         buildRecordedFlowMeta("flow_recorded_linked_filters", "录制联动筛选流程"),
+      ),
+    },
+    {
+      name: "keyboard-command-palette",
+      flow: buildFlowFromEvents(
+        [
+          parseRecordedEvent({
+            id: "evt_nav_keyboard_command_palette",
+            type: "navigate",
+            timestamp: 0,
+            url: keyboardCommandPaletteFixtureUrl,
+            payload: {
+              url: "keyboard-command-palette.html",
+              waitUntil: "domcontentloaded",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_fill_keyboard_command_palette",
+            type: "fill",
+            timestamp: 100,
+            url: keyboardCommandPaletteFixtureUrl,
+            payload: {
+              selector: "#command-search",
+              role: "textbox",
+              name: "搜索命令",
+              value: "导出",
+              tagName: "input",
+              inputType: "text",
+              placeholder: "例如：导出日报",
+              labelText: "搜索命令",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_press_keyboard_command_palette_next",
+            type: "keypress",
+            timestamp: 200,
+            url: keyboardCommandPaletteFixtureUrl,
+            payload: {
+              selector: "#command-search",
+              role: "textbox",
+              name: "搜索命令",
+              key: "ArrowDown",
+              tagName: "input",
+              inputType: "text",
+              placeholder: "例如：导出日报",
+              labelText: "搜索命令",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_press_keyboard_command_palette_confirm",
+            type: "keypress",
+            timestamp: 300,
+            url: keyboardCommandPaletteFixtureUrl,
+            payload: {
+              selector: "#command-search",
+              role: "textbox",
+              name: "搜索命令",
+              key: "Enter",
+              tagName: "input",
+              inputType: "text",
+              placeholder: "例如：导出日报",
+              labelText: "搜索命令",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_keyboard_command_palette_result",
+            type: "click",
+            timestamp: 400,
+            url: keyboardCommandPaletteFixtureUrl,
+            payload: {
+              selector: "#command-toast[data-ready='true'][data-command-id='export-daily']",
+              text: "已执行命令：导出日报",
+            },
+          }),
+        ],
+        buildRecordedFlowMeta("flow_recorded_keyboard_command_palette", "录制命令面板键盘流程"),
       ),
     },
     {

@@ -34,6 +34,10 @@ const bulkCrossPageSelectionFixtureUrl = pathToFileURL(
 const linkedFiltersFixtureUrl = new URL("linked-filters.html", fixturesBaseUrl).toString();
 const drawerDoubleSaveFixtureUrl = new URL("drawer-double-save.html", fixturesBaseUrl).toString();
 const repeatedRowActionsFixtureUrl = new URL("repeated-row-actions.html", fixturesBaseUrl).toString();
+const keyboardCommandPaletteFixtureUrl = new URL(
+  "keyboard-command-palette.html",
+  fixturesBaseUrl,
+).toString();
 
 const baseMeta = {
   createdAt: "2026-05-26T00:00:00.000Z",
@@ -1437,6 +1441,55 @@ describe("executeFlow", () => {
     expect(result.status).toBe("success");
   });
 
+  it("支持真实页面风格的命令面板键盘回放", async () => {
+    const result = await executeFlow(
+      buildFlow("flow_keyboard_command_palette", "命令面板键盘回放流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: keyboardCommandPaletteFixtureUrl,
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "fill",
+          target: { strategies: [{ kind: "css", selector: "#command-search" }] },
+          value: "导出",
+        },
+        {
+          id: "s3",
+          type: "press",
+          target: { strategies: [{ kind: "css", selector: "#command-search" }] },
+          key: "ArrowDown",
+        },
+        {
+          id: "s4",
+          type: "press",
+          target: { strategies: [{ kind: "css", selector: "#command-search" }] },
+          key: "Enter",
+        },
+        {
+          id: "s5",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#command-toast[data-ready='true'][data-command-id='export-daily']",
+              },
+            ],
+          },
+        },
+      ]),
+      {
+        headless: true,
+      },
+    );
+
+    expect(result.status).toBe("success");
+  });
+
   it("支持 wait hidden 与 wait urlIncludes", async () => {
     const delayedResult = await executeFlow(
       buildFlow("flow_delayed_panel", "延迟面板等待流程", [
@@ -1766,13 +1819,14 @@ describe("executeFlow", () => {
     };
 
     const summary = await matrixModule.runRealPageFixtureMatrix({ headless: true });
-    expect(summary.results).toHaveLength(11);
+    expect(summary.results).toHaveLength(12);
     expect(summary.results.map((item) => item.name)).toEqual([
       "checkbox-select",
       "delayed-panel",
       "upload-form",
       "spa-route",
       "session-dashboard",
+      "keyboard-command-palette",
       "filterable-list",
       "modal-bulk-action",
       "session-expired-dashboard",
