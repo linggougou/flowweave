@@ -1,6 +1,5 @@
 import type { FlowDocument, NormalizedStep } from "@flowweave/flow-dsl";
-
-const variablePattern = /\{\{\s*([^{}]+?)\s*\}\}/g;
+import { extractTemplateVariables, interpolateTemplateString } from "@flowweave/shared";
 const leadingVariablePattern = /^\s*\{\{\s*[^{}]+\s*\}\}/;
 
 type StepTarget = Extract<NormalizedStep, { type: "click" }>["target"];
@@ -33,20 +32,11 @@ function interpolateVariables(
   value: string,
   variables?: FragilityAnalysisContext["variables"],
 ): string {
-  if (!variables) {
-    return value;
-  }
-
-  return value.replace(variablePattern, (match, variableName: string) => {
-    const resolved = variables[variableName.trim()];
-    return resolved === undefined ? match : String(resolved);
-  });
+  return interpolateTemplateString(value, variables);
 }
 
 function extractVariableNames(value: unknown): string[] {
-  return typeof value === "string"
-    ? Array.from(value.matchAll(variablePattern), (match) => match[1]?.trim() ?? "").filter(Boolean)
-    : [];
+  return extractTemplateVariables(value);
 }
 
 function collectAvailableVariables(

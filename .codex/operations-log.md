@@ -1893,3 +1893,36 @@
     - `Studio Experience`
     - `Benchmarks P5`
     - `CI Runtime Refresh`
+
+## Foundation 执行 - 共享占位符协议基线
+
+- 时间：2026-06-07 00:16:00 CST
+- 任务目标：在正式创建 5 个 worktree 之前，由主代理先补齐 Recorder / Runtime / Fragility 的共享占位符协议基线，消除 `packages/shared` 抢写风险。
+- TDD 过程：
+  - 红灯测试：
+    - 新增 `packages/shared/src/template-variables.test.ts`
+    - 执行：
+      - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/shared test -- template-variables.test.ts`
+    - 结果：失败
+    - 失败原因：
+      - `extractTemplateVariables`、`getSingleTemplateVariableName`、`interpolateTemplateString` 尚不存在
+  - 最小实现：
+    - 新增 `packages/shared/src/template-variables.ts`
+    - `packages/shared/src/index.ts` 导出共享占位符工具
+    - `packages/page-intelligence/src/fragility.ts` 切换为共享提取/插值逻辑
+- 绿灯验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/shared test -- template-variables.test.ts`
+    - 结果：通过，`3/3`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/shared build`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/page-intelligence test`
+    - 结果：通过，`13/13`
+- 编码后声明：
+  - 新增共享协议能力：
+    - 统一模板变量提取
+    - 整值模板变量识别
+    - 模板字符串插值且保留缺失变量
+  - 当前仍保留 `fragility.ts` 的 `leadingVariablePattern` 本地判断，仅用于 `baseUrl` 预检特例；Recorder / Runtime 轨道仍需继续切换其余手写正则。
+- 结论：
+  - Foundation 已完成，可作为后续 5 个 worktree 的共同基线。
+  - 同一阻塞条件未连续出现 3 次，无需标记为阻塞。

@@ -9,3 +9,8 @@ export {
   type RecordedEventType,
   type RecorderSessionMeta,
 } from "./recording-protocol.js";
+export {
+  extractTemplateVariables,
+  getSingleTemplateVariableName,
+  interpolateTemplateString,
+} from "./template-variables.js";
