@@ -142,6 +142,9 @@ export const flowDocumentSchema = z.object({
   }),
 });
 
-export type FlowDocument = z.infer<typeof flowDocumentSchema>;
-export type NormalizedStep = z.infer<typeof normalizedStepSchema>;
+type FlowDocumentBase = z.infer<typeof flowDocumentSchema>;
+export type NormalizedStep = z.infer<typeof normalizedStepBaseSchema>;
+export type FlowDocument = Omit<FlowDocumentBase, "steps"> & {
+  steps: NormalizedStep[];
+};
 export type Target = z.infer<typeof targetSchema>;
