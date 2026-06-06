@@ -2409,3 +2409,65 @@
   1. 在 Node 20 下跑与规划相关的基线验证，确认当前协调分支可作为 Wave 5 起点。
   2. 提交 planning baseline。
   3. 创建 4 个 Wave 5 worktree，并按编排板分派子代理。
+
+## 2026-06-06 Wave 5 Worktree 建链与实现分派
+
+- 时间：2026-06-06 23:19:19 CST
+- planning baseline：
+  - 提交：`1f31693 docs: 规划 Wave 5 真实页面稳定性`
+- `.worktrees` 校验：
+  - `git check-ignore -q .worktrees`
+    - 结果：通过，已确认 `.worktrees` 被忽略
+- 新建的 Wave 5 worktree / 分支：
+  - `.worktrees/codex-real-page-recorder-async-stability` -> `codex/real-page-recorder-async-stability`
+  - `.worktrees/codex-real-page-runtime-recorded-replay` -> `codex/real-page-runtime-recorded-replay`
+  - `.worktrees/codex-real-page-benchmarks-observability` -> `codex/real-page-benchmarks-observability`
+  - `.worktrees/codex-real-page-studio-failure-insights` -> `codex/real-page-studio-failure-insights`
+- 保留但暂不处理的旧 worktree：
+  - `.worktrees/codex-ci-runtime-refresh`
+  - `.worktrees/codex-real-page-benchmarks-p5`
+  - `.worktrees/codex-real-page-recorder-contract`
+  - `.worktrees/codex-real-page-runtime-contract`
+  - `.worktrees/codex-real-page-studio-experience`
+- 首轮基线异常：
+  - 新 worktree 直接跑定向测试时，统一报 `vitest / tsc: command not found`。
+  - 根因：fresh worktree 没有本地 `node_modules`。
+  - 处理：在 4 个新 worktree 内分别执行 `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm install --frozen-lockfile`。
+- 第二轮基线异常：
+  - 安装依赖后，Recorder / Runtime / Benchmarks 轨继续报 `Failed to resolve entry for package "@flowweave/*"`。
+  - 根因：fresh worktree 虽已安装依赖，但本地 workspace 包的 `dist` 导出尚未生成。
+  - 处理：在 4 个新 worktree 内分别执行 `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm build`，为本地 workspace 包补齐导出入口。
+- Node 20 worktree 基线复验：
+  - Recorder 轨：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension test -- lib/content-contract.test.ts`
+      - 结果：通过，`2/2`
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test -- src/normalize.test.ts src/step-filter.test.ts`
+      - 结果：通过，`34/34`
+  - Runtime 轨：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+      - 结果：通过，`13/13`
+      - 关键耗时：约 `46.22s`
+  - Benchmarks 轨：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- real-page-matrix.test.ts`
+      - 结果：通过，`2/2`
+      - 关键耗时：约 `30.40s`
+  - Studio 轨：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
+      - 结果：通过，`36/36`
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+      - 结果：通过
+- 旧探索 agent 回收：
+  - 已关闭：
+    - `Anscombe / 019e9d4a-b56a-7581-ade8-c8789e351a22`
+    - `Archimedes / 019e9d6f-8436-7460-a405-1e0210f3b82c`
+    - `Harvey / 019e9d6f-abf1-7810-8796-4f2091d04e73`
+    - `Darwin / 019e9d6f-d6e8-7b30-b892-09b5c28d6fb0`
+- 新实现 worker 分派：
+  - Recorder Async Stabilization：`Aristotle / 019e9d84-1bc4-78b0-9d9e-857661360b83`
+  - Runtime Recorded Replay Expansion：`Fermat / 019e9d84-1c47-7cf0-a3a8-1d2e8e3a78bd`
+  - Benchmarks Observability：`Helmholtz / 019e9d84-1d14-7d83-8d37-7d96b6676a6a`
+  - Studio Failure Insight Workbench：`Planck / 019e9d84-1df3-7661-90a0-36e0175969fa`
+- 主代理当前职责：
+  - 持续等待各轨道首轮实现回流
+  - 准备按 `Recorder -> Runtime -> Benchmarks -> Studio` 顺序回收合并
+  - 在协调分支统一维护 `.codex/verification-report.md` 与最终 Node 20 集成验收
