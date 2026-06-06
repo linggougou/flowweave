@@ -11,6 +11,149 @@
 
 ### 验证结果
 
+## 2026-06-06 执行上下文持久化与历史 fragility 复原验收
+
+### 验证范围
+
+- `packages/project-knowledge` 是否已经把执行环境名、`baseUrl`、`storageStatePath` 与运行变量持久化到 `executions`，并从历史记录准确读回。
+- `apps/studio` 的 Electron 链路与 HTTP fallback 是否都基于持久化 `runContext` 复原历史执行的 fragility，而不是退化成无上下文诊断。
+- 旧本地 SQLite 项目是否能通过补列逻辑兼容读取，而不是要求手工删库重建。
+- 当前主工作区是否在 `Node 20.19.6` 基线下通过定向回归与仓库级 `pnpm smoke`。
+
+### 验证结果
+
+1. 执行上下文持久化验证通过。
+   - `packages/project-knowledge/src/db/client.ts` 与 `src/db/schema.ts` 已为 `executions` 表补充 `environment_name`、`base_url`、`storage_state_path`、`variables_json`。
+   - `packages/project-knowledge/src/repository.ts` 已在 `saveExecution` 写入 `runContext`，并在 `listExecutions / getExecution / assembleExecution` 统一解析读回。
+   - `packages/project-knowledge/src/repository.test.ts` 新增回归用例，确认 `saveExecution / listExecutions / getExecution` 能完整保留：
+     - `environmentName`
+     - `baseUrl`
+     - `storageStatePath`
+     - `variables`
+2. 旧库兼容补列验证通过。
+   - `packages/project-knowledge/src/repository.ts` 新增 `ensureExecutionRunContextColumns()`，沿用既有补列模式对旧库执行 `ALTER TABLE`。
+   - 该逻辑与现有 `ensureExecutionStepDiagnosticPathColumn()` 保持同一职责边界，没有引入新的迁移入口或双写分支。
+3. 历史 fragility 复原验证通过。
+   - `apps/studio/src/shared/execution-fragility.ts` 把 `StudioExecutionRunContext` 转成 `FragilityAnalysisContext`，统一给 Electron 与 HTTP fallback 复用。
+   - `apps/studio/electron/services.ts` 在实时运行结果和历史重建结果中都改为走 `buildExecutionFragilityIssues(flow, runContext)`。
+   - `apps/studio/src/studio-client.ts` 已同步改为消费 `stored.runContext`，避免两条读取链路行为分叉。
+   - `apps/studio/src/shared/execution-fragility.test.ts` 已覆盖三类关键场景：
+     - 缺少 `baseUrl` 时继续报 `MISSING_ENVIRONMENT`
+     - 缺少变量时继续报 `MISSING_VARIABLE`
+     - `baseUrl + variables` 完整时不误报上下文问题
+4. 定向验证通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/project-knowledge test -- repository.test.ts`
+     - 结果：通过，`11/11`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- execution-fragility`
+     - 结果：通过，`3/3`
+5. 仓库级统一验收通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+     - 结果：通过
+     - 内部已完整跑过：
+       - `pnpm typecheck`
+       - `pnpm test`
+       - `pnpm build`
+       - `pnpm e2e:login`
+   - `e2e:login`
+     - 项目 ID：`e4bbe7ef-8fe2-4544-82d0-0dc8c0d66f1b`
+     - 执行 ID：`41b4cf30-780d-4c80-93e4-8b34ad33e94d`
+     - 共 `4` 个步骤，全部 `success`
+
+### Findings
+
+1. 未发现阻塞级问题。
+   - 当前改动已经把“执行时上下文”和“历史复盘时上下文”收敛到同一数据契约，关键回归点已有定向测试与仓库级烟测覆盖。
+2. 残余风险：`variables_json` 当前只持久化 `string | number | boolean`。
+   - 这是与现有 `RunFlowVariableValue` 契约一致的设计，不构成当前回归，但如果未来变量类型扩展到数组或对象，需要同步升级序列化和兼容测试。
+3. 残余风险：Node 24 仍不是本仓库验收基线。
+   - 本轮所有结论都基于 `Node v20.19.6`，`better-sqlite3` 的更高版本 ABI 兼容性仍需后续单独轨道处理。
+
+### 综合结论
+
+- 代码质量评分：97
+- 测试覆盖评分：95
+- 规范遵循评分：98
+- 战略匹配评分：96
+- 风险评估评分：93
+- 综合评分：96
+- 建议：通过
+
+## 2026-06-06 执行时 Flow 快照补修验收
+
+### 验证范围
+
+- 历史执行页是否已经优先绑定“执行当时的 Flow 快照”，而不是继续使用当前 Flow 生成步骤标签与 fragility。
+- `packages/project-knowledge` 是否已经把 Flow 快照持久化到 `executions`，并兼容旧 SQLite 库首次升级补列。
+- Flow 快照补修后，`Node v20.19.6` 基线下的定向回归与仓库级 `pnpm smoke` 是否继续通过。
+- 已验收的并行 worktree 是否已经安全回收，仅保留协调分支。
+
+### 验证结果
+
+1. 高风险漂移问题已修复。
+   - `packages/project-knowledge/src/types.ts` 为 `ExecutionResult` 新增 `flowSnapshot?: FlowDocument`。
+   - `packages/project-knowledge/src/db/client.ts` 与 `src/db/schema.ts` 为 `executions` 新增 `flow_snapshot_json`。
+   - `packages/project-knowledge/src/repository.ts` 已在 `saveExecution` 写入 Flow 快照，并在 `getExecution / listExecutions / assembleExecution` 解析读回。
+   - `apps/studio/electron/services.ts` 与 `apps/studio/src/studio-client.ts` 历史执行重建时均改为优先消费 `stored.flowSnapshot`，只有旧记录没有快照时才回退到当前 Flow。
+2. 快照优先级回归验证通过。
+   - `apps/studio/src/shared/execution-fragility.ts` 新增 `resolveExecutionFlow()` 共享规则。
+   - `apps/studio/src/shared/execution-fragility.test.ts`
+     - 新增“历史执行优先使用执行当时的 Flow 快照”
+     - 本轮总计 `4/4` 通过
+   - 该用例明确覆盖：即使当前 Flow 已被改成“无相对路径、无变量依赖”的新内容，历史执行仍会基于快照继续报 `MISSING_ENVIRONMENT` 与 `MISSING_VARIABLE`。
+3. 持久化与旧库升级回归验证通过。
+   - `packages/project-knowledge/src/repository.test.ts`
+     - 新增 Flow 快照随执行持久化断言
+     - 新增旧 `executions` 表首次读取自动补齐 `flow_snapshot_json / environment_name / base_url / storage_state_path / variables_json` 的升级断言
+   - 本轮总计 `12/12` 通过。
+4. 并行轨道回收验证通过。
+   - `git worktree list` 当前仅剩主工作区 `/Users/ling/codeHome/A_Mine/flowweave`。
+   - 已回收：
+     - `codex-real-page-benchmarks`
+     - `codex-real-page-benchmarks-p4`
+     - `codex-real-page-diagnostics`
+     - `codex-real-page-diagnostics-ui`
+     - `codex-real-page-environment`
+     - `codex-real-page-foundation`
+     - `codex-real-page-fragility-context`
+     - `codex-real-page-recorder`
+     - `codex-real-page-recorder-p2`
+     - `codex-real-page-runtime`
+     - `feat-p1-knowledge`
+     - `feat-p2-execution-history`
+   - 当前协调分支 `codex/real-page-stability-program` 保留，等待后续并回 `main`。
+5. 仓库级统一验收通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+     - 结果：通过
+     - 内含：
+       - `pnpm typecheck`
+       - `pnpm test`
+       - `pnpm build`
+       - `pnpm e2e:login`
+   - `e2e:login`
+     - 项目 ID：`32c7ae5a-b47d-49d8-9a8f-4a3e1f116c40`
+     - 执行 ID：`8f601276-fc11-4328-bfaa-9db0acc84eeb`
+     - 共 `4` 个步骤，全部 `success`
+
+### Findings
+
+1. 未发现阻塞级问题。
+   - 这轮补修已经把“执行上下文”与“执行时 Flow 内容”同时绑定到执行记录，历史执行的诊断漂移主因已消除。
+2. 残余风险：升级前的旧执行记录仍然可能没有 `flowSnapshot` 与 `runContext`。
+   - 这些旧记录现在会优先尝试读取新字段；若字段为空，Studio 仍只能回退到当前 Flow 或无上下文诊断。
+   - 这属于历史存量数据能力边界，不是本轮回归。
+3. 残余风险：Node 24 仍不在当前验收基线内。
+   - 本轮全部证据继续基于 `Node v20.19.6`，`better-sqlite3` 的更高版本 ABI 兼容性仍需独立轨道处理。
+
+### 综合结论
+
+- 代码质量评分：98
+- 测试覆盖评分：96
+- 规范遵循评分：98
+- 战略匹配评分：97
+- 风险评估评分：94
+- 综合评分：97
+- 建议：通过
+
 1. 目录树检查通过。
    - 已确认存在 `apps/`、`packages/`、`docs/superpowers/specs/`、`docs/superpowers/plans/`、`examples/`、`scripts/` 与 `.codex/`。
 2. Git 初始化检查通过。

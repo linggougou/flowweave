@@ -1,3 +1,5 @@
+import type { FlowDocument } from "@flowweave/flow-dsl";
+
 export type ProjectRef = {
   id: string;
   name: string;
@@ -47,6 +49,15 @@ export type StepLog = {
   diagnosticPath?: string;
 };
 
+export type ExecutionVariableValue = string | number | boolean;
+
+export type ExecutionRunContext = {
+  environmentName?: string;
+  baseUrl?: string;
+  storageStatePath?: string;
+  variables?: Record<string, ExecutionVariableValue>;
+};
+
 /** 流程执行结果（与 runtime 输出契约对齐，P1 由 knowledge 包定义） */
 export type ExecutionResult = {
   executionId: string;
@@ -55,6 +66,8 @@ export type ExecutionResult = {
   steps: StepLog[];
   startedAt?: string;
   finishedAt?: string;
+  flowSnapshot?: FlowDocument;
+  runContext?: ExecutionRunContext;
 };
 
 /** 带项目上下文的执行结果（getExecution 查询时使用） */

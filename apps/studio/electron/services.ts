@@ -5,17 +5,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import type { FlowDocument } from "@flowweave/flow-dsl";
-import type {
-  FragilityAnalysisContext,
-  FragilityIssue,
-  PageSnapshotSummary,
-} from "@flowweave/page-intelligence";
+import type { PageSnapshotSummary } from "@flowweave/page-intelligence";
 import {
   ProjectKnowledgeRepository,
   type ExecutionResult as KnowledgeExecutionResult,
   type ProjectEnvironment,
 } from "@flowweave/project-knowledge";
-import { analyzeFlowFragility } from "@flowweave/page-intelligence";
 import { executeFlow, type ExecutionResult as RuntimeExecutionResult } from "@flowweave/runtime";
 import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
 import { isChromiumInstalled } from "./env-setup.js";
@@ -23,12 +18,18 @@ import type {
   ExecutionStepLog,
   ExecutionSummary,
   RunFlowOptions,
+  RunFlowVariableValue,
   StudioStepDiagnostic,
   StudioExecution,
+  StudioExecutionRunContext,
   StudioFlowVersion,
   StudioProject,
   StudioProjectEnvironment,
 } from "../src/shared/studio-api-types.js";
+import {
+  buildExecutionFragilityIssues,
+  resolveExecutionFlow,
+} from "../src/shared/execution-fragility.js";
 import {
   apiAllocateRunDirectory,
   apiCreateProject,
@@ -320,6 +321,8 @@ function mapRuntimeSteps(
 function toKnowledgeExecution(
   runtime: RuntimeExecutionResult,
   flowId: string,
+  flowSnapshot: FlowDocument,
+  runContext?: StudioExecutionRunContext,
 ): KnowledgeExecutionResult {
   const finishedAt = new Date().toISOString();
   return {
@@ -328,6 +331,8 @@ function toKnowledgeExecution(
     status: runtime.status === "success" ? "success" : "failed",
     startedAt: runtime.steps[0]?.startedAt,
     finishedAt,
+    flowSnapshot,
+    runContext,
     steps: runtime.steps.map((step) => ({
       stepIndex: step.stepIndex,
       stepId: step.stepId,
@@ -340,14 +345,16 @@ function toKnowledgeExecution(
   };
 }
 
-function buildFragilityIssues(
-  flow?: FlowDocument,
-  context: FragilityAnalysisContext = {},
-): FragilityIssue[] | undefined {
-  if (!flow) {
-    return undefined;
-  }
-  return analyzeFlowFragility(flow, context);
+function toRunContext(
+  environment: ResolvedRunEnvironment,
+  variables?: Record<string, RunFlowVariableValue>,
+): StudioExecutionRunContext {
+  return {
+    environmentName: environment.name,
+    baseUrl: environment.baseUrl,
+    storageStatePath: environment.storageStatePath,
+    variables,
+  };
 }
 
 export type RunFlowServiceOptions = RunFlowOptions;
@@ -379,7 +386,8 @@ export async function runFlow(
     variables: options.variables,
     environmentName: environment.name,
   });
-  await apiSaveExecution(projectId, toKnowledgeExecution(runtimeResult, flow.id));
+  const runContext = toRunContext(environment, options.variables);
+  await apiSaveExecution(projectId, toKnowledgeExecution(runtimeResult, flow.id, flow, runContext));
 
   for (const snap of runtimeResult.pageSnapshots ?? []) {
     await apiSavePageSnapshot(projectId, snap.summary, snap.filePath);
@@ -393,11 +401,9 @@ export async function runFlow(
     steps: mapRuntimeSteps(runtimeResult, flow),
     startedAt,
     finishedAt: new Date().toISOString(),
-    environmentName: environment.name,
-    fragilityIssues: buildFragilityIssues(flow, {
-      baseUrl: environment.baseUrl,
-      variables: options.variables,
-    }),
+    environmentName: runContext.environmentName,
+    runContext,
+    fragilityIssues: buildExecutionFragilityIssues(flow, runContext),
   };
 
   if (runtimeResult.error) {
@@ -423,6 +429,8 @@ function fromKnowledgeExecution(
   flow?: FlowDocument,
 ): StudioExecution {
   const startedAt = stored.startedAt ?? new Date(0).toISOString();
+  const runContext = stored.runContext;
+  const executionFlow = resolveExecutionFlow(stored.flowSnapshot, flow);
   return {
     executionId: stored.executionId,
     projectId: stored.projectId,
@@ -430,11 +438,13 @@ function fromKnowledgeExecution(
     status: mapKnowledgeStatus(stored.status),
     startedAt,
     finishedAt: stored.finishedAt,
+    environmentName: runContext?.environmentName,
+    runContext,
     steps: stored.steps.map((step) => {
       const mappedStep: ExecutionStepLog = {
         stepIndex: step.stepIndex,
         stepId: step.stepId,
-        label: resolveStepLabel(flow, step.stepIndex, step.stepId),
+        label: resolveStepLabel(executionFlow, step.stepIndex, step.stepId),
         status: step.status,
         message: step.errorMessage,
         durationMs: step.durationMs,
@@ -449,7 +459,7 @@ function fromKnowledgeExecution(
         ...readStepArtifacts(mappedStep),
       };
     }),
-    fragilityIssues: buildFragilityIssues(flow),
+    fragilityIssues: buildExecutionFragilityIssues(executionFlow, runContext),
   };
 }
 
@@ -461,10 +471,12 @@ export async function getExecution(executionId: string): Promise<StudioExecution
   const stored = await apiGetExecution(executionId);
   if (stored) {
     let flow: FlowDocument | undefined;
-    try {
-      flow = await apiGetFlow(stored.projectId, stored.flowId);
-    } catch {
-      flow = undefined;
+    if (!stored.flowSnapshot) {
+      try {
+        flow = await apiGetFlow(stored.projectId, stored.flowId);
+      } catch {
+        flow = undefined;
+      }
     }
 
     const record = fromKnowledgeExecution(stored, flow);
@@ -482,6 +494,7 @@ export async function listExecutions(projectId: string): Promise<ExecutionSummar
     status: mapKnowledgeStatus(item.status),
     startedAt: item.startedAt,
     finishedAt: item.finishedAt,
+    environmentName: item.runContext?.environmentName,
   }));
 }
 

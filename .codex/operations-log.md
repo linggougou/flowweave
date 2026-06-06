@@ -909,3 +909,217 @@
   - 下一轮 4 轨并行开发已全部完成并并入 `codex/real-page-stability-program`
   - Studio 现已具备内嵌诊断面板、页面摘要入口和分级 fragility 展示能力
   - 真实页面矩阵已扩展到 `11` 个场景，并在主工作区与 `smoke:full` 中双重通过
+
+## 2026-06-06 执行上下文持久化与历史 fragility 复原
+
+- 时间：2026-06-06 17:24:00 CST
+- 任务目标：补齐执行上下文持久化，并让历史执行重载时能基于真实 `baseUrl / variables / environmentName / storageStatePath` 复原 fragility 诊断。
+- 工具与环境说明：
+  - 当前环境未提供 `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code`，本轮使用 CodeGraph、项目文档、本地命令与现有测试替代。
+  - 当前活跃目标已确认：`继续推进 FlowWeave 真实页面稳定性，补齐执行上下文持久化与历史 fragility 复原能力，并完成本地验收。`
+  - 统一开发与验收基线继续使用 `Node v20.19.6`：`PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH`
+- 上下文检索结果：
+  - 已阅读架构与主路线文档：
+    - `docs/architecture/overview.md`
+    - `docs/superpowers/plans/2026-05-26-run-first-roadmap.md`
+  - 已分析的相似实现：
+    - `apps/studio/electron/services.ts:320`
+    - `apps/studio/electron/services.ts:421`
+    - `apps/studio/src/App.tsx:472`
+    - `packages/project-knowledge/src/repository.ts:407`
+  - 已分析的测试模式：
+    - `packages/project-knowledge/src/repository.test.ts`
+  - 已生成上下文摘要：
+    - `.codex/context-summary-execution-context-persistence.md`
+
+## 编码前检查 - 执行上下文持久化
+
+时间：2026-06-06 17:24:00 CST
+
+□ 已查阅上下文摘要文件：`.codex/context-summary-execution-context-persistence.md`
+□ 将使用以下可复用组件：
+- `resolveRunEnvironment`: `apps/studio/electron/services.ts` - 收敛环境字段
+- `buildFragilityIssues`: `apps/studio/electron/services.ts` - 统一 fragility 构造
+- `analyzeFlowFragility`: `packages/page-intelligence/src/fragility.ts` - 复原诊断上下文
+- `ensure*Column` 模式：`packages/project-knowledge/src/repository.ts` - 旧库补列兼容
+□ 将遵循命名约定：延续 `RunFlowOptions` 与 `ExecutionResult` 的字段命名，优先复用 `baseUrl / storageStatePath / variables / environmentName`
+□ 将遵循代码风格：TypeScript strict、小函数、显式类型，新增注释仅说明兼容迁移或上下文意图
+□ 确认不重复造轮子，证明：已检查 `services.ts`、`studio-client.ts`、`repository.ts`、`App.tsx` 中的现有上下文与 fragility 处理链路，当前仓库不存在已持久化执行上下文的等价实现
+
+## 2026-06-06 续跑记录 - 执行上下文持久化 Foundation 收口
+
+- 时间：2026-06-06 18:38:00 CST
+- 当前协调分支：`codex/real-page-stability-program`
+- 当前目标：在不切换 Node 版本的前提下，完成执行上下文持久化与历史 fragility 复原的最终留痕、Node 20 复验和轨道回收判断。
+- worktree / 轨道快速核查：
+  - 主工作区：存在本轮未提交改动，范围集中在 `apps/studio` 与 `packages/project-knowledge`
+  - `codex-real-page-fragility-context`：已并回，当前能力已吸收到主协调分支
+  - `codex-real-page-foundation`：保留历史分支快照，本轮实现已直接在协调分支收口
+  - 其余历史轨道暂不写入，待只读子代理补充回收建议后统一处理
+- 本轮执行策略：
+  - 主代理负责 `.codex` 留痕补齐、Node 20 验证、最终集成判断
+  - 并行只读子代理负责：
+    - worktree / 分支回收建议
+    - 当前未提交 diff 的正确性审查
+
+## 前序红灯症状 - 执行上下文持久化
+
+- 时间：2026-06-06 19:17:55 CST
+- 前序缺口：
+  - `ProjectKnowledgeRepository` 的 `executions` 记录尚未持久化 `environmentName / baseUrl / storageStatePath / variables`，导致历史执行重载时 `runContext` 为空。
+  - Studio 从知识库重建历史执行时，只能对 Flow 做无上下文静态分析，无法继续判断“缺少 baseUrl”或“缺少变量输入”这类上下文相关 fragility。
+- 红灯用例意图：
+  - `packages/project-knowledge/src/repository.test.ts`
+    - 期望 `saveExecution / listExecutions / getExecution` 能完整读回 `runContext`
+  - `apps/studio/src/shared/execution-fragility.test.ts`
+    - 期望历史执行在缺少 `baseUrl` 时继续报 `MISSING_ENVIRONMENT`
+    - 期望历史执行在缺少变量时继续报 `MISSING_VARIABLE`
+    - 期望历史执行在上下文完整时不再误报
+- 失败症状归纳：
+  - 持久化链路缺失时，历史执行无法保留真实运行环境信息。
+  - 诊断链路缺失时，历史执行的上下文相关 fragility 会被吞掉，导致 Studio 复盘结果失真。
+
+## 实现完成 - 执行上下文持久化
+
+- 时间：2026-06-06 19:17:55 CST
+- 实现范围：
+  - `packages/project-knowledge`
+    - `types.ts` / `index.ts`：新增 `ExecutionVariableValue`、`ExecutionRunContext` 并对外导出。
+    - `db/client.ts` / `db/schema.ts`：为 `executions` 表补充 `environment_name`、`base_url`、`storage_state_path`、`variables_json`。
+    - `repository.ts`：新增 `ensureExecutionRunContextColumns()` 旧库补列；打通 `saveExecution / listExecutions / getExecution / assembleExecution` 的 `runContext` 读写与 JSON 解析。
+    - `repository.test.ts`：新增执行上下文持久化回归测试。
+  - `apps/studio`
+    - `src/shared/studio-api-types.ts`：新增 `StudioExecutionRunContext`，并让 `StudioExecution / ExecutionSummary` 暴露环境上下文。
+    - `src/shared/execution-fragility.ts`：抽出历史执行 fragility 复原共享逻辑。
+    - `src/shared/execution-fragility.test.ts`：覆盖缺环境、缺变量、上下文完整三类历史执行场景。
+    - `electron/services.ts`：`runFlow()` 写入 `runContext`；历史 `fromKnowledgeExecution()` 基于持久化上下文重建 fragility 与环境名。
+    - `src/studio-client.ts`：HTTP fallback 同样消费 `stored.runContext`，避免 Electron / Web 两条链路行为漂移。
+
+## 编码后声明 - 执行上下文持久化
+
+- 时间：2026-06-06 19:17:55 CST
+- 复用了以下既有组件：
+  - `resolveRunEnvironment`：继续作为 Studio 运行环境解析入口，不新建第二套环境推断逻辑。
+  - `analyzeFlowFragility`：仍由 `@flowweave/page-intelligence` 提供诊断规则，只在 Studio 侧补齐上下文装配。
+  - `ProjectKnowledgeRepository`：继续作为执行历史的唯一持久化入口，不平行写新的缓存文件。
+  - `ensure*Column` 兼容模式：沿用既有 SQLite 旧库补列方式，保持本地已有项目可平滑读取。
+- 遵循的项目约定：
+  - 字段命名沿用 `baseUrl / storageStatePath / environmentName / variables`，与 `RunFlowOptions` 和 runtime 语义保持一致。
+  - 诊断共享逻辑集中在 `apps/studio/src/shared/`，避免 Electron 与 HTTP fallback 各写一套 fragility 拼装代码。
+  - 所有新增测试继续使用 Vitest 与现有仓库断言风格。
+- 未重复造轮子的证明：
+  - 已检查 `apps/studio/electron/services.ts`、`apps/studio/src/studio-client.ts`、`packages/project-knowledge/src/repository.ts` 既有链路，仓库内此前不存在可直接复用的执行上下文持久化实现。
+
+## 本轮验证结果 - 执行上下文持久化
+
+- 时间：2026-06-06 19:17:55 CST
+- Node 基线：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH`
+- 定向回归验证：
+  - `pnpm --filter @flowweave/project-knowledge test -- repository.test.ts`
+    - 结果：通过，`11/11`
+  - `pnpm --filter @flowweave/app-studio test -- execution-fragility`
+    - 结果：通过，`3/3`
+- 仓库级统一验收：
+  - `pnpm smoke`
+    - 结果：通过
+    - 内含：
+      - `pnpm typecheck`
+      - `pnpm test`
+      - `pnpm build`
+      - `pnpm e2e:login`
+  - `e2e:login`
+    - 项目 ID：`e4bbe7ef-8fe2-4544-82d0-0dc8c0d66f1b`
+    - 执行 ID：`41b4cf30-780d-4c80-93e4-8b34ad33e94d`
+    - `4` 个步骤全部 `success`
+- 当前结论：
+  - 执行上下文已能随执行记录一并持久化，并可从历史记录完整读回。
+  - 历史执行重载时，Studio 与 HTTP fallback 均能基于真实上下文复原 fragility，而不是退化为“无上下文”诊断。
+
+## 评审回流与根因定位 - 历史 Flow 漂移
+
+- 时间：2026-06-06 19:28:56 CST
+- 只读评审发现：
+  - 历史执行页此前仍会按 `flowId` 拉取“当前 Flow”来生成步骤标签与 fragility。
+  - 一旦 Flow 在执行后被编辑、恢复旧版本或删除，历史执行页的诊断结论就会漂移，不符合“历史复原”的语义。
+- 根因定位：
+  - 本轮前半段只补齐了 `runContext`，但执行记录没有同时持久化执行当时的 Flow 快照。
+  - `apps/studio/electron/services.ts` 与 `apps/studio/src/studio-client.ts` 在历史执行重建时仍以当前 Flow 为优先输入。
+- 修复策略：
+  - 在 `executions` 表增加 `flow_snapshot_json`，把执行当时的 Flow 随执行记录一并持久化。
+  - Studio 历史执行优先使用 `flowSnapshot` 重建步骤标签与 fragility；只有旧记录没有快照时才回退到当前 Flow。
+
+## 红绿回归 - 历史 Flow 快照
+
+- 时间：2026-06-06 19:28:56 CST
+- 红灯验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- execution-fragility`
+    - 失败点：`resolveExecutionFlow is not a function`
+    - 说明：历史执行尚未具备“优先消费执行时 Flow 快照”的共享逻辑
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/project-knowledge test -- repository.test.ts`
+    - 失败点：`loaded?.flowSnapshot === undefined`
+    - 说明：执行记录尚未持久化执行时 Flow 快照
+- 最小实现：
+  - `packages/project-knowledge`
+    - `types.ts`：`ExecutionResult` 新增 `flowSnapshot?: FlowDocument`
+    - `db/client.ts` / `db/schema.ts`：`executions` 新增 `flow_snapshot_json`
+    - `repository.ts`：旧库自动补列、`flowSnapshot` 序列化/反序列化、`saveExecution/getExecution/listExecutions` 打通
+    - `repository.test.ts`：新增“Flow 快照随执行保存”和“旧库首次读取自动补列”回归
+  - `apps/studio`
+    - `src/shared/execution-fragility.ts`：新增 `resolveExecutionFlow()`，统一“优先快照、再回退当前 Flow”的规则
+    - `electron/services.ts` / `src/studio-client.ts`：历史执行重建时优先消费 `stored.flowSnapshot`
+- 绿灯验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- execution-fragility`
+    - 结果：通过，`4/4`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/project-knowledge test -- repository.test.ts`
+    - 结果：通过，`12/12`
+
+## 并行轨道回收结果
+
+- 时间：2026-06-06 19:28:56 CST
+- 只读子代理结论：
+  - `codex/real-page-stability-program` 仍是活跃协调分支，保留。
+  - 其余 `codex/real-page-*` worktree 补丁均已等价并入协调分支，可回收 worktree，但暂不删除分支引用。
+  - `feat/p1-knowledge`、`feat/p2-execution-history` worktree 已被 `main` 与当前协调分支包含，可直接回收。
+- 已执行回收：
+  - `git worktree remove .worktrees/codex-real-page-benchmarks`
+  - `git worktree remove .worktrees/codex-real-page-benchmarks-p4`
+  - `git worktree remove .worktrees/codex-real-page-diagnostics`
+  - `git worktree remove .worktrees/codex-real-page-diagnostics-ui`
+  - `git worktree remove .worktrees/codex-real-page-environment`
+  - `git worktree remove .worktrees/codex-real-page-foundation`
+  - `git worktree remove .worktrees/codex-real-page-fragility-context`
+  - `git worktree remove .worktrees/codex-real-page-recorder`
+  - `git worktree remove .worktrees/codex-real-page-recorder-p2`
+  - `git worktree remove .worktrees/codex-real-page-runtime`
+  - `git worktree remove .worktrees/feat-p1-knowledge`
+  - `git worktree remove .worktrees/feat-p2-execution-history`
+- 回收后状态：
+  - `git worktree list` 仅剩主工作区 `/Users/ling/codeHome/A_Mine/flowweave`
+
+## 最终验证结果 - Flow 快照补修后
+
+- 时间：2026-06-06 19:28:56 CST
+- Node 基线：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH`
+- 定向回归：
+  - `pnpm --filter @flowweave/app-studio test -- execution-fragility`
+    - 结果：通过，`4/4`
+  - `pnpm --filter @flowweave/project-knowledge test -- repository.test.ts`
+    - 结果：通过，`12/12`
+- 仓库级统一验收：
+  - `pnpm smoke`
+    - 结果：通过
+    - 内含：
+      - `pnpm typecheck`
+      - `pnpm test`
+      - `pnpm build`
+      - `pnpm e2e:login`
+  - `e2e:login`
+    - 项目 ID：`32c7ae5a-b47d-49d8-9a8f-4a3e1f116c40`
+    - 执行 ID：`8f601276-fc11-4328-bfaa-9db0acc84eeb`
+    - `4` 个步骤全部 `success`
+- 当前结论：
+  - 执行记录现在同时持久化 `runContext` 与执行当时的 Flow 快照。
+  - 历史执行页的步骤标签与 fragility 会优先绑定执行时状态，避免被当前 Flow 后续编辑污染。
+  - 二次只读评审已确认“未发现阻塞级问题”；剩余边界仅是旧记录若没有 `flowSnapshot`，仍会回退到当前 Flow。

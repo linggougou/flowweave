@@ -34,6 +34,11 @@ CREATE TABLE IF NOT EXISTS executions (
   project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   flow_id TEXT NOT NULL REFERENCES flows(id) ON DELETE CASCADE,
   status TEXT NOT NULL,
+  flow_snapshot_json TEXT,
+  environment_name TEXT,
+  base_url TEXT,
+  storage_state_path TEXT,
+  variables_json TEXT,
   started_at TEXT,
   finished_at TEXT
 );
@@ -55,6 +60,7 @@ CREATE TABLE IF NOT EXISTS project_environments (
   project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   base_url TEXT NOT NULL,
+  storage_state_path TEXT,
   is_default INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 );

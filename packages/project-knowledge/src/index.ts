@@ -10,7 +10,9 @@ export type {
   ProjectEnvironment,
   PageSnapshotRecord,
   FlowVersionRecord,
+  ExecutionRunContext,
   ExecutionResult,
+  ExecutionVariableValue,
   ExecutionWithProject,
   StepLog,
 } from "./types.js";

@@ -16,6 +16,7 @@ import * as dbSchema from "./db/schema.js";
 import type { PageSnapshotSummary } from "@flowweave/page-intelligence";
 
 import type {
+  ExecutionRunContext,
   ExecutionResult,
   ExecutionWithProject,
   FlowVersionRecord,
@@ -29,6 +30,11 @@ const EXECUTION_STATUSES = ["success", "failed", "cancelled"] as const;
 const STEP_STATUSES = ["passed", "failed", "skipped"] as const;
 const PROJECT_ENVIRONMENT_STORAGE_STATE_COLUMN = "storage_state_path";
 const EXECUTION_STEP_DIAGNOSTIC_PATH_COLUMN = "diagnostic_path";
+const EXECUTION_FLOW_SNAPSHOT_JSON_COLUMN = "flow_snapshot_json";
+const EXECUTION_ENVIRONMENT_NAME_COLUMN = "environment_name";
+const EXECUTION_BASE_URL_COLUMN = "base_url";
+const EXECUTION_STORAGE_STATE_PATH_COLUMN = "storage_state_path";
+const EXECUTION_VARIABLES_JSON_COLUMN = "variables_json";
 
 function parseExecutionStatus(status: string): ExecutionResult["status"] {
   return EXECUTION_STATUSES.includes(status as ExecutionResult["status"])
@@ -66,6 +72,123 @@ function ensureExecutionStepDiagnosticPathColumn(
     ALTER TABLE execution_steps
     ADD COLUMN diagnostic_path TEXT
   `);
+}
+
+function ensureExecutionRunContextColumns(
+  sqlite: Parameters<typeof closeProjectDatabase>[0],
+): void {
+  const columns = sqlite.pragma("table_info(executions)") as Array<{ name: string }>;
+  if (!columns.some((column) => column.name === EXECUTION_FLOW_SNAPSHOT_JSON_COLUMN)) {
+    sqlite.exec(`
+      ALTER TABLE executions
+      ADD COLUMN flow_snapshot_json TEXT
+    `);
+  }
+  if (!columns.some((column) => column.name === EXECUTION_ENVIRONMENT_NAME_COLUMN)) {
+    sqlite.exec(`
+      ALTER TABLE executions
+      ADD COLUMN environment_name TEXT
+    `);
+  }
+  if (!columns.some((column) => column.name === EXECUTION_BASE_URL_COLUMN)) {
+    sqlite.exec(`
+      ALTER TABLE executions
+      ADD COLUMN base_url TEXT
+    `);
+  }
+  if (!columns.some((column) => column.name === EXECUTION_STORAGE_STATE_PATH_COLUMN)) {
+    sqlite.exec(`
+      ALTER TABLE executions
+      ADD COLUMN storage_state_path TEXT
+    `);
+  }
+  if (!columns.some((column) => column.name === EXECUTION_VARIABLES_JSON_COLUMN)) {
+    sqlite.exec(`
+      ALTER TABLE executions
+      ADD COLUMN variables_json TEXT
+    `);
+  }
+}
+
+function serializeExecutionVariables(
+  variables: ExecutionRunContext["variables"],
+): string | null {
+  if (variables === undefined) {
+    return null;
+  }
+  return JSON.stringify(variables);
+}
+
+function serializeExecutionFlowSnapshot(
+  flowSnapshot: ExecutionResult["flowSnapshot"],
+): string | null {
+  if (!flowSnapshot) {
+    return null;
+  }
+  return JSON.stringify(flowSnapshot);
+}
+
+function parseExecutionVariables(
+  variablesJson: string | null | undefined,
+): ExecutionRunContext["variables"] {
+  if (!variablesJson) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(variablesJson) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return undefined;
+    }
+
+    const entries = Object.entries(parsed).filter((entry): entry is [string, string | number | boolean] => {
+      const value = entry[1];
+      return (
+        typeof value === "string" ||
+        typeof value === "number" ||
+        typeof value === "boolean"
+      );
+    });
+
+    return Object.fromEntries(entries);
+  } catch {
+    return undefined;
+  }
+}
+
+function parseExecutionFlowSnapshot(
+  flowSnapshotJson: string | null | undefined,
+): ExecutionResult["flowSnapshot"] {
+  if (!flowSnapshotJson) {
+    return undefined;
+  }
+
+  try {
+    return parseFlowDocument(JSON.parse(flowSnapshotJson));
+  } catch {
+    return undefined;
+  }
+}
+
+function parseExecutionRunContext(
+  row: typeof dbSchema.executions.$inferSelect,
+): ExecutionRunContext | undefined {
+  const variables = parseExecutionVariables(row.variablesJson);
+  if (
+    row.environmentName == null &&
+    row.baseUrl == null &&
+    row.storageStatePath == null &&
+    variables === undefined
+  ) {
+    return undefined;
+  }
+
+  return {
+    environmentName: row.environmentName ?? undefined,
+    baseUrl: row.baseUrl ?? undefined,
+    storageStatePath: row.storageStatePath ?? undefined,
+    variables,
+  };
 }
 
 export type ProjectKnowledgeRepositoryOptions = {
@@ -407,6 +530,7 @@ export class ProjectKnowledgeRepository {
   saveExecution(projectId: string, result: ExecutionResult): void {
     const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
     try {
+      ensureExecutionRunContextColumns(sqlite);
       ensureExecutionStepDiagnosticPathColumn(sqlite);
       db.insert(dbSchema.executions)
         .values({
@@ -414,6 +538,11 @@ export class ProjectKnowledgeRepository {
           projectId,
           flowId: result.flowId,
           status: result.status,
+          flowSnapshotJson: serializeExecutionFlowSnapshot(result.flowSnapshot),
+          environmentName: result.runContext?.environmentName ?? null,
+          baseUrl: result.runContext?.baseUrl ?? null,
+          storageStatePath: result.runContext?.storageStatePath ?? null,
+          variablesJson: serializeExecutionVariables(result.runContext?.variables),
           startedAt: result.startedAt ?? null,
           finishedAt: result.finishedAt ?? null,
         })
@@ -574,6 +703,7 @@ export class ProjectKnowledgeRepository {
   listExecutions(projectId: string, limit = 50): ExecutionResult[] {
     const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
     try {
+      ensureExecutionRunContextColumns(sqlite);
       ensureExecutionStepDiagnosticPathColumn(sqlite);
       const rows = db
         .select()
@@ -607,6 +737,7 @@ export class ProjectKnowledgeRepository {
 
       const { db, sqlite } = openProjectDatabase(entry, this.dataDir);
       try {
+        ensureExecutionRunContextColumns(sqlite);
         ensureExecutionStepDiagnosticPathColumn(sqlite);
         const row = db
           .select()
@@ -644,6 +775,8 @@ export class ProjectKnowledgeRepository {
       status: parseExecutionStatus(executionRow.status),
       startedAt: executionRow.startedAt ?? undefined,
       finishedAt: executionRow.finishedAt ?? undefined,
+      flowSnapshot: parseExecutionFlowSnapshot(executionRow.flowSnapshotJson),
+      runContext: parseExecutionRunContext(executionRow),
       steps: stepRows.map((step) => ({
         stepIndex: step.stepIndex,
         stepId: step.stepId,

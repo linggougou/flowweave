@@ -1,11 +1,13 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
+import Database from "better-sqlite3";
 import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
 import { describe, expect, it, afterEach } from "vitest";
 
 import { ProjectKnowledgeRepository } from "./repository.js";
+import { resolveProjectStorePath } from "./db/client.js";
 import type { ExecutionResult } from "./types.js";
 
 function sampleFlow(projectId: string, flowId: string) {
@@ -111,6 +113,193 @@ describe("ProjectKnowledgeRepository", () => {
     };
 
     expect(() => repo.saveExecution(project.id, result)).not.toThrow();
+  });
+
+  it("saveExecution / listExecutions / getExecution 持久化执行上下文", () => {
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-pk-"));
+    const repo = new ProjectKnowledgeRepository({ dataDir });
+
+    const project = repo.createProject("执行上下文项目");
+    const flowId = "flow_exec_context_1";
+    repo.saveFlow(project.id, sampleFlow(project.id, flowId));
+
+    const result: ExecutionResult = {
+      executionId: "exec_context_1",
+      flowId,
+      status: "success",
+      startedAt: "2026-05-25T11:30:00.000Z",
+      finishedAt: "2026-05-25T11:30:03.000Z",
+      flowSnapshot: sampleFlow(project.id, flowId),
+      runContext: {
+        environmentName: "预发已登录",
+        baseUrl: "https://staging.example.com/app",
+        storageStatePath: "/tmp/flowweave/state.json",
+        variables: {
+          username: "alice",
+          retryCount: 2,
+          rememberMe: true,
+        },
+      },
+      steps: [
+        {
+          stepIndex: 0,
+          stepId: "s1",
+          status: "passed",
+        },
+      ],
+    };
+
+    repo.saveExecution(project.id, result);
+
+    const listed = repo.listExecutions(project.id, 10);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.runContext).toEqual(result.runContext);
+
+    const loaded = repo.getExecution(result.executionId);
+    expect(loaded?.projectId).toBe(project.id);
+    expect(loaded?.runContext).toEqual(result.runContext);
+    expect(loaded?.flowSnapshot).toEqual(result.flowSnapshot);
+  });
+
+  it("旧库首次读取执行记录时自动补齐执行上下文列", () => {
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-pk-"));
+    const projectId = "project_legacy_exec_columns";
+    const storePath = resolveProjectStorePath(projectId, dataDir);
+    mkdirSync(dirname(storePath), { recursive: true });
+
+    const sqlite = new Database(storePath);
+    sqlite.pragma("foreign_keys = ON");
+    sqlite.exec(`
+CREATE TABLE projects (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE flows (
+  id TEXT PRIMARY KEY NOT NULL,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  document_json TEXT NOT NULL,
+  schema_version INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE executions (
+  id TEXT PRIMARY KEY NOT NULL,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  flow_id TEXT NOT NULL REFERENCES flows(id) ON DELETE CASCADE,
+  status TEXT NOT NULL,
+  started_at TEXT,
+  finished_at TEXT
+);
+CREATE TABLE execution_steps (
+  id TEXT PRIMARY KEY NOT NULL,
+  execution_id TEXT NOT NULL REFERENCES executions(id) ON DELETE CASCADE,
+  step_index INTEGER NOT NULL,
+  step_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  duration_ms INTEGER,
+  error_message TEXT,
+  screenshot_path TEXT
+);
+CREATE TABLE project_environments (
+  id TEXT PRIMARY KEY NOT NULL,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  base_url TEXT NOT NULL,
+  is_default INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE page_snapshots (
+  id TEXT PRIMARY KEY NOT NULL,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  url TEXT NOT NULL,
+  title TEXT,
+  summary_json TEXT NOT NULL,
+  snapshot_path TEXT,
+  captured_at TEXT NOT NULL
+);
+CREATE TABLE flow_versions (
+  id TEXT PRIMARY KEY NOT NULL,
+  flow_id TEXT NOT NULL REFERENCES flows(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  version INTEGER NOT NULL,
+  document_json TEXT NOT NULL,
+  change_message TEXT,
+  created_at TEXT NOT NULL
+);
+    `);
+
+    const flow = sampleFlow(projectId, "flow_legacy_1");
+    sqlite
+      .prepare(
+        `
+INSERT INTO projects (id, name, created_at, updated_at)
+VALUES (?, ?, ?, ?)
+      `,
+      )
+      .run(projectId, "旧库项目", "2026-05-25T10:00:00.000Z", "2026-05-25T10:00:00.000Z");
+    sqlite
+      .prepare(
+        `
+INSERT INTO flows (id, project_id, name, document_json, schema_version, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+      `,
+      )
+      .run(
+        flow.id,
+        projectId,
+        flow.name,
+        JSON.stringify(flow),
+        flow.schemaVersion,
+        flow.meta.createdAt,
+        flow.meta.updatedAt,
+      );
+    sqlite
+      .prepare(
+        `
+INSERT INTO executions (id, project_id, flow_id, status, started_at, finished_at)
+VALUES (?, ?, ?, ?, ?, ?)
+      `,
+      )
+      .run(
+        "exec_legacy_1",
+        projectId,
+        flow.id,
+        "success",
+        "2026-05-25T11:00:00.000Z",
+        "2026-05-25T11:00:05.000Z",
+      );
+    sqlite
+      .prepare(
+        `
+INSERT INTO execution_steps (id, execution_id, step_index, step_id, status)
+VALUES (?, ?, ?, ?, ?)
+      `,
+      )
+      .run("step_legacy_1", "exec_legacy_1", 0, "s1", "passed");
+    sqlite.close();
+
+    const repo = new ProjectKnowledgeRepository({ dataDir });
+    const listed = repo.listExecutions(projectId, 10);
+    expect(listed).toHaveLength(1);
+
+    const upgradedDb = new Database(storePath);
+    const columnsAfterList = upgradedDb.pragma("table_info(executions)") as Array<{ name: string }>;
+    upgradedDb.close();
+    expect(columnsAfterList.map((column) => column.name)).toEqual(
+      expect.arrayContaining([
+        "flow_snapshot_json",
+        "environment_name",
+        "base_url",
+        "storage_state_path",
+        "variables_json",
+      ]),
+    );
+
+    const loaded = repo.getExecution("exec_legacy_1");
+    expect(loaded?.executionId).toBe("exec_legacy_1");
   });
 
   it("getFlow 在未知 id 时返回 null", () => {

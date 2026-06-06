@@ -4,6 +4,13 @@ import type { FragilityIssue, PageSnapshotSummary } from "@flowweave/page-intell
 
 export type RunFlowVariableValue = string | number | boolean;
 
+export type StudioExecutionRunContext = {
+  environmentName?: string;
+  baseUrl?: string;
+  storageStatePath?: string;
+  variables?: Record<string, RunFlowVariableValue>;
+};
+
 export type StudioProjectEnvironment = {
   name: string;
   baseUrl: string;
@@ -70,6 +77,7 @@ export type StudioExecution = {
   startedAt: string;
   finishedAt?: string;
   environmentName?: string;
+  runContext?: StudioExecutionRunContext;
   fragilityIssues?: FragilityIssue[];
 };
 
@@ -93,6 +101,7 @@ export type ExecutionSummary = {
   status: StudioExecution["status"];
   startedAt?: string;
   finishedAt?: string;
+  environmentName?: string;
 };
 
 export type StudioFlowRef = {

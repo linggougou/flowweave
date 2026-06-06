@@ -42,6 +42,11 @@ export const executions = sqliteTable("executions", {
     .notNull()
     .references(() => flows.id, { onDelete: "cascade" }),
   status: text("status").notNull(),
+  flowSnapshotJson: text("flow_snapshot_json"),
+  environmentName: text("environment_name"),
+  baseUrl: text("base_url"),
+  storageStatePath: text("storage_state_path"),
+  variablesJson: text("variables_json"),
   startedAt: text("started_at"),
   finishedAt: text("finished_at"),
 });
