@@ -43,6 +43,8 @@ export type StepLog = {
   errorMessage?: string;
   /** 截图文件路径，不入库 BLOB */
   screenshotPath?: string;
+  /** 失败步骤诊断 JSON 路径 */
+  diagnosticPath?: string;
 };
 
 /** 流程执行结果（与 runtime 输出契约对齐，P1 由 knowledge 包定义） */

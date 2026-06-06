@@ -454,9 +454,10 @@ export function App() {
     startedAt: step.startedAt,
     finishedAt: step.finishedAt,
     screenshotPath: step.screenshotPath,
+    diagnosticPath: step.diagnosticPath,
   }));
 
-  const openScreenshot = (filePath: string) => {
+  const openLocalPath = (filePath: string) => {
     void getStudioApi()
       .openPath(filePath)
       .catch((err: unknown) => {
@@ -954,7 +955,8 @@ export function App() {
                   ? "点击「运行流程」或从左侧选择一条执行记录"
                   : "请先在侧栏选择一个 Flow"
               }
-              onOpenScreenshot={openScreenshot}
+              onOpenScreenshot={openLocalPath}
+              onOpenDiagnostic={openLocalPath}
             />
           </>
         ) : null}

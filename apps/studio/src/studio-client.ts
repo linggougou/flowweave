@@ -75,6 +75,7 @@ function toStudioExecution(stored: ExecutionWithProject): StudioExecution {
       startedAt,
       finishedAt: stored.finishedAt,
       screenshotPath: step.screenshotPath,
+      diagnosticPath: step.diagnosticPath,
     })),
   };
 }

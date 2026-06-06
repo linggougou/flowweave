@@ -28,6 +28,7 @@ export type ExecutionStepLog = {
   startedAt: string;
   finishedAt?: string;
   screenshotPath?: string;
+  diagnosticPath?: string;
 };
 
 export type FragilityWarning = {

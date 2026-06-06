@@ -81,4 +81,5 @@ export const executionSteps = sqliteTable("execution_steps", {
   durationMs: integer("duration_ms"),
   errorMessage: text("error_message"),
   screenshotPath: text("screenshot_path"),
+  diagnosticPath: text("diagnostic_path"),
 });

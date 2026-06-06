@@ -17,6 +17,8 @@ export interface StepLog {
   message?: string;
   /** 步骤截图本地路径（仅当 artifactDir 启用时） */
   screenshotPath?: string;
+  /** 失败步骤诊断 JSON 路径（仅在可生成诊断时写入） */
+  diagnosticPath?: string;
 }
 
 export type RuntimePageSnapshot = {

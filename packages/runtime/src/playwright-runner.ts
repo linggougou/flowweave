@@ -26,6 +26,13 @@ type StrategyAttempt = {
   error?: string;
 };
 
+type TargetDiagnosticContext = {
+  url: string;
+  title: string;
+  strategyAttempts: StrategyAttempt[];
+  targetHints?: Target["hints"];
+};
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -180,8 +187,36 @@ async function buildTargetDiagnosticError(
   return new FlowWeaveError(
     "RUNTIME_STEP_FAILED",
     messageParts.join(" "),
-    cause,
+    {
+      url: page.url(),
+      title,
+      strategyAttempts: attempts,
+      targetHints: target.hints,
+      cause: formatUnknownError(cause),
+    } satisfies TargetDiagnosticContext & { cause: string },
   );
+}
+
+function getTargetDiagnosticContext(error: unknown): TargetDiagnosticContext | null {
+  if (!(error instanceof FlowWeaveError) || !error.details || typeof error.details !== "object") {
+    return null;
+  }
+
+  const details = error.details as Partial<TargetDiagnosticContext>;
+  if (
+    typeof details.url !== "string" ||
+    typeof details.title !== "string" ||
+    !Array.isArray(details.strategyAttempts)
+  ) {
+    return null;
+  }
+
+  return {
+    url: details.url,
+    title: details.title,
+    strategyAttempts: details.strategyAttempts,
+    targetHints: details.targetHints,
+  };
 }
 
 function strategyToLocator(page: Page, strategy: LocatorStrategy): Locator {
@@ -368,6 +403,32 @@ async function capturePageSummary(
   return { stepIndex, filePath, summary };
 }
 
+function writeStepDiagnostic(
+  artifactDir: string,
+  step: NormalizedStep,
+  stepIndex: number,
+  diagnostic: TargetDiagnosticContext,
+): string {
+  const filePath = join(artifactDir, `step-${stepIndex}-diagnostic.json`);
+  writeFileSync(
+    filePath,
+    JSON.stringify(
+      {
+        stepId: step.id,
+        stepIndex,
+        url: diagnostic.url,
+        title: diagnostic.title,
+        strategyAttempts: diagnostic.strategyAttempts,
+        targetHints: diagnostic.targetHints,
+      },
+      null,
+      2,
+    ),
+    "utf-8",
+  );
+  return filePath;
+}
+
 async function runStep(
   page: Page,
   step: NormalizedStep,
@@ -503,11 +564,27 @@ async function runStep(
           ? error.message
           : String(error);
     let screenshotPath: string | undefined;
+    let diagnosticPath: string | undefined;
     if (artifactDir) {
       try {
         screenshotPath = await captureStepScreenshot(page, artifactDir, stepIndex);
       } catch {
         screenshotPath = undefined;
+      }
+      try {
+        if (pageSnapshots) {
+          pageSnapshots.push(await capturePageSummary(page, artifactDir, stepIndex));
+        }
+      } catch {
+        // 页面已失效时允许跳过失败页摘要
+      }
+      const diagnostic = getTargetDiagnosticContext(error);
+      if (diagnostic) {
+        try {
+          diagnosticPath = writeStepDiagnostic(artifactDir, resolvedStep, stepIndex, diagnostic);
+        } catch {
+          diagnosticPath = undefined;
+        }
       }
     }
     return {
@@ -520,6 +597,7 @@ async function runStep(
       durationMs: Date.now() - startMs,
       message,
       screenshotPath,
+      diagnosticPath,
     };
   }
 }

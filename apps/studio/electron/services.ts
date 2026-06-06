@@ -241,6 +241,7 @@ function mapRuntimeSteps(result: RuntimeExecutionResult): ExecutionStepLog[] {
     finishedAt: step.endedAt,
     durationMs: step.durationMs,
     screenshotPath: step.screenshotPath,
+    diagnosticPath: step.diagnosticPath,
   }));
 }
 
@@ -262,6 +263,7 @@ function toKnowledgeExecution(
       durationMs: step.durationMs,
       errorMessage: step.message,
       screenshotPath: step.screenshotPath,
+      diagnosticPath: step.diagnosticPath,
     })),
   };
 }
@@ -354,6 +356,7 @@ function fromKnowledgeExecution(
       startedAt,
       finishedAt: stored.finishedAt,
       screenshotPath: step.screenshotPath,
+      diagnosticPath: step.diagnosticPath,
     })),
   };
 }

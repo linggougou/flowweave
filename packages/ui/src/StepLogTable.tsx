@@ -10,12 +10,14 @@ export type StepLogRow = {
   startedAt: string;
   finishedAt?: string;
   screenshotPath?: string;
+  diagnosticPath?: string;
 };
 
 export type StepLogTableProps = {
   steps: StepLogRow[];
   emptyMessage?: string;
   onOpenScreenshot?: (filePath: string) => void;
+  onOpenDiagnostic?: (filePath: string) => void;
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -30,6 +32,7 @@ export function StepLogTable({
   steps,
   emptyMessage = "暂无步骤日志",
   onOpenScreenshot,
+  onOpenDiagnostic,
 }: StepLogTableProps): ReactNode {
   if (steps.length === 0) {
     return <p className="fw-step-log-empty">{emptyMessage}</p>;
@@ -45,6 +48,7 @@ export function StepLogTable({
           <th>耗时</th>
           <th>说明</th>
           <th>截图</th>
+          <th>诊断</th>
           <th>开始</th>
           <th>结束</th>
         </tr>
@@ -70,6 +74,24 @@ export function StepLogTable({
                   </button>
                 ) : (
                   <span title={step.screenshotPath}>{shortenPath(step.screenshotPath)}</span>
+                )
+              ) : (
+                "—"
+              )}
+            </td>
+            <td className="fw-step-screenshot">
+              {step.diagnosticPath ? (
+                onOpenDiagnostic ? (
+                  <button
+                    type="button"
+                    className="fw-step-screenshot-btn"
+                    title={step.diagnosticPath}
+                    onClick={() => onOpenDiagnostic(step.diagnosticPath!)}
+                  >
+                    {shortenPath(step.diagnosticPath)}
+                  </button>
+                ) : (
+                  <span title={step.diagnosticPath}>{shortenPath(step.diagnosticPath)}</span>
                 )
               ) : (
                 "—"

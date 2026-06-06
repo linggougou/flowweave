@@ -212,6 +212,7 @@ describe("ProjectKnowledgeRepository", () => {
           status: "passed",
           durationMs: 1200,
           screenshotPath: "/tmp/flowweave/screenshots/exec_newer_step0.png",
+          diagnosticPath: "/tmp/flowweave/diagnostics/exec_newer_step0.json",
         },
       ],
     };
@@ -224,6 +225,7 @@ describe("ProjectKnowledgeRepository", () => {
     expect(listed[0]?.executionId).toBe("exec_newer");
     expect(listed[1]?.executionId).toBe("exec_older");
     expect(listed[0]?.steps[0]?.screenshotPath).toContain("exec_newer_step0");
+    expect(listed[0]?.steps[0]?.diagnosticPath).toContain("exec_newer_step0.json");
 
     const limited = repo.listExecutions(project.id, 1);
     expect(limited).toHaveLength(1);
@@ -235,6 +237,7 @@ describe("ProjectKnowledgeRepository", () => {
     expect(loaded?.status).toBe("failed");
     expect(loaded?.steps).toHaveLength(1);
     expect(loaded?.steps[0]?.errorMessage).toBe("超时");
+    expect(loaded?.steps[0]?.diagnosticPath).toBeUndefined();
 
     expect(repo.getExecution("missing_exec")).toBeNull();
   });

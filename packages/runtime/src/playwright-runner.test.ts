@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -391,6 +391,7 @@ describe("executeFlow", () => {
   });
 
   it("定位失败时在 message 中包含更清晰的策略诊断", async () => {
+    artifactDir = mkdtempSync(join(tmpdir(), "fw-runtime-diagnostic-"));
     const result = await executeFlow(
       buildFlow("flow_target_diagnostic", "定位诊断流程", [
         {
@@ -410,7 +411,7 @@ describe("executeFlow", () => {
           },
         },
       ]),
-      { headless: true, timeoutMs: 4_000 },
+      { headless: true, timeoutMs: 4_000, artifactDir },
     );
 
     expect(result.status).toBe("failed");
@@ -419,5 +420,31 @@ describe("executeFlow", () => {
     expect(failedStep?.message).toContain("#missing-action");
     expect(failedStep?.message).toContain("匹配");
     expect(failedStep?.message).toContain("当前页面");
+    expect(failedStep?.diagnosticPath).toBe(join(artifactDir, "step-1-diagnostic.json"));
+    expect(existsSync(join(artifactDir, "page-1.json"))).toBe(true);
+    expect(existsSync(join(artifactDir, "step-1-diagnostic.json"))).toBe(true);
+
+    const diagnostic = JSON.parse(
+      readFileSync(join(artifactDir, "step-1-diagnostic.json"), "utf-8"),
+    ) as {
+      stepId: string;
+      stepIndex: number;
+      url: string;
+      title: string;
+      strategyAttempts: Array<{
+        label: string;
+        matchedCount: number;
+        visibleCount?: number;
+        success: boolean;
+        error?: string;
+      }>;
+    };
+    expect(diagnostic.stepId).toBe("s2");
+    expect(diagnostic.stepIndex).toBe(1);
+    expect(diagnostic.url).toContain("checkbox-select.html");
+    expect(diagnostic.title).toBeTruthy();
+    expect(diagnostic.strategyAttempts).toHaveLength(2);
+    expect(diagnostic.strategyAttempts[0]?.label).toBe("#missing-action");
+    expect(diagnostic.strategyAttempts[0]?.matchedCount).toBe(0);
   });
 });

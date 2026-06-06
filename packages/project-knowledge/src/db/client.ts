@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS execution_steps (
   status TEXT NOT NULL,
   duration_ms INTEGER,
   error_message TEXT,
-  screenshot_path TEXT
+  screenshot_path TEXT,
+  diagnostic_path TEXT
 );
 
 CREATE TABLE IF NOT EXISTS project_environments (

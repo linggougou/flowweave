@@ -28,6 +28,7 @@ import type {
 const EXECUTION_STATUSES = ["success", "failed", "cancelled"] as const;
 const STEP_STATUSES = ["passed", "failed", "skipped"] as const;
 const PROJECT_ENVIRONMENT_STORAGE_STATE_COLUMN = "storage_state_path";
+const EXECUTION_STEP_DIAGNOSTIC_PATH_COLUMN = "diagnostic_path";
 
 function parseExecutionStatus(status: string): ExecutionResult["status"] {
   return EXECUTION_STATUSES.includes(status as ExecutionResult["status"])
@@ -51,6 +52,19 @@ function ensureProjectEnvironmentStorageStateColumn(
   sqlite.exec(`
     ALTER TABLE project_environments
     ADD COLUMN storage_state_path TEXT
+  `);
+}
+
+function ensureExecutionStepDiagnosticPathColumn(
+  sqlite: Parameters<typeof closeProjectDatabase>[0],
+): void {
+  const columns = sqlite.pragma("table_info(execution_steps)") as Array<{ name: string }>;
+  if (columns.some((column) => column.name === EXECUTION_STEP_DIAGNOSTIC_PATH_COLUMN)) {
+    return;
+  }
+  sqlite.exec(`
+    ALTER TABLE execution_steps
+    ADD COLUMN diagnostic_path TEXT
   `);
 }
 
@@ -393,6 +407,7 @@ export class ProjectKnowledgeRepository {
   saveExecution(projectId: string, result: ExecutionResult): void {
     const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
     try {
+      ensureExecutionStepDiagnosticPathColumn(sqlite);
       db.insert(dbSchema.executions)
         .values({
           id: result.executionId,
@@ -416,6 +431,7 @@ export class ProjectKnowledgeRepository {
               durationMs: step.durationMs ?? null,
               errorMessage: step.errorMessage ?? null,
               screenshotPath: step.screenshotPath ?? null,
+              diagnosticPath: step.diagnosticPath ?? null,
             })),
           )
           .run();
@@ -558,6 +574,7 @@ export class ProjectKnowledgeRepository {
   listExecutions(projectId: string, limit = 50): ExecutionResult[] {
     const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
     try {
+      ensureExecutionStepDiagnosticPathColumn(sqlite);
       const rows = db
         .select()
         .from(dbSchema.executions)
@@ -590,6 +607,7 @@ export class ProjectKnowledgeRepository {
 
       const { db, sqlite } = openProjectDatabase(entry, this.dataDir);
       try {
+        ensureExecutionStepDiagnosticPathColumn(sqlite);
         const row = db
           .select()
           .from(dbSchema.executions)
@@ -633,6 +651,7 @@ export class ProjectKnowledgeRepository {
         durationMs: step.durationMs ?? undefined,
         errorMessage: step.errorMessage ?? undefined,
         screenshotPath: step.screenshotPath ?? undefined,
+        diagnosticPath: step.diagnosticPath ?? undefined,
       })),
     };
   }
