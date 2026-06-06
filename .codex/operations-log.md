@@ -4642,3 +4642,37 @@
     - 结果：通过
 - 结论：
   - `apps/studio` 的测试入口现在不再依赖默认发现规则，Wave 10 新增的 Studio 诊断测试具备显式配置保护。
+
+## 2026-06-07 Wave 11 上下文扫描与计划重开
+
+- 时间：2026-06-07 07:45:00 CST
+- 背景判断：
+  - `Wave 10` 原设计中的“大范围 detached/intercepted/not-ready 扩展”尚未真正落地。
+  - 当前主线已经先完成：
+    - 受控表单动作回弹恢复
+    - Benchmarks / recorded replay 单一真相收口
+    - Studio 对 `action-state-reset` 的消费
+  - 因此下一阶段应以当前主线为基线，重开为 `Wave 11`，避免继续沿用已部分完成、部分过期的旧 Wave 10 计划。
+- 本轮上下文检索：
+  - 阅读 `packages/runtime/src/playwright-runner.ts`
+  - 阅读 `packages/runtime/src/playwright-runner.test.ts`
+  - 阅读 `packages/runtime/src/types.ts`
+  - 阅读 `examples/real-page-smoke.ts`
+  - 阅读 `examples/recorded-replay-smoke.ts`
+  - 阅读 `apps/studio/src/shared/studio-api-types.ts`
+  - 阅读 `docs/superpowers/specs/2026-06-07-real-page-stability-wave10-action-resilience-design.md`
+  - 阅读 `docs/superpowers/plans/2026-06-07-real-page-stability-wave10-action-resilience-plan.md`
+  - 阅读 `docs/superpowers/plans/2026-06-07-real-page-stability-wave10-orchestration.md`
+- 关键结论：
+  - runtime 当前只有 `fill / select / setChecked` 具备动作恢复；`click / press / upload` 仍是一发式
+  - `RuntimeErrorDiagnostic` 仍缺 `runtimeCauseCategory / recoveryTried / recoveredAttemptCount`
+  - `real-page-smoke` 仍只有 `p7`，`p8` 尚未建立
+  - Studio 当前只细化了 `action-state-reset`，更广 runtime 根因仍未消费
+- 新增文档：
+  - `.codex/context-summary-wave11-execution-resilience.md`
+  - `docs/superpowers/specs/2026-06-07-real-page-stability-wave11-execution-resilience-design.md`
+  - `docs/superpowers/plans/2026-06-07-real-page-stability-wave11-execution-resilience-plan.md`
+- 下一步：
+  - 按 `Wave 11` 计划创建三条新 worktree
+  - 先并行启动 Runtime Cause Expansion 与 Benchmarks P8 Expansion
+  - Studio Runtime Category Expansion 等 runtime 新字段方案明确后同步推进
