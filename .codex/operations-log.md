@@ -4173,3 +4173,152 @@
       - `packages/runtime/src/real-page-matrix.test.ts`
       - `docs/guides/recorded-replay-matrix.md`
       - `docs/guides/fixture-matrix.md`
+
+## 2026-06-07 Wave 9 续跑状态同步
+
+- 时间：2026-06-07 10:58:00 CST
+- 当前主线：
+  - 分支：`codex/real-page-stability-program`
+  - HEAD：`4e163e1`
+  - 相对 `origin/codex/real-page-stability-program`：`ahead 7`
+- 已并回主线并完成 Node 20 复验的轨道：
+  - `Capture Heuristic Tightening`
+    - 关键文件：
+      - `apps/extension/entrypoints/content.ts`
+      - `apps/extension/lib/content-contract.test.ts`
+    - 复验命令：
+      - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension test -- content-contract.test.ts`
+    - 结果：
+      - 通过，`9/9`
+    - 效果：
+      - 方向键录制不再因 `aria-autocomplete="none"` 或仅 `aria-controls` 被误判为放行
+  - `Press Wait Stabilization`
+    - 关键文件：
+      - `packages/runtime/src/playwright-runner.ts`
+      - `packages/runtime/src/playwright-runner.test.ts`
+    - 复验命令：
+      - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+    - 结果：
+      - 通过，`28/28`
+    - 已知并回能力：
+      - suggest/combobox 的 `fill` 后追加 best-effort ready 等待
+      - `ArrowDown / ArrowUp` 后等待 `aria-activedescendant` 或 active option
+      - 当第一次导航按键早于 suggestions ready 时，会在 ready 后补发同按键
+      - `isSuggestLikeTarget()` 已放宽为任意 `aria-controls` 目标可纳入窄等待识别
+- 仍在进行中的轨道：
+  - `Async Suggest Replay Matrix`
+    - worktree：`.worktrees/codex-real-page-wave9-async-suggest-matrix`
+    - 分支：`codex/real-page-wave9-async-suggest-matrix`
+    - 当前未提交改动：
+      - `examples/fixtures/async-command-palette.html`
+      - `packages/runtime/src/recorded-replay-matrix.test.ts`
+      - `packages/runtime/src/real-page-matrix.test.ts`
+    - 已知本地修正但尚未验收收口：
+      - `async-command-palette` 过滤完成后默认高亮首项，保证一次 `ArrowDown` 会落到第二项
+      - matrix 相关超时上调到 `120_000`
+- 当前剩余红灯：
+  - `recorded-replay-matrix.test.ts`
+    - 现象：不再超时，但 `summary.results.every((item) => item.status === "success")` 仍为 `false`
+  - `real-page-matrix.test.ts`
+    - 现象：`summary.failed.length === 1` 断言失败
+  - 两条 smoke 共性：
+    - `pnpm e2e:recorded-pages`：`13` 条中 `11` 成功，失败 `keyboard-command-palette`、`async-command-palette`
+    - `pnpm e2e:real-pages`：`21` 条中 `19` 成功，失败 `keyboard-command-palette`、`async-command-palette`
+    - 共同症状：最终 `wait visible` 等结果节点超时，说明 `Enter` 后未命中预期命令或根本未执行
+- 失败证据位置：
+  - real-pages：
+    - `/var/folders/t9/s59syyts3d19hlc1g_8fgpxm0000gn/T/flowweave-real-page-smoke-myHtiU/keyboard-command-palette`
+    - `/var/folders/t9/s59syyts3d19hlc1g_8fgpxm0000gn/T/flowweave-real-page-smoke-myHtiU/async-command-palette`
+  - recorded-pages：
+    - `/var/folders/t9/s59syyts3d19hlc1g_8fgpxm0000gn/T/flowweave-recorded-replay-smoke-Ks77FY/keyboard-command-palette`
+    - `/var/folders/t9/s59syyts3d19hlc1g_8fgpxm0000gn/T/flowweave-recorded-replay-smoke-Ks77FY/async-command-palette`
+- 续跑策略：
+  1. 先检查失败截图与诊断 JSON，确认是“执行了错误项”还是“根本未执行”。
+  2. 若是高亮/命中项偏差，优先修 fixture 与 case 数据。
+  3. 若是未执行，再补更贴近真实 fixture 的 runtime 回归测试，避免只靠内联 fixture 通过。
+
+## 2026-06-07 Wave 9 最终收口启动
+
+- 时间：2026-06-07 05:44:15 CST
+- 任务目标：完成 `Async Suggest Replay Matrix` 轨道的最终留痕、Node 20 复验、提交并回与轨道回收。
+- 当前状态确认：
+  - 主线分支：`codex/real-page-stability-program`
+  - 主线工作区未提交文件：`.codex/operations-log.md`
+  - 待并回 worktree：`.worktrees/codex-real-page-wave9-async-suggest-matrix`
+  - 可直接回收 worktree：`.worktrees/codex-real-page-wave9-press-wait`
+- 关键根因回顾：
+  - `packages/runtime/src/playwright-runner.ts` 中 suggest/combobox 稳定等待原先只判断“列表是否存在 / active 是否存在”，没有基于状态变化，因此会把旧结果误判为 ready。
+  - 传给 `locator.evaluate()` 与 `page.waitForFunction()` 的浏览器侧回调内部定义了 helper；构建后 helper 被包装为 `__name(...)`，在浏览器上下文执行时触发 `ReferenceError: __name is not defined`，导致等待逻辑静默失效。
+- 已知修复范围：
+  - 新增 `waitForBrowserFrame(page)`，在 `fill` 与导航键 `press` 后先过一帧。
+  - 新增 `SuggestTargetSnapshot` 与 `captureSuggestTargetSnapshot()`，把 suggest 等待改为基于 baseline 的“状态变化”判定。
+  - `waitForSuggestTargetReady()`、`waitForActiveSuggestionOption()`、`waitForNavigationPressSettled()` 均已改成基于 baseline 的变化等待，并移除浏览器侧内部 helper，规避 `__name` 问题。
+  - `packages/runtime/src/playwright-runner.test.ts` 已补真实 HTTP fixture 回归；matrix baseline 已纳入 `async-command-palette`。
+- 工具与环境说明：
+  - 当前环境仍未提供 `sequential-thinking`、`desktop-commander`、`context7`，本轮继续以结构化排查、本地命令、现有测试和 `.codex` 留痕替代。
+  - 本轮验收统一使用 `Node v20.19.6`，与仓库 `.nvmrc` 和既有稳定基线保持一致。
+- 本轮执行顺序：
+  1. 先补当前收口留痕。
+  2. 用 `Node v20.19.6` 重跑 Wave 9 相关验证命令，获取新鲜证据。
+  3. 验证通过后在 worktree 提交改动，并回主线。
+  4. 回收已通过的 `wave9-async-suggest-matrix` 与 `wave9-press-wait` 轨道。
+
+## 2026-06-07 Wave 9 Node 20 复验完成
+
+- 时间：2026-06-07 05:47:56 CST
+- 验证工作区：`.worktrees/codex-real-page-wave9-async-suggest-matrix`
+- 验证环境：`PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH`
+- 新鲜验证结果：
+  - `pnpm --filter @flowweave/runtime build`
+    - 结果：通过
+  - `pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+    - 结果：通过，`30/30`
+    - 关键回归点：
+      - `通过 runtime src index 入口时也会命中最新 suggest 等待实现`
+      - `在 HTTP fixture 上也会等待命令面板筛选与异步 suggest 稳定后再执行`
+      - `真实页面 fixture 矩阵全部成功`
+  - `pnpm --filter @flowweave/recorder test -- normalize.test.ts`
+    - 结果：通过，`31/31`
+  - `pnpm --filter @flowweave/runtime test -- recorded-replay-matrix.test.ts real-page-matrix.test.ts`
+    - 结果：通过，`5/5`
+  - `pnpm e2e:recorded-pages`
+    - 结果：通过，`13/13`
+    - 关键信号：
+      - `keyboard-command-palette`：成功
+      - `async-command-palette`：成功
+  - `pnpm e2e:real-pages`
+    - 结果：通过，`21/21`
+    - 关键信号：
+      - `keyboard-command-palette`：成功
+      - `async-command-palette`：成功
+- 结论：
+  - Wave 9 剩余红灯已被 runtime 的 suggest 等待策略修复消除，不是靠放宽断言或跳过用例掩盖。
+  - 下一步进入 worktree 提交、主线并回与轨道回收。
+
+## 2026-06-07 Wave 9 并回与轨道回收完成
+
+- 时间：2026-06-07 05:51:36 CST
+- 业务轨道提交：
+  - 分支：`codex/real-page-wave9-async-suggest-matrix`
+  - 提交：`cc95b5f feat: 补齐异步 suggest 矩阵稳定性`
+- 主线并回：
+  - 合并提交：`8f0c66e Merge branch 'codex/real-page-wave9-async-suggest-matrix' into codex/real-page-stability-program`
+  - 合并方式：`git merge --no-ff codex/real-page-wave9-async-suggest-matrix`
+- 主线并回后 Node 20 复验：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts recorded-replay-matrix.test.ts real-page-matrix.test.ts`
+    - 结果：通过，`35/35`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:recorded-pages`
+    - 结果：通过，`13/13`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+    - 结果：通过，`21/21`
+- 已回收轨道：
+  - 已删除 worktree：
+    - `.worktrees/codex-real-page-wave9-async-suggest-matrix`
+    - `.worktrees/codex-real-page-wave9-press-wait`
+  - 已删除分支：
+    - `codex/real-page-wave9-async-suggest-matrix`
+    - `codex/real-page-wave9-press-wait`
+  - `git worktree list` 当前仅剩协调工作区 `/Users/ling/codeHome/A_Mine/flowweave`
+- 编码后声明：
+  - 本轮复用了既有 `keypress -> press` 协议与 `playwright-runner.ts` 主执行链路，没有引入新的事件类型或平行执行器。
+  - `async-command-palette` 已同时纳入 recorded replay baseline 与 real-page smoke，确保真实页面异步 suggest 录制与执行闭环都受回归保护。

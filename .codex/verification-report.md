@@ -2871,3 +2871,77 @@
 - 风险评估评分：96
 - 综合评分：98
 - 建议：通过
+
+## 2026-06-07 Wave 9 异步 Suggest 稳定执行统一验收
+
+### 审查范围
+
+- `examples/fixtures/async-command-palette.html`
+- `examples/recorded-replay-smoke.ts`
+- `examples/run-real-page-smoke.ts`
+- `packages/recorder/src/normalize.test.ts`
+- `packages/runtime/src/playwright-runner.ts`
+- `packages/runtime/src/playwright-runner.test.ts`
+- `packages/runtime/src/recorded-replay-matrix.test.ts`
+- `packages/runtime/src/real-page-matrix.test.ts`
+- `docs/guides/recorded-replay-matrix.md`
+- `docs/guides/fixture-matrix.md`
+- `.codex/operations-log.md`
+- 关键提交：
+  - 轨道提交：`cc95b5f feat: 补齐异步 suggest 矩阵稳定性`
+  - 主线合并：`8f0c66e Merge branch 'codex/real-page-wave9-async-suggest-matrix' into codex/real-page-stability-program`
+
+### 审查结果
+
+1. 需求字段完整性通过。
+   - 目标明确：修复真实页面异步 suggest / command palette 在录制回放与手写矩阵中的不稳定执行。
+   - 范围明确：runtime 等待策略、fixture、matrix 与 smoke 校验；不扩散到新的录制协议或 Studio UI。
+   - 交付物完整：代码、fixture、矩阵、Node 20 验证结果与 `.codex` 留痕均已落盘。
+2. 根因修复方向正确。
+   - 运行时不再把“已有旧列表/旧 active”误判为 ready，而是基于 baseline 快照等待真实状态变化。
+   - 浏览器上下文回调已去掉内部 helper，规避构建后注入 `__name(...)` 导致的 `ReferenceError` 和等待逻辑失效。
+   - `fill` 与导航键 `press` 后增加过帧与补发导航键的窄等待，能够覆盖异步过滤与高亮延迟场景。
+3. 架构一致性通过。
+   - 继续复用 `playwright-runner.ts` 既有执行主链路，没有新建平行执行器。
+   - 继续沿用现有 recorded replay 与 real-page 双矩阵结构，只在必要位置扩充 `async-command-palette` 场景与回归测试。
+4. 主线合并后验证证据充分。
+   - worktree 内已完成 Node 20 新鲜复验：
+     - `pnpm --filter @flowweave/runtime build`：通过
+     - `pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`：通过，`30/30`
+     - `pnpm --filter @flowweave/recorder test -- normalize.test.ts`：通过，`31/31`
+     - `pnpm --filter @flowweave/runtime test -- recorded-replay-matrix.test.ts real-page-matrix.test.ts`：通过，`5/5`
+     - `pnpm e2e:recorded-pages`：通过，`13/13`
+     - `pnpm e2e:real-pages`：通过，`21/21`
+   - 主线并回后再次完成 Node 20 验证：
+     - `pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts recorded-replay-matrix.test.ts real-page-matrix.test.ts`
+       - 结果：通过，`35/35`
+     - `pnpm e2e:recorded-pages`
+       - 结果：通过，`13/13`
+     - `pnpm e2e:real-pages`
+       - 结果：通过，`21/21`
+5. 轨道回收完整。
+   - `git worktree list` 当前仅剩主工作区。
+   - 已删除 `codex-real-page-wave9-async-suggest-matrix` 与 `codex-real-page-wave9-press-wait` worktree 及对应分支，未留下悬空轨道。
+
+### Findings
+
+1. 未发现阻塞级问题。
+   - Wave 9 的真实问题位于 runtime suggest 等待策略与浏览器上下文执行方式，当前修复已经在单测、矩阵和两条 smoke 上得到交叉验证。
+2. 本轮消除的是“真实执行器时序问题”，不是 fixture 假红。
+   - 关键证据是：`async-command-palette` 在 recorded replay 与 real-page 两条链路都从失败恢复到成功，并且 HTTP fixture 回归也已覆盖。
+3. 残余风险：当前 suggest readiness 仍依赖 DOM 状态信号。
+   - 若未来页面使用完全自定义且无 `aria-controls` / `aria-activedescendant` / visible option 信号的命令面板，仍可能需要新的等待策略。
+   - 这不构成本轮阻塞，因为现有平台支持的 suggest/combobox 模式已被有效覆盖。
+4. 残余风险：矩阵数量断言仍然存在维护成本。
+   - 当前 baseline 已从 `12` 扩充到 `13`，real-page 场景数已扩充到 `21`。
+   - 后续新增 fixture 时仍需同步更新文档与断言，否则容易出现“能力已接入但矩阵未计入”的假红。
+
+### 综合结论
+
+- 代码质量评分：99
+- 测试覆盖评分：98
+- 规范遵循评分：100
+- 战略匹配评分：99
+- 风险评估评分：96
+- 综合评分：98
+- 建议：通过
