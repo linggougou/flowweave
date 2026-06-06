@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowWeave 跨页批量选择 Fixture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+        --bg: #eef5f3;
+        --panel: #fbfefd;
+        --border: #c5d8d2;
+        --text: #21352f;
+        --muted: #64786f;
+        --accent: #267160;
+        --accent-soft: rgba(38, 113, 96, 0.12);
+        --success-soft: rgba(38, 113, 96, 0.1);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top left, rgba(38, 113, 96, 0.14), transparent 34%),
+          linear-gradient(180deg, #fbfffd 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      main {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 40px 20px 72px;
+      }
+
+      .hero,
+      .shell,
+      .summary,
+      .result {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: 0 18px 42px rgba(33, 53, 47, 0.08);
+      }
+
+      .hero,
+      .shell,
+      .summary,
+      .result {
+        padding: 24px;
+      }
+
+      .hero {
+        margin-bottom: 20px;
+      }
+
+      .toolbar,
+      .pager,
+      .metrics {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .toolbar,
+      .pager {
+        justify-content: space-between;
+      }
+
+      .loading {
+        margin-top: 16px;
+        padding: 12px 14px;
+        border-radius: 16px;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .loading[hidden],
+      .result[hidden] {
+        display: none;
+      }
+
+      table {
+        width: 100%;
+        margin-top: 18px;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 12px 10px;
+        border-bottom: 1px solid rgba(100, 120, 111, 0.18);
+        text-align: left;
+      }
+
+      th {
+        color: var(--muted);
+      }
+
+      input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+      }
+
+      button {
+        border: none;
+        border-radius: 14px;
+        padding: 11px 16px;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        background: var(--accent);
+        color: #fff;
+      }
+
+      button.ghost {
+        background: #fff;
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .summary,
+      .result {
+        margin-top: 18px;
+      }
+
+      .metrics {
+        margin-top: 14px;
+      }
+
+      .metric {
+        flex: 1 1 180px;
+        padding: 16px;
+        border-radius: 18px;
+        background: var(--success-soft);
+      }
+
+      .metric strong {
+        display: block;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <p>Fixture 目标：验证跨页保留勾选、换页后继续选择，以及最终批量提交成功。</p>
+        <h1 id="page-title">跨页批量归档台</h1>
+        <p>推荐步骤：第 1 页勾选一条，切到第 2 页再勾选一条，最后执行批量提交。</p>
+      </section>
+
+      <section id="selection-shell" class="shell" data-page="1" data-loading="false">
+        <div class="toolbar">
+          <p id="page-caption">当前位于第 1 页，等待勾选归档批次。</p>
+          <button id="submit-selection" type="button" disabled>提交批量归档</button>
+        </div>
+
+        <div id="selection-loading" class="loading" hidden aria-live="polite">
+          正在切换分页并保留跨页勾选...
+        </div>
+
+        <section
+          id="selection-summary"
+          class="summary"
+          data-count="0"
+          aria-labelledby="summary-title"
+        >
+          <strong id="summary-title">已选摘要</strong>
+          <div class="metrics">
+            <div class="metric">
+              <strong>已选数量</strong>
+              <span id="selected-count">0 项</span>
+            </div>
+            <div class="metric">
+              <strong>已选页面</strong>
+              <span id="selected-pages">尚未选择</span>
+            </div>
+            <div class="metric">
+              <strong>定位锚点</strong>
+              <span id="selection-anchor">bulk:none</span>
+            </div>
+          </div>
+        </section>
+
+        <table aria-label="跨页批量选择列表">
+          <thead>
+            <tr>
+              <th>选择</th>
+              <th>批次编号</th>
+              <th>业务线</th>
+              <th>状态</th>
+            </tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
+
+        <div class="pager">
+          <button id="prev-page" type="button" class="ghost" disabled>上一页</button>
+          <span id="current-page">第 1 页</span>
+          <button id="next-page" type="button">下一页</button>
+        </div>
+
+        <section
+          id="bulk-result"
+          class="result"
+          hidden
+          data-ready="false"
+          data-count="0"
+          aria-labelledby="result-title"
+        >
+          <strong id="result-title">批量提交结果</strong>
+          <div class="metrics">
+            <div class="metric">
+              <strong>提交数量</strong>
+              <span id="result-count">0</span>
+            </div>
+            <div class="metric">
+              <strong>选中批次</strong>
+              <span id="result-codes">-</span>
+            </div>
+            <div class="metric">
+              <strong>结果描述</strong>
+              <span id="result-status">未提交</span>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const shell = document.getElementById("selection-shell");
+      const tableBody = document.getElementById("table-body");
+      const selectionLoading = document.getElementById("selection-loading");
+      const pageCaption = document.getElementById("page-caption");
+      const submitButton = document.getElementById("submit-selection");
+      const selectedCount = document.getElementById("selected-count");
+      const selectedPages = document.getElementById("selected-pages");
+      const selectionSummary = document.getElementById("selection-summary");
+      const selectionAnchor = document.getElementById("selection-anchor");
+      const currentPage = document.getElementById("current-page");
+      const prevButton = document.getElementById("prev-page");
+      const nextButton = document.getElementById("next-page");
+      const bulkResult = document.getElementById("bulk-result");
+      const resultCount = document.getElementById("result-count");
+      const resultCodes = document.getElementById("result-codes");
+      const resultStatus = document.getElementById("result-status");
+
+      const pageData = {
+        1: [
+          {
+            id: "FW-BATCH-301",
+            checkboxId: "select-batch-301",
+            unit: "增长运营",
+            status: "待归档",
+          },
+          {
+            id: "FW-BATCH-302",
+            checkboxId: "select-batch-302",
+            unit: "品牌巡检",
+            status: "待复核",
+          },
+          {
+            id: "FW-BATCH-303",
+            checkboxId: "select-batch-303",
+            unit: "线索同步",
+            status: "待确认",
+          },
+        ],
+        2: [
+          {
+            id: "FW-BATCH-304",
+            checkboxId: "select-batch-304",
+            unit: "增长运营",
+            status: "待归档",
+          },
+          {
+            id: "FW-BATCH-305",
+            checkboxId: "select-batch-305",
+            unit: "发票补录",
+            status: "待复核",
+          },
+          {
+            id: "FW-BATCH-306",
+            checkboxId: "select-batch-306",
+            unit: "回执归并",
+            status: "待同步",
+          },
+        ],
+      };
+
+      const selectedItems = new Map();
+
+      function setLoading(active) {
+        shell.dataset.loading = active ? "true" : "false";
+        selectionLoading.hidden = !active;
+        submitButton.disabled = active || selectedItems.size === 0;
+      }
+
+      function refreshSummary() {
+        const uniquePages = [...new Set([...selectedItems.values()].map((item) => item.page))];
+        selectedCount.textContent = `${selectedItems.size} 项`;
+        selectedPages.textContent =
+          uniquePages.length === 0
+            ? "尚未选择"
+            : uniquePages.map((page) => `第 ${page} 页`).join(" + ");
+        selectionSummary.dataset.count = String(selectedItems.size);
+        selectionAnchor.textContent =
+          selectedItems.size === 0 ? "bulk:none" : `bulk:${[...selectedItems.keys()].join("|")}`;
+        submitButton.disabled = shell.dataset.loading === "true" || selectedItems.size === 0;
+      }
+
+      function renderPage(page) {
+        shell.dataset.page = String(page);
+        currentPage.textContent = `第 ${page} 页`;
+        pageCaption.textContent = `当前位于第 ${page} 页，可继续保留跨页勾选。`;
+        prevButton.disabled = page <= 1;
+        nextButton.disabled = page >= 2;
+        tableBody.innerHTML = (pageData[page] || [])
+          .map(
+            (item) => `
+              <tr>
+                <td>
+                  <input id="${item.checkboxId}" type="checkbox" ${
+                    selectedItems.has(item.id) ? "checked" : ""
+                  } />
+                </td>
+                <td>${item.id}</td>
+                <td>${item.unit}</td>
+                <td>${item.status}</td>
+              </tr>
+            `,
+          )
+          .join("");
+
+        (pageData[page] || []).forEach((item) => {
+          const checkbox = document.getElementById(item.checkboxId);
+          checkbox.addEventListener("change", () => {
+            if (checkbox.checked) {
+              selectedItems.set(item.id, { page, id: item.id });
+            } else {
+              selectedItems.delete(item.id);
+            }
+            bulkResult.hidden = true;
+            bulkResult.dataset.ready = "false";
+            bulkResult.dataset.count = "0";
+            refreshSummary();
+          });
+        });
+
+        refreshSummary();
+      }
+
+      function goToPage(page) {
+        if (shell.dataset.loading === "true" || page === Number(shell.dataset.page)) {
+          return;
+        }
+
+        setLoading(true);
+        pageCaption.textContent = `正在切换到第 ${page} 页并保留已选条目...`;
+        window.setTimeout(() => {
+          renderPage(page);
+          setLoading(false);
+        }, 660);
+      }
+
+      submitButton.addEventListener("click", () => {
+        if (submitButton.disabled || shell.dataset.loading === "true") {
+          return;
+        }
+
+        setLoading(true);
+        pageCaption.textContent = "正在提交跨页批量归档...";
+        window.setTimeout(() => {
+          const codes = [...selectedItems.keys()];
+          bulkResult.hidden = false;
+          bulkResult.dataset.ready = "true";
+          bulkResult.dataset.count = String(codes.length);
+          resultCount.textContent = String(codes.length);
+          resultCodes.textContent = codes.join("、");
+          resultStatus.textContent = `已跨 ${new Set([...selectedItems.values()].map((item) => item.page)).size} 页提交 ${codes.length} 条归档`;
+          pageCaption.textContent = "跨页批量提交成功。";
+          setLoading(false);
+        }, 740);
+      });
+
+      prevButton.addEventListener("click", () => goToPage(Number(shell.dataset.page) - 1));
+      nextButton.addEventListener("click", () => goToPage(Number(shell.dataset.page) + 1));
+
+      renderPage(1);
+    </script>
+  </body>
+</html>

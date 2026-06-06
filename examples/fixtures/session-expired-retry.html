@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowWeave 会话恢复重试 Fixture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+        --bg: #f4f2ee;
+        --panel: rgba(255, 252, 247, 0.97);
+        --border: #d8cebf;
+        --text: #342a1f;
+        --muted: #6b6154;
+        --warning: #9d5627;
+        --warning-soft: rgba(157, 86, 39, 0.12);
+        --danger: #9d3a3a;
+        --danger-soft: rgba(157, 58, 58, 0.12);
+        --accent: #3f5f8f;
+        --accent-soft: rgba(63, 95, 143, 0.12);
+        --success: #2f6c57;
+        --success-soft: rgba(47, 108, 87, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top right, rgba(157, 86, 39, 0.14), transparent 30%),
+          linear-gradient(180deg, #fcfbf8 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      main {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 40px 20px 72px;
+      }
+
+      .hero,
+      .shell,
+      .banner,
+      .panel,
+      .alert {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: 0 18px 42px rgba(52, 42, 31, 0.08);
+      }
+
+      .hero,
+      .shell,
+      .banner,
+      .panel,
+      .alert {
+        padding: 24px;
+      }
+
+      .hero {
+        margin-bottom: 20px;
+      }
+
+      .status-row,
+      .actions,
+      .metrics {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 7px 14px;
+        border-radius: 999px;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      #session-state[data-tone="warning"] {
+        background: var(--warning-soft);
+        color: var(--warning);
+      }
+
+      #session-state[data-tone="danger"] {
+        background: var(--danger-soft);
+        color: var(--danger);
+      }
+
+      #session-state[data-tone="success"] {
+        background: var(--success-soft);
+        color: var(--success);
+      }
+
+      .banner,
+      .alert,
+      .panel {
+        margin-top: 18px;
+      }
+
+      .banner[hidden],
+      .alert[hidden],
+      .panel[hidden],
+      .loading[hidden] {
+        display: none;
+      }
+
+      .loading {
+        margin-top: 16px;
+        padding: 12px 14px;
+        border-radius: 16px;
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+
+      .alert[data-state="failed"] {
+        background: var(--danger-soft);
+        border-color: rgba(157, 58, 58, 0.2);
+      }
+
+      .metrics {
+        margin-top: 14px;
+      }
+
+      .metric {
+        flex: 1 1 180px;
+        padding: 16px;
+        border-radius: 18px;
+        background: rgba(63, 95, 143, 0.08);
+      }
+
+      .metric strong {
+        display: block;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      button {
+        border: none;
+        border-radius: 14px;
+        padding: 12px 18px;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        background: var(--accent);
+        color: #fff;
+      }
+
+      button.ghost {
+        background: #fff;
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+
+      button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+
+      #refresh-status {
+        min-height: 24px;
+        margin-top: 16px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <p>Fixture 目标：验证会话恢复第一次失败、第二次重试成功，以及仪表盘最终重新可用。</p>
+        <h1 id="page-title">日报会话修复台</h1>
+        <p>推荐步骤：点击恢复会话，等待失败提醒出现，再点击重试并断言最终恢复面板。</p>
+      </section>
+
+      <section id="dashboard-shell" class="shell" data-loading="false" data-attempt="0">
+        <div class="status-row">
+          <span id="session-state" class="chip" data-tone="warning">会话待恢复</span>
+          <span id="last-user">最近登录：未知</span>
+        </div>
+
+        <section id="session-banner" class="banner" aria-labelledby="banner-title">
+          <strong id="banner-title">检测到后台会话已过期</strong>
+          <p id="banner-copy">请先恢复会话，再重新拉取今天的渠道日报与待办队列。</p>
+          <div class="actions">
+            <button id="refresh-session" type="button">恢复会话</button>
+            <button id="retry-session" type="button" class="ghost" hidden>再次重试</button>
+          </div>
+        </section>
+
+        <div id="session-refreshing" class="loading" hidden aria-live="polite">
+          正在恢复会话并重新连接仪表盘...
+        </div>
+
+        <section
+          id="refresh-alert"
+          class="alert"
+          hidden
+          data-state="idle"
+          aria-labelledby="alert-title"
+        >
+          <strong id="alert-title">第一次恢复失败</strong>
+          <p id="alert-copy">会话票据校验未通过，请重试一次并重新拉取实时数据。</p>
+        </section>
+
+        <p id="refresh-status">等待处理会话失效提醒。</p>
+
+        <section
+          id="dashboard-panel"
+          class="panel"
+          hidden
+          data-ready="false"
+          aria-labelledby="dashboard-title"
+        >
+          <strong id="dashboard-title">会话已恢复</strong>
+          <div class="metrics">
+            <div class="metric">
+              <strong>当前登录</strong>
+              <span id="session-user">未恢复</span>
+            </div>
+            <div class="metric">
+              <strong>恢复结果</strong>
+              <span id="refresh-result">尚未执行</span>
+            </div>
+            <div class="metric">
+              <strong>重试次数</strong>
+              <span id="retry-attempt">0 次</span>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const shell = document.getElementById("dashboard-shell");
+      const sessionState = document.getElementById("session-state");
+      const lastUser = document.getElementById("last-user");
+      const refreshButton = document.getElementById("refresh-session");
+      const retryButton = document.getElementById("retry-session");
+      const refreshing = document.getElementById("session-refreshing");
+      const refreshAlert = document.getElementById("refresh-alert");
+      const refreshStatus = document.getElementById("refresh-status");
+      const dashboardPanel = document.getElementById("dashboard-panel");
+      const sessionUser = document.getElementById("session-user");
+      const refreshResult = document.getElementById("refresh-result");
+      const retryAttempt = document.getElementById("retry-attempt");
+
+      const currentUser = window.localStorage.getItem("flowweave:session-user") || "矩阵值班同学";
+      lastUser.textContent = `最近登录：${currentUser}`;
+
+      function setLoading(active, message) {
+        shell.dataset.loading = active ? "true" : "false";
+        refreshing.hidden = !active;
+        refreshStatus.textContent = message;
+        refreshButton.disabled = active;
+        retryButton.disabled = active || retryButton.hidden;
+      }
+
+      function recoverSession() {
+        if (shell.dataset.loading === "true") {
+          return;
+        }
+
+        const attempt = Number(shell.dataset.attempt || "0") + 1;
+        shell.dataset.attempt = String(attempt);
+        setLoading(true, attempt === 1 ? "第一次恢复会话中..." : "正在执行第二次会话重试...");
+
+        window.setTimeout(
+          () => {
+            setLoading(false, "");
+
+            if (attempt === 1) {
+              refreshAlert.hidden = false;
+              refreshAlert.dataset.state = "failed";
+              retryButton.hidden = false;
+              retryButton.disabled = false;
+              sessionState.textContent = "第一次恢复失败";
+              sessionState.dataset.tone = "danger";
+              refreshStatus.textContent = "第一次恢复失败，请点击“再次重试”。";
+              refreshResult.textContent = "第一次校验失败";
+              retryAttempt.textContent = "1 次";
+              return;
+            }
+
+            window.localStorage.setItem("flowweave:session-status", "active");
+            refreshAlert.hidden = true;
+            refreshAlert.dataset.state = "resolved";
+            retryButton.hidden = true;
+            refreshButton.disabled = true;
+            sessionState.textContent = "会话已恢复";
+            sessionState.dataset.tone = "success";
+            refreshStatus.textContent = "第二次重试成功，仪表盘已重新连接。";
+            dashboardPanel.hidden = false;
+            dashboardPanel.dataset.ready = "true";
+            sessionUser.textContent = currentUser;
+            refreshResult.textContent = "第 2 次重试成功";
+            retryAttempt.textContent = "2 次";
+          },
+          attempt === 1 ? 720 : 780,
+        );
+      }
+
+      refreshButton.addEventListener("click", recoverSession);
+      retryButton.addEventListener("click", recoverSession);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowWeave Drawer 二次保存 Fixture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+        --bg: #f3f1f8;
+        --panel: #fdfcff;
+        --border: #d5cee6;
+        --text: #31294a;
+        --muted: #716587;
+        --accent: #6c4cb3;
+        --accent-soft: rgba(108, 76, 179, 0.12);
+        --danger: #a1415a;
+        --danger-soft: rgba(161, 65, 90, 0.12);
+        --success: #2e6c57;
+        --success-soft: rgba(46, 108, 87, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top right, rgba(108, 76, 179, 0.16), transparent 32%),
+          linear-gradient(180deg, #fbfaff 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      body[data-drawer-open="true"] {
+        overflow: hidden;
+      }
+
+      main {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 40px 20px 72px;
+      }
+
+      .hero,
+      .shell,
+      .result,
+      .drawer-card,
+      .alert {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: 0 20px 44px rgba(49, 41, 74, 0.08);
+      }
+
+      .hero,
+      .shell,
+      .result,
+      .alert {
+        padding: 24px;
+      }
+
+      .hero {
+        margin-bottom: 20px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 12px 10px;
+        border-bottom: 1px solid rgba(113, 101, 135, 0.16);
+        text-align: left;
+      }
+
+      th {
+        color: var(--muted);
+      }
+
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+      }
+
+      button {
+        border: none;
+        border-radius: 14px;
+        padding: 11px 16px;
+        background: var(--accent);
+        color: #fff;
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      button.ghost {
+        background: #fff;
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .result,
+      .alert {
+        margin-top: 18px;
+      }
+
+      .result[hidden],
+      .alert[hidden],
+      .drawer-shell[hidden] {
+        display: none;
+      }
+
+      .drawer-shell {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        justify-content: flex-end;
+        background: rgba(35, 24, 58, 0.24);
+      }
+
+      .drawer-card {
+        width: min(100%, 460px);
+        height: 100%;
+        padding: 24px;
+        border-radius: 28px 0 0 28px;
+        overflow-y: auto;
+      }
+
+      .field {
+        margin-top: 16px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        border-radius: 14px;
+        border: 1px solid var(--border);
+        padding: 12px 14px;
+        background: #fff;
+        color: var(--text);
+      }
+
+      textarea {
+        min-height: 120px;
+        resize: vertical;
+      }
+
+      .drawer-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        margin-top: 20px;
+      }
+
+      .alert[data-state="error"] {
+        background: var(--danger-soft);
+        border-color: rgba(161, 65, 90, 0.24);
+      }
+
+      .meta-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+        margin-top: 14px;
+      }
+
+      .meta-grid div {
+        padding: 14px;
+        border-radius: 18px;
+        background: var(--success-soft);
+      }
+
+      .meta-grid strong {
+        display: block;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      #drawer-status {
+        min-height: 24px;
+        margin-top: 14px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <p>Fixture 目标：验证 Drawer 第一次保存失败、修正备注后第二次保存成功。</p>
+        <h1 id="page-title">复核规则 Drawer 保存台</h1>
+        <p>推荐步骤：打开 Drawer、直接保存触发失败提醒、补充备注，再二次保存并等待结果回显。</p>
+      </section>
+
+      <section id="drawer-shell" class="shell" data-loading="false">
+        <table aria-label="规则列表">
+          <thead>
+            <tr>
+              <th>规则编号</th>
+              <th>负责人</th>
+              <th>优先级</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>FW-RULE-720</td>
+              <td id="row-owner-720">闻溪</td>
+              <td id="row-priority-720">P1</td>
+              <td>
+                <button id="edit-rule-720" type="button" data-owner="闻溪" data-priority="p1">
+                  打开 Drawer
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <section
+          id="save-result"
+          class="result"
+          hidden
+          data-ready="false"
+          aria-labelledby="result-title"
+        >
+          <h2 id="result-title">保存结果</h2>
+          <div class="meta-grid">
+            <div>
+              <strong>负责人</strong>
+              <span id="result-owner">-</span>
+            </div>
+            <div>
+              <strong>优先级</strong>
+              <span id="result-priority">-</span>
+            </div>
+            <div>
+              <strong>状态</strong>
+              <span id="result-status">未保存</span>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <div id="edit-drawer" class="drawer-shell" hidden data-ready="false" aria-hidden="true">
+      <aside class="drawer-card" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+        <p id="drawer-badge">侧栏状态：待保存</p>
+        <h2 id="drawer-title">编辑复核规则</h2>
+        <p>第一次保存会收到后台失败提醒，补充备注后再次保存即可通过。</p>
+
+        <div class="field">
+          <label for="drawer-owner">负责人</label>
+          <input id="drawer-owner" type="text" placeholder="请输入负责人" />
+        </div>
+
+        <div class="field">
+          <label for="drawer-priority">优先级</label>
+          <select id="drawer-priority">
+            <option value="p2">P2</option>
+            <option value="p1">P1</option>
+            <option value="p0">P0</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="drawer-review-note">复核备注</label>
+          <textarea id="drawer-review-note">待补</textarea>
+        </div>
+
+        <section
+          id="save-alert"
+          class="alert"
+          hidden
+          data-state="idle"
+          aria-labelledby="save-alert-title"
+        >
+          <strong id="save-alert-title">保存失败提醒</strong>
+          <p id="save-alert-copy">第一次保存失败后，这里会提示补充备注。</p>
+        </section>
+
+        <p id="drawer-status">请先确认当前修改。</p>
+
+        <div class="drawer-actions">
+          <button id="cancel-drawer" type="button" class="ghost">取消</button>
+          <button id="save-drawer" type="button">保存修改</button>
+        </div>
+      </aside>
+    </div>
+
+    <script>
+      const body = document.body;
+      const shell = document.getElementById("drawer-shell");
+      const editButton = document.getElementById("edit-rule-720");
+      const rowOwner = document.getElementById("row-owner-720");
+      const rowPriority = document.getElementById("row-priority-720");
+      const drawer = document.getElementById("edit-drawer");
+      const drawerBadge = document.getElementById("drawer-badge");
+      const ownerInput = document.getElementById("drawer-owner");
+      const prioritySelect = document.getElementById("drawer-priority");
+      const reviewNote = document.getElementById("drawer-review-note");
+      const saveAlert = document.getElementById("save-alert");
+      const saveAlertCopy = document.getElementById("save-alert-copy");
+      const drawerStatus = document.getElementById("drawer-status");
+      const cancelButton = document.getElementById("cancel-drawer");
+      const saveButton = document.getElementById("save-drawer");
+      const result = document.getElementById("save-result");
+      const resultOwner = document.getElementById("result-owner");
+      const resultPriority = document.getElementById("result-priority");
+      const resultStatus = document.getElementById("result-status");
+
+      let saveAttempts = 0;
+
+      function syncFormState() {
+        const ownerValid = ownerInput.value.trim().length >= 2;
+        saveButton.disabled = !ownerValid || shell.dataset.loading === "true";
+        if (shell.dataset.loading !== "true") {
+          drawerStatus.textContent = ownerValid
+            ? "内容可提交，等待保存。"
+            : "负责人至少需要 2 个字符。";
+        }
+      }
+
+      function closeDrawer() {
+        drawer.hidden = true;
+        drawer.dataset.ready = "false";
+        drawer.setAttribute("aria-hidden", "true");
+        body.dataset.drawerOpen = "false";
+      }
+
+      editButton.addEventListener("click", () => {
+        ownerInput.value = editButton.dataset.owner || "";
+        prioritySelect.value = editButton.dataset.priority || "p1";
+        reviewNote.value = "待补";
+        saveAttempts = 0;
+        saveAlert.hidden = true;
+        saveAlert.dataset.state = "idle";
+        drawer.hidden = false;
+        drawer.dataset.ready = "true";
+        drawer.setAttribute("aria-hidden", "false");
+        body.dataset.drawerOpen = "true";
+        drawerBadge.textContent = "侧栏状态：编辑中";
+        syncFormState();
+      });
+
+      ownerInput.addEventListener("input", syncFormState);
+      prioritySelect.addEventListener("change", syncFormState);
+      reviewNote.addEventListener("input", syncFormState);
+      cancelButton.addEventListener("click", closeDrawer);
+
+      saveButton.addEventListener("click", () => {
+        if (saveButton.disabled || shell.dataset.loading === "true") {
+          return;
+        }
+
+        shell.dataset.loading = "true";
+        shell.setAttribute("aria-busy", "true");
+        saveButton.disabled = true;
+        drawerStatus.textContent = "正在提交 Drawer 保存请求...";
+
+        window.setTimeout(
+          () => {
+            shell.dataset.loading = "false";
+            shell.removeAttribute("aria-busy");
+            saveAttempts += 1;
+
+            if (saveAttempts === 1) {
+              saveAlert.hidden = false;
+              saveAlert.dataset.state = "error";
+              saveAlertCopy.textContent = "第一次保存失败：请补充至少 6 个字的处理说明后重试。";
+              drawerStatus.textContent = "第一次保存失败，请修正备注后再次提交。";
+              syncFormState();
+              return;
+            }
+
+            const note = reviewNote.value.trim();
+            if (note.length < 6) {
+              saveAlert.hidden = false;
+              saveAlert.dataset.state = "error";
+              saveAlertCopy.textContent = "备注长度仍不足 6 个字，请继续补充。";
+              drawerStatus.textContent = "备注长度不足，暂时无法保存。";
+              syncFormState();
+              return;
+            }
+
+            const owner = ownerInput.value.trim();
+            const priorityLabel = prioritySelect.value.toUpperCase();
+            rowOwner.textContent = owner;
+            rowPriority.textContent = priorityLabel;
+            editButton.dataset.owner = owner;
+            editButton.dataset.priority = prioritySelect.value;
+            result.hidden = false;
+            result.dataset.ready = "true";
+            resultOwner.textContent = owner;
+            resultPriority.textContent = priorityLabel;
+            resultStatus.textContent = "第二次保存成功并已回填列表";
+            drawerBadge.textContent = "侧栏状态：已完成";
+            closeDrawer();
+            syncFormState();
+          },
+          saveAttempts === 0 ? 680 : 760,
+        );
+      });
+    </script>
+  </body>
+</html>

@@ -18,7 +18,64 @@ type MatrixCase = {
   options?: Pick<ExecutionOptions, "variables" | "storageStatePath">;
 };
 
-export type RealPageMatrixProfile = "baseline" | "p5";
+type MatrixRuntimeAssets = {
+  uploadFileA: string;
+  uploadFileB: string;
+  storageStatePath: string;
+  expiredStorageStatePath: string;
+};
+
+export type RealPageMatrixProfile = "baseline" | "p5" | "p6";
+
+export type RealPageFailureType =
+  | "core-interaction"
+  | "upload-submission"
+  | "session-recovery"
+  | "filtering"
+  | "confirmation"
+  | "pagination"
+  | "drawer-save"
+  | "contenteditable"
+  | "retry-recovery"
+  | "bulk-selection"
+  | "unknown";
+
+export type RealPageFailureTypeCounts = Partial<Record<RealPageFailureType, number>>;
+
+const REAL_PAGE_FAILURE_TYPE_LABELS: Record<RealPageFailureType, string> = {
+  "core-interaction": "基础交互",
+  "upload-submission": "上传提交流程",
+  "session-recovery": "会话恢复",
+  filtering: "筛选联动",
+  confirmation: "确认提交流程",
+  pagination: "分页切换",
+  "drawer-save": "抽屉保存",
+  contenteditable: "富文本编辑",
+  "retry-recovery": "结果重试恢复",
+  "bulk-selection": "跨页批量选择",
+  unknown: "未知类型",
+};
+
+const CASE_FAILURE_TYPE_MAP: Record<string, RealPageFailureType> = {
+  "checkbox-select": "core-interaction",
+  "delayed-panel": "core-interaction",
+  "spa-route": "core-interaction",
+  "tabbed-workspace": "core-interaction",
+  "upload-form": "upload-submission",
+  "session-dashboard": "session-recovery",
+  "session-expired-dashboard": "session-recovery",
+  "session-expired-retry": "session-recovery",
+  "filterable-list": "filtering",
+  "linked-filters": "filtering",
+  "modal-bulk-action": "confirmation",
+  "toast-popconfirm": "confirmation",
+  "paginated-list": "pagination",
+  "drawer-edit-form": "drawer-save",
+  "drawer-double-save": "drawer-save",
+  "contenteditable-editor": "contenteditable",
+  "empty-results-retry": "retry-recovery",
+  "bulk-cross-page-selection": "bulk-selection",
+};
 
 export type RealPageFixtureCaseResult = {
   name: string;
@@ -27,6 +84,7 @@ export type RealPageFixtureCaseResult = {
   durationMs: number;
   artifactDir: string;
   message?: string;
+  failureType?: RealPageFailureType;
 };
 
 export type RealPageFixtureMatrixSummary = {
@@ -39,6 +97,7 @@ export type RealPageFixtureMatrixSummary = {
   failureCount: number;
   totalDurationMs: number;
   averageDurationMs: number;
+  failureTypeCounts: RealPageFailureTypeCounts;
 };
 
 function buildFlow(id: string, name: string, steps: FlowDocument["steps"]): FlowDocument {
@@ -88,64 +147,95 @@ async function startStaticServer(rootDir: string): Promise<{ server: Server; bas
   };
 }
 
-function buildBaselineMatrixCases(baseUrl: string, workspaceDir: string): MatrixCase[] {
+function writeStorageState(
+  filePath: string,
+  origin: string,
+  localStorage: Array<{ name: string; value: string }>,
+) {
+  writeFileSync(
+    filePath,
+    JSON.stringify(
+      {
+        cookies: [],
+        origins: [
+          {
+            origin,
+            localStorage,
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+    "utf-8",
+  );
+}
+
+function buildMatrixRuntimeAssets(baseUrl: string, workspaceDir: string): MatrixRuntimeAssets {
   const uploadFileA = join(workspaceDir, "evidence-a.txt");
   const uploadFileB = join(workspaceDir, "evidence-b.txt");
   writeFileSync(uploadFileA, "alpha", "utf-8");
   writeFileSync(uploadFileB, "beta", "utf-8");
 
   const storageStatePath = join(workspaceDir, "session-storage-state.json");
-  writeFileSync(
-    storageStatePath,
-    JSON.stringify(
-      {
-        cookies: [],
-        origins: [
-          {
-            origin: new URL(baseUrl).origin,
-            localStorage: [
-              {
-                name: "flowweave:session-user",
-                value: "矩阵验证用户",
-              },
-            ],
-          },
-        ],
-      },
-      null,
-      2,
-    ),
-    "utf-8",
-  );
+  const origin = new URL(baseUrl).origin;
+  writeStorageState(storageStatePath, origin, [
+    {
+      name: "flowweave:session-user",
+      value: "矩阵验证用户",
+    },
+  ]);
 
   const expiredStorageStatePath = join(workspaceDir, "session-expired-storage-state.json");
-  writeFileSync(
-    expiredStorageStatePath,
-    JSON.stringify(
-      {
-        cookies: [],
-        origins: [
-          {
-            origin: new URL(baseUrl).origin,
-            localStorage: [
-              {
-                name: "flowweave:session-user",
-                value: "矩阵验证用户",
-              },
-              {
-                name: "flowweave:session-status",
-                value: "expired",
-              },
-            ],
-          },
-        ],
-      },
-      null,
-      2,
-    ),
-    "utf-8",
-  );
+  writeStorageState(expiredStorageStatePath, origin, [
+    {
+      name: "flowweave:session-user",
+      value: "矩阵验证用户",
+    },
+    {
+      name: "flowweave:session-status",
+      value: "expired",
+    },
+  ]);
 
+  return {
+    uploadFileA,
+    uploadFileB,
+    storageStatePath,
+    expiredStorageStatePath,
+  };
+}
+
+function resolveRealPageFailureType(caseName: string): RealPageFailureType {
+  return CASE_FAILURE_TYPE_MAP[caseName] ?? "unknown";
+}
+
+export function getRealPageFailureTypeLabel(failureType: RealPageFailureType): string {
+  return REAL_PAGE_FAILURE_TYPE_LABELS[failureType];
+}
+
+export function summarizeRealPageFailureTypes(
+  results: Array<Pick<RealPageFixtureCaseResult, "name" | "status" | "failureType">>,
+): RealPageFailureTypeCounts {
+  const counts: RealPageFailureTypeCounts = {};
+
+  for (const item of results) {
+    if (item.status === "success") {
+      continue;
+    }
+    const failureType = item.failureType ?? resolveRealPageFailureType(item.name);
+    counts[failureType] = (counts[failureType] ?? 0) + 1;
+  }
+
+  return counts;
+}
+
+function buildBaselineMatrixCases({
+  uploadFileA,
+  uploadFileB,
+  storageStatePath,
+  expiredStorageStatePath,
+}: MatrixRuntimeAssets): MatrixCase[] {
   return [
     {
       name: "checkbox-select",
@@ -761,16 +851,204 @@ function buildP5MatrixCases(): MatrixCase[] {
   ];
 }
 
+function buildP6MatrixCases({ expiredStorageStatePath }: MatrixRuntimeAssets): MatrixCase[] {
+  return [
+    {
+      name: "session-expired-retry",
+      flow: buildFlow("flow_session_expired_retry", "会话恢复失败后二次重试流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "session-expired-retry.html",
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#refresh-session" }] },
+        },
+        {
+          id: "s3",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#refresh-alert[data-state='failed']",
+              },
+            ],
+          },
+        },
+        {
+          id: "s4",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#retry-session" }] },
+        },
+        {
+          id: "s5",
+          type: "wait",
+          condition: "hidden",
+          target: { strategies: [{ kind: "css", selector: "#session-refreshing" }] },
+        },
+        {
+          id: "s6",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#dashboard-panel[data-ready='true']",
+              },
+            ],
+          },
+        },
+      ]),
+      options: {
+        storageStatePath: expiredStorageStatePath,
+      },
+    },
+    {
+      name: "bulk-cross-page-selection",
+      flow: buildFlow("flow_bulk_cross_page_selection", "跨页批量选择提交流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "bulk-cross-page-selection.html",
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "setChecked",
+          target: { strategies: [{ kind: "css", selector: "#select-batch-301" }] },
+          checked: true,
+        },
+        {
+          id: "s3",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#next-page" }] },
+        },
+        {
+          id: "s4",
+          type: "wait",
+          condition: "hidden",
+          target: { strategies: [{ kind: "css", selector: "#selection-loading" }] },
+        },
+        {
+          id: "s5",
+          type: "setChecked",
+          target: { strategies: [{ kind: "css", selector: "#select-batch-304" }] },
+          checked: true,
+        },
+        {
+          id: "s6",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#submit-selection" }] },
+        },
+        {
+          id: "s7",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#bulk-result[data-ready='true'][data-count='2']",
+              },
+            ],
+          },
+        },
+      ]),
+    },
+    {
+      name: "drawer-double-save",
+      flow: buildFlow("flow_drawer_double_save", "抽屉首次保存失败后修正重提流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "drawer-double-save.html",
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#edit-rule-720" }] },
+        },
+        {
+          id: "s3",
+          type: "wait",
+          condition: "visible",
+          target: { strategies: [{ kind: "css", selector: "#edit-drawer[data-ready='true']" }] },
+        },
+        {
+          id: "s4",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#save-drawer" }] },
+        },
+        {
+          id: "s5",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#save-alert[data-state='error']",
+              },
+            ],
+          },
+        },
+        {
+          id: "s6",
+          type: "fill",
+          target: { strategies: [{ kind: "css", selector: "#drawer-review-note" }] },
+          value: "已补充失败原因与修正动作，允许二次保存。",
+        },
+        {
+          id: "s7",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#save-drawer" }] },
+        },
+        {
+          id: "s8",
+          type: "wait",
+          condition: "hidden",
+          target: { strategies: [{ kind: "css", selector: "#edit-drawer" }] },
+        },
+        {
+          id: "s9",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#save-result[data-ready='true']",
+              },
+            ],
+          },
+        },
+      ]),
+    },
+  ];
+}
+
 export async function runRealPageFixtureMatrix(
   options: { headless?: boolean; profile?: RealPageMatrixProfile } = {},
 ): Promise<RealPageFixtureMatrixSummary> {
   const profile = options.profile ?? "baseline";
   const workspaceDir = mkdtempSync(join(tmpdir(), "flowweave-real-page-smoke-"));
   const { server, baseUrl } = await startStaticServer(fixturesDir);
+  const assets = buildMatrixRuntimeAssets(baseUrl, workspaceDir);
+  const baselineCases = buildBaselineMatrixCases(assets);
+  const p5Cases = [...baselineCases, ...buildP5MatrixCases()];
   const cases =
-    profile === "p5"
-      ? [...buildBaselineMatrixCases(baseUrl, workspaceDir), ...buildP5MatrixCases()]
-      : buildBaselineMatrixCases(baseUrl, workspaceDir);
+    profile === "p6"
+      ? [...p5Cases, ...buildP6MatrixCases(assets)]
+      : profile === "p5"
+        ? p5Cases
+        : baselineCases;
   const results: RealPageFixtureCaseResult[] = [];
 
   try {
@@ -783,6 +1061,9 @@ export async function runRealPageFixtureMatrix(
         artifactDir,
         ...item.options,
       });
+      const failedStep = result.steps.find((step) => step.status === "failed");
+      const failureType =
+        result.status === "failed" ? resolveRealPageFailureType(item.name) : undefined;
 
       results.push({
         name: item.name,
@@ -791,6 +1072,7 @@ export async function runRealPageFixtureMatrix(
         durationMs: Date.now() - startedAt,
         artifactDir,
         message: result.error?.message,
+        failureType: failedStep ? failureType : undefined,
       });
     }
   } finally {
@@ -807,6 +1089,7 @@ export async function runRealPageFixtureMatrix(
 
   const failed = results.filter((item) => item.status !== "success");
   const totalDurationMs = results.reduce((total, item) => total + item.durationMs, 0);
+  const failureTypeCounts = summarizeRealPageFailureTypes(results);
 
   return {
     profile,
@@ -818,5 +1101,6 @@ export async function runRealPageFixtureMatrix(
     failureCount: failed.length,
     totalDurationMs,
     averageDurationMs: results.length === 0 ? 0 : Math.round(totalDurationMs / results.length),
+    failureTypeCounts,
   };
 }

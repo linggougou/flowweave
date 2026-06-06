@@ -2179,3 +2179,180 @@
 - 结论：
   - 协调分支当前状态适合作为 Wave 4 新 worktree 的共同基线。
   - 当前没有新的阻塞；下一步进入“提交规划基线 -> 创建 worktree -> 派发子代理”。
+
+## Wave 4 worktree 与子代理派发
+
+- 时间：2026-06-06 22:15:10 CST
+- 规划基线提交：
+  - 提交：`6b9576c docs: 规划 Wave 4 真实页面稳定性`
+- 新建 worktree：
+  - `codex/real-page-recorder-contenteditable`
+    - 路径：`.worktrees/codex-real-page-recorder-contenteditable`
+    - 基线：`6b9576c`
+  - `codex/real-page-diagnostics-suggestions`
+    - 路径：`.worktrees/codex-real-page-diagnostics-suggestions`
+    - 基线：`6b9576c`
+  - `codex/real-page-benchmarks-p6`
+    - 路径：`.worktrees/codex-real-page-benchmarks-p6`
+    - 基线：`6b9576c`
+- 子代理派发结果：
+  - Recorder Contenteditable Contract：
+    - `Pasteur / 019e9d4a-20b0-7502-af3a-94f077e472ee`
+    - 写入边界：`apps/extension/**`、`packages/recorder/**`
+    - 局部验收：`pnpm --filter @flowweave/recorder test`
+  - Studio Repair Suggestions：
+    - `Chandrasekhar / 019e9d4a-6df2-7c32-867d-fc2259560929`
+    - 写入边界：`apps/studio/src/**`
+    - 局部验收：`pnpm --filter @flowweave/app-studio test && pnpm --filter @flowweave/app-studio typecheck`
+  - Benchmarks P6：
+    - `Anscombe / 019e9d4a-b56a-7581-ade8-c8789e351a22`
+    - 写入边界：`examples/**`、`docs/guides/fixture-matrix.md`、`packages/runtime/src/real-page-matrix.test.ts`
+    - 局部验收：`pnpm --filter @flowweave/runtime test && pnpm e2e:real-pages`
+- 当前决策：
+  - 主代理不与这三条轨道抢写同一文件。
+  - 接下来主代理负责：
+    - 盯第一批子代理结果
+    - 做规格/质量复核
+    - 处理并回与 Node 20 统一验收
+
+## Wave 4 轨道回收 - Recorder Contenteditable Contract
+
+- 时间：2026-06-06 22:29:20 CST
+- 轨道信息：
+  - worktree：`.worktrees/codex-real-page-recorder-contenteditable`
+  - 分支：`codex/real-page-recorder-contenteditable`
+  - 子代理：`Pasteur / 019e9d4a-20b0-7502-af3a-94f077e472ee`
+  - 子代理提交：`913fd63 feat: 支持 recorder 录制 contenteditable`
+- 主代理复核结论：
+  - 规格符合：
+    - `contenteditable` 进入 recorder 的 `fill` 录制闭环
+    - 未新增额外协议字段，仍复用现有 `fill.value`
+    - payload / normalize / 去噪回归已补齐
+  - 边界符合：
+    - 仅修改了 `apps/extension/**` 与 `packages/recorder/**`
+    - 未越界改动 `examples/**`、`apps/studio/**`、CI
+- 主分支集成：
+  - 已 cherry-pick：`913fd63bfd2e24e109ac5be5708e8a00460e8180`
+  - 协调分支新提交：`2be3576 feat: 支持 recorder 录制 contenteditable`
+- Node 20 主分支复验：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test`
+    - 结果：通过，`41/41`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension test -- content-contract`
+    - 结果：通过，`2/2`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension typecheck`
+    - 结果：通过
+- 回收结果：
+  - 已关闭子代理 `Pasteur`
+  - 对应 worktree 已删除：`.worktrees/codex-real-page-recorder-contenteditable`
+- 残余风险：
+  - 当前 `contenteditable` 仍只保留纯文本，不覆盖富文本标记与复杂块结构；这与现有 `fill` 合同一致，但若后续要回放富文本格式，需要单独扩协议。
+
+## Wave 4 轨道回收 - Studio Repair Suggestions
+
+- 时间：2026-06-06 22:31:50 CST
+- 轨道信息：
+  - worktree：`.worktrees/codex-real-page-diagnostics-suggestions`
+  - 分支：`codex/real-page-diagnostics-suggestions`
+  - 子代理：`Chandrasekhar / 019e9d4a-6df2-7c32-867d-fc2259560929`
+  - 子代理提交：`02d0570 补齐 Studio 结构化修复建议层`
+- 主代理复核结论：
+  - 规格符合：
+    - 建议层已提取为纯函数 `repair-suggestions.ts`
+    - `DiagnosticInspector` 新增结构化“修复建议”展示
+    - `FragilityNotice` 新增动作导向建议，不再只复述错误文案
+    - 新增单测覆盖 `MISSING_ENVIRONMENT`、`MISSING_VARIABLE`、多命中、不可见、上传控件与自定义输入区提示
+  - 边界处理：
+    - 子代理提交同时包含 worktree 私有 `.codex` 留痕文件
+    - 主代理决定只摘取代码与测试文件，并不把子 worktree 的 `.codex` 直接并回协调分支
+- 主分支集成：
+  - 已从 `02d0570` 摘取以下文件到协调分支：
+    - `apps/studio/src/DiagnosticInspector.tsx`
+    - `apps/studio/src/DiagnosticInspector.test.tsx`
+    - `apps/studio/src/FragilityNotice.tsx`
+    - `apps/studio/src/FragilityNotice.test.tsx`
+    - `apps/studio/src/shared/repair-suggestions.ts`
+    - `apps/studio/src/shared/repair-suggestions.test.ts`
+- Node 20 主分支复验：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
+    - 结果：通过，`36/36`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+    - 结果：通过
+- 回收结果：
+  - 已关闭子代理 `Chandrasekhar`
+  - 对应 worktree 已删除：`.worktrees/codex-real-page-diagnostics-suggestions`
+- 残余风险：
+  - 富文本/自定义输入区建议仍是启发式推断，因为当前协议没有显式 `contenteditable` 标记。
+
+## Wave 4 轨道回收 - Benchmarks P6
+
+- 时间：2026-06-06 22:46:47 CST
+- 轨道信息：
+  - worktree：`.worktrees/codex-real-page-benchmarks-p6`
+  - 分支：`codex/real-page-benchmarks-p6`
+  - 子代理：`Anscombe / 019e9d4a-b56a-7581-ade8-c8789e351a22`
+  - 子代理提交：`012a262 测试：扩展真实页面矩阵到 P6 并补失败类型汇总`
+- 主代理复核结论：
+  - 规格符合：
+    - `examples/real-page-smoke.ts` 已把矩阵档位扩到 `p6`，并新增失败类型统计汇总。
+    - `examples/run-real-page-smoke.ts` 默认执行档位已切到 `p6`，CLI 会打印失败类型统计。
+    - 新增 `session-expired-retry`、`bulk-cross-page-selection`、`drawer-double-save` 三个 fixture。
+    - `baseline` 与 `p5` 的既有顺序保持不变。
+  - 边界处理：
+    - 子代理提交同时包含 worktree 私有 `.codex` 留痕文件。
+    - 主代理决定只摘取代码与文档文件，并继续在协调分支统一维护 `.codex`。
+- 子代理 worktree Node 20 复验：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- real-page-matrix.test.ts`
+    - 结果：通过，`2/2`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+    - 结果：通过，`18/18`
+    - 总耗时：`26415ms`
+    - 平均耗时：`1468ms`
+    - 失败类型统计：`无`
+- 主分支集成：
+  - 已从 `012a262` 摘取以下文件到协调分支：
+    - `docs/guides/fixture-matrix.md`
+    - `examples/fixtures/session-expired-retry.html`
+    - `examples/fixtures/bulk-cross-page-selection.html`
+    - `examples/fixtures/drawer-double-save.html`
+    - `examples/real-page-smoke.ts`
+    - `examples/run-real-page-smoke.ts`
+    - `packages/runtime/src/real-page-matrix.test.ts`
+  - 集成后统一验收先暴露一个非业务型阻塞：
+    - `pnpm smoke` 中的 `@flowweave/runtime typecheck` 失败。
+    - 根因：`packages/runtime/src/real-page-matrix.test.ts` 手写的 `runRealPageFixtureMatrix()` 返回类型把 `summary.results` 缩窄得过头，导致其不满足 `summarizeRealPageFailureTypes()` 的参数契约。
+    - 处理：主代理以最小补丁补入 `MatrixResultShape` 共享类型，保持测试断言不变，只修复类型契约。
+- Node 20 主分支统一验收：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime typecheck`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm lint`
+    - 结果：通过，`12 successful, 12 total`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+    - 结果：通过
+    - `typecheck`：`19 successful, 19 total`
+    - `test`：通过，`@flowweave/runtime` 为 `15/15`
+    - `build`：`12 successful, 12 total`
+    - `e2e:login`
+      - 项目 ID：`e62d1a20-b521-42f7-afde-a934e846e52b`
+      - 执行 ID：`e5ac88c5-a7e6-4c03-b588-de1910f72693`
+      - 状态：`success`
+      - 步骤：`4/4`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+    - 结果：通过，`18/18`
+    - 总耗时：`25896ms`
+    - 平均耗时：`1439ms`
+    - 失败类型统计：`无`
+- 编码后声明 - Benchmarks P6：
+  - 复用了以下既有组件与模式：
+    - `buildBaselineMatrixCases()` / `buildP5MatrixCases()`：沿用既有矩阵分层，只在 `p6` 追加新场景。
+    - `session-expired-dashboard.html`、`paginated-list.html`、`drawer-edit-form.html`：分别复用会话恢复、分页切换、Drawer 保存的页面状态机模式。
+    - `runRealPageFixtureMatrix()`：继续作为矩阵汇总单一入口，不新建并行执行脚本。
+  - 遵循的项目约定：
+    - fixture 仍保持单文件自包含与稳定 `id` / `data-*` 锚点。
+    - 文档继续统一写入 `docs/guides/fixture-matrix.md`，不分叉新的矩阵说明文件。
+    - 运行与测试逻辑仍集中在 `examples/**` 与 `packages/runtime/src/real-page-matrix.test.ts`。
+- 回收结果：
+  - 已回收子代理 `Anscombe`
+  - 对应 worktree 已删除：`.worktrees/codex-real-page-benchmarks-p6`
+- 残余风险：
+  - 当前失败类型统计仍按“场景族”归类，适合看哪类后台路径回归；若后续要区分 `locator` / `timeout` / `disabled` 等技术根因，需要再补第二层分类。
+  - `p6` 默认耗时比 `p5` 更长，但当前 `18` 个场景约 `26s`，尚未明显拖垮矩阵稳定性。

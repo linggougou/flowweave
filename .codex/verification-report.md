@@ -1400,3 +1400,82 @@
 - 风险评估评分：95
 - 综合评分：96
 - 建议：通过
+
+## Wave 4 Benchmarks P6 集成与统一验收
+
+时间：2026-06-06 22:46:47 CST
+
+### 审查范围
+
+- `examples/real-page-smoke.ts` 是否已经把真实页面矩阵从 `p5` 扩展到 `p6`，并保留 `baseline` / `p5` 顺序稳定。
+- `examples/run-real-page-smoke.ts` 是否已经把 `p6` 作为默认档位，并输出失败类型统计。
+- 三个新增 fixture 与 `docs/guides/fixture-matrix.md` 是否已经同步落地：
+  - `session-expired-retry`
+  - `bulk-cross-page-selection`
+  - `drawer-double-save`
+- 协调分支在 `Node v20.19.6` 下是否通过：
+  - `pnpm lint`
+  - `pnpm smoke`
+  - `pnpm e2e:real-pages`
+
+### 审查结论
+
+1. Benchmarks P6 已完整接入真实页面矩阵。
+   - `examples/real-page-smoke.ts` 新增：
+     - `RealPageMatrixProfile = "baseline" | "p5" | "p6"`
+     - `RealPageFailureType`
+     - `RealPageFailureTypeCounts`
+     - `summarizeRealPageFailureTypes()`
+     - `getRealPageFailureTypeLabel()`
+   - `runRealPageFixtureMatrix()` 现已在 `p5` 基线上追加三个 `p6` 场景，并把失败类型统计汇总到返回值。
+   - `examples/run-real-page-smoke.ts` 已默认执行 `p6`，并在 CLI 中打印失败类型统计。
+2. 三个新增复杂状态 fixture 已落地且文档同步完成。
+   - `examples/fixtures/session-expired-retry.html`
+   - `examples/fixtures/bulk-cross-page-selection.html`
+   - `examples/fixtures/drawer-double-save.html`
+   - `docs/guides/fixture-matrix.md` 已同步更新档位说明、总览矩阵与页面细节。
+3. 主分支集成时暴露的类型问题已修复。
+   - 初次 `pnpm smoke` 失败于 `@flowweave/runtime typecheck`。
+   - 根因不是业务逻辑，而是 `packages/runtime/src/real-page-matrix.test.ts` 手写的动态导入返回类型过度缩窄，导致 `summary.results` 无法再传给 `summarizeRealPageFailureTypes()`。
+   - 已以最小补丁引入 `MatrixResultShape`，只修复测试类型契约，不改业务实现。
+4. Node 20 统一验收通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm lint`
+     - 结果：通过，`12 successful, 12 total`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+     - 结果：通过
+     - `typecheck`：`19 successful, 19 total`
+     - `@flowweave/runtime`：`15/15`
+     - `build`：`12 successful, 12 total`
+     - `e2e:login`
+       - 项目 ID：`e62d1a20-b521-42f7-afde-a934e846e52b`
+       - 执行 ID：`e5ac88c5-a7e6-4c03-b588-de1910f72693`
+       - 步骤：`4/4`
+       - 状态：`success`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+     - 结果：通过，`18/18`
+     - 总耗时：`25896ms`
+     - 平均耗时：`1439ms`
+     - 失败类型统计：`无`
+
+### 风险评估
+
+1. 暂未发现阻塞级问题。
+   - 本轮已经同时验证了：
+     - `runtime` 的矩阵测试
+     - 整仓 `smoke`
+     - 独立 `e2e:real-pages`
+2. 当前失败类型统计仍偏产品语义，而非技术根因。
+   - 这更适合快速判断哪类后台路径回归。
+   - 如果未来需要进一步定位 `locator`、`timeout`、`detached` 等执行层根因，需要再补二级分类。
+3. 默认 `p6` 会拉长真实页面回归耗时。
+   - 当前 `18` 个场景约 `26s`，仍在可接受范围内，但后续继续扩矩阵时应持续盯住总耗时。
+
+### 综合评分
+
+- 代码质量评分：96
+- 测试覆盖评分：97
+- 规范遵循评分：98
+- 战略匹配评分：97
+- 风险评估评分：94
+- 综合评分：96
+- 建议：通过
