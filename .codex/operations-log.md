@@ -283,3 +283,69 @@
 - 当前结论：
   - 真实页面失败时，现在会同时保留截图、失败页摘要和诊断 JSON。
   - Studio 执行日志页已具备“打开截图 / 打开诊断”双入口。
+
+## 2026-06-06 Benchmarks 第二阶段验收
+
+- 时间：2026-06-06 16:09:46 CST
+- 任务目标：补齐真实页面登录态环境基准、统一 5 个本地 fixture 回归矩阵，并把该矩阵纳入 `smoke:full`。
+- 所用技能：
+  - `verification-before-completion`：先跑新鲜验收，再做提交与留痕。
+  - `test-driven-development`：延续本轮前序红灯 -> 绿灯过程，不用“改了应该能过”的推断替代验证。
+- 单 agent 串行执行说明：
+  - 本轮变更同时穿过 `packages/runtime`、`examples/`、`package.json`、`docs/guides/fixture-matrix.md`，并在最终验收时暴露了 `apps/studio/src/App.tsx` 的未使用类型导入。
+  - 若再次派发并行子代理，会在 runtime 测试、矩阵脚本、脚本入口和文档同步上形成高概率冲突。
+  - 因此本轮由主代理串行闭环，补偿措施是执行 `pnpm lint` 与 `pnpm smoke:full` 双重验收。
+- 前序红绿过程摘要：
+  - `packages/runtime/src/types.ts` 早已定义 `storageStatePath`，但 `packages/runtime/src/playwright-runner.ts` 在本轮修复前并未把它传给 `browser.newContext()`。
+  - runtime 登录态测试在修复前失败；补上 `storageState: options.storageStatePath` 后转绿。
+  - 真实页面矩阵脚本在创建初期会误吃旧 `dist` 产物；本轮改为直接导入 `packages/*/src/index.ts`，避免基准结果与 live implementation 脱节。
+- 实现范围：
+  - `packages/runtime/src/playwright-runner.ts`
+    - `browser.newContext()` 透传 `storageStatePath`
+  - `packages/runtime/src/playwright-runner.test.ts`
+    - 新增“支持通过 `storageStatePath` 注入登录态环境”
+    - 新增“真实页面 fixture 矩阵全部成功”
+    - 清理未使用的 `spaRouteFixtureUrl`，恢复 runtime lint
+  - `examples/fixtures/session-dashboard.html`
+    - 新增登录态仪表盘 fixture，验证 localStorage 会话恢复
+  - `examples/real-page-smoke.ts`
+    - 统一定义 5 个基准 Flow、上传测试文件与 `storageStatePath`
+  - `examples/run-real-page-smoke.ts`
+    - 输出矩阵结果、耗时和产物目录
+  - `package.json`
+    - 新增 `e2e:real-pages`
+    - `smoke:full` 追加真实页面矩阵
+  - `docs/guides/fixture-matrix.md`
+    - 同步第二阶段回归入口与 `session-dashboard` 基准说明
+  - `apps/studio/src/App.tsx`
+    - 清理未使用的 `StudioProjectEnvironment` 类型导入，恢复仓库 lint 绿灯
+- 编码后声明：
+  - 复用了以下既有组件与模式：
+    - `ExecutionOptions.storageStatePath`：继续作为环境注入唯一入口，不新建平行配置字段。
+    - `executeFlow`：继续走 runtime 主执行链路，不新增独立 smoke 执行器。
+    - 既有 `examples/fixtures/*.html` 与 runtime fixture 测试模式：沿用本地自包含 HTML 基准，不引入外部站点波动。
+  - 遵循了以下项目约定：
+    - 包级对外行为仍通过 `packages/*/src/index.ts` 暴露。
+    - 注释与文档保持简体中文，标识符沿用英文。
+    - 验收统一使用 `Node v20.19.6`，不把 `Node 24` 假失败混入结果。
+- 绿灯验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm lint`
+    - 结果：通过，`12` 个包全部成功。
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke:full`
+    - 结果：通过，包含 `typecheck / test / build / e2e:login / e2e:real-pages`
+    - `e2e:login`
+      - 项目 ID：`639177c6-41e8-41cf-80e1-46c5ae8c6c66`
+      - 执行 ID：`6dbc2072-655b-497a-a69a-9f63d5eda342`
+      - `4` 个步骤全部 `success`
+    - `e2e:real-pages`
+      - `checkbox-select`：成功，`5` 步，`860ms`
+      - `delayed-panel`：成功，`4` 步，`1554ms`
+      - `upload-form`：成功，`5` 步，`768ms`
+      - `spa-route`：成功，`4` 步，`797ms`
+      - `session-dashboard`：成功，`3` 步，`685ms`
+- 提交结果：
+  - 代码提交：`d5bcfea feat: 建立真实页面回归矩阵并补齐登录态基准`
+- 当前结论：
+  - `storageStatePath` 已从 Studio / 环境配置语义真正落到 Playwright context 级别，登录态页面不再只是“界面上填了字段”，而是可以进入可执行验证。
+  - 真实页面基准现已形成 `5` case 矩阵，并纳入 `smoke:full`。
+  - `Node 24` 与 `better-sqlite3` 的 ABI 风险仍存在，本轮验收继续以 `Node 20` 为准。

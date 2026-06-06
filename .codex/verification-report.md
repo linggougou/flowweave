@@ -199,3 +199,60 @@
 - 风险评估评分：93
 - 综合评分：95
 - 建议：通过
+
+## 2026-06-06 Benchmarks 第二阶段验收
+
+### 验证范围
+
+- `storageStatePath` 是否真正注入到 Playwright `browser.newContext()`。
+- 真实页面矩阵是否已形成统一脚本入口，并覆盖 `checkbox-select`、`delayed-panel`、`upload-form`、`spa-route`、`session-dashboard` 五个 case。
+- `pnpm smoke:full` 是否已在仓库级统一纳入 `e2e:real-pages`。
+- 当前最终工作树是否同时通过 `pnpm lint` 与 `pnpm smoke:full`。
+
+### 验证结果
+
+1. 登录态环境注入验证通过。
+   - runtime 测试新增“支持通过 `storageStatePath` 注入登录态环境”。
+   - `session-dashboard` 基准页面会读取 localStorage 中的 `flowweave:session-user`，并在注入成功后切换到“已登录环境”视图。
+   - `packages/runtime/src/playwright-runner.ts` 已确认把 `options.storageStatePath` 传给 `browser.newContext()`。
+2. 真实页面矩阵脚本验证通过。
+   - 已新增 `examples/real-page-smoke.ts` 与 `examples/run-real-page-smoke.ts`。
+   - runtime 测试新增“真实页面 fixture 矩阵全部成功”，本轮 `pnpm test` 中 `packages/runtime` 为 `9/9` 通过。
+   - `examples/real-page-smoke.ts` 直接导入 `packages/*/src/index.ts`，避免旧 `dist` 产物导致假失败。
+3. CLI 静态检查验证通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm lint`，通过。
+   - 本轮最终验收前额外修复了两个真实 lint 阻塞：
+     - `packages/runtime/src/playwright-runner.test.ts` 中未使用的 `spaRouteFixtureUrl`
+     - `apps/studio/src/App.tsx` 中未使用的 `StudioProjectEnvironment`
+4. 仓库级完整烟测验证通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke:full`，通过。
+   - `smoke:full` 内部已完整跑过：
+     - `pnpm typecheck`
+     - `pnpm test`
+     - `pnpm build`
+     - `pnpm e2e:login`
+     - `pnpm e2e:real-pages`
+5. `e2e:login` 与 `e2e:real-pages` 明细通过。
+   - `e2e:login`：
+     - 项目 ID：`639177c6-41e8-41cf-80e1-46c5ae8c6c66`
+     - 执行 ID：`6dbc2072-655b-497a-a69a-9f63d5eda342`
+     - `4` 个步骤全部 `success`
+   - `e2e:real-pages`：
+     - `checkbox-select`：成功，`5` 步，`860ms`
+     - `delayed-panel`：成功，`4` 步，`1554ms`
+     - `upload-form`：成功，`5` 步，`768ms`
+     - `spa-route`：成功，`4` 步，`797ms`
+     - `session-dashboard`：成功，`3` 步，`685ms`
+6. 残余风险已识别。
+   - 当前矩阵仍以本地 fixture 为主，尚未覆盖外部真实站点的网络波动、复杂权限与第三方脚本干扰。
+   - `Node 24` 与 `better-sqlite3` 的 ABI 风险仍存在，验收继续以 `Node 20` 为准。
+
+### 综合结论
+
+- 代码质量评分：97
+- 测试覆盖评分：96
+- 规范遵循评分：97
+- 战略匹配评分：96
+- 风险评估评分：93
+- 综合评分：96
+- 建议：通过

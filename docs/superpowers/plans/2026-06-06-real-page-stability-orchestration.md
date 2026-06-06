@@ -1,6 +1,6 @@
 # 真实页面稳定性增强并行编排板
 
-更新时间：2026-06-06 15:46 CST
+更新时间：2026-06-06 16:09 CST
 
 ## 1. 主目标
 
@@ -85,6 +85,17 @@
      - `pnpm --filter @flowweave/project-knowledge test`
      - `pnpm --filter @flowweave/app-studio typecheck`
      - `pnpm smoke`
+9. Benchmarks 第二阶段已由主代理直接完成并通过回归：
+   - 代码提交：`d5bcfea feat: 建立真实页面回归矩阵并补齐登录态基准`
+   - 新能力：
+     - `packages/runtime/src/playwright-runner.ts` 现在会把 `storageStatePath` 透传给 `browser.newContext()`
+     - 新增 `examples/fixtures/session-dashboard.html` 登录态基准页面
+     - 新增 `examples/real-page-smoke.ts` 与 `examples/run-real-page-smoke.ts`
+     - `package.json` 新增 `e2e:real-pages`，`smoke:full` 纳入真实页面矩阵
+     - runtime 新增“登录态环境注入”和“5 个真实页面 case 全成功”测试
+   - 验证：
+     - `pnpm lint`
+     - `pnpm smoke:full`
 
 ### 阶段 C：统一集成
 
@@ -103,7 +114,8 @@
     - `07d4d02 增强真实页面 runtime 稳定执行能力`
     - `1051e10 feat: 打通 Studio 运行环境与变量注入`
     - `76851c9 feat: 增强失败步骤诊断产物与入口`
-  - Node 20 统一验收结果：全部通过。
+    - `d5bcfea feat: 建立真实页面回归矩阵并补齐登录态基准`
+  - Node 20 统一验收结果：`pnpm lint` 与 `pnpm smoke:full` 全部通过。
 
 ## 5. 验收门槛
 
@@ -112,12 +124,13 @@
   - Runtime：`pnpm --filter @flowweave/runtime test`
   - Environment：`pnpm --filter @flowweave/project-knowledge test && pnpm --filter @flowweave/app-studio typecheck`
   - Diagnostics：`pnpm --filter @flowweave/page-intelligence test && pnpm --filter @flowweave/app-studio typecheck`
-  - Benchmarks：`pnpm smoke`
+  - Benchmarks：`pnpm e2e:real-pages`
 - 主代理统一门槛：
+  - `pnpm lint`
   - `pnpm typecheck`
   - `pnpm test`
   - `pnpm build`
-  - `pnpm smoke`
+  - `pnpm smoke:full`
 
 ## 6. 回收规则
 
@@ -138,10 +151,10 @@
 
 - `Node 24` 仍存在 `better-sqlite3` ABI 漂移风险，因此当前本地与 CI 继续以 `Node 20` 作为稳定基线。
 - Diagnostics 第二阶段若深入 Studio 调试 UI，仍需避免与后续 Environment 演进再次并发写同一区域。
-- Benchmarks 第二阶段若引入更重的真实站点 smoke，需单独控制运行时长与外部依赖波动。
+- 当前真实页面矩阵仍以本地 fixture 为主；后续若扩展到更重的真实站点 smoke，需单独控制运行时长与外部依赖波动。
 
 ## 8. 下一轮候选
 
-1. Benchmarks 第二阶段：补更多异步加载、列表筛选、登录态页面基准，并形成更细的成功率矩阵。
+1. Benchmarks 第三阶段：补列表筛选、分页、Modal、双态登录失效等基准，并形成成功率与耗时矩阵。
 2. Diagnostics 第三阶段：在 Studio 内直接渲染诊断 JSON 内容，并补 warning / error 分组与修复建议。
 3. Node 24 兼容排查：单独评估 `better-sqlite3` ABI 与安装策略，决定是否支持双 Node 基线。
