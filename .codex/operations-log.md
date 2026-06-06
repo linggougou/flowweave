@@ -65,3 +65,52 @@
   - 验证环境修正：
     - 快进到 `origin/main` 后，本地 Node 24 环境暴露了 `happy-dom` 与 `better-sqlite3` 的安装/ABI 漂移问题。
     - 依据仓库 `.nvmrc` 与 CI 工作流，最终使用 `Node v20.19.6` 进行验收，结果与远端 CI 目标环境一致。
+
+## 2026-06-06 真实页面稳定性增强规划启动
+
+- 时间：2026-06-06 14:46:00 CST
+- 任务目标：为“真实页面录制与执行不稳定”问题建立完整设计、实施计划、worktree 并行编排与后续自主开发基线。
+- 用户指令：
+  - 用户明确授权“全权自主规划任务、持续开发”。
+  - 用户要求“先用 plan 制定完整开发计划，各功能依托 worktree 分派 subagent 并行开发，验收合格即可回收对应 agent”。
+- 所用技能：
+  - `writing-plans`：产出完整实施计划。
+  - `using-git-worktrees`：确认工作区隔离与 worktree 目录策略。
+  - `dispatching-parallel-agents`：设计后续并行轨道。
+  - `subagent-driven-development`：约束后续执行与验收方式。
+  - `brainstorming`：本应要求设计审批后再实现；由于用户已明确授予自主决策权限，本轮以“先写设计文档并落盘”满足设计关卡，再继续进入计划与执行阶段。
+- 工具与环境说明：
+  - 当前环境未提供 `sequential-thinking`，改为结构化分析、CodeGraph、现有测试与分阶段留痕替代。
+  - 当前环境未提供 `desktop-commander`，改用本地命令与 `apply_patch` 进行文件分析与编辑。
+  - 当前环境未提供 `context7` 与 `github.search_code`，本轮优先依据仓库现有实现、文档与测试做计划；后续若需要外部资料，再补充来源。
+- 上下文依据：
+  - `.codex/context-summary-real-page-stability-program.md`
+  - `docs/architecture/overview.md`
+  - `docs/domain/flow-dsl.md`
+  - `docs/superpowers/plans/2026-05-26-run-first-roadmap.md`
+  - `packages/flow-dsl/src/schema.ts`
+  - `packages/recorder/src/normalize.ts`
+  - `packages/recorder/src/target-from-dom.ts`
+  - `packages/runtime/src/playwright-runner.ts`
+  - `packages/project-knowledge/src/repository.ts`
+  - `apps/studio/electron/services.ts`
+- 基线检查：
+  - 已确认当前在普通仓库工作区，不在 linked worktree 中。
+  - 已确认 `.worktrees/` 目录存在且被 `.gitignore` 忽略。
+  - 已确认 Node 20 基线存在：`v20.19.6`。
+  - 已执行 `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`，结果通过。
+- 编码前检查：
+  - 已查阅上下文摘要文件：`.codex/context-summary-real-page-stability-program.md`
+  - 将使用以下可复用组件：
+    - `packages/recorder/src/target-from-dom.ts`：目标提取与行为判定
+    - `packages/recorder/src/normalize.ts`：录制归一化
+    - `packages/runtime/src/playwright-runner.ts`：执行主循环与产物落盘
+    - `packages/project-knowledge/src/repository.ts`：环境与执行记录持久化
+    - `apps/studio/electron/services.ts`：Studio 运行服务编排
+  - 将遵循命名约定：包对外导出走 `src/index.ts`，错误使用 `FlowWeaveError`，文档与注释使用简体中文。
+  - 将遵循代码风格：先补测试、再做最小实现、最后跑 Node 20 验证。
+  - 确认不重复造轮子：已检查 recorder、runtime、knowledge、studio 现有主链路，后续以增强为主，不新建平行执行框架。
+- 本轮新增文档：
+  - `docs/superpowers/specs/2026-06-06-real-page-stability-design.md`
+  - `docs/superpowers/plans/2026-06-06-real-page-stability-implementation-plan.md`
+  - `docs/superpowers/plans/2026-06-06-real-page-stability-orchestration.md`
