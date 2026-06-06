@@ -3135,3 +3135,89 @@
 - 下一步执行策略：
   - 先用 Node 20 复跑 Foundation 相关验证，确认基线仍然稳定。
   - 随后创建四个独立 worktree，并按修正后的文件边界派发 Recorder / Runtime / Studio / Benchmarks 四条并行轨道。
+
+## 2026-06-07 Benchmarks P7 轨道：重复行同文案按钮真实页面基准
+
+- 时间：2026-06-07 01:07:47 CST
+- 任务目标：
+  - 新增 `repeated-row-actions.html` 真实页面 fixture。
+  - 把新场景接入 `examples/real-page-smoke.ts`、`packages/runtime/src/real-page-matrix.test.ts` 与 `docs/guides/fixture-matrix.md`。
+  - 在不修改 Runtime 生产实现和 recorded replay 回归的前提下，为目标消歧场景补齐真实页面基准。
+- 使用技能：
+  - `using-superpowers`
+  - `test-driven-development`
+  - `verification-before-completion`
+- 工具与替代说明：
+  - 当前环境未提供 `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code`。
+  - 本轨改用仓库既有文档、CodeGraph、本地命令、Vitest 与真实页面 smoke 作为等效流程，并保留 Node 20 命令证据。
+- 单代理执行说明：
+  - 本轨只有 4 个授权代码文件，且红灯 -> fixture 接线 -> 文档 -> Node20 复验严格串行。
+  - 若拆成多代理，会同时争用 `examples/real-page-smoke.ts` 与 `packages/runtime/src/real-page-matrix.test.ts`，冲突成本高于收益，因此本轨维持单代理执行。
+- 上下文依据：
+  - `AGENTS.md`
+  - `.codex/context-summary-target-disambiguation-wave.md`
+  - `docs/superpowers/specs/2026-06-07-real-page-target-disambiguation-design.md`
+  - `docs/superpowers/plans/2026-06-07-real-page-target-disambiguation-plan.md`
+  - `docs/superpowers/plans/2026-06-07-real-page-target-disambiguation-orchestration.md`
+  - `examples/real-page-smoke.ts`
+  - `docs/guides/fixture-matrix.md`
+  - `packages/runtime/src/real-page-matrix.test.ts`
+- 编码前检查：
+  - 已查阅轨道上下文摘要与设计/计划文档。
+  - 将复用的既有模式：
+    - `examples/real-page-smoke.ts`：矩阵分层、Flow 定义与统计口径
+    - `packages/runtime/src/real-page-matrix.test.ts`：真实页面矩阵汇总断言模式
+    - `docs/guides/fixture-matrix.md`：fixture 目标、断言和风险说明格式
+  - 将遵循命名约定：fixture 名使用 kebab-case；文档与注释保持简体中文；不新增超出轨道范围的 runtime/studio/recorder 改动。
+  - 确认不重复造轮子：沿用现有 matrix / fixture / summary 架构，只新增 `p7` 档位与一条真实页面 case。
+- 红灯记录：
+  - 初次执行 `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- real-page-matrix.test.ts`
+    - 首次阻塞：worktree 初始缺少 `node_modules`，`vitest: command not found`；协调侧随后在本 worktree 完成 `pnpm install`。
+  - 环境补齐后再次执行同一命令前，先执行：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/shared --filter @flowweave/flow-dsl --filter @flowweave/page-intelligence build`
+  - 真正红灯结果：
+    - `real-page-matrix.test.ts` 失败，原因是 `p7` 尚未接入、`repeated-row-actions` 未出现在结果列表，且失败类型/成功覆盖摘要仍把该场景视为 `unknown`。
+- 实现记录：
+  - `examples/fixtures/repeated-row-actions.html`
+    - 新增 3 行共享同文案“编辑”按钮的本地 fixture。
+    - 只有目标行 `campaign-204 / 华东运营日报` 会把 `#result-panel` 写成 `data-ready="true"`。
+    - 非目标行只会把结果区写成 `data-ready="false"`，用于放大误命中问题。
+  - `examples/real-page-smoke.ts`
+    - 新增 `p7` 档位与 `repeated-row-actions` case。
+    - 为该 case 注入 `scopeText: "华东运营日报"`、`scopeKind: "row"` 等 hints，显式表达对 Runtime 消歧轨的依赖。
+    - 将历史 `p6` 调用兼容映射到最新 `p7`，保证 `pnpm e2e:real-pages` 不改脚本也能执行新矩阵。
+    - 将 `repeated-row-actions` 纳入 `core-interaction` 统计口径。
+  - `packages/runtime/src/real-page-matrix.test.ts`
+    - 先补 `p7` 红灯断言。
+    - 绿灯阶段保留两种合法结果：
+      - Runtime 消歧已并入时：`repeated-row-actions` 成功，`19/19` 通过。
+      - Runtime 消歧未并入时：仅 `repeated-row-actions` 失败，其余 `18/19` 保持通过，并明确失败归因为 `core-interaction`。
+  - `docs/guides/fixture-matrix.md`
+    - 补 `p7` 档位说明、fixture 总览行、页面细节和当前回归入口说明。
+- 编码后声明：
+  - 复用了以下既有组件：
+    - `buildFlow()` / matrix case 列表：继续使用既有 Flow 构造方式，不新建执行入口。
+    - `summarizeRealPageFailureTypes()` / `summarizeRealPageSuccessCoverage()`：沿用现有汇总逻辑，只补新场景映射。
+    - 既有 fixture 文档模板：继续按“交互目的 / 关键断言 / 后续价值”组织。
+  - 与相似实现对比：
+    - 相比 `drawer-double-save.html`，本场景不强调错误恢复，而强调“多命中同文案按钮”的目标歧义。
+    - 相比 `bulk-cross-page-selection.html`，本场景不引入分页状态，而是把变量收敛到单页列表行作用域。
+    - 相比 `real-page-matrix.test.ts` 原 `p6` 汇总，本次新增了“Runtime 未并轨时也要把剩余依赖说清楚”的双态断言。
+  - 未重复造轮子的证明：
+    - 已检查现有 18 个 fixture 与 matrix 文档，没有任何一个覆盖“列表多行共享同文案操作按钮”的误命中场景。
+- Node 20 验证结果：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/shared --filter @flowweave/flow-dsl --filter @flowweave/page-intelligence build`
+    - 结果：通过。
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- real-page-matrix.test.ts`
+    - 结果：通过，`4/4`。
+    - 说明：矩阵汇总测试已经覆盖 `p7` 新场景，并允许在 Runtime 消歧轨未并入时以显式依赖状态通过。
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+    - 结果：失败，`19` 个 case 中 `18` 个通过、`1` 个失败。
+    - 唯一失败 case：`repeated-row-actions`
+    - 失败信息：等待 `#result-panel[data-ready='true'][data-target-row='campaign-204']` 可见超时。
+    - 产物证据：
+      - `step-2.png` 显示当前 runtime 命中了第一行“华北首屏巡检”的按钮，而不是目标行“华东运营日报”。
+      - `step-2-diagnostic.json` 说明最终没有任何 `data-target-row='campaign-204'` 的 ready 结果出现。
+    - 结论：失败与本轨设计一致，属于 Runtime 消歧轨尚未并入时的预期剩余依赖，不应由 Benchmarks 轨越界修改 runtime 文件来兜底。
+- 功能提交哈希：
+  - `cd268ef721cf2f06630f124e53abf91121b48222` `feat: 新增重复行同文案按钮真实页面基准`

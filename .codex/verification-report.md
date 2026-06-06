@@ -2199,3 +2199,74 @@
 - 风险评估评分：95
 - 综合评分：97
 - 建议：通过
+
+## 2026-06-07 Benchmarks P7 轨道验证
+
+### 验证范围
+
+- 仅在授权范围内完成以下交付：
+  - `examples/fixtures/repeated-row-actions.html`
+  - `examples/real-page-smoke.ts`
+  - `docs/guides/fixture-matrix.md`
+  - `packages/runtime/src/real-page-matrix.test.ts`
+- 是否满足 TDD：
+  - 先补 `real-page-matrix.test.ts` 的 `p7` 红灯断言
+  - 再补 fixture / matrix 接线
+  - 最后执行 Node 20 验证
+- 若最终仍有失败，是否可以明确证明其仅依赖 Runtime 消歧轨，而不是 Benchmarks 轨实现缺陷。
+
+### 验证结果
+
+1. 文件边界符合要求。
+   - 本轨代码提交仅涉及授权的 4 个业务文件。
+   - 运行与记录留痕另外更新了：
+     - `.codex/operations-log.md`
+     - `.codex/verification-report.md`
+   - 未修改：
+     - `packages/runtime/src/playwright-runner.ts`
+     - `packages/runtime/src/playwright-runner.test.ts`
+     - `packages/recorder/**`
+     - `apps/studio/**`
+2. TDD 红绿链路成立。
+   - 红灯：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- real-page-matrix.test.ts`
+     - 在接线前明确失败，表现为 `p7` 场景列表缺失 `repeated-row-actions`，汇总函数也未识别该 case 的场景族。
+   - 绿灯：
+     - 同一命令在接线后通过，`4/4` 全部成功。
+3. `p7` 矩阵已接入并可被当前真实页面 smoke 命中。
+   - `examples/real-page-smoke.ts` 现已定义 `p7` 档位。
+   - 历史 `p6` 请求已兼容映射到最新 `p7`，因此 `pnpm e2e:real-pages` 会执行新增场景而无需修改 CLI 脚本。
+4. `pnpm e2e:real-pages` 的唯一失败属于 Runtime 轨剩余依赖。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+     - 结果：失败
+     - 档位：`p7`
+     - 基准数量：`19`
+     - 成功 / 失败：`18 / 1`
+   - 唯一失败 case：
+     - `repeated-row-actions`
+   - 证据：
+     - `step-2.png` 中第一行被高亮，说明当前 runtime 仍按 `.first()` 命中了首个“编辑”按钮。
+     - `step-2-diagnostic.json` 中等待的 `#result-panel[data-ready='true'][data-target-row='campaign-204']` 始终匹配 `0` 个元素。
+   - 判断：
+     - 该失败正是 Benchmarks P7 想要暴露的真实页面歧义问题。
+     - 在用户禁止越界修改 runtime 的前提下，本轨不应通过改 fixture 降低难度来“假绿”。
+
+### Findings
+
+1. 未发现授权范围内的阻塞级实现问题。
+   - 新 fixture、matrix 注册、统计口径和文档都已落齐。
+2. 当前剩余风险明确且单一。
+   - `repeated-row-actions` 仍依赖 Runtime 消歧轨消费 `scopeText / scopeKind` 等 hints，才能从“命中第一行”转为“命中目标行”。
+3. 验收状态需要带顾虑收口。
+   - `real-page-matrix.test.ts` 已经把该依赖显式编码为可审计状态。
+   - 但仓库级 `pnpm e2e:real-pages` 仍未全绿，因此不宜宣称本轨已经独立完成最终集成闭环。
+
+### 综合结论
+
+- 代码质量评分：95
+- 测试覆盖评分：88
+- 规范遵循评分：99
+- 战略匹配评分：95
+- 风险评估评分：84
+- 综合评分：88
+- 建议：需讨论
