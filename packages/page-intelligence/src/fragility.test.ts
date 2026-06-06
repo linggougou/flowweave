@@ -188,6 +188,71 @@ describe("analyzeFlowFragility", () => {
     expect(codes).toContain("TEXT_ONLY");
   });
 
+  it("对仅使用 css 的 select 步骤给出 CSS_ONLY", () => {
+    const flow = baseFlow([
+      {
+        id: "s1",
+        type: "select",
+        target: {
+          strategies: [{ kind: "css", selector: "#city" }],
+        },
+        values: ["shanghai"],
+      },
+    ]);
+
+    const codes = analyzeFlowFragility(flow).map((issue) => issue.code as string);
+    expect(codes).toContain("CSS_ONLY");
+  });
+
+  it("对依赖 nth-of-type 的 setChecked 步骤给出 CSS_NTH_OF_TYPE", () => {
+    const flow = baseFlow([
+      {
+        id: "s1",
+        type: "setChecked",
+        target: {
+          strategies: [{ kind: "css", selector: "form > div:nth-of-type(2) input" }],
+        },
+        checked: true,
+      },
+    ]);
+
+    const codes = analyzeFlowFragility(flow).map((issue) => issue.code as string);
+    expect(codes).toContain("CSS_ONLY");
+    expect(codes).toContain("CSS_NTH_OF_TYPE");
+  });
+
+  it("对仅文本策略的 upload 步骤给出 TEXT_ONLY", () => {
+    const flow = baseFlow([
+      {
+        id: "s1",
+        type: "upload",
+        target: {
+          strategies: [{ kind: "text", text: "上传头像", exact: true }],
+        },
+        files: ["/tmp/avatar.png"],
+      },
+    ]);
+
+    const codes = analyzeFlowFragility(flow).map((issue) => issue.code as string);
+    expect(codes).toContain("TEXT_ONLY");
+  });
+
+  it("对带 target 但缺少策略的 press 步骤给出 NO_STRATEGIES", () => {
+    const flow = baseFlow([
+      {
+        id: "s1",
+        type: "press",
+        target: {
+          strategies: [],
+        },
+        key: "Enter",
+      },
+    ]);
+
+    const codes = analyzeFlowFragility(flow).map((issue) => issue.code as string);
+    expect(codes).toContain("NO_STRATEGIES");
+  });
+
   it("对仅依赖通用 condition 的 wait 步骤给出 WAIT_MAY_BE_UNSTABLE", () => {
     const flow = baseFlow([
       {
