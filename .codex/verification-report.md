@@ -1049,6 +1049,52 @@
 - 综合评分：96
 - 建议：通过
 
+## 2026-06-07 Studio Ambiguity Insight 规格审查报告
+
+### 审查范围
+
+- worktree：`/Users/ling/codeHome/A_Mine/flowweave/.worktrees/codex-target-studio-ambiguity`
+- 分支：`codex/target-studio-ambiguity`
+- 提交范围：`ab0a6ed..d6e2f0c`
+- 规格来源：
+  - `docs/superpowers/specs/2026-06-07-real-page-target-disambiguation-design.md`
+  - `docs/superpowers/plans/2026-06-07-real-page-target-disambiguation-plan.md`
+  - `docs/superpowers/plans/2026-06-07-real-page-target-disambiguation-orchestration.md`
+
+### 关键审查点
+
+- 是否仅改 Studio 轨授权范围内的产品代码
+- 是否为“多命中 / 作用域不足 / 候选并列”提供更具体修复建议
+- 是否在诊断面板展示关键歧义线索与 `scope` 字段
+- 是否避免大范围 UI 重构
+- 是否通过指定 Node20 验收
+
+### 结果
+
+1. 边界符合。
+   - 产品代码改动仅在 4 个 Studio 授权文件内。
+   - 未发现 `packages/runtime/**`、`packages/recorder/**`、`examples/**` 越界改动。
+2. 行为符合。
+   - `repair-suggestions.ts` 已新增“重新录制到正确列表行/弹层/区域”与“补上作用域线索后再重录”这两类歧义专用建议。
+   - `DiagnosticInspector.tsx` 已新增“歧义线索”展示，并在 Target 提示表格中展示 `作用域类型`、`作用域文本`。
+3. UI 范围符合。
+   - 改动建立在现有诊断工作台骨架之上，仅追加说明块和表格字段，没有演变成大范围重构。
+4. Node20 验收符合。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- DiagnosticInspector.test.tsx src/shared/repair-suggestions.test.ts`
+     - 结果：通过
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+     - 结果：通过
+
+### 评分
+
+- 代码质量评分：96
+- 测试覆盖评分：95
+- 规范遵循评分：99
+- 战略匹配评分：98
+- 风险评估评分：96
+- 综合评分：97
+- 建议：通过
+
 ### 验证范围
 
 - 真实页面矩阵是否已扩展到 `filterable-list` 与 `modal-bulk-action` 两个新场景。
@@ -2250,4 +2296,79 @@
 - 战略匹配评分：97
 - 风险评估评分：94
 - 综合评分：96
+- 建议：通过
+
+## 2026-06-07 Runtime Disambiguation 轨道验证
+
+### 验证范围
+
+- `packages/runtime/src/playwright-runner.ts`
+- `packages/runtime/src/playwright-runner.test.ts`
+- 目标：
+  - runtime 在多命中候选时不再直接 `.first()`
+  - 优先消费已有 `target.hints`，尤其是 `scopeText / scopeKind` 与既有 hints
+  - 若最高分并列或证据不足，返回明确歧义诊断
+  - 保留 `matchedCount === 1` 快路径
+
+### 验证结果
+
+1. 需求字段完整性通过。
+   - 目标明确：运行时多命中目标消解与歧义失败。
+   - 范围明确：仅限 `playwright-runner.ts` 与 `playwright-runner.test.ts`。
+   - 交付物明确：
+     - runtime 候选打分实现
+     - recorded replay / synthetic 回归
+     - `.codex/operations-log.md`
+     - 本验证报告
+   - 审查要点明确：
+     - 不扩大修改范围
+     - 不回退他人改动
+     - Node 20 本地验证通过
+2. TDD 证据充分。
+   - 红灯命令：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+   - 红灯结果：
+     - 新增 `3` 条回归失败，分别暴露：
+       - `scopeText / scopeKind` 仍未参与正确行消解
+       - `placeholder` hint 仍未参与 recorded replay 输入框消解
+       - 并列最高分场景仍静默命中第一个候选
+3. 实现与架构方向一致。
+   - 复用 `Target.hints` 与 `strategyAttempts` 既有协议，没有新增平行数据通道。
+   - `matchedCount === 1` 快路径保留，没有把单命中链路改成全量打分。
+   - 多命中时新增候选快照、基于 hints 的打分与歧义失败，符合既定设计与轨道边界。
+4. Node 20 绿灯验证通过。
+   - 环境补救：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime... build`
+     - 用于生成 workspace 依赖包的 `dist` 导出，未涉及授权范围外源码修改。
+   - 类型验证：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime typecheck`
+     - 结果：通过
+   - 验收命令：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts`
+   - 结果：
+     - 通过，`19/19`
+5. 诊断质量提升明确。
+   - `strategyAttempts` 现在包含：
+     - `selectedIndex`
+     - `ambiguityReason`
+     - `candidateSummaries`
+   - 失败 message 会直接呈现候选摘要，不再只显示“匹配多个”而缺少原因。
+
+### Findings
+
+1. 未发现阻塞级问题。
+   - 授权范围内目标已完成，新增回归与既有用例同时通过。
+2. 残余风险：当前录制链路尚未在本 worktree 内自然产出 `scopeText / scopeKind`。
+   - 本轨已准备好消费这些 hints；要把收益扩展到真实录制流，还需要 Recorder 轨道并回。
+3. 残余风险：多命中打分会在少数步骤上增加候选采样成本。
+   - 当前通过保留单命中快路径控制了常见路径成本，但真实页面长期扩容后仍应继续关注耗时。
+
+### 综合结论
+
+- 代码质量评分：97
+- 测试覆盖评分：98
+- 规范遵循评分：99
+- 战略匹配评分：98
+- 风险评估评分：95
+- 综合评分：97
 - 建议：通过
