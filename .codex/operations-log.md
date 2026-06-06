@@ -1432,3 +1432,146 @@
       - 执行 ID：`c2c4d108-1959-4bbe-98f1-e894f6b20659`
       - `4` 个步骤全部 `success`
   - reviewer 子代理 `Carver` 已回收
+## 调研任务 - better-sqlite3 与 Node 24 兼容性
+
+- 时间：2026-06-06 20:08:00 CST
+- 目标：核对 FlowWeave 当前锁定的 `better-sqlite3` 版本在 Node 24 下的兼容状态，并基于官方资料给出最小改动建议
+- 写入确认：
+  - `.codex/operations-log.md` 可写
+  - `.codex/verification-report.md` 可写
+- 工具与替代：
+  - `sequential-thinking`：当前环境不可用，改用结构化分步分析并在本文留痕
+  - `context7`：当前环境不可用，改用官方 npm registry、官方 GitHub Releases、官方 README / troubleshooting 作为主证据
+  - `github.search_code`：当前环境不可用；本次任务聚焦官方来源，未使用开源代码搜索替代
+
+### 上下文收集
+
+- 读取仓库依赖声明：
+  - [packages/project-knowledge/package.json](/Users/ling/codeHome/A_Mine/flowweave/packages/project-knowledge/package.json:23) 声明 `better-sqlite3: ^11.8.1`
+  - [pnpm-lock.yaml](/Users/ling/codeHome/A_Mine/flowweave/pnpm-lock.yaml:1841) 实际锁定为 `better-sqlite3@11.10.0`
+- 读取仓库 Node / Electron 基线：
+  - [package.json](/Users/ling/codeHome/A_Mine/flowweave/package.json:40) `engines.node` 为 `>=20`
+  - [apps/studio/package.json](/Users/ling/codeHome/A_Mine/flowweave/apps/studio/package.json:32) 当前 Electron 为 `^33.2.1`
+- 已生成上下文摘要：
+  - [context-summary-better-sqlite3-node24-compat.md](/Users/ling/codeHome/A_Mine/flowweave/.codex/context-summary-better-sqlite3-node24-compat.md:1)
+
+### 官方资料核对
+
+- npm registry：
+  - `better-sqlite3@11.10.0` 无 `engines` 字段，安装脚本为 `prebuild-install || node-gyp rebuild --release`
+  - `better-sqlite3@12.0.0` / `12.1.0` 的 `engines.node` 都包含 `24.x`
+- GitHub Releases：
+  - `v11.10.0`（2025-05-07）资产只有 `node-v108`、`node-v115`、`node-v127`、`node-v131`
+  - `v12.0.0`（2025-06-21）release note 明确写了 “Add node v24 to build matrix”
+  - `v12.1.0`（2025-06-23）release note 写了 “Use node-abi 4.9.0”，资产出现 `node-v137-*`
+- 官方 README / troubleshooting：
+  - README 安装章节强调“当前受支持 Node.js + LTS 预编译”
+  - troubleshooting 首条建议是“使用最新版 better-sqlite3”
+  - Electron 场景单独建议 `electron-rebuild`
+
+### 本地验证
+
+- 环境：
+  - `node -v` => `v24.14.0`
+  - `process.versions.modules` => `137`
+- 临时目录执行：
+  - `npm install better-sqlite3@11.10.0`
+- 结果：
+  - `prebuild-install warn install No prebuilt binaries found (target=24.14.0 runtime=node arch=arm64 libc= platform=darwin)`
+  - 随后自动执行 `node-gyp rebuild --release`
+  - 本机因缺少 Xcode CLT 失败：`gyp: No Xcode or CLT version detected!`
+- 结论：
+  - 失败主因是“Node 24 无预编译产物，进入源码编译路径；而本机缺构建工具”
+  - 当前没有看到“源码本身与 Node 24 ABI 不兼容导致编译失败”的直接证据
+
+### 编码前检查 - better-sqlite3-node24-compat
+
+- 时间：2026-06-06 20:14:00 CST
+- 已查阅上下文摘要文件：`.codex/context-summary-better-sqlite3-node24-compat.md`
+- 本次无代码实现，不涉及复用组件改造
+- 将遵循命名约定：仅新增 `.codex` 调研留痕文件
+- 将遵循代码风格：文档与日志使用简体中文
+- 确认不重复造轮子，证明：本次不写业务代码，不新增仓库实现
+
+## 实施任务 - better-sqlite3 Node 24 兼容落地
+
+- 时间：2026-06-06 20:18:00 CST
+- 目标：将 `project-knowledge` 的 SQLite 原生依赖升级到首个稳定支持 Node 24 的最小可信版本，并验证 Node 24 / Node 20 双环境都可运行。
+- 上下文依据：
+  - `.codex/context-summary-better-sqlite3-node24-compat.md`
+  - `packages/project-knowledge/package.json`
+  - `pnpm-lock.yaml`
+  - `README.md`
+  - `docs/guides/quickstart.md`
+- 编码前检查：
+  - 已查阅上下文摘要文件：`.codex/context-summary-better-sqlite3-node24-compat.md`
+  - 将复用的项目模式：
+    - 根 `README.md` 与 `docs/guides/quickstart.md` 作为环境要求与故障排查的统一入口
+    - `packages/project-knowledge/package.json` + `pnpm-lock.yaml` 作为依赖版本唯一事实来源
+  - 将遵循命名约定：只做最小依赖升级与文档修正，不新增自定义脚本
+  - 将遵循代码风格：将版本精确固定到 `12.1.1`，避免未来漂移到未验证的小版本
+
+### 实施内容
+
+- 依赖升级：
+  - [packages/project-knowledge/package.json](/Users/ling/codeHome/A_Mine/flowweave/packages/project-knowledge/package.json:23)
+    - `better-sqlite3` 从 `^11.8.1` 升级并精确固定为 `12.1.1`
+  - [pnpm-lock.yaml](/Users/ling/codeHome/A_Mine/flowweave/pnpm-lock.yaml:272)
+    - 锁文件刷新到 `better-sqlite3@12.1.1`
+- 文档修正：
+  - [README.md](/Users/ling/codeHome/A_Mine/flowweave/README.md:77)
+    - 补充“仓库默认稳定基线仍是 Node 20，但支持切到 Node 24”
+    - 明确切换 Node 20 / 24 后应执行 `pnpm install --force`
+  - [docs/guides/quickstart.md](/Users/ling/codeHome/A_Mine/flowweave/docs/guides/quickstart.md:5)
+    - 将环境要求更新为“Node 20 或 24”
+    - 把 `better-sqlite3` 的排障命令从普通 `pnpm install` 修正为 `pnpm install --force`
+
+### 调试与验证过程
+
+- Node 24 安装与目标包回归：
+  - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm install`
+    - 结果：通过，`better-sqlite3` install script 正常完成
+  - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/project-knowledge test`
+    - 结果：通过，`12/12`
+  - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/project-knowledge build`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH SKIP_E2E=1 pnpm smoke`
+    - 结果：通过
+- Node 20 回切时发现真实 ABI 切换陷阱：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm install && pnpm smoke`
+    - 结果：失败
+    - 失败点：`e2e:login`
+    - 错误：`better_sqlite3.node` 仍是 `NODE_MODULE_VERSION 137`，而 Node 20 需要 `115`
+  - 结论：普通 `pnpm install` 在锁文件未变化时不会重跑 `better-sqlite3` install script，不能作为跨 Node 主版本切换的可靠修复命令
+- 最小修复路径验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm rebuild better-sqlite3 && pnpm e2e:login`
+    - 结果：仍失败
+    - 结论：单独 `pnpm rebuild better-sqlite3` 不足以覆盖当前 pnpm 工作区里的 ABI 切换场景
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm install --force && pnpm e2e:login`
+    - 结果：通过
+    - `e2e:login`
+      - 项目 ID：`0dda4105-33d2-43c6-8ab7-25e1bf633bc6`
+      - 执行 ID：`5e9538fa-2112-4b64-aa2c-f79aa0231a4b`
+      - `4` 个步骤全部 `success`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+    - 结果：通过
+    - `e2e:login`
+      - 项目 ID：`548b1d1b-a129-42bc-a15c-d6a320799799`
+      - 执行 ID：`ea4a26be-ea33-42fb-8521-5857d2e5fea2`
+      - `4` 个步骤全部 `success`
+
+### 编码后声明 - better-sqlite3-node24-compat
+
+- 复用了以下既有组件与约定：
+  - `package.json` / `pnpm-lock.yaml` 作为依赖升级的唯一入口
+  - `README.md` / `docs/guides/quickstart.md` 作为开发环境说明与排障入口
+- 遵循了以下项目约定：
+  - 依赖升级只落在现有包声明与锁文件，不新增脚本或绕行安装器
+  - 文档继续使用简体中文，并保持“先给结论、再给命令”的既有风格
+- 未重复造轮子的证明：
+  - 没有新增 `native:rebuild` 之类自定义脚本
+  - 直接采用 pnpm 标准命令 `pnpm install --force` 作为跨 Node 主版本切换方案
+- 额外复核说明：
+  - 已尝试派发 reviewer 子代理 `Banach` / `019e9ce3-3de5-78b1-8997-536e7fbe6d19` 做只读审查
+  - 两次等待均未在时限内返回有效结论，随后已主动回收该子代理
+  - 补救措施：主代理改为基于 staged diff、双 Node 验证结果与锁文件差异做人工复核后再提交

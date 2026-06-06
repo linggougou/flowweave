@@ -1043,3 +1043,150 @@
   - `pnpm --filter @flowweave/page-intelligence test`
   - `pnpm --filter @flowweave/page-intelligence typecheck`
   - `pnpm --filter @flowweave/page-intelligence build`
+## 调研验证报告 - better-sqlite3 与 Node 24 兼容性
+
+时间：2026-06-06 20:16:00 CST
+
+### 验收结论
+
+1. 当前仓库锁定版本在 Node 24 上是否已知有 ABI / prebuild 问题
+   - 结论：有明确的 **prebuild 缺失问题**，但未发现官方资料证明 `11.10.0` 本身存在“Node 24 ABI 编译不兼容”的已知源码问题
+   - 证据：
+     - [pnpm-lock.yaml](/Users/ling/codeHome/A_Mine/flowweave/pnpm-lock.yaml:1841) 锁定 `better-sqlite3@11.10.0`
+     - `v11.10.0` 官方 release 资产仅到 `node-v131`，无 `node-v137`
+     - 本地 `Node v24.14.0` 下实际安装日志先报 `No prebuilt binaries found`
+   - 判断依据：
+     - Node 24 的 Node ABI 是 `137`
+     - `11.10.0` 未发布 `node-v137` 预编译包，因此 Node 24 安装默认会 miss prebuild
+     - 安装脚本会自动回退到 `node-gyp rebuild --release`
+
+2. 官方推荐的修复路径是升级依赖、强制 rebuild，还是切换安装策略
+   - 结论：**官方主推荐是升级到最新支持版本**；源码 rebuild 是内建兜底，不是 README / troubleshooting 的首选主路径；切换安装策略不是官方主建议
+   - 证据：
+     - README 安装说明：要求使用当前受支持的 Node.js，LTS 提供预编译
+     - troubleshooting 首条：`Use the latest version of better-sqlite3`
+     - troubleshooting 对 Electron 单独建议 `electron-rebuild`
+     - `v12.0.0` release 明确 “Add node v24 to build matrix”
+     - `v12.1.0` release 明确更新 `node-abi 4.9.0`，且资产中已有 `node-v137`
+   - 解释：
+     - `prebuild-install || node-gyp rebuild --release` 说明强制 rebuild 只是安装脚本的自动回退逻辑
+     - 真正把 Node 24 作为正式支持对象写进 release / engines / 预编译资产的是 12.x，特别是 `12.1.0`
+
+3. 如果要最小改动支持 Node 24，优先建议什么
+   - 结论：优先建议 **把 `better-sqlite3` 升到至少 `12.1.0` 并刷新 lockfile**；如果短期绝不改依赖，则次优方案是在所有 Node 24 环境补齐本地构建链，接受源码编译安装
+   - 依据：
+     - `12.1.0` 是首个同时满足以下条件的版本：
+       - npm `engines` 显式包含 `24.x`
+       - 官方 release 资产包含 `node-v137-*`
+       - release note 明确更新 `node-abi` 到支持 Node 24 的版本
+     - FlowWeave 当前仓库基线为 `node >=20`，当前 Electron 为 `33.x`，不会撞上 `v12.0.0` 删除的 Node 18 / Electron 26-28 支持
+
+### 风险评估
+
+- 若继续停留在 `11.10.0`：
+  - Node 24 新环境安装将依赖本地编译工具链
+  - CI / 开发机 / 新成员机器的可重复性较差
+  - arm64 macOS 缺 Xcode CLT 时会直接安装失败
+- 若升级到 `12.1.0+`：
+  - 需要做一次依赖刷新与最小回归验证
+  - 主要兼容面是 Node 18 与旧 Electron，但这不影响当前仓库基线
+
+### 本地验证记录
+
+- `node -v`
+  - 结果：`v24.14.0`
+- `node -p "process.versions.modules + ' ' + process.version"`
+  - 结果：`137 v24.14.0`
+- 临时目录 `npm install better-sqlite3@11.10.0`
+  - 结果：失败
+  - 关键日志：
+    - `prebuild-install warn install No prebuilt binaries found (target=24.14.0 runtime=node arch=arm64 libc= platform=darwin)`
+    - `gyp: No Xcode or CLT version detected!`
+  - 说明：这是“缺 prebuild 后回退源码编译，但本机缺构建工具”的失败，不是业务代码改动失败
+
+### 评分
+
+- 代码质量：95
+- 测试覆盖：90
+- 规范遵循：94
+- 需求匹配：97
+- 架构一致：95
+- 风险评估：96
+- 综合评分：95
+- 建议：通过
+
+### 说明
+
+- 本次为只读调研，无业务代码改动
+- 主要证据来自官方 npm registry、官方 GitHub Releases、官方 README 与 troubleshooting
+
+## better-sqlite3 Node 24 兼容落地验收
+
+时间：2026-06-06 20:29:00 CST
+
+### 验证范围
+
+- `packages/project-knowledge` 是否已将 `better-sqlite3` 升级到 Node 24 可稳定安装的版本，并同步刷新锁文件。
+- Node 24 下是否已消除 `better-sqlite3` 的预编译缺失安装阻塞，且最小整仓 smoke 能通过。
+- Node 20 基线是否仍能通过完整 `pnpm smoke`，不因为本轮升级引入回归。
+- 文档是否准确说明“切换 Node 主版本后的正确恢复命令”，避免再次踩 ABI 失配坑。
+
+### 验证结果
+
+1. 依赖升级已落地。
+   - `packages/project-knowledge/package.json` 已将 `better-sqlite3` 精确固定为 `12.1.1`。
+   - `pnpm-lock.yaml` 已同步刷新到 `better-sqlite3@12.1.1`，并更新 `drizzle-orm` 对应的可选依赖解析。
+2. Node 24 安装与最小整仓验证通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm install`
+     - 结果：通过，`better-sqlite3` install script 正常完成。
+   - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/project-knowledge test`
+     - 结果：通过，`12/12`
+   - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/project-knowledge build`
+     - 结果：通过
+   - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH SKIP_E2E=1 pnpm smoke`
+     - 结果：通过
+     - 说明：已覆盖整仓 `typecheck / test / build`，确认 Node 24 不再卡在 SQLite 原生模块安装与加载。
+3. 切回 Node 20 时已定位并修正文档中的关键误导。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm install && pnpm smoke`
+     - 初次结果：失败
+     - 失败点：`e2e:login`
+     - 原因：普通 `pnpm install` 在锁文件未变时不会重跑 `better-sqlite3` install script，仍保留 Node 24 的 `NODE_MODULE_VERSION 137` 产物。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm rebuild better-sqlite3 && pnpm e2e:login`
+     - 结果：仍失败
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm install --force && pnpm e2e:login`
+     - 结果：通过
+     - 项目 ID：`0dda4105-33d2-43c6-8ab7-25e1bf633bc6`
+     - 执行 ID：`5e9538fa-2112-4b64-aa2c-f79aa0231a4b`
+4. Node 20 主基线最终回归通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+     - 结果：通过
+     - `e2e:login`
+       - 项目 ID：`548b1d1b-a129-42bc-a15c-d6a320799799`
+       - 执行 ID：`ea4a26be-ea33-42fb-8521-5857d2e5fea2`
+       - `4` 个步骤全部 `success`
+5. 文档已与真实行为对齐。
+   - `README.md` 已明确：
+     - 仓库默认稳定基线仍是 Node 20
+     - 切换 Node 20 / 24 后应执行 `pnpm install --force`
+   - `docs/guides/quickstart.md` 已同步更新环境要求与排障命令。
+
+### Findings
+
+1. 当前未发现阻塞级问题。
+   - 通过依赖升级到 `12.1.1`，Node 24 的原生安装阻塞已经解除；Node 20 主基线在强制重装后也恢复通过。
+2. 重要运行约束：切换 Node 主版本后，普通 `pnpm install` 不足以恢复原生模块。
+   - 当前仓库必须使用 `pnpm install --force` 才能确保 `better-sqlite3` 按当前 ABI 重新落盘。
+   - 这不是本轮回归，而是本轮显式验证出来的运行约束，已写入文档。
+3. 残余风险：Node 24 下本轮没有执行浏览器 E2E。
+   - 本轮 Node 24 验收做到 `SKIP_E2E=1 pnpm smoke` + `project-knowledge` 定向验证，已覆盖最关键的 SQLite 原生模块链路。
+   - 若后续要把 Node 24 提升为正式 CI 基线，仍建议补一次完整 `pnpm smoke` 或独立 E2E 轨道。
+
+### 综合结论
+
+- 代码质量评分：96
+- 测试覆盖评分：94
+- 规范遵循评分：97
+- 战略匹配评分：96
+- 风险评估评分：93
+- 综合评分：95
+- 建议：通过

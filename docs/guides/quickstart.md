@@ -2,7 +2,7 @@
 
 本指南帮助你在 **30 分钟内** 跑通 FlowWeave 主链路：验证工程 → 录制 → 同步知识库 → Studio 回放 → Web 查看。
 
-**要求**：Node.js **20**（见仓库根目录 `.nvmrc`）、pnpm、macOS / Linux / Windows。
+**要求**：Node.js **20**（默认稳定基线，见仓库根目录 `.nvmrc`）或 **24**、pnpm、macOS / Linux / Windows。
 
 ---
 
@@ -110,9 +110,9 @@ pnpm --filter @flowweave/runtime exec playwright install chromium
 
 确认已运行 `pnpm dev:web`，且 `curl http://127.0.0.1:3847/api/health` 返回 `{"ok":true}`。
 
-### `better-sqlite3` 编译失败
+### 切换 Node 20 / 24 后 `better-sqlite3` 加载或编译失败
 
-请使用 **Node 20**（与 `.nvmrc` 一致），重新 `pnpm install`。
+请确认当前 Node 版本是仓库支持的 **20** 或 **24**，然后在切换主版本后执行一次 `pnpm install --force`，让原生模块按当前 Node ABI 重新安装。
 
 ### Studio 找不到 Flow
 

@@ -74,7 +74,9 @@ pnpm dev:extension   # 浏览器扩展（WXT 热更新）
 
 详见 [快速启动](docs/guides/quickstart.md)、[P1 端到端](docs/guides/p1-e2e.md)。
 
-要求 Node.js ≥ 20（见 `.nvmrc`）。
+要求 Node.js ≥ 20（仓库默认基线仍是 `.nvmrc` 的 Node 20）。
+
+如需在 Node 20 / 24 之间切换，请在切换主版本后执行一次 `pnpm install --force`，让 `better-sqlite3` 等原生模块按当前 Node ABI 重新落盘。
 
 ## 交付阶段
 
