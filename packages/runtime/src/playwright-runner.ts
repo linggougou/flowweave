@@ -621,9 +621,10 @@ export async function executeFlow(
 
   const browser = await chromium.launch({ headless });
   try {
-    const context = await browser.newContext(
-      harPath ? { recordHar: { path: harPath, mode: "minimal" } } : undefined,
-    );
+    const context = await browser.newContext({
+      ...(harPath ? { recordHar: { path: harPath, mode: "minimal" as const } } : {}),
+      ...(options.storageStatePath ? { storageState: options.storageStatePath } : {}),
+    });
     const page = await context.newPage();
     page.setDefaultTimeout(timeoutMs);
 

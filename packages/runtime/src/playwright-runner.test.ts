@@ -1,7 +1,9 @@
+import { createServer, type Server } from "node:http";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
 import type { FlowDocument } from "@flowweave/flow-dsl";
@@ -20,7 +22,6 @@ const delayedPanelFixtureUrl = pathToFileURL(
   join(fixturesDir, "delayed-panel.html"),
 ).href;
 const uploadFormFixtureUrl = pathToFileURL(join(fixturesDir, "upload-form.html")).href;
-const spaRouteFixtureUrl = pathToFileURL(join(fixturesDir, "spa-route.html")).href;
 
 const baseMeta = {
   createdAt: "2026-05-26T00:00:00.000Z",
@@ -114,9 +115,80 @@ function buildPressFixtureHtml(): string {
 </html>`;
 }
 
+function buildSessionDashboardHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+  <body>
+    <main>
+      <h1 id="dashboard-title">访客视图</h1>
+      <p id="login-required">请先登录后再查看项目数据。</p>
+      <section id="dashboard-panel" hidden>
+        <p id="session-user">未登录</p>
+        <button id="open-report" type="button">打开日报</button>
+        <div id="report-panel" hidden data-ready="false">日报已就绪</div>
+      </section>
+    </main>
+    <script>
+      const dashboardTitle = document.getElementById("dashboard-title");
+      const loginRequired = document.getElementById("login-required");
+      const dashboardPanel = document.getElementById("dashboard-panel");
+      const sessionUser = document.getElementById("session-user");
+      const openReport = document.getElementById("open-report");
+      const reportPanel = document.getElementById("report-panel");
+      const session = window.localStorage.getItem("flowweave:session-user");
+
+      if (session) {
+        dashboardTitle.textContent = "项目仪表盘";
+        loginRequired.hidden = true;
+        dashboardPanel.hidden = false;
+        sessionUser.textContent = "当前登录：" + session;
+      }
+
+      openReport.addEventListener("click", () => {
+        reportPanel.hidden = false;
+        reportPanel.dataset.ready = "true";
+      });
+    </script>
+  </body>
+</html>`;
+}
+
+async function startStaticServer(
+  rootDir: string,
+): Promise<{ server: Server; baseUrl: string }> {
+  const server = createServer((request, response) => {
+    const url = new URL(request.url ?? "/", "http://127.0.0.1");
+    const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
+    const filePath = join(rootDir, pathname.slice(1));
+
+    try {
+      const body = readFileSync(filePath);
+      response.writeHead(200, {
+        "Content-Type": filePath.endsWith(".html") ? "text/html; charset=utf-8" : "text/plain",
+      });
+      response.end(body);
+    } catch {
+      response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      response.end("not found");
+    }
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => resolve());
+  });
+
+  const address = server.address() as AddressInfo;
+  return {
+    server,
+    baseUrl: `http://127.0.0.1:${address.port}/`,
+  };
+}
+
 describe("executeFlow", () => {
   let artifactDir: string | undefined;
   const cleanupPaths = new Set<string>();
+  const cleanupServers = new Set<Server>();
 
   afterEach(() => {
     if (artifactDir) {
@@ -127,6 +199,10 @@ describe("executeFlow", () => {
       rmSync(targetPath, { recursive: true, force: true });
     }
     cleanupPaths.clear();
+    for (const server of cleanupServers) {
+      server.close();
+    }
+    cleanupServers.clear();
   });
 
   it("artifactDir 时每步写入截图文件", async () => {
@@ -388,6 +464,80 @@ describe("executeFlow", () => {
     );
 
     expect(spaResult.status).toBe("success");
+  });
+
+  it("支持通过 storageStatePath 注入登录态环境", async () => {
+    const fixtureDir = mkdtempSync(join(tmpdir(), "fw-runtime-session-"));
+    cleanupPaths.add(fixtureDir);
+    writeFileSync(join(fixtureDir, "session-dashboard.html"), buildSessionDashboardHtml(), "utf-8");
+
+    const { server, baseUrl } = await startStaticServer(fixtureDir);
+    cleanupServers.add(server);
+
+    const storageStatePath = join(fixtureDir, "storage-state.json");
+    writeFileSync(
+      storageStatePath,
+      JSON.stringify(
+        {
+          cookies: [],
+          origins: [
+            {
+              origin: new URL(baseUrl).origin,
+              localStorage: [
+                {
+                  name: "flowweave:session-user",
+                  value: "测试用户",
+                },
+              ],
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+
+    const result = await executeFlow(
+      buildFlow("flow_session_dashboard", "登录态环境流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "session-dashboard.html",
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "click",
+          target: { strategies: [{ kind: "css", selector: "#open-report" }] },
+        },
+        {
+          id: "s3",
+          type: "wait",
+          condition: "visible",
+          target: { strategies: [{ kind: "css", selector: "#report-panel[data-ready='true']" }] },
+        },
+      ]),
+      {
+        headless: true,
+        baseUrl,
+        storageStatePath,
+      },
+    );
+
+    expect(result.status).toBe("success");
+  });
+
+  it("真实页面 fixture 矩阵全部成功", async () => {
+    const matrixModuleUrl = pathToFileURL(join(repoRoot, "examples/real-page-smoke.ts")).href;
+    const matrixModule = (await import(matrixModuleUrl)) as {
+      runRealPageFixtureMatrix: (options?: { headless?: boolean }) => Promise<{
+        failed: Array<{ name: string; status: string; message?: string }>;
+      }>;
+    };
+
+    const summary = await matrixModule.runRealPageFixtureMatrix({ headless: true });
+    expect(summary.failed).toHaveLength(0);
   });
 
   it("定位失败时在 message 中包含更清晰的策略诊断", async () => {

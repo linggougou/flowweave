@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>登录态仪表盘</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: "PingFang SC", "Noto Sans SC", sans-serif;
+        background: linear-gradient(180deg, #f6f8fb 0%, #eef3ff 100%);
+        color: #20304d;
+      }
+
+      main {
+        max-width: 760px;
+        margin: 48px auto;
+        padding: 24px;
+      }
+
+      .card {
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid rgba(32, 78, 207, 0.08);
+        border-radius: 20px;
+        padding: 24px;
+        box-shadow: 0 20px 40px rgba(32, 48, 77, 0.08);
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: #ebf3ff;
+        color: #204ecf;
+        font-size: 14px;
+      }
+
+      .muted {
+        color: #60708f;
+      }
+
+      button {
+        margin-top: 16px;
+        border: none;
+        border-radius: 12px;
+        padding: 12px 18px;
+        background: #204ecf;
+        color: #fff;
+        cursor: pointer;
+      }
+
+      #report-panel {
+        margin-top: 20px;
+        padding: 16px;
+        border-radius: 14px;
+        border: 1px solid #cfe5c3;
+        background: #eff7ec;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="card">
+        <span class="chip" id="session-state">访客模式</span>
+        <h1 id="dashboard-title">访客视图</h1>
+        <p class="muted" id="login-required">请先登录后再查看项目数据。</p>
+        <section id="dashboard-panel" hidden>
+          <p id="session-user">未登录</p>
+          <button id="open-report" type="button">打开日报</button>
+          <div id="report-panel" hidden data-ready="false">
+            <strong id="report-title">日报已就绪</strong>
+            <p id="report-owner">当前负责人：未分配</p>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const dashboardTitle = document.getElementById("dashboard-title");
+      const sessionState = document.getElementById("session-state");
+      const loginRequired = document.getElementById("login-required");
+      const dashboardPanel = document.getElementById("dashboard-panel");
+      const sessionUser = document.getElementById("session-user");
+      const openReport = document.getElementById("open-report");
+      const reportPanel = document.getElementById("report-panel");
+      const reportOwner = document.getElementById("report-owner");
+      const session = window.localStorage.getItem("flowweave:session-user");
+
+      if (session) {
+        dashboardTitle.textContent = "项目仪表盘";
+        sessionState.textContent = "已登录环境";
+        loginRequired.hidden = true;
+        dashboardPanel.hidden = false;
+        sessionUser.textContent = "当前登录：" + session;
+        reportOwner.textContent = "当前负责人：" + session;
+      }
+
+      openReport.addEventListener("click", () => {
+        reportPanel.hidden = false;
+        reportPanel.dataset.ready = "true";
+      });
+    </script>
+  </body>
+</html>

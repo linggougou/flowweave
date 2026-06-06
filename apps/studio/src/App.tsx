@@ -16,7 +16,6 @@ import type {
   StudioExecution,
   StudioFlowRef,
   StudioFlowVersion,
-  StudioProjectEnvironment,
   StudioProject,
 } from "./shared/studio-api-types.js";
 

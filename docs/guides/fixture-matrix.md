@@ -1,6 +1,13 @@
 # 真实页面 Fixture 矩阵
 
-本矩阵对应 `Benchmarks` 轨道第一阶段，只提供本地 HTML fixture 与说明文档，不引入新的 runtime / recorder / test 代码。
+本矩阵起始于 `Benchmarks` 轨道第一阶段，用于沉淀稳定、可复现的本地 HTML fixture。
+
+当前 `Benchmarks` 第二阶段已经把这些 fixture 接入真实回归脚本：
+
+- `examples/real-page-smoke.ts`
+- `examples/run-real-page-smoke.ts`
+- `pnpm e2e:real-pages`
+- `pnpm smoke:full`
 
 所有页面都满足以下约束：
 
@@ -17,6 +24,7 @@
 | `examples/fixtures/delayed-panel.html` | 点击后延迟展示结果面板 | 点击加载 -> 等待 `#loading-indicator` 消失 -> 断言 `#report-panel` 可见 | `#report-panel[data-ready="true"]`、`#completed-steps`、`#manual-checks`、`#retry-count` | 动作后稳定等待、`visible/hidden` 条件、局部 loading、`aria-busy` 检测 |
 | `examples/fixtures/upload-form.html` | 文件上传、文件预览、提交结果 | 填写提交人 -> 设置文件 -> 点击提交 | `#file-preview[data-ready="true"]`、`#selected-count`、`#upload-result[data-ready="true"]`、`#result-batch` | `upload` 语义、文件列表断言、表单可用态、提交后结果回显 |
 | `examples/fixtures/spa-route.html` | 同页路由切换与延迟渲染 | 点击导航 -> 等待 loading 消失 -> 断言 hash 与标题 | `#route-token`、`#route-title`、`#route-hash`、`#route-card[data-ready="true"]` | SPA hash 路由切换、点击后非整页刷新、动作后 URL 校验、局部异步渲染 |
+| `examples/fixtures/session-dashboard.html` | 登录态 localStorage 注入、受会话影响的页面初始化 | 通过 `storageState` 预置登录态 -> 打开日报 -> 等待结果面板可见 | `#session-state`、`#session-user`、`#report-panel[data-ready="true"]`、`#report-owner` | `storageStatePath` 透传、登录态环境注入、真实页面会话恢复 |
 
 ## 页面细节
 
@@ -71,13 +79,38 @@
   - 适合覆盖 SPA 点击后 URL 变化但不刷新文档的场景。
   - 适合验证“等待路由就绪标记”是否优于只等网络空闲。
 
-## 推荐后续接入顺序
+### `session-dashboard.html`
 
-1. 先在 runtime 侧把 `checkbox-select` 与 `delayed-panel` 接成最小回归。
-2. 再补 `upload-form`，验证 `setInputFiles` 与文件结果断言。
-3. 最后接 `spa-route`，用于验证录制端路由监听和 runtime 的 URL / DOM 双重稳定等待。
+- 交互目的：
+  - 模拟“页面内容依赖已登录会话”的真实场景。
+  - 验证 Studio / runtime 已打通的 `storageStatePath` 是否真正传递到 Playwright `browser.newContext()`。
+- 关键断言：
+  - 注入 localStorage 后，页面初始即从“访客模式”切换到“已登录环境”。
+  - `#session-user` 与 `#report-owner` 都会回显当前登录用户。
+  - 点击 `#open-report` 后，`#report-panel[data-ready="true"]` 可见。
+- 后续自动化价值：
+  - 适合覆盖登录态恢复、会话环境切换、受权限影响的页面初始化。
+  - 适合验证“流程本身没问题，但环境没注入导致失败”的真实问题。
+
+## 第二阶段回归入口
+
+- `examples/real-page-smoke.ts`
+  - 统一定义 5 个 fixture 的 Flow、上传测试文件和 `storageStatePath` 注入配置。
+- `examples/run-real-page-smoke.ts`
+  - 负责打印矩阵结果、耗时和每个 case 的产物目录。
+- `pnpm e2e:real-pages`
+  - 独立执行真实页面矩阵，适合局部回归 Benchmarks 轨道。
+- `pnpm smoke:full`
+  - 在仓库级 `typecheck / test / build / e2e:login` 之后，再补跑真实页面矩阵。
+
+## 后续扩展建议
+
+1. 增补列表筛选、分页、Modal、Tab 切换等更接近业务后台的页面。
+2. 把 `session-dashboard` 扩展为“登录态失效 -> 回到访客模式”的双态基准。
+3. 为矩阵汇总保留成功率、失败类型与平均耗时，形成可比对的长期基线。
 
 ## 备注
 
-- 本阶段没有新增 smoke 脚本，也没有改 runtime 测试文件；这是为了避免在 Foundation / Runtime 轨道接口未完全合入前引入耦合。
-- 第二阶段可在以上断言节点不变的前提下补 `examples/run-real-page-smoke.ts` 与对应测试。
+- 第一阶段只落 fixture 与文档，不改 runtime / test，是为了避免在 Foundation / Runtime 轨道接口未完全合入前引入耦合。
+- 第二阶段已新增 `examples/run-real-page-smoke.ts`、runtime 矩阵测试与 `session-dashboard.html`。
+- 第二阶段矩阵脚本直接从 `packages/*/src/index.ts` 导入 live implementation，避免脚本误吃旧 `dist` 产物，导致基准结果与当前源码脱节。

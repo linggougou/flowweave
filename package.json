@@ -13,8 +13,9 @@
     "format:write": "prettier --write .",
     "doctor": "node scripts/doctor.mjs",
     "smoke": "pnpm typecheck && pnpm test && pnpm build && sh -c 'test \"$SKIP_E2E\" = 1 || pnpm e2e:login'",
-    "smoke:full": "pnpm typecheck && pnpm test && pnpm build && pnpm e2e:login",
+    "smoke:full": "pnpm typecheck && pnpm test && pnpm build && pnpm e2e:login && pnpm e2e:real-pages",
     "e2e:login": "tsx examples/run-login-flow.ts",
+    "e2e:real-pages": "tsx examples/run-real-page-smoke.ts",
     "dev:web": "pnpm --filter @flowweave/app-web dev",
     "dev:studio": "pnpm --filter @flowweave/app-studio dev",
     "dev:extension": "pnpm --filter @flowweave/app-extension dev"
