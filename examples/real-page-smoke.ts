@@ -25,7 +25,7 @@ type MatrixRuntimeAssets = {
   expiredStorageStatePath: string;
 };
 
-export type RealPageMatrixProfile = "baseline" | "p5" | "p6";
+export type RealPageMatrixProfile = "baseline" | "p5" | "p6" | "p7";
 
 export type RealPageFailureType =
   | "core-interaction"
@@ -75,6 +75,7 @@ const CASE_FAILURE_TYPE_MAP: Record<string, RealPageFailureType> = {
   "contenteditable-editor": "contenteditable",
   "empty-results-retry": "retry-recovery",
   "bulk-cross-page-selection": "bulk-selection",
+  "repeated-row-actions": "core-interaction",
 };
 
 export type RealPageFixtureCaseResult = {
@@ -1118,21 +1119,80 @@ function buildP6MatrixCases({ expiredStorageStatePath }: MatrixRuntimeAssets): M
   ];
 }
 
+function buildP7MatrixCases(): MatrixCase[] {
+  return [
+    {
+      name: "repeated-row-actions",
+      flow: buildFlow("flow_repeated_row_actions", "重复行同文案按钮消歧流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: "repeated-row-actions.html",
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "click",
+          target: {
+            strategies: [
+              { kind: "role", role: "button", name: "编辑" },
+              { kind: "text", text: "编辑", exact: true },
+            ],
+            hints: {
+              scopeText: "华东运营日报",
+              scopeKind: "row",
+              textSample: "编辑",
+            },
+          },
+        },
+        {
+          id: "s3",
+          type: "wait",
+          condition: "visible",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#result-panel[data-ready='true'][data-target-row='campaign-204']",
+              },
+            ],
+          },
+        },
+      ]),
+    },
+  ];
+}
+
+function normalizeRealPageMatrixProfile(
+  profile?: RealPageMatrixProfile,
+): RealPageMatrixProfile {
+  // 兼容现有 CLI 仍传入 p6；Benchmarks P7 起这里统一执行最新矩阵。
+  if (profile === "p6") {
+    return "p7";
+  }
+
+  return profile ?? "baseline";
+}
+
 export async function runRealPageFixtureMatrix(
   options: { headless?: boolean; profile?: RealPageMatrixProfile } = {},
 ): Promise<RealPageFixtureMatrixSummary> {
-  const profile = options.profile ?? "baseline";
+  const profile = normalizeRealPageMatrixProfile(options.profile);
   const workspaceDir = mkdtempSync(join(tmpdir(), "flowweave-real-page-smoke-"));
   const { server, baseUrl } = await startStaticServer(fixturesDir);
   const assets = buildMatrixRuntimeAssets(baseUrl, workspaceDir);
   const baselineCases = buildBaselineMatrixCases(assets);
   const p5Cases = [...baselineCases, ...buildP5MatrixCases()];
+  const p6Cases = [...p5Cases, ...buildP6MatrixCases(assets)];
+  const p7Cases = [...p6Cases, ...buildP7MatrixCases()];
   const cases =
-    profile === "p6"
-      ? [...p5Cases, ...buildP6MatrixCases(assets)]
-      : profile === "p5"
-        ? p5Cases
-        : baselineCases;
+    profile === "p7"
+      ? p7Cases
+      : profile === "p6"
+        ? p6Cases
+        : profile === "p5"
+          ? p5Cases
+          : baselineCases;
   const results: RealPageFixtureCaseResult[] = [];
 
   try {

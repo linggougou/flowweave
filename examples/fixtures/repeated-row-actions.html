@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowWeave 重复行同文案按钮 Fixture</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+        --bg: #f4f7fb;
+        --panel: #fcfdff;
+        --border: #c9d4e3;
+        --text: #243446;
+        --muted: #61748a;
+        --accent: #1f6fb2;
+        --accent-soft: rgba(31, 111, 178, 0.12);
+        --success: #1d7a57;
+        --success-soft: rgba(29, 122, 87, 0.12);
+        --warning: #9f6420;
+        --warning-soft: rgba(159, 100, 32, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top left, rgba(31, 111, 178, 0.14), transparent 30%),
+          linear-gradient(180deg, #fcfeff 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      main {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 40px 20px 72px;
+      }
+
+      .hero,
+      .shell,
+      .result {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: 0 20px 44px rgba(36, 52, 70, 0.08);
+      }
+
+      .hero,
+      .shell,
+      .result {
+        padding: 24px;
+      }
+
+      .hero {
+        margin-bottom: 20px;
+      }
+
+      .hero p,
+      .shell p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .meta-strip {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      .meta-card {
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: var(--accent-soft);
+      }
+
+      .meta-card strong {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--muted);
+      }
+
+      table {
+        width: 100%;
+        margin-top: 18px;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 14px 12px;
+        border-bottom: 1px solid rgba(97, 116, 138, 0.16);
+        text-align: left;
+      }
+
+      th {
+        color: var(--muted);
+      }
+
+      tbody tr[data-selected="true"] {
+        background: rgba(31, 111, 178, 0.06);
+      }
+
+      button {
+        border: none;
+        border-radius: 14px;
+        padding: 11px 18px;
+        font: inherit;
+        font-weight: 700;
+        color: #fff;
+        background: var(--accent);
+        cursor: pointer;
+      }
+
+      .result {
+        margin-top: 18px;
+      }
+
+      .result[hidden] {
+        display: none;
+      }
+
+      .result[data-ready="true"] {
+        border-color: rgba(29, 122, 87, 0.28);
+      }
+
+      .result[data-ready="false"] {
+        border-color: rgba(159, 100, 32, 0.24);
+      }
+
+      .result-tone {
+        margin-top: 12px;
+        padding: 12px 14px;
+        border-radius: 16px;
+      }
+
+      .result-tone[data-state="success"] {
+        background: var(--success-soft);
+        color: var(--success);
+      }
+
+      .result-tone[data-state="warning"] {
+        background: var(--warning-soft);
+        color: var(--warning);
+      }
+
+      .result-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      .result-item {
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: rgba(97, 116, 138, 0.08);
+      }
+
+      .result-item strong {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <p>Fixture 目标：验证重复行共享“编辑”按钮文案时，只有命中目标行才会写入正确结果区。</p>
+        <h1 id="page-title">运营复盘列表</h1>
+        <p>推荐步骤：命中标题为“华东运营日报”的那一行编辑按钮，再等待结果区进入 ready 态。</p>
+
+        <div class="meta-strip">
+          <div class="meta-card">
+            <strong>目标行标题</strong>
+            <span id="expected-title">华东运营日报</span>
+          </div>
+          <div class="meta-card">
+            <strong>目标行锚点</strong>
+            <span id="expected-anchor">campaign-204</span>
+          </div>
+          <div class="meta-card">
+            <strong>约束</strong>
+            <span>三行按钮文案完全一致，均为“编辑”</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="shell" aria-labelledby="table-title">
+        <p id="table-title">下面三条复盘任务都使用同一个操作文案，只有目标行会把结果区写成 ready。</p>
+
+        <table aria-label="重复行编辑列表">
+          <thead>
+            <tr>
+              <th>任务标题</th>
+              <th>负责人</th>
+              <th>更新窗口</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-row-id="campaign-203" data-row-title="华北首屏巡检" data-owner="季临">
+              <td>华北首屏巡检</td>
+              <td>季临</td>
+              <td>09:30</td>
+              <td><button class="row-action" type="button">编辑</button></td>
+            </tr>
+            <tr data-row-id="campaign-204" data-row-title="华东运营日报" data-owner="闻溪">
+              <td>华东运营日报</td>
+              <td>闻溪</td>
+              <td>11:00</td>
+              <td><button class="row-action" type="button">编辑</button></td>
+            </tr>
+            <tr data-row-id="campaign-205" data-row-title="华南预算看板" data-owner="青禾">
+              <td>华南预算看板</td>
+              <td>青禾</td>
+              <td>14:20</td>
+              <td><button class="row-action" type="button">编辑</button></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <section
+          id="result-panel"
+          class="result"
+          hidden
+          data-ready="false"
+          data-target-row="none"
+          aria-labelledby="result-title"
+        >
+          <strong id="result-title">编辑结果区</strong>
+          <div id="result-tone" class="result-tone" data-state="warning">
+            尚未命中目标行，请点击标题为“华东运营日报”的那一行。
+          </div>
+
+          <div class="result-grid">
+            <div class="result-item">
+              <strong>当前行标题</strong>
+              <span id="result-row-title">-</span>
+            </div>
+            <div class="result-item">
+              <strong>当前负责人</strong>
+              <span id="result-owner">-</span>
+            </div>
+            <div class="result-item">
+              <strong>结果锚点</strong>
+              <span id="result-anchor">row:none</span>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const targetRowId = "campaign-204";
+      const rows = Array.from(document.querySelectorAll("tbody tr"));
+      const resultPanel = document.getElementById("result-panel");
+      const resultTone = document.getElementById("result-tone");
+      const resultRowTitle = document.getElementById("result-row-title");
+      const resultOwner = document.getElementById("result-owner");
+      const resultAnchor = document.getElementById("result-anchor");
+
+      function markSelectedRow(activeRow) {
+        rows.forEach((row) => {
+          row.dataset.selected = row === activeRow ? "true" : "false";
+        });
+      }
+
+      function updateResult(row) {
+        const rowId = row.dataset.rowId ?? "unknown";
+        const rowTitle = row.dataset.rowTitle ?? "未命名任务";
+        const owner = row.dataset.owner ?? "未知负责人";
+        const matchedTarget = rowId === targetRowId;
+
+        markSelectedRow(row);
+        resultPanel.hidden = false;
+        resultPanel.dataset.targetRow = rowId;
+        resultPanel.dataset.ready = matchedTarget ? "true" : "false";
+        resultTone.dataset.state = matchedTarget ? "success" : "warning";
+        resultTone.textContent = matchedTarget
+          ? "已命中目标行，结果区进入 ready 态。"
+          : "命中了非目标行，结果区不会进入 ready 态。";
+        resultRowTitle.textContent = rowTitle;
+        resultOwner.textContent = owner;
+        resultAnchor.textContent = `row:${rowId}`;
+      }
+
+      document.querySelectorAll(".row-action").forEach((button) => {
+        button.addEventListener("click", () => {
+          const row = button.closest("tr");
+          if (!row) {
+            return;
+          }
+
+          updateResult(row);
+        });
+      });
+    </script>
+  </body>
+</html>

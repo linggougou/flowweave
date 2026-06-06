@@ -2,14 +2,14 @@
 
 本矩阵起始于 `Benchmarks` 轨道第一阶段，用于沉淀稳定、可复现的本地 HTML fixture。
 
-当前 `Benchmarks` 第六阶段已经把这些 fixture 接入真实回归脚本：
+当前 `Benchmarks` 第七阶段已经把这些 fixture 接入真实回归脚本：
 
 - `examples/real-page-smoke.ts`
 - `examples/run-real-page-smoke.ts`
 - `pnpm e2e:real-pages`
 - `pnpm smoke:full`
 
-当前矩阵分成三个档位：
+当前矩阵分成四个档位：
 
 - `baseline`
   - 保持既有 `11` 个 fixture，不改变 `packages/runtime/src/playwright-runner.test.ts` 的稳定基线。
@@ -17,6 +17,8 @@
   - 在 `baseline` 之上新增 `4` 个更贴近后台站点的 fixture，由 `examples/run-real-page-smoke.ts` 和 `pnpm e2e:real-pages` 默认执行。
 - `p6`
   - 在 `p5` 之上继续新增 `3` 个后台异常路径 / 复杂状态切换 fixture，并输出失败类型统计、最慢场景排行与成功态覆盖摘要；当前默认由 `examples/run-real-page-smoke.ts` 和 `pnpm e2e:real-pages` 执行。
+- `p7`
+  - 在 `p6` 之上新增 `1` 个“重复行同文案按钮” fixture，用于验证目标消歧；当前通过 `examples/real-page-smoke.ts` 兼容接管历史 `p6` 调用，因此 `pnpm e2e:real-pages` 会直接执行最新 `p7` 矩阵。
 
 所有页面都满足以下约束：
 
@@ -47,6 +49,7 @@
 | `examples/fixtures/session-expired-retry.html`     | 会话第一次恢复失败、第二次重试成功               | 点击恢复会话 -> 等待失败提醒 -> 点击再次重试 -> 等待恢复面板 ready                         | `#refresh-alert[data-state="failed"]`、`#retry-session`、`#session-refreshing`、`#dashboard-panel[data-ready="true"]`          | 会话恢复异常路径、二次重试、失败态到成功态切换                        |
 | `examples/fixtures/bulk-cross-page-selection.html` | 跨页保留勾选、换页后继续选择、最终批量提交       | 第 1 页勾选一条 -> 下一页 -> 第 2 页再勾选一条 -> 提交批量归档                             | `#selection-loading`、`#selection-summary[data-count]`、`#submit-selection`、`#bulk-result[data-ready="true"][data-count]`     | 跨页状态保持、分页与批量选择复合流程、最终批量提交                    |
 | `examples/fixtures/drawer-double-save.html`        | Drawer 第一次保存失败、修正备注后二次保存成功    | 打开 Drawer -> 直接保存触发失败提醒 -> 补备注 -> 再次保存 -> 等待结果区 ready              | `#edit-drawer[data-ready="true"]`、`#save-alert[data-state="error"]`、`#drawer-review-note`、`#save-result[data-ready="true"]` | 抽屉内失败后修正、二次保存、错误态与成功态切换                        |
+| `examples/fixtures/repeated-row-actions.html`      | 重复行共享同文案按钮、命中正确行后结果区 ready  | 直接点击同文案“编辑”按钮 -> 仅目标行成功后才等待 `#result-panel[data-ready="true"]` 可见   | `#result-panel[data-ready="true"][data-target-row="campaign-204"]`、`#result-row-title`、`#result-owner`、`#result-anchor`     | 重复按钮歧义、列表行作用域、错误命中第一条记录                        |
 
 ## 页面细节
 
@@ -279,6 +282,19 @@
   - 适合覆盖 Drawer 内失败后修正、二次提交和状态回填。
   - 适合作为后台表单错误恢复的长期基准。
 
+### `repeated-row-actions.html`
+
+- 交互目的：
+  - 模拟后台列表中多行共享同一个“编辑”按钮文案的常见歧义场景。
+  - 为 target disambiguation 提供真实页面基准，验证只有命中目标行才会把结果区写成 ready。
+- 关键断言：
+  - 三行按钮文案完全一致，都会暴露为“编辑”。
+  - 点击非目标行后，`#result-panel` 会展示当前行信息，但保持 `data-ready="false"`。
+  - 只有命中标题为“华东运营日报”的目标行后，`#result-panel[data-ready="true"][data-target-row="campaign-204"]` 才可见。
+- 后续自动化价值：
+  - 适合覆盖重复按钮、多命中 locator 和列表行作用域缩小。
+  - 适合作为 Runtime 消歧策略并回后的长期回归基线。
+
 ## 当前观测输出
 
 - `examples/real-page-smoke.ts`
@@ -298,17 +314,18 @@
 ## 当前回归入口
 
 - `examples/real-page-smoke.ts`
-  - 统一定义 `baseline` / `p5` / `p6` 三档矩阵，负责 Flow、上传测试文件、`storageStatePath` 注入，以及观测字段汇总。
+  - 统一定义 `baseline` / `p5` / `p6` / `p7` 四档矩阵，负责 Flow、上传测试文件、`storageStatePath` 注入，以及观测字段汇总。
+  - 当前 `p6` 请求会兼容映射到最新 `p7` 档位，避免额外改动 CLI 入口也能执行最新矩阵。
 - `examples/run-real-page-smoke.ts`
-  - 默认执行 `p6` 档位，并打印成功数、失败数、总耗时、平均耗时、成功态摘要、最慢场景排行、失败类型统计与每个 case 的产物目录。
+  - 当前默认通过兼容映射执行 `p7` 档位，并打印成功数、失败数、总耗时、平均耗时、成功态摘要、最慢场景排行、失败类型统计与每个 case 的产物目录。
 - `pnpm e2e:real-pages`
-  - 独立执行 `p6` 增强矩阵，适合局部回归 Benchmarks 轨道。
+  - 独立执行当前最新的 `p7` 增强矩阵，适合局部回归 Benchmarks 轨道。
 - `pnpm smoke:full`
   - 在仓库级 `typecheck / test / build / e2e:login` 之后，再补跑真实页面矩阵。
 
 ## 后续扩展建议
 
-1. 当矩阵继续扩容时，评估是否需要独立的 `p7` 档位，而不是继续挤压默认 `p6` 时长。
+1. 当矩阵继续扩容时，评估是否需要独立的 `p8` 档位，而不是继续挤压当前默认矩阵时长。
 2. 如果未来要从“业务场景族”继续下钻，可在失败类型统计之外再补一层技术根因分类，例如 `locator`、`timeout`、`detached`。
 
 ## 备注
@@ -319,4 +336,5 @@
 - 第四阶段继续扩到 `session-expired-dashboard.html`、`paginated-list.html`、`drawer-edit-form.html` 与 `toast-popconfirm.html`，矩阵总数提升到 `11`。
 - 第五阶段新增 `tabbed-workspace.html`、`contenteditable-editor.html`、`empty-results-retry.html` 与 `linked-filters.html`，`p5` 档位矩阵总数提升到 `15`，同时保留 `baseline` 的 `11` 个稳定 case。
 - 第六阶段新增 `session-expired-retry.html`、`bulk-cross-page-selection.html` 与 `drawer-double-save.html`，`p6` 档位矩阵总数提升到 `18`，并新增失败类型统计、最慢场景排行与成功态覆盖摘要输出。
+- 第七阶段新增 `repeated-row-actions.html`，`p7` 档位矩阵总数提升到 `19`，用于验证重复行同文案按钮的目标消歧场景，并通过兼容映射接入 `pnpm e2e:real-pages`。
 - 矩阵脚本直接从 `packages/*/src/index.ts` 导入 live implementation，避免脚本误吃旧 `dist` 产物，导致基准结果与当前源码脱节。
