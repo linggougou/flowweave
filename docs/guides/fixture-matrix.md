@@ -2,23 +2,43 @@
 
 本矩阵起始于 `Benchmarks` 轨道第一阶段，用于沉淀稳定、可复现的本地 HTML fixture。
 
-当前 `Benchmarks` 第七阶段已经把这些 fixture 接入真实回归脚本：
+当前 Wave 10 的收口目标，是把 `examples/fixtures/`、`examples/real-page-smoke.ts`、`examples/recorded-replay-smoke.ts` 与 runtime 矩阵测试的场景口径统一到一份总表里。
 
 - `examples/real-page-smoke.ts`
 - `examples/run-real-page-smoke.ts`
+- `examples/recorded-replay-smoke.ts`
 - `pnpm e2e:real-pages`
+- `pnpm e2e:recorded-pages`
 - `pnpm smoke:full`
 
-当前矩阵分成四个档位：
+## 单一真相口径
+
+- `examples/fixtures/` 当前共有 `22` 个 HTML。
+- 其中 `21` 个属于 Benchmarks fixture 矩阵，会被 `examples/real-page-smoke.ts` 的 `p7` 最新档位完整覆盖。
+- `examples/fixtures/login.html` 只服务 `pnpm e2e:login`，不纳入 real-page / recorded replay 矩阵总数。
+- `placeholder-disambiguation` 属于 recorded replay 的运行期临时页，不在 `examples/fixtures/` 目录内，也不计入 fixture 总数。
+- `examples/recorded-replay-smoke.ts` 当前 `baseline` 会执行 `21` 个真实 fixture 场景，再补 `1` 个运行期临时页，总数 `22`。
+
+| 分类               | 数量 | 覆盖口径                                                                             |
+| ------------------ | ---- | ------------------------------------------------------------------------------------ |
+| Benchmarks fixture | `21` | `real-page p7` 完整覆盖；`recorded replay baseline` 也完整覆盖这 `21` 条真实 fixture |
+| 登录专用 fixture   | `1`  | `examples/fixtures/login.html` 仅供 `pnpm e2e:login`                                 |
+| 运行期临时页       | `1`  | `placeholder-disambiguation` 仅供 `recorded replay baseline`                         |
+
+Benchmarks `21` 条真实 fixture 名单如下：`checkbox-select`、`delayed-panel`、`upload-form`、`spa-route`、`session-dashboard`、`keyboard-command-palette`、`async-command-palette`、`filterable-list`、`modal-bulk-action`、`session-expired-dashboard`、`paginated-list`、`drawer-edit-form`、`toast-popconfirm`、`tabbed-workspace`、`contenteditable-editor`、`empty-results-retry`、`linked-filters`、`session-expired-retry`、`bulk-cross-page-selection`、`drawer-double-save`、`repeated-row-actions`。
+
+其中 `keyboard-command-palette` 已正式列入基线矩阵，同时出现在 real-page `baseline` 与 recorded replay `baseline`。
+
+真实页面矩阵仍保留四个档位：
 
 - `baseline`
-  - 当前主线的基础真实页面夹具已扩到 `13` 个核心交互场景，其中 Wave 8 纳入了 `keyboard-command-palette`，Wave 9 再补 `async-command-palette`。
+  - 当前包含 `13` 个稳定真实 fixture。
 - `p5`
-  - 在 `baseline` 之上新增 `4` 个更贴近后台站点的 fixture，由 `examples/run-real-page-smoke.ts` 和 `pnpm e2e:real-pages` 默认执行。
+  - 在 `baseline` 之上新增 `4` 个 fixture，总数 `17`。
 - `p6`
-  - 在 `p5` 之上继续新增 `3` 个后台异常路径 / 复杂状态切换 fixture，并输出失败类型统计、最慢场景排行与成功态覆盖摘要；当前默认由 `examples/run-real-page-smoke.ts` 和 `pnpm e2e:real-pages` 执行。
+  - 在 `p5` 之上新增 `3` 个 fixture，总数 `20`，并输出失败类型统计、最慢场景排行与成功态覆盖摘要。
 - `p7`
-  - 在 `p6` 之上新增 `1` 个“重复行同文案按钮” fixture，用于验证目标消歧；随后又通过 `examples/real-page-smoke.ts` 兼容接入 `keyboard-command-palette` 与 `async-command-palette` 两条键盘基线，因此 `pnpm e2e:real-pages` 当前会直接执行 `21` 个场景的最新兼容矩阵。
+  - 在 `p6` 之上新增 `1` 个“重复行同文案按钮” fixture，总数 `21`，也是 `examples/run-real-page-smoke.ts` 当前显式执行的最新档位。
 
 所有页面都满足以下约束：
 
@@ -27,29 +47,58 @@
 - 关键断言节点使用稳定 `id` 或 `data-*` 标记。
 - 不依赖外部接口或网络请求，便于后续回归脚本稳定复用。
 
+## 单一真相总表
+
+| 名称                         | 来源                                               | real-page  | recorded replay | 备注                                    |
+| ---------------------------- | -------------------------------------------------- | ---------- | --------------- | --------------------------------------- |
+| `checkbox-select`            | `examples/fixtures/checkbox-select.html`           | `baseline` | `baseline`      | select + checkbox 基线                  |
+| `delayed-panel`              | `examples/fixtures/delayed-panel.html`             | `baseline` | `baseline`      | 延迟渲染与可见性等待                    |
+| `upload-form`                | `examples/fixtures/upload-form.html`               | `baseline` | `baseline`      | 文件上传                                |
+| `spa-route`                  | `examples/fixtures/spa-route.html`                 | `baseline` | `baseline`      | 同页路由切换                            |
+| `session-dashboard`          | `examples/fixtures/session-dashboard.html`         | `baseline` | `baseline`      | 登录态注入                              |
+| `keyboard-command-palette`   | `examples/fixtures/keyboard-command-palette.html`  | `baseline` | `baseline`      | 同步命令面板键盘回放                    |
+| `async-command-palette`      | `examples/fixtures/async-command-palette.html`     | `baseline` | `baseline`      | 异步 suggest + active descendant        |
+| `filterable-list`            | `examples/fixtures/filterable-list.html`           | `baseline` | `baseline`      | 列表筛选                                |
+| `modal-bulk-action`          | `examples/fixtures/modal-bulk-action.html`         | `baseline` | `baseline`      | 覆盖层弹窗批量操作                      |
+| `session-expired-dashboard`  | `examples/fixtures/session-expired-dashboard.html` | `baseline` | `baseline`      | 失效会话恢复                            |
+| `paginated-list`             | `examples/fixtures/paginated-list.html`            | `baseline` | `baseline`      | 分页切换                                |
+| `drawer-edit-form`           | `examples/fixtures/drawer-edit-form.html`          | `baseline` | `baseline`      | Drawer 编辑保存                         |
+| `toast-popconfirm`           | `examples/fixtures/toast-popconfirm.html`          | `baseline` | `baseline`      | 轻量确认 toast                          |
+| `tabbed-workspace`           | `examples/fixtures/tabbed-workspace.html`          | `p5`       | `baseline`      | 同页 Tab 切换                           |
+| `contenteditable-editor`     | `examples/fixtures/contenteditable-editor.html`    | `p5`       | `baseline`      | 富文本编辑                              |
+| `empty-results-retry`        | `examples/fixtures/empty-results-retry.html`       | `p5`       | `baseline`      | 空结果重试恢复                          |
+| `linked-filters`             | `examples/fixtures/linked-filters.html`            | `p5`       | `baseline`      | 联动筛选                                |
+| `session-expired-retry`      | `examples/fixtures/session-expired-retry.html`     | `p6`       | `baseline`      | 首次失败后二次重试                      |
+| `bulk-cross-page-selection`  | `examples/fixtures/bulk-cross-page-selection.html` | `p6`       | `baseline`      | 跨页批量选择                            |
+| `drawer-double-save`         | `examples/fixtures/drawer-double-save.html`        | `p6`       | `baseline`      | 首次失败后二次保存                      |
+| `repeated-row-actions`       | `examples/fixtures/repeated-row-actions.html`      | `p7`       | `baseline`      | 行级消歧                                |
+| `login`                      | `examples/fixtures/login.html`                     | 不纳入     | 不纳入          | 专供 `pnpm e2e:login`                   |
+| `placeholder-disambiguation` | 运行期临时生成                                     | 不纳入     | `baseline`      | 非仓库 fixture，仅验证 placeholder 消歧 |
+
 ## 总览矩阵
 
-| Fixture                                            | 主要交互目标                                     | 建议自动化步骤                                                                             | 可断言 DOM 结果                                                                                                                | 预计覆盖的稳定性问题                                                  |
-| -------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
-| `examples/fixtures/checkbox-select.html`           | `select`、checkbox、按钮启用态                   | 选择城市 -> 勾选授权 -> 可选勾选提醒 -> 点击保存                                           | `#result-panel[data-ready="true"]`、`#result-city`、`#result-agree`、`#result-notice`                                          | select 语义识别、checkbox 去噪、动态按钮启用、表单提交后结果断言      |
-| `examples/fixtures/delayed-panel.html`             | 点击后延迟展示结果面板                           | 点击加载 -> 等待 `#loading-indicator` 消失 -> 断言 `#report-panel` 可见                    | `#report-panel[data-ready="true"]`、`#completed-steps`、`#manual-checks`、`#retry-count`                                       | 动作后稳定等待、`visible/hidden` 条件、局部 loading、`aria-busy` 检测 |
-| `examples/fixtures/upload-form.html`               | 文件上传、文件预览、提交结果                     | 填写提交人 -> 设置文件 -> 点击提交                                                         | `#file-preview[data-ready="true"]`、`#selected-count`、`#upload-result[data-ready="true"]`、`#result-batch`                    | `upload` 语义、文件列表断言、表单可用态、提交后结果回显               |
-| `examples/fixtures/spa-route.html`                 | 同页路由切换与延迟渲染                           | 点击导航 -> 等待 loading 消失 -> 断言 hash 与标题                                          | `#route-token`、`#route-title`、`#route-hash`、`#route-card[data-ready="true"]`                                                | SPA hash 路由切换、点击后非整页刷新、动作后 URL 校验、局部异步渲染    |
-| `examples/fixtures/session-dashboard.html`         | 登录态 localStorage 注入、受会话影响的页面初始化 | 通过 `storageState` 预置登录态 -> 打开日报 -> 等待结果面板可见                             | `#session-state`、`#session-user`、`#report-panel[data-ready="true"]`、`#report-owner`                                         | `storageStatePath` 透传、登录态环境注入、真实页面会话恢复             |
-| `examples/fixtures/filterable-list.html`           | 列表筛选、局部 loading、结果数量回填             | 输入关键字 -> 选择状态 -> 点击筛选 -> 等待 loading 消失                                    | `#filter-summary[data-ready="true"][data-count="2"]`、`#result-count`、`#result-status`、`#result-keyword`                     | 筛选链路稳定等待、列表结果数量断言、局部刷新与空结果态前置能力        |
-| `examples/fixtures/modal-bulk-action.html`         | 覆盖层弹窗、批量操作、确认文本填写               | 勾选任务 -> 打开弹窗 -> 填写原因 -> 确认归档 -> 等待弹窗关闭和结果展示                     | `#archive-modal[data-ready="true"]`、`#confirm-archive`、`#archive-result[data-ready="true"]`、`#archive-result-summary`       | Modal 遮罩层稳定定位、弹窗内表单填写、关闭后结果区断言、批量操作链路  |
-| `examples/fixtures/session-expired-dashboard.html` | 失效会话恢复、局部 loading、恢复后仪表盘重新可用 | 通过 `storageState` 预置失效会话 -> 点击恢复会话 -> 等待 loading 消失 -> 断言恢复面板可见  | `#session-refreshing`、`#dashboard-panel[data-ready="true"]`、`#session-state[data-tone="success"]`、`#refresh-result`         | 会话失效恢复、会话相关页局部刷新、恢复后重新可操作                    |
-| `examples/fixtures/paginated-list.html`            | 后台分页切换、页码摘要、结果列表换页             | 点击下一页 -> 等待 `#pagination-loading` 消失 -> 断言 `#page-summary[data-page="2"]`       | `#pagination-loading`、`#page-summary[data-ready="true"][data-page="2"]`、`#current-page`、`#page-anchor`                      | 分页按钮稳定性、页码更新、结果区间断言、后台列表换页                  |
-| `examples/fixtures/drawer-edit-form.html`          | Drawer 打开、表单编辑、保存后关闭并回填结果      | 打开 Drawer -> 填写负责人 -> 选择优先级 -> 保存 -> 等待 Drawer 关闭和结果区展示            | `#edit-drawer[data-ready="true"]`、`#save-drawer`、`#drawer-result[data-ready="true"]`、`#result-owner`、`#result-priority`    | Drawer 侧栏稳定定位、表单填写、保存后等待侧栏关闭与列表回填           |
-| `examples/fixtures/toast-popconfirm.html`          | 轻量确认 toast、确认后关闭、结果区回显           | 点击提交审核 -> 等待 toast 可见 -> 点击确认 -> 等待 toast 消失 -> 断言结果区可见           | `#toast-popconfirm[data-ready="true"]`、`#toast-confirm`、`#toast-result[data-ready="true"]`、`#result-summary`                | 轻量确认而非 Modal、短暂浮层稳定定位、确认后消失与结果回显            |
-| `examples/fixtures/tabbed-workspace.html`          | 同页 Tab 切换、局部 loading、面板 ready 态切换   | 点击审批记录 Tab -> 等待 `#tab-loading` 消失 -> 断言 `#panel-approvals[data-ready="true"]` | `#tab-loading`、`#panel-approvals[data-ready="true"]`、`#approval-count`、`#approval-anchor`                                   | 同页 Tab 切换、局部异步渲染、非导航型视图切换                         |
-| `examples/fixtures/contenteditable-editor.html`    | `contenteditable` 编辑、保存按钮启用、结果回显   | 填写备注正文 -> 点击保存 -> 断言 `#note-result[data-ready="true"]`                         | `#editor-body`、`#save-note`、`#note-result[data-ready="true"]`、`#note-length`、`#note-preview`                               | 富文本备注输入、非传统 input/textarea 填写、保存后摘要回显            |
-| `examples/fixtures/empty-results-retry.html`       | 空结果态、重试成功、结果面板恢复                 | 执行查询 -> 断言空结果 -> 点击重试 -> 等待 `#query-loading` 消失 -> 断言结果面板显示       | `#empty-state[data-ready="true"]`、`#retry-query`、`#query-loading`、`#result-panel[data-ready="true"][data-count="3"]`        | 空结果态到成功态的二次转换、重试链路、结果恢复稳定性                  |
-| `examples/fixtures/linked-filters.html`            | 联动筛选、依赖下拉刷新、结果摘要                 | 先选业务线 -> 等待团队下拉刷新 -> 选择团队 -> 应用筛选                                     | `#business-unit`、`#team-filter`、`#filter-loading`、`#linked-result[data-ready="true"][data-team="growth-east"]`              | 联动筛选、依赖选项刷新、后台筛选摘要稳定断言                          |
-| `examples/fixtures/session-expired-retry.html`     | 会话第一次恢复失败、第二次重试成功               | 点击恢复会话 -> 等待失败提醒 -> 点击再次重试 -> 等待恢复面板 ready                         | `#refresh-alert[data-state="failed"]`、`#retry-session`、`#session-refreshing`、`#dashboard-panel[data-ready="true"]`          | 会话恢复异常路径、二次重试、失败态到成功态切换                        |
-| `examples/fixtures/bulk-cross-page-selection.html` | 跨页保留勾选、换页后继续选择、最终批量提交       | 第 1 页勾选一条 -> 下一页 -> 第 2 页再勾选一条 -> 提交批量归档                             | `#selection-loading`、`#selection-summary[data-count]`、`#submit-selection`、`#bulk-result[data-ready="true"][data-count]`     | 跨页状态保持、分页与批量选择复合流程、最终批量提交                    |
-| `examples/fixtures/drawer-double-save.html`        | Drawer 第一次保存失败、修正备注后二次保存成功    | 打开 Drawer -> 直接保存触发失败提醒 -> 补备注 -> 再次保存 -> 等待结果区 ready              | `#edit-drawer[data-ready="true"]`、`#save-alert[data-state="error"]`、`#drawer-review-note`、`#save-result[data-ready="true"]` | 抽屉内失败后修正、二次保存、错误态与成功态切换                        |
-| `examples/fixtures/repeated-row-actions.html`      | 重复行共享同文案按钮、命中正确行后结果区 ready  | 直接点击同文案“编辑”按钮 -> 仅目标行成功后才等待 `#result-panel[data-ready="true"]` 可见   | `#result-panel[data-ready="true"][data-target-row="campaign-204"]`、`#result-row-title`、`#result-owner`、`#result-anchor`     | 重复按钮歧义、列表行作用域、错误命中第一条记录                        |
+| Fixture                                            | 主要交互目标                                        | 建议自动化步骤                                                                             | 可断言 DOM 结果                                                                                                                                                                             | 预计覆盖的稳定性问题                                                  |
+| -------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `examples/fixtures/checkbox-select.html`           | `select`、checkbox、按钮启用态                      | 选择城市 -> 勾选授权 -> 可选勾选提醒 -> 点击保存                                           | `#result-panel[data-ready="true"]`、`#result-city`、`#result-agree`、`#result-notice`                                                                                                       | select 语义识别、checkbox 去噪、动态按钮启用、表单提交后结果断言      |
+| `examples/fixtures/delayed-panel.html`             | 点击后延迟展示结果面板                              | 点击加载 -> 等待 `#loading-indicator` 消失 -> 断言 `#report-panel` 可见                    | `#report-panel[data-ready="true"]`、`#completed-steps`、`#manual-checks`、`#retry-count`                                                                                                    | 动作后稳定等待、`visible/hidden` 条件、局部 loading、`aria-busy` 检测 |
+| `examples/fixtures/upload-form.html`               | 文件上传、文件预览、提交结果                        | 填写提交人 -> 设置文件 -> 点击提交                                                         | `#file-preview[data-ready="true"]`、`#selected-count`、`#upload-result[data-ready="true"]`、`#result-batch`                                                                                 | `upload` 语义、文件列表断言、表单可用态、提交后结果回显               |
+| `examples/fixtures/spa-route.html`                 | 同页路由切换与延迟渲染                              | 点击导航 -> 等待 loading 消失 -> 断言 hash 与标题                                          | `#route-token`、`#route-title`、`#route-hash`、`#route-card[data-ready="true"]`                                                                                                             | SPA hash 路由切换、点击后非整页刷新、动作后 URL 校验、局部异步渲染    |
+| `examples/fixtures/session-dashboard.html`         | 登录态 localStorage 注入、受会话影响的页面初始化    | 通过 `storageState` 预置登录态 -> 打开日报 -> 等待结果面板可见                             | `#session-state`、`#session-user`、`#report-panel[data-ready="true"]`、`#report-owner`                                                                                                      | `storageStatePath` 透传、登录态环境注入、真实页面会话恢复             |
+| `examples/fixtures/keyboard-command-palette.html`  | 键盘命令面板、`ArrowDown`/`Enter`、命令执行         | 输入“导出” -> `ArrowDown` -> `Enter` -> 断言命令执行结果                                   | `#command-results`、`#command-search[aria-activedescendant]`、`#command-toast[data-ready="true"][data-command-id="export-daily"]`                                                           | 键盘导航、active-descendant 稳定性、同步命令执行结果                  |
+| `examples/fixtures/filterable-list.html`           | 列表筛选、局部 loading、结果数量回填                | 输入关键字 -> 选择状态 -> 点击筛选 -> 等待 loading 消失                                    | `#filter-summary[data-ready="true"][data-count="2"]`、`#result-count`、`#result-status`、`#result-keyword`                                                                                  | 筛选链路稳定等待、列表结果数量断言、局部刷新与空结果态前置能力        |
+| `examples/fixtures/modal-bulk-action.html`         | 覆盖层弹窗、批量操作、确认文本填写                  | 勾选任务 -> 打开弹窗 -> 填写原因 -> 确认归档 -> 等待弹窗关闭和结果展示                     | `#archive-modal[data-ready="true"]`、`#confirm-archive`、`#archive-result[data-ready="true"]`、`#archive-result-summary`                                                                    | Modal 遮罩层稳定定位、弹窗内表单填写、关闭后结果区断言、批量操作链路  |
+| `examples/fixtures/session-expired-dashboard.html` | 失效会话恢复、局部 loading、恢复后仪表盘重新可用    | 通过 `storageState` 预置失效会话 -> 点击恢复会话 -> 等待 loading 消失 -> 断言恢复面板可见  | `#session-refreshing`、`#dashboard-panel[data-ready="true"]`、`#session-state[data-tone="success"]`、`#refresh-result`                                                                      | 会话失效恢复、会话相关页局部刷新、恢复后重新可操作                    |
+| `examples/fixtures/paginated-list.html`            | 后台分页切换、页码摘要、结果列表换页                | 点击下一页 -> 等待 `#pagination-loading` 消失 -> 断言 `#page-summary[data-page="2"]`       | `#pagination-loading`、`#page-summary[data-ready="true"][data-page="2"]`、`#current-page`、`#page-anchor`                                                                                   | 分页按钮稳定性、页码更新、结果区间断言、后台列表换页                  |
+| `examples/fixtures/drawer-edit-form.html`          | Drawer 打开、表单编辑、保存后关闭并回填结果         | 打开 Drawer -> 填写负责人 -> 选择优先级 -> 保存 -> 等待 Drawer 关闭和结果区展示            | `#edit-drawer[data-ready="true"]`、`#save-drawer`、`#drawer-result[data-ready="true"]`、`#result-owner`、`#result-priority`                                                                 | Drawer 侧栏稳定定位、表单填写、保存后等待侧栏关闭与列表回填           |
+| `examples/fixtures/toast-popconfirm.html`          | 轻量确认 toast、确认后关闭、结果区回显              | 点击提交审核 -> 等待 toast 可见 -> 点击确认 -> 等待 toast 消失 -> 断言结果区可见           | `#toast-popconfirm[data-ready="true"]`、`#toast-confirm`、`#toast-result[data-ready="true"]`、`#result-summary`                                                                             | 轻量确认而非 Modal、短暂浮层稳定定位、确认后消失与结果回显            |
+| `examples/fixtures/tabbed-workspace.html`          | 同页 Tab 切换、局部 loading、面板 ready 态切换      | 点击审批记录 Tab -> 等待 `#tab-loading` 消失 -> 断言 `#panel-approvals[data-ready="true"]` | `#tab-loading`、`#panel-approvals[data-ready="true"]`、`#approval-count`、`#approval-anchor`                                                                                                | 同页 Tab 切换、局部异步渲染、非导航型视图切换                         |
+| `examples/fixtures/contenteditable-editor.html`    | `contenteditable` 编辑、保存按钮启用、结果回显      | 填写备注正文 -> 点击保存 -> 断言 `#note-result[data-ready="true"]`                         | `#editor-body`、`#save-note`、`#note-result[data-ready="true"]`、`#note-length`、`#note-preview`                                                                                            | 富文本备注输入、非传统 input/textarea 填写、保存后摘要回显            |
+| `examples/fixtures/empty-results-retry.html`       | 空结果态、重试成功、结果面板恢复                    | 执行查询 -> 断言空结果 -> 点击重试 -> 等待 `#query-loading` 消失 -> 断言结果面板显示       | `#empty-state[data-ready="true"]`、`#retry-query`、`#query-loading`、`#result-panel[data-ready="true"][data-count="3"]`                                                                     | 空结果态到成功态的二次转换、重试链路、结果恢复稳定性                  |
+| `examples/fixtures/linked-filters.html`            | 联动筛选、依赖下拉刷新、结果摘要                    | 先选业务线 -> 等待团队下拉刷新 -> 选择团队 -> 应用筛选                                     | `#business-unit`、`#team-filter`、`#filter-loading`、`#linked-result[data-ready="true"][data-team="growth-east"]`                                                                           | 联动筛选、依赖选项刷新、后台筛选摘要稳定断言                          |
+| `examples/fixtures/session-expired-retry.html`     | 会话第一次恢复失败、第二次重试成功                  | 点击恢复会话 -> 等待失败提醒 -> 点击再次重试 -> 等待恢复面板 ready                         | `#refresh-alert[data-state="failed"]`、`#retry-session`、`#session-refreshing`、`#dashboard-panel[data-ready="true"]`                                                                       | 会话恢复异常路径、二次重试、失败态到成功态切换                        |
+| `examples/fixtures/bulk-cross-page-selection.html` | 跨页保留勾选、换页后继续选择、最终批量提交          | 第 1 页勾选一条 -> 下一页 -> 第 2 页再勾选一条 -> 提交批量归档                             | `#selection-loading`、`#selection-summary[data-count]`、`#submit-selection`、`#bulk-result[data-ready="true"][data-count]`                                                                  | 跨页状态保持、分页与批量选择复合流程、最终批量提交                    |
+| `examples/fixtures/drawer-double-save.html`        | Drawer 第一次保存失败、修正备注后二次保存成功       | 打开 Drawer -> 直接保存触发失败提醒 -> 补备注 -> 再次保存 -> 等待结果区 ready              | `#edit-drawer[data-ready="true"]`、`#save-alert[data-state="error"]`、`#drawer-review-note`、`#save-result[data-ready="true"]`                                                              | 抽屉内失败后修正、二次保存、错误态与成功态切换                        |
+| `examples/fixtures/repeated-row-actions.html`      | 重复行共享同文案按钮、命中正确行后结果区 ready      | 直接点击同文案“编辑”按钮 -> 仅目标行成功后才等待 `#result-panel[data-ready="true"]` 可见   | `#result-panel[data-ready="true"][data-target-row="campaign-204"]`、`#result-row-title`、`#result-owner`、`#result-anchor`                                                                  | 重复按钮歧义、列表行作用域、错误命中第一条记录                        |
 | `examples/fixtures/async-command-palette.html`     | 异步 suggestions、`aria-activedescendant`、命令执行 | 输入“账单” -> 等待 suggestions 准备 -> `ArrowDown` -> `Enter` -> 断言命令执行结果          | `#command-shell[data-loading="false"]`、`#async-command-options`、`#async-command-search[aria-activedescendant]`、`#async-command-toast[data-ready="true"][data-command-id="sync-billing"]` | 输入后 debounce、异步候选加载、键盘高亮更新、active-descendant 稳定性 |
 
 ## 页面细节
@@ -311,16 +360,27 @@
     - 最慢场景排行（Top 5）
     - 失败类型统计
     - 每个 case 的产物目录与失败信息
+- `examples/recorded-replay-smoke.ts`
+  - `runRecordedReplayMatrix()` 当前会返回：
+    - `results / failed / successCount / failureCount`
+    - `totalDurationMs / averageDurationMs`
+  - CLI 当前会额外打印：
+    - 真实 fixture 数与运行期临时页数
+    - 每个 case 的步数、耗时与产物目录
 
 ## 当前回归入口
 
 - `examples/real-page-smoke.ts`
   - 统一定义 `baseline` / `p5` / `p6` / `p7` 四档矩阵，负责 Flow、上传测试文件、`storageStatePath` 注入，以及观测字段汇总。
-  - 当前 `p6` 请求会兼容映射到最新 `p7` 档位，避免额外改动 CLI 入口也能执行最新矩阵。
+  - 底层仍兼容旧的 `p6` 调用，并映射到最新 `p7` 档位。
 - `examples/run-real-page-smoke.ts`
-  - 当前默认通过兼容映射执行 `p7` 档位，并打印成功数、失败数、总耗时、平均耗时、成功态摘要、最慢场景排行、失败类型统计与每个 case 的产物目录。
+  - 当前显式执行 `p7` 档位，并打印成功数、失败数、总耗时、平均耗时、成功态摘要、最慢场景排行、失败类型统计与每个 case 的产物目录。
+- `examples/recorded-replay-smoke.ts`
+  - 当前统一执行 `baseline` recorded replay 矩阵，覆盖 `21` 个真实 fixture 与 `1` 个运行期临时页。
 - `pnpm e2e:real-pages`
   - 独立执行当前最新的 `p7` 增强矩阵，适合局部回归 Benchmarks 轨道。
+- `pnpm e2e:recorded-pages`
+  - 独立执行 recorded replay 基线矩阵，适合验证 `RecordedEvent -> buildFlowFromEvents() -> executeFlow()` 闭环。
 - `pnpm smoke:full`
   - 在仓库级 `typecheck / test / build / e2e:login` 之后，再补跑真实页面矩阵。
 
@@ -331,11 +391,10 @@
 
 ## 备注
 
-- 第一阶段只落 fixture 与文档，不改 runtime / test，是为了避免在 Foundation / Runtime 轨道接口未完全合入前引入耦合。
-- 第二阶段已新增 `examples/run-real-page-smoke.ts`、runtime 矩阵测试与 `session-dashboard.html`。
-- 第三阶段继续扩到 `filterable-list.html` 与 `modal-bulk-action.html`，矩阵总数提升到 `7`。
-- 第四阶段继续扩到 `session-expired-dashboard.html`、`paginated-list.html`、`drawer-edit-form.html` 与 `toast-popconfirm.html`，矩阵总数提升到 `11`。
-- 第五阶段新增 `tabbed-workspace.html`、`contenteditable-editor.html`、`empty-results-retry.html` 与 `linked-filters.html`，`p5` 档位矩阵总数提升到 `15`，同时保留 `baseline` 的 `11` 个稳定 case。
-- 第六阶段新增 `session-expired-retry.html`、`bulk-cross-page-selection.html` 与 `drawer-double-save.html`，`p6` 档位矩阵总数提升到 `18`，并新增失败类型统计、最慢场景排行与成功态覆盖摘要输出。
-- 第七阶段新增 `repeated-row-actions.html`，`p7` 档位矩阵总数提升到 `19`，用于验证重复行同文案按钮的目标消歧场景，并通过兼容映射接入 `pnpm e2e:real-pages`。
+- 当前权威口径是：
+  - `examples/fixtures/` 共 `22` 个 HTML。
+  - 其中 `21` 个属于 Benchmarks fixture 矩阵，`login.html` 单独服务登录 E2E。
+  - recorded replay 额外包含 `placeholder-disambiguation` 这 `1` 个运行期临时页。
+- `keyboard-command-palette` 与 `async-command-palette` 已回灌到 `baseline`，因此 real-page `baseline` 当前固定为 `13` 条，而不是早期文档里的 `11` 条。
+- Wave 10 收口后，real-page 最新档位固定为 `21` 条，recorded replay 基线固定为 `22` 条（`21` 真实 fixture + `1` 运行期临时页）。
 - 矩阵脚本直接从 `packages/*/src/index.ts` 导入 live implementation，避免脚本误吃旧 `dist` 产物，导致基准结果与当前源码脱节。
