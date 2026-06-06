@@ -2600,3 +2600,47 @@
 - 风险评估评分：96
 - 综合评分：98
 - 建议：通过
+
+## 2026-06-07 Wave 7 规划审查
+
+### 审查范围
+
+- `.codex/context-summary-real-page-stability-wave7.md`
+- `docs/superpowers/specs/2026-06-07-real-page-stability-wave7-design.md`
+- `docs/superpowers/plans/2026-06-07-real-page-stability-wave7-plan.md`
+- `docs/superpowers/plans/2026-06-07-real-page-stability-wave7-orchestration.md`
+
+### 审查结果
+
+1. 需求字段完整性通过。
+   - 目标明确：把下一阶段重点转向“真实录制回放闭环”。
+   - 范围明确：`apps/extension`、`packages/recorder/runtime`、`examples` 三层，不引入 Studio 新能力。
+   - 并行边界明确：3 条轨道写入范围互斥。
+2. 当前缺口判断有现状证据支撑。
+   - `p7` 手写真实页面矩阵已 `19/19`，但 recorded replay 当前只有 `7` 条整链回归。
+   - `background.ts` 当前确实承担 session/export/sync 主链，但没有自动化合同测试。
+   - 当前没有 `pnpm e2e:recorded-pages` 一类独立 recorded smoke 命令。
+3. 方案比较合理。
+   - 仅加 runtime 测试或仅补 background 测试都不足以回答“真实录制内容是否稳定执行”。
+   - 推荐方案同时覆盖导出链路、recorded replay 场景和独立 smoke 基线，更贴近用户真实价值。
+4. 计划与编排板一致。
+   - 实施计划中的 3 个任务与并行编排板一一对应。
+   - Node 20 统一验收命令、分支名、worktree 名称、回收条件已明确。
+
+### Findings
+
+1. 未发现当前规划阶段的阻塞问题。
+2. 残余风险：Wave 7 新增 recorded replay 场景后，可能逼出 `normalize.ts` 的 wait 推断边界问题。
+   - 计划里已经将其限定为“被红灯证明时才做最小修补”，范围可控。
+3. 残余风险：recorded smoke runner 与 runtime 单测之间存在 case 维护重复。
+   - 编排板已明确二者职责不同：单测负责细粒度断言，smoke 负责独立整链基线。
+
+### 综合结论
+
+- 代码质量评分：96
+- 测试覆盖评分：95
+- 规范遵循评分：99
+- 战略匹配评分：99
+- 风险评估评分：95
+- 综合评分：97
+- 建议：通过

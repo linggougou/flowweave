@@ -3518,3 +3518,53 @@
   - `git worktree list` 仅剩主工作区 `/Users/ling/codeHome/A_Mine/flowweave`
   - 当前协调分支：`codex/real-page-stability-program`
   - 下一步：推送到 `origin`，作为后续自主续跑的新基线
+
+## 2026-06-07 真实页面稳定性 Wave 7 规划启动
+
+- 时间：2026-06-07 02:29:38 CST
+- 任务目标：
+  - 在 Wave 6 完整收口后，继续自主推进真实页面执行稳定性的下一阶段增强。
+  - 本轮把重点从“手写 Flow 稳定执行”转向“真实录制回放闭环更可证实、更可验收”。
+- 所用技能：
+  - `brainstorming`：本应要求逐段设计确认；由于用户已明确授予“全权自主规划任务、持续开发”，本轮以显式上下文扫描、方案比较、设计文档落盘和自审代替人工确认门禁。
+  - `writing-plans`：输出 Wave 7 实施计划。
+  - `using-git-worktrees`：为下一轮并行轨道准备 worktree 隔离。
+  - `subagent-driven-development`：后续按互斥写入边界分派实现。
+- 工具与替代说明：
+  - 当前环境仍未提供 `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code`。
+  - 本轮继续使用 CodeGraph、本地命令、既有测试与 Node 20 验证替代，并在本日志显式留痕。
+- 上下文依据：
+  - `.codex/context-summary-recorder-stability-gap-audit.md`
+  - `apps/extension/entrypoints/content.ts`
+  - `apps/extension/entrypoints/background.ts`
+  - `packages/recorder/src/normalize.ts`
+  - `packages/runtime/src/playwright-runner.test.ts`
+  - `examples/real-page-smoke.ts`
+- 现状核对结论：
+  - `pnpm e2e:real-pages` 证明的是手写 `p7` 真实页面矩阵 `19/19`，不是 recorded replay 矩阵。
+  - `packages/runtime/src/playwright-runner.test.ts` 当前 recorded replay 整链只覆盖 `7` 条流程：
+    - `upload`
+    - `spa-route`
+    - `filterable-list`
+    - `contenteditable-editor`
+    - `session-expired-retry`
+    - `bulk-cross-page-selection`
+    - `placeholder-disambiguation`
+  - `apps/extension/entrypoints/background.ts` 当前承接 `MSG_RECORD_EVENT / MSG_EXPORT_FLOW / MSG_SYNC_KNOWLEDGE`，但没有自动化合同测试。
+  - 因此下一阶段最值当的主线，不是继续只扩手写 Flow 矩阵，而是补 recorded replay 与扩展导出闭环。
+- 本轮新增文档：
+  - `.codex/context-summary-real-page-stability-wave7.md`
+  - `docs/superpowers/specs/2026-06-07-real-page-stability-wave7-design.md`
+  - `docs/superpowers/plans/2026-06-07-real-page-stability-wave7-plan.md`
+  - `docs/superpowers/plans/2026-06-07-real-page-stability-wave7-orchestration.md`
+- Wave 7 主题决策：
+  - 主题：`真实录制回放闭环 + recorded replay 矩阵`
+  - 推荐并行轨道：
+    1. `Extension Session Export Contract`
+    2. `Recorded Replay Coverage Expansion`
+    3. `Recorded Replay Smoke Runner`
+  - 主代理下一步：
+    - 提交 Wave 7 规划文档
+    - 创建 3 个隔离 worktree
+    - 依据编排板派发子代理
+    - 在 Node 20 下完成分层验收、合并与回收
