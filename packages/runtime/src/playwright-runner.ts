@@ -16,8 +16,172 @@ import type {
 
 export type { ExecutionOptions };
 
+type TargetWaitState = "visible" | "hidden" | "attached" | "detached";
+
+type StrategyAttempt = {
+  label: string;
+  matchedCount: number;
+  visibleCount?: number;
+  success: boolean;
+  error?: string;
+};
+
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function formatUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
+function interpolateString(
+  value: string,
+  variables?: ExecutionOptions["variables"],
+): string {
+  if (!variables) {
+    return value;
+  }
+
+  return value.replace(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g, (match, variableName: string) => {
+    const resolved = variables[variableName];
+    return resolved === undefined ? match : String(resolved);
+  });
+}
+
+function interpolateStepValue<T>(value: T, variables?: ExecutionOptions["variables"]): T {
+  if (typeof value === "string") {
+    return interpolateString(value, variables) as T;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => interpolateStepValue(item, variables)) as T;
+  }
+
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value).map(([key, entryValue]) => [
+      key,
+      interpolateStepValue(entryValue, variables),
+    ]);
+    return Object.fromEntries(entries) as T;
+  }
+
+  return value;
+}
+
+function isAbsoluteUrl(value: string): boolean {
+  return /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(value);
+}
+
+function resolveNavigationUrl(url: string, baseUrl?: string): string {
+  if (!baseUrl || isAbsoluteUrl(url)) {
+    return url;
+  }
+
+  return new URL(url, baseUrl).toString();
+}
+
+function resolveStep(step: NormalizedStep, options: ExecutionOptions): NormalizedStep {
+  const interpolated = interpolateStepValue(step, options.variables) as NormalizedStep;
+
+  if (interpolated.type !== "navigate") {
+    return interpolated;
+  }
+
+  return {
+    ...interpolated,
+    url: resolveNavigationUrl(interpolated.url, options.baseUrl),
+  };
+}
+
+function formatStrategyLabel(strategy: LocatorStrategy): string {
+  switch (strategy.kind) {
+    case "css":
+      return strategy.selector;
+    case "role":
+      return `role=${strategy.role}${strategy.name ? ` name="${strategy.name}"` : ""}`;
+    case "text":
+      return `text="${strategy.text}"`;
+    case "testId":
+      return `testId=${strategy.testId}`;
+    case "xpath":
+      return `xpath=${strategy.expression}`;
+    default: {
+      const _exhaustive: never = strategy;
+      return _exhaustive;
+    }
+  }
+}
+
+function formatTargetHints(target: Target): string | null {
+  if (!target.hints) {
+    return null;
+  }
+
+  const entries = Object.entries(target.hints).filter(([, value]) => value);
+  if (entries.length === 0) {
+    return null;
+  }
+
+  return entries.map(([key, value]) => `${key}=${value}`).join("，");
+}
+
+async function countVisible(locator: Locator, matchedCount: number): Promise<number> {
+  if (matchedCount === 0) {
+    return 0;
+  }
+
+  let visibleCount = 0;
+  for (let index = 0; index < matchedCount; index++) {
+    if (await locator.nth(index).isVisible().catch(() => false)) {
+      visibleCount += 1;
+    }
+  }
+
+  return visibleCount;
+}
+
+async function buildTargetDiagnosticError(
+  page: Page,
+  target: Target,
+  attempts: StrategyAttempt[],
+  prefix: string,
+  cause?: unknown,
+): Promise<FlowWeaveError> {
+  const title = await page.title().catch(() => "未知标题");
+  const attemptSummary = attempts
+    .map((attempt) => {
+      const metrics = [`匹配 ${attempt.matchedCount} 个`];
+      if (attempt.visibleCount !== undefined) {
+        metrics.push(`可见 ${attempt.visibleCount} 个`);
+      }
+      if (attempt.error) {
+        metrics.push(`错误：${attempt.error}`);
+      }
+      if (attempt.success) {
+        metrics.push("已命中");
+      }
+      return `${attempt.label}（${metrics.join("，")}）`;
+    })
+    .join("；");
+  const hintSummary = formatTargetHints(target);
+  const messageParts = [
+    `${prefix}。`,
+    `当前页面：${page.url()}（${title}）。`,
+    `策略诊断：${attemptSummary || "无可用策略"}。`,
+  ];
+  if (hintSummary) {
+    messageParts.push(`Target 提示：${hintSummary}。`);
+  }
+
+  return new FlowWeaveError(
+    "RUNTIME_STEP_FAILED",
+    messageParts.join(" "),
+    cause,
+  );
 }
 
 function strategyToLocator(page: Page, strategy: LocatorStrategy): Locator {
@@ -56,39 +220,122 @@ async function waitForPageSettled(page: Page, timeoutMs = 12_000): Promise<void>
   }
 
   await page
+    .waitForFunction(
+      () => !document.querySelector("[aria-busy='true'], [data-loading='true']"),
+      undefined,
+      { timeout: Math.min(remaining(), 8_000) },
+    )
+    .catch(() => undefined);
+
+  await page
     .waitForLoadState("networkidle", { timeout: Math.min(remaining(), 8_000) })
     .catch(() => undefined);
 }
 
-async function resolveTarget(page: Page, target: Target, timeoutMs = 12_000): Promise<Locator> {
-  const tried: string[] = [];
+async function resolveTarget(
+  page: Page,
+  target: Target,
+  timeoutMs = 12_000,
+  desiredState: TargetWaitState = "visible",
+): Promise<Locator> {
+  const attempts: StrategyAttempt[] = [];
   let lastError: unknown;
   const perStrategyTimeout = Math.max(
     2_000,
     Math.floor(timeoutMs / Math.max(target.strategies.length, 1)),
   );
+
   for (const strategy of target.strategies) {
-    const label =
-      strategy.kind === "css"
-        ? strategy.selector
-        : strategy.kind === "role"
-          ? `role=${strategy.role}${strategy.name ? ` name="${strategy.name}"` : ""}`
-          : strategy.kind === "text"
-            ? `text="${strategy.text}"`
-            : strategy.kind;
-    tried.push(label);
+    const label = formatStrategyLabel(strategy);
+    const locator = strategyToLocator(page, strategy);
+    const first = locator.first();
+    const attempt: StrategyAttempt = {
+      label,
+      matchedCount: await locator.count().catch(() => 0),
+      success: false,
+    };
+    if (desiredState === "visible" || attempt.matchedCount > 0) {
+      attempt.visibleCount = await countVisible(locator, attempt.matchedCount).catch(() => 0);
+    }
+
     try {
-      const locator = strategyToLocator(page, strategy);
-      const first = locator.first();
-      await first.waitFor({ state: "visible", timeout: perStrategyTimeout });
+      await first.waitFor({ state: desiredState, timeout: perStrategyTimeout });
+      attempt.success = true;
+      attempt.matchedCount = await locator.count().catch(() => attempt.matchedCount);
+      attempt.visibleCount = await countVisible(locator, attempt.matchedCount).catch(
+        () => attempt.visibleCount ?? 0,
+      );
+      attempts.push(attempt);
       return first;
     } catch (error) {
+      attempt.error = formatUnknownError(error);
+      attempts.push(attempt);
       lastError = error;
     }
   }
-  throw new FlowWeaveError(
-    "RUNTIME_STEP_FAILED",
-    `无法根据 Target 策略定位元素（已尝试：${tried.join("；")}）`,
+
+  throw await buildTargetDiagnosticError(
+    page,
+    target,
+    attempts,
+    "无法根据 Target 策略定位元素",
+    lastError,
+  );
+}
+
+async function waitForTargetState(
+  page: Page,
+  target: Target,
+  state: TargetWaitState,
+  timeoutMs = 12_000,
+): Promise<void> {
+  const attempts: StrategyAttempt[] = [];
+  let lastError: unknown;
+  const perStrategyTimeout = Math.max(
+    2_000,
+    Math.floor(timeoutMs / Math.max(target.strategies.length, 1)),
+  );
+
+  for (const strategy of target.strategies) {
+    const label = formatStrategyLabel(strategy);
+    const locator = strategyToLocator(page, strategy);
+    const first = locator.first();
+    const attempt: StrategyAttempt = {
+      label,
+      matchedCount: await locator.count().catch(() => 0),
+      success: false,
+    };
+
+    try {
+      if ((state === "hidden" || state === "detached") && attempt.matchedCount === 0) {
+        await first.waitFor({
+          state: "attached",
+          timeout: Math.min(perStrategyTimeout, 2_000),
+        });
+        attempt.matchedCount = await locator.count().catch(() => attempt.matchedCount);
+      }
+
+      attempt.visibleCount = await countVisible(locator, attempt.matchedCount).catch(() => 0);
+      await first.waitFor({ state, timeout: perStrategyTimeout });
+      attempt.success = true;
+      attempt.matchedCount = await locator.count().catch(() => attempt.matchedCount);
+      attempt.visibleCount = await countVisible(locator, attempt.matchedCount).catch(
+        () => attempt.visibleCount ?? 0,
+      );
+      attempts.push(attempt);
+      return;
+    } catch (error) {
+      attempt.error = formatUnknownError(error);
+      attempts.push(attempt);
+      lastError = error;
+    }
+  }
+
+  throw await buildTargetDiagnosticError(
+    page,
+    target,
+    attempts,
+    `等待目标状态 ${state} 失败`,
     lastError,
   );
 }
@@ -125,20 +372,22 @@ async function runStep(
   page: Page,
   step: NormalizedStep,
   stepIndex: number,
+  options: ExecutionOptions,
   artifactDir?: string,
   pageSnapshots?: RuntimePageSnapshot[],
   timeoutMs = 30_000,
 ): Promise<StepLog> {
   const startedAt = nowIso();
   const startMs = Date.now();
+  const resolvedStep = resolveStep(step, options);
 
   try {
-    switch (step.type) {
+    switch (resolvedStep.type) {
       case "navigate":
-        await page.goto(step.url, {
-          waitUntil: step.waitUntil ?? "load",
+        await page.goto(resolvedStep.url, {
+          waitUntil: resolvedStep.waitUntil ?? "load",
         });
-        if (step.url.includes("#")) {
+        if (resolvedStep.url.includes("#")) {
           await page.waitForLoadState("domcontentloaded").catch(() => undefined);
           await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => undefined);
         }
@@ -147,37 +396,83 @@ async function runStep(
         }
         break;
       case "click": {
-        const locator = await resolveTarget(page, step.target, timeoutMs);
+        const locator = await resolveTarget(page, resolvedStep.target, timeoutMs);
         await locator.click({
-          button: step.button ?? "left",
+          button: resolvedStep.button ?? "left",
         });
         await waitForPageSettled(page, Math.min(timeoutMs, 15_000));
         break;
       }
       case "fill": {
-        const locator = await resolveTarget(page, step.target, timeoutMs);
-        if (step.clear !== false) {
+        const locator = await resolveTarget(page, resolvedStep.target, timeoutMs);
+        if (resolvedStep.clear !== false) {
           await locator.clear();
         }
-        await locator.fill(step.value);
+        await locator.fill(resolvedStep.value);
+        break;
+      }
+      case "select": {
+        const locator = await resolveTarget(page, resolvedStep.target, timeoutMs);
+        await locator.selectOption(resolvedStep.values);
+        await waitForPageSettled(page, Math.min(timeoutMs, 8_000));
+        break;
+      }
+      case "setChecked": {
+        const locator = await resolveTarget(page, resolvedStep.target, timeoutMs);
+        await locator.setChecked(resolvedStep.checked);
+        await waitForPageSettled(page, Math.min(timeoutMs, 8_000));
+        break;
+      }
+      case "press": {
+        if (resolvedStep.target) {
+          const locator = await resolveTarget(page, resolvedStep.target, timeoutMs);
+          await locator.press(resolvedStep.key);
+        } else {
+          await page.keyboard.press(resolvedStep.key);
+        }
+        await waitForPageSettled(page, Math.min(timeoutMs, 8_000));
+        break;
+      }
+      case "upload": {
+        const locator = await resolveTarget(page, resolvedStep.target, timeoutMs, "attached");
+        await locator.setInputFiles(resolvedStep.files);
+        await waitForPageSettled(page, Math.min(timeoutMs, 8_000));
         break;
       }
       case "wait":
-        if (step.ms != null) {
-          await page.waitForTimeout(step.ms);
-        } else if (step.condition === "networkidle") {
+        if (resolvedStep.ms != null) {
+          await page.waitForTimeout(resolvedStep.ms);
+        } else if (resolvedStep.condition === "networkidle") {
           await page.waitForLoadState("networkidle");
-        } else if (step.condition === "visible") {
-          throw new FlowWeaveError(
-            "RUNTIME_STEP_FAILED",
-            "wait 步骤 condition=visible 需配合 Target，P1 暂未实现",
+        } else if (resolvedStep.condition === "urlIncludes") {
+          await page.waitForURL(
+            (url) => url.toString().includes(resolvedStep.urlIncludes ?? ""),
+            { timeout: Math.min(timeoutMs, 15_000) },
+          );
+        } else if (
+          resolvedStep.condition === "visible" ||
+          resolvedStep.condition === "hidden" ||
+          resolvedStep.condition === "attached" ||
+          resolvedStep.condition === "detached"
+        ) {
+          if (!resolvedStep.target) {
+            throw new FlowWeaveError(
+              "RUNTIME_STEP_FAILED",
+              `wait 步骤 condition=${resolvedStep.condition} 缺少 target`,
+            );
+          }
+          await waitForTargetState(
+            page,
+            resolvedStep.target,
+            resolvedStep.condition,
+            Math.min(timeoutMs, 15_000),
           );
         } else {
           await page.waitForTimeout(500);
         }
         break;
       default: {
-        const unsupported = step as { type: string };
+        const unsupported = resolvedStep as { type: string };
         throw new FlowWeaveError(
           "RUNTIME_STEP_FAILED",
           `不支持的步骤类型: ${unsupported.type}`,
@@ -191,8 +486,8 @@ async function runStep(
       : undefined;
     return {
       stepIndex,
-      stepId: step.id,
-      type: step.type,
+      stepId: resolvedStep.id,
+      type: resolvedStep.type,
       status: "success",
       startedAt,
       endedAt,
@@ -217,8 +512,8 @@ async function runStep(
     }
     return {
       stepIndex,
-      stepId: step.id,
-      type: step.type,
+      stepId: resolvedStep.id,
+      type: resolvedStep.type,
       status: "failed",
       startedAt,
       endedAt,
@@ -259,7 +554,15 @@ export async function executeFlow(
       if (!step) {
         continue;
       }
-      const log = await runStep(page, step, stepIndex, artifactDir, pageSnapshots, timeoutMs);
+      const log = await runStep(
+        page,
+        step,
+        stepIndex,
+        options,
+        artifactDir,
+        pageSnapshots,
+        timeoutMs,
+      );
       stepLogs.push(log);
       if (log.status === "failed") {
         await context.close();
