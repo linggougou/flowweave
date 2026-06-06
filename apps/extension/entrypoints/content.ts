@@ -101,6 +101,7 @@ export function buildUploadReplayInputs(
 }
 
 const PRESS_KEYS = new Set(["Enter", "Tab", "Escape"]);
+const NAVIGATION_PRESS_KEYS = new Set(["ArrowDown", "ArrowUp"]);
 const MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta"]);
 const FILL_DEBOUNCE_MS = 400;
 
@@ -117,6 +118,32 @@ function normalizePressKey(key: string): string {
   return key;
 }
 
+function isKeyboardNavigationTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  let current: Element | null = target;
+  for (let depth = 0; depth < 6 && current; depth += 1) {
+    if (current instanceof HTMLSelectElement) {
+      return true;
+    }
+
+    const role = current.getAttribute("role")?.toLowerCase();
+    if (
+      role === "combobox" ||
+      current.getAttribute("aria-autocomplete") !== null ||
+      current.getAttribute("aria-controls") !== null
+    ) {
+      return true;
+    }
+
+    current = current.parentElement;
+  }
+
+  return false;
+}
+
 function buildRecordedPressKey(event: KeyboardEvent): string | null {
   if (event.isComposing || event.repeat) {
     return null;
@@ -128,7 +155,11 @@ function buildRecordedPressKey(event: KeyboardEvent): string | null {
   }
 
   const hasShortcutModifier = event.ctrlKey || event.altKey || event.metaKey;
-  if (!hasShortcutModifier && !PRESS_KEYS.has(key)) {
+  if (
+    !hasShortcutModifier &&
+    !PRESS_KEYS.has(key) &&
+    !(NAVIGATION_PRESS_KEYS.has(key) && isKeyboardNavigationTarget(event.target))
+  ) {
     return null;
   }
 

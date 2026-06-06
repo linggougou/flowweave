@@ -38,6 +38,148 @@ async function loadContentModule(): Promise<ContentModule> {
   return (await import("../entrypoints/content.js")) as ContentModule;
 }
 
+type HandlerEvent = { target: unknown; [key: string]: unknown };
+
+class FakeElement {
+  parentElement: FakeElement | null = null;
+  tagName = "div";
+}
+
+class FakeHTMLElement extends FakeElement {
+  textContent = "";
+  innerText = "";
+  isContentEditable = false;
+  id = "";
+  #attributes = new Map<string, string>();
+
+  setAttribute(name: string, value: string): void {
+    this.#attributes.set(name, value);
+    if (name === "contenteditable" && value.toLowerCase() !== "false") {
+      this.isContentEditable = true;
+    }
+  }
+
+  getAttribute(name: string): string | null {
+    return this.#attributes.get(name) ?? null;
+  }
+}
+
+class FakeHTMLInputElement extends FakeHTMLElement {
+  value = "";
+  type = "text";
+  checked = false;
+  files: Array<{ name: string }> | null = null;
+
+  constructor() {
+    super();
+    this.tagName = "input";
+  }
+}
+
+class FakeHTMLTextAreaElement extends FakeHTMLElement {
+  value = "";
+
+  constructor() {
+    super();
+    this.tagName = "textarea";
+  }
+}
+
+class FakeHTMLSelectElement extends FakeHTMLElement {
+  selectedOptions: Array<{ value: string }> = [];
+
+  constructor() {
+    super();
+    this.tagName = "select";
+  }
+}
+
+async function setupContentHarness() {
+  vi.stubGlobal("Element", FakeElement);
+  vi.stubGlobal("HTMLElement", FakeHTMLElement);
+  vi.stubGlobal("HTMLInputElement", FakeHTMLInputElement);
+  vi.stubGlobal("HTMLTextAreaElement", FakeHTMLTextAreaElement);
+  vi.stubGlobal("HTMLSelectElement", FakeHTMLSelectElement);
+
+  const handlers = new Map<string, Array<(event: HandlerEvent) => void>>();
+  const documentStub = {
+    body: new FakeHTMLElement(),
+    documentElement: new FakeHTMLElement(),
+    addEventListener: vi.fn((type: string, handler: (event: HandlerEvent) => void) => {
+      const bucket = handlers.get(type) ?? [];
+      bucket.push(handler);
+      handlers.set(type, bucket);
+    }),
+    querySelector: vi.fn(() => null),
+  };
+  const windowStub = {
+    location: { href: "https://app.example.com/search" },
+    addEventListener: vi.fn(),
+  };
+  const historyStub = {
+    pushState() {
+      return undefined;
+    },
+    replaceState() {
+      return undefined;
+    },
+  };
+  const sendMessage = vi.fn().mockResolvedValue(undefined);
+
+  vi.stubGlobal("document", documentStub);
+  vi.stubGlobal("window", windowStub);
+  vi.stubGlobal("history", historyStub);
+  vi.stubGlobal("browser", {
+    runtime: {
+      sendMessage,
+      onMessage: {
+        addListener: vi.fn(),
+      },
+    },
+  });
+
+  const contentModule = await loadContentModule();
+  recorderMocks.resolveClickTarget.mockImplementation((element) => element);
+  recorderMocks.shouldRecordClick.mockReturnValue(true);
+  recorderMocks.buildInteractionPayload.mockImplementation((element, kind, options) => {
+    const htmlElement = element as FakeHTMLElement;
+    const selector = htmlElement.id ? `#${htmlElement.id}` : `#${htmlElement.tagName.toLowerCase()}`;
+    const role =
+      htmlElement instanceof FakeHTMLSelectElement
+        ? "combobox"
+        : htmlElement.getAttribute("role") ?? "textbox";
+
+    if (kind === "fill") {
+      return {
+        selector,
+        role,
+        name: "字段",
+        value: options?.value,
+      };
+    }
+
+    return {
+      selector,
+      role,
+      name: "字段",
+    };
+  });
+  expect(contentModule.default?.main).toBeTypeOf("function");
+  contentModule.default?.main?.();
+  sendMessage.mockClear();
+
+  return {
+    handlers,
+    sendMessage,
+  };
+}
+
+function readRecordedEvents(sendMessage: ReturnType<typeof vi.fn>) {
+  return sendMessage.mock.calls.map(
+    ([payload]) => (payload as { event: { type: string; payload: Record<string, unknown> } }).event,
+  );
+}
+
 describe("content upload placeholder contract", () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -78,32 +220,6 @@ describe("content upload placeholder contract", () => {
 
     expect(contentModule.readFillValue).toBeTypeOf("function");
 
-    class FakeHTMLElement {
-      textContent = "";
-      innerText = "";
-      isContentEditable = false;
-      #attributes = new Map<string, string>();
-
-      setAttribute(name: string, value: string): void {
-        this.#attributes.set(name, value);
-        if (name === "contenteditable" && value.toLowerCase() !== "false") {
-          this.isContentEditable = true;
-        }
-      }
-
-      getAttribute(name: string): string | null {
-        return this.#attributes.get(name) ?? null;
-      }
-    }
-
-    class FakeHTMLInputElement extends FakeHTMLElement {
-      value = "";
-    }
-
-    class FakeHTMLTextAreaElement extends FakeHTMLElement {
-      value = "";
-    }
-
     vi.stubGlobal("HTMLElement", FakeHTMLElement);
     vi.stubGlobal("HTMLInputElement", FakeHTMLInputElement);
     vi.stubGlobal("HTMLTextAreaElement", FakeHTMLTextAreaElement);
@@ -132,129 +248,12 @@ describe("content upload placeholder contract", () => {
 
   it("提交型 keypress 会先 flush 待提交 fill，再记录 keypress", async () => {
     vi.useFakeTimers();
-
-    class FakeElement {
-      parentElement: FakeElement | null = null;
-      tagName = "div";
-    }
-
-    class FakeHTMLElement extends FakeElement {
-      textContent = "";
-      innerText = "";
-      isContentEditable = false;
-      #attributes = new Map<string, string>();
-
-      setAttribute(name: string, value: string): void {
-        this.#attributes.set(name, value);
-      }
-
-      getAttribute(name: string): string | null {
-        return this.#attributes.get(name) ?? null;
-      }
-    }
-
-    class FakeHTMLInputElement extends FakeHTMLElement {
-      value = "";
-      type = "text";
-      checked = false;
-      files: Array<{ name: string }> | null = null;
-      id = "";
-
-      constructor() {
-        super();
-        this.tagName = "input";
-      }
-    }
-
-    class FakeHTMLTextAreaElement extends FakeHTMLElement {
-      value = "";
-
-      constructor() {
-        super();
-        this.tagName = "textarea";
-      }
-    }
-
-    class FakeHTMLSelectElement extends FakeHTMLElement {
-      selectedOptions: Array<{ value: string }> = [];
-
-      constructor() {
-        super();
-        this.tagName = "select";
-      }
-    }
-
-    vi.stubGlobal("Element", FakeElement);
-    vi.stubGlobal("HTMLElement", FakeHTMLElement);
-    vi.stubGlobal("HTMLInputElement", FakeHTMLInputElement);
-    vi.stubGlobal("HTMLTextAreaElement", FakeHTMLTextAreaElement);
-    vi.stubGlobal("HTMLSelectElement", FakeHTMLSelectElement);
-
-    const handlers = new Map<string, Array<(event: { target: unknown; [key: string]: unknown }) => void>>();
-    const documentStub = {
-      body: new FakeHTMLElement(),
-      documentElement: new FakeHTMLElement(),
-      addEventListener: vi.fn((type: string, handler: (event: { target: unknown; [key: string]: unknown }) => void) => {
-        const bucket = handlers.get(type) ?? [];
-        bucket.push(handler);
-        handlers.set(type, bucket);
-      }),
-      querySelector: vi.fn(() => null),
-    };
-    const windowStub = {
-      location: { href: "https://app.example.com/search" },
-      addEventListener: vi.fn(),
-    };
-    const historyStub = {
-      pushState() {
-        return undefined;
-      },
-      replaceState() {
-        return undefined;
-      },
-    };
-    const sendMessage = vi.fn().mockResolvedValue(undefined);
-
-    vi.stubGlobal("document", documentStub);
-    vi.stubGlobal("window", windowStub);
-    vi.stubGlobal("history", historyStub);
-    vi.stubGlobal("browser", {
-      runtime: {
-        sendMessage,
-        onMessage: {
-          addListener: vi.fn(),
-        },
-      },
-    });
-
-    const contentModule = await loadContentModule();
+    const { handlers, sendMessage } = await setupContentHarness();
     const input = new FakeHTMLInputElement();
     input.value = "flowweave";
     input.id = "keyword";
 
     recorderMocks.shouldRecordFill.mockImplementation((element) => element === (input as unknown as Element));
-    recorderMocks.resolveClickTarget.mockImplementation((element) => element);
-    recorderMocks.shouldRecordClick.mockReturnValue(true);
-    recorderMocks.buildInteractionPayload.mockImplementation((_element, kind, options) => {
-      if (kind === "fill") {
-        return {
-          selector: "#keyword",
-          role: "textbox",
-          name: "搜索词",
-          value: options?.value,
-        };
-      }
-      return {
-        selector: "#keyword",
-        role: "textbox",
-        name: "搜索词",
-      };
-    });
-
-    expect(contentModule.default?.main).toBeTypeOf("function");
-    contentModule.default?.main?.();
-
-    sendMessage.mockClear();
 
     handlers.get("input")?.[0]?.({ target: input });
     handlers.get("keydown")?.[0]?.({
@@ -269,9 +268,7 @@ describe("content upload placeholder contract", () => {
     });
 
     expect(sendMessage).toHaveBeenCalledTimes(2);
-    const recordedEvents = sendMessage.mock.calls.map(
-      ([payload]) => (payload as { event: { type: string; payload: Record<string, unknown> } }).event,
-    );
+    const recordedEvents = readRecordedEvents(sendMessage);
     expect(recordedEvents[0]).toMatchObject({
       type: "fill",
       payload: {
@@ -289,5 +286,134 @@ describe("content upload placeholder contract", () => {
 
     vi.advanceTimersByTime(450);
     expect(sendMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it("suggest 输入上的 ArrowDown 会记录 keypress，但不会提前 flush pending fill", async () => {
+    vi.useFakeTimers();
+
+    const { handlers, sendMessage } = await setupContentHarness();
+    const input = new FakeHTMLInputElement();
+    input.id = "keyword";
+    input.value = "flow";
+    input.setAttribute("aria-controls", "keyword-suggestions");
+    input.setAttribute("aria-autocomplete", "list");
+
+    recorderMocks.shouldRecordFill.mockImplementation((element) => element === (input as unknown as Element));
+
+    handlers.get("input")?.[0]?.({ target: input });
+    handlers.get("keydown")?.[0]?.({
+      target: input,
+      key: "ArrowDown",
+      isComposing: false,
+      repeat: false,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+      metaKey: false,
+    });
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(readRecordedEvents(sendMessage)[0]).toMatchObject({
+      type: "keypress",
+      payload: {
+        selector: "#keyword",
+        key: "ArrowDown",
+      },
+    });
+
+    vi.advanceTimersByTime(450);
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(readRecordedEvents(sendMessage)[1]).toMatchObject({
+      type: "fill",
+      payload: {
+        selector: "#keyword",
+        value: "flow",
+      },
+    });
+  });
+
+  it("原生 select 与组合框容器内输入框上的方向键会记录为 keypress", async () => {
+    const { handlers, sendMessage } = await setupContentHarness();
+    const select = new FakeHTMLSelectElement();
+    select.id = "country";
+    const combobox = new FakeHTMLElement();
+    combobox.setAttribute("role", "combobox");
+    const childInput = new FakeHTMLInputElement();
+    childInput.id = "city";
+    childInput.parentElement = combobox;
+
+    handlers.get("keydown")?.[0]?.({
+      target: select,
+      key: "ArrowDown",
+      isComposing: false,
+      repeat: false,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+      metaKey: false,
+    });
+    handlers.get("keydown")?.[0]?.({
+      target: childInput,
+      key: "ArrowUp",
+      isComposing: false,
+      repeat: false,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+      metaKey: false,
+    });
+
+    expect(readRecordedEvents(sendMessage)).toEqual([
+      expect.objectContaining({
+        type: "keypress",
+        payload: expect.objectContaining({
+          selector: "#country",
+          key: "ArrowDown",
+        }),
+      }),
+      expect.objectContaining({
+        type: "keypress",
+        payload: expect.objectContaining({
+          selector: "#city",
+          key: "ArrowUp",
+        }),
+      }),
+    ]);
+  });
+
+  it("普通非导航型输入框上的方向键不会被录制，也不会提前 flush", async () => {
+    vi.useFakeTimers();
+
+    const { handlers, sendMessage } = await setupContentHarness();
+    const input = new FakeHTMLInputElement();
+    input.id = "plain";
+    input.value = "plain text";
+
+    recorderMocks.shouldRecordFill.mockImplementation((element) => element === (input as unknown as Element));
+
+    handlers.get("input")?.[0]?.({ target: input });
+    handlers.get("keydown")?.[0]?.({
+      target: input,
+      key: "ArrowDown",
+      isComposing: false,
+      repeat: false,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+      metaKey: false,
+    });
+
+    expect(sendMessage).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(450);
+    expect(readRecordedEvents(sendMessage)).toEqual([
+      expect.objectContaining({
+        type: "fill",
+        payload: expect.objectContaining({
+          selector: "#plain",
+          value: "plain text",
+        }),
+      }),
+    ]);
   });
 });
