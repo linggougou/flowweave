@@ -2749,3 +2749,125 @@
 - 风险评估评分：97
 - 综合评分：99
 - 建议：通过
+
+## 2026-06-07 Wave 8 Keyboard Capture 只读代码审查
+
+### 审查范围
+
+- worktree：`/Users/ling/codeHome/A_Mine/flowweave/.worktrees/codex-real-page-wave8-keyboard-capture`
+- HEAD：`778e84f688895a5481e2f94b5ec02db9a5b6da45`
+- 重点文件：
+  - `apps/extension/entrypoints/content.ts`
+  - `apps/extension/lib/content-contract.test.ts`
+- 审查问题：
+  1. `ArrowDown / ArrowUp` 是否只在组合框 / suggest / 原生 `select` 导航目标上录制
+  2. 方向键是否保证不会像 `Enter / Tab / Escape` 那样提前 flush pending fill
+  3. 是否存在误录制、边界漏测、脆弱断言或越界改动
+
+### 审查结果
+
+1. 录制范围实现符合本轨设计。
+   - `content.ts:121-145` 将导航目标限定为 `HTMLSelectElement`、`role="combobox"`、带 `aria-autocomplete` 或 `aria-controls` 的目标及其近祖先。
+   - `content.ts:157-163` 只在 `NAVIGATION_PRESS_KEYS` 且目标命中导航判定时放开 `ArrowDown / ArrowUp`。
+   - `content-contract.test.ts:291-382` 对 suggest 输入、原生 `select`、组合框容器子输入、普通输入框四类场景分别给出正反合同。
+2. pending fill flush 语义未被方向键破坏。
+   - `content.ts:183-188` 的提交型按键集合仍只包含 `Enter / Tab / Escape / Ctrl|Meta+S`。
+   - `content.ts:354-356` 只有提交型按键才调用 `flushPendingFill(event.target)`。
+   - `content-contract.test.ts:291-333` 与 `384-405` 明确锁住“方向键记录但不提前 flush”和“普通输入框方向键既不录制也不提前 flush”。
+3. 未发现授权范围外的代码越界。
+   - 本轨功能提交 `499f69e` 的代码面只修改了目标文件，额外变更为 `.codex` 留痕。
+
+### Findings
+
+1. 无阻塞问题。
+2. 非阻塞风险：`isKeyboardNavigationTarget` 目前把 `aria-controls` / `aria-autocomplete` 的“属性存在”直接视为导航目标，符合本轨设计，但仍属于宽启发式。
+   - 影响：未来若页面把这些属性用于非 suggest 控件，`ArrowDown / ArrowUp` 可能被误录制。
+   - 证据：`apps/extension/entrypoints/content.ts:132-137`
+   - 覆盖缺口：`apps/extension/lib/content-contract.test.ts` 还没有锁住 `aria-controls` 非 suggest、`aria-autocomplete="none"` 等反例。
+3. 非阻塞风险：当前合同测试主要验证 capture 分支与 flush 时序，仍是 stub DOM harness，不是浏览器级 fixture。
+   - 影响：它能证明本轨录制逻辑正确，但真实页面里 `ArrowDown -> Enter` 的最终 replay 闭环仍要依赖另一条 replay matrix 轨道兜底。
+   - 证据：`apps/extension/lib/content-contract.test.ts:291-405`
+
+### 综合结论
+
+- 代码质量评分：96
+- 测试覆盖评分：93
+- 规范遵循评分：99
+- 战略匹配评分：97
+- 风险评估评分：91
+- 综合评分：95
+- 建议：通过
+
+## 2026-06-07 Wave 8 键盘驱动录制回放统一验收
+
+### 审查范围
+
+- `apps/extension/entrypoints/content.ts`
+- `apps/extension/lib/content-contract.test.ts`
+- `examples/fixtures/keyboard-command-palette.html`
+- `packages/runtime/src/playwright-runner.test.ts`
+- `examples/recorded-replay-smoke.ts`
+- `packages/runtime/src/recorded-replay-matrix.test.ts`
+- `examples/real-page-smoke.ts`
+- `docs/guides/recorded-replay-matrix.md`
+- `.codex/operations-log.md`
+- 协调分支新增业务提交：
+  - `8f1fc70 feat: 补齐键盘导航录制合同`
+  - `3b82598 feat: 扩展键盘导航回放矩阵`
+
+### 审查结果
+
+1. 需求字段完整性通过。
+   - 目标明确：补齐真实页面里键盘导航型录制回放，尤其是 `ArrowDown / ArrowUp + Enter`。
+   - 范围明确：扩展内容录制合同 + runtime/fixture/replay matrix，不扩散到新的事件协议或 Studio UI。
+   - 交付物明确：代码、fixture、Node 20 验证结果、review 结论与 `.codex` 留痕均已落盘。
+2. 原始意图覆盖完整。
+   - 扩展侧已把 `ArrowDown / ArrowUp` 收敛到组合框 / suggest / 原生 `select` 这类导航目标。
+   - runtime 单测、recorded replay smoke baseline、real-pages smoke 均新增 `keyboard-command-palette`。
+   - recorded replay baseline 从 `11` 条稳定扩展到 `12` 条，real-pages smoke 从 `19` 条扩展到 `20` 条。
+3. review 闭环有效。
+   - replay 轨道首轮实现曾被 reviewer 指出“ArrowDown 无实质判别作用”的阻塞问题。
+   - 主代理没有忽略该问题，而是通过新增 `导出周报` 候选并把输入值改成 `导出`，让 `ArrowDown` 必须把高亮从第 1 项切到第 2 项才能通过断言。
+   - reviewer 二次复查确认该问题已被修实，当前无阻塞问题。
+4. 架构一致性通过。
+   - 继续复用现有 `keypress -> press` 协议，没有新增 `keydown` / `keyup` / `hotkey` 事件类型。
+   - 继续复用 runtime 既有 `press` 执行能力，没有新建平行执行器。
+   - 新增 fixture 与 recorded/hand-written 双矩阵保持同名场景，职责清晰。
+5. 验证证据充分。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension test -- content-contract.test.ts`
+     - 结果：通过，`7/7`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test -- normalize.test.ts`
+     - 结果：通过，`30/30`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts recorded-replay-matrix.test.ts`
+     - 结果：通过，`27/27`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:recorded-pages`
+     - 结果：通过，`12/12`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+     - 结果：通过，`20/20`
+
+### Findings
+
+1. 未发现阻塞级问题。
+   - Wave 8 的两条轨道均已完成、回收并通过主线统一验收。
+2. 本轮出现过一次高价值假绿灯风险，但已在提交前被 reviewer 与主代理联手消除。
+   - 初版 `keyboard-command-palette` 因过滤后只剩唯一候选，`ArrowDown` 没有真实判别作用。
+   - 当前 fixture 和 case 已改成 `导出周报` 在前、输入值为 `导出`、最终必须命中 `export-daily`，因此 `ArrowDown` 已成为决定性步骤。
+3. 残余风险：扩展侧 `isKeyboardNavigationTarget` 仍是偏宽启发式。
+   - 影响：未来若某些页面把 `aria-controls` 或 `aria-autocomplete` 用在非 suggest 控件上，仍有误录制 `ArrowDown / ArrowUp` 的可能。
+   - 当前不构成阻塞，因为合同测试已锁住主路径，且 replay fixture 已证明闭环收益。
+4. 残余风险：recorded replay baseline 对 `stepCount` 的硬编码断言依然偏脆。
+   - 影响：如果后续 `buildFlowFromEvents()` 合理增减自动 `wait`/去噪步骤，可能引入假红。
+   - 当前不构成阻塞，因为这次 `12/12` baseline 与 `27/27` runtime 回归都已通过。
+5. 残余风险：键盘命令面板当前只覆盖“向下移动一格命中第二项”。
+   - 尚未覆盖多次 `ArrowDown`、`ArrowUp`、回环或异步筛选延迟。
+   - 这是后续扩展空间，不影响本轮验收。
+
+### 综合结论
+
+- 代码质量评分：98
+- 测试覆盖评分：97
+- 规范遵循评分：100
+- 战略匹配评分：99
+- 风险评估评分：96
+- 综合评分：98
+- 建议：通过

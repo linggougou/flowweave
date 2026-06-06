@@ -3907,3 +3907,139 @@
 - 推荐并行轨道：
   1. `Keyboard Capture Contract`
   2. `Keyboard Replay Matrix`
+
+## 2026-06-07 Wave 8 worktree 基线与轨道分派
+
+- 时间：2026-06-07 04:18:30 CST
+- worktree 目录检查：
+  - 已确认 `.worktrees/` 仍被 Git ignore，可继续复用。
+- 已创建 worktree：
+  - `.worktrees/codex-real-page-wave8-keyboard-capture`
+  - `.worktrees/codex-real-page-wave8-keyboard-replay`
+- 已创建分支：
+  - `codex/real-page-wave8-keyboard-capture`
+  - `codex/real-page-wave8-keyboard-replay`
+- 冷启动基线问题与补救：
+  - 首次在两个 worktree 直接运行 Node 20 基线命令时，均因本地 `node_modules` 缺失导致 `vitest: command not found`。
+  - 补救动作：在两个 worktree 均执行 `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm install --frozen-lockfile`。
+  - 安装依赖后再次运行基线命令，又暴露本地包构建产物缺失：
+    - capture 轨缺 `@flowweave/recorder`
+    - replay 轨缺 `@flowweave/shared`，随后补构建时又缺 `@flowweave/page-intelligence`
+  - 最小补救：
+    - capture 轨执行 `pnpm --filter @flowweave/shared --filter @flowweave/recorder build`
+    - replay 轨执行 `pnpm --filter @flowweave/shared --filter @flowweave/flow-dsl --filter @flowweave/recorder --filter @flowweave/page-intelligence --filter @flowweave/runtime build`
+- 冷启动基线验证（Node 20）：
+  - capture 轨：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension test -- content-contract.test.ts`
+    - 结果：通过，`4/4`
+  - replay 轨：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- recorded-replay-matrix.test.ts`
+    - 结果：通过，`1/1`
+- 已启动子代理：
+  - `Averroes / 019e9e5c-ef98-7131-b80f-aceb5f3a7c8a`
+    - 轨道：`Keyboard Capture Contract`
+    - 写入边界：`apps/extension/entrypoints/content.ts`、`apps/extension/lib/content-contract.test.ts`
+  - `Hegel / 019e9e5d-2228-7e22-b23f-c924d06662e4`
+    - 轨道：`Keyboard Replay Matrix`
+    - 写入边界：`examples/fixtures/keyboard-command-palette.html`、runtime/replay matrix 相关文件
+
+## 2026-06-07 Wave 8 Keyboard Capture 只读审查
+
+- 时间：2026-06-07 03:28:15 CST
+- 审查目标：
+  - worktree：`/Users/ling/codeHome/A_Mine/flowweave/.worktrees/codex-real-page-wave8-keyboard-capture`
+  - HEAD：`778e84f688895a5481e2f94b5ec02db9a5b6da45`
+  - 重点文件：`apps/extension/entrypoints/content.ts`、`apps/extension/lib/content-contract.test.ts`
+- 所用技能：
+  - `using-superpowers`：按会话要求先检查技能适用性
+  - `judge-harness`：按审查结论输出 PASS / REVISE 口径
+- 工具与环境说明：
+  - 当前环境未提供 `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code`；本次以 CodeGraph、本地 Git/rg/sed 与定向 Vitest 验证替代，并在此留痕。
+- 审查基线确认：
+  - `HEAD` 提交 `778e84f` 仅追加 `.codex/operations-log.md`
+  - 目标功能提交为 `499f69e 补齐键盘导航录制合同`
+  - 相对 `main` 的 merge-base：`527a164d39c0a1231d37a6cf2f474600452b8fb3`
+- 上下文检索：
+  - 已分析 `.codex/context-summary-wave8-keyboard-capture-review.md`
+  - 已核对现有模式：
+    - `apps/extension/entrypoints/content.ts:121-145` 导航目标判定
+    - `apps/extension/entrypoints/content.ts:190-248` pending fill flush / debounce
+    - `packages/recorder/src/normalize.ts:427-449` 下游提交型按键与 wait 推断
+- 验证命令：
+  - 首次误用根目录命令：`pnpm exec vitest run apps/extension/lib/content-contract.test.ts`
+    - 结果：根 `vitest.config.ts` 只包含 `packages/**`，返回 `No test files found`
+    - 结论：命令不适用，已改用包级验证
+  - 正确命令：`pnpm --dir /Users/ling/codeHome/A_Mine/flowweave/.worktrees/codex-real-page-wave8-keyboard-capture --filter @flowweave/app-extension test -- content-contract.test.ts`
+    - 结果：通过，`7/7`
+- 审查结论摘要：
+  - `ArrowDown / ArrowUp` 录制开口只加在 `isKeyboardNavigationTarget` 判定命中时，未扩散到全局方向键
+  - `recordPress` 仅对 `isSubmitLikePressKey(key)` 为真的按键调用 `flushPendingFill(event.target)`，方向键不会像 `Enter / Tab / Escape` 那样提前 flush
+  - 本轨代码改动未越出授权代码文件；额外改动仅为 `.codex` 留痕
+  - 发现 0 个阻塞问题，保留 2 个非阻塞风险待后续收敛
+
+## 2026-06-07 Wave 8 Replay 轨道回收与修正
+
+- 时间：2026-06-07 04:45:30 CST
+- replay 轨道回收结论：
+  - 子代理 `Hegel / 019e9e5d-2228-7e22-b23f-c924d06662e4` 已完成 `Keyboard Replay Matrix`
+  - 主体改动范围：
+    - `examples/fixtures/keyboard-command-palette.html`
+    - `packages/runtime/src/playwright-runner.test.ts`
+    - `examples/recorded-replay-smoke.ts`
+    - `packages/runtime/src/recorded-replay-matrix.test.ts`
+    - `examples/real-page-smoke.ts`
+    - `docs/guides/recorded-replay-matrix.md`
+- reviewer 首轮发现：
+  - `ArrowDown` 虽然进入了流程，但由于初始 fixture 里 `fill("导出日报")` 会把候选收窄成唯一一项，`ArrowDown` 不会改变最终高亮，导致 `fill -> ArrowDown -> Enter` 实际仍可能是假绿灯。
+- 根因分析：
+  - 问题不在 runtime `press` 能力，也不在 `keypress -> press` 协议。
+  - 根因在于命令面板 fixture 与 case 数据没有构造出“ArrowDown 真正决定选中项”的分叉条件。
+- 修正动作：
+  - 在 `keyboard-command-palette` fixture 中新增 `导出周报` 候选，并排在 `导出日报` 之前。
+  - 把 runtime、recorded replay、real-pages 三处 case 的输入值从 `导出日报` 调整为更宽的 `导出`。
+  - 保持最终断言仍指向 `#command-toast[data-command-id='export-daily']`，从而让 `ArrowDown` 真正负责把高亮从第 1 项切到第 2 项。
+- 修正后 reviewer 复查结论：
+  - 无阻塞问题。
+  - 当前 `ArrowDown` 已实质决定 `export-daily` 被选中并执行。
+  - 保留 2 个非阻塞风险：
+    - `stepCount` 硬编码断言仍偏脆
+    - 目前只覆盖“向下移动一格命中第二项”，尚未覆盖多次 `ArrowDown`、`ArrowUp` 或异步筛选延迟
+
+## 2026-06-07 Wave 8 统一验收与资源回收
+
+- 时间：2026-06-07 04:52:10 CST
+- 主线新增业务提交：
+  - `8f1fc70 feat: 补齐键盘导航录制合同`
+  - `3b82598 feat: 扩展键盘导航回放矩阵`
+- Wave 8 统一验收（Node 20）：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension test -- content-contract.test.ts`
+    - 结果：通过，`7/7`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test -- normalize.test.ts`
+    - 结果：通过，`30/30`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- playwright-runner.test.ts recorded-replay-matrix.test.ts`
+    - 结果：通过，`27/27`
+    - 关键信息：
+      - runtime 新增 `keyboard-command-palette` 命令面板键盘回放用例
+      - recorded replay baseline 已扩到 `12` 条
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:recorded-pages`
+    - 结果：通过，`12/12`
+    - 关键信息：`keyboard-command-palette` 成功，`5` 步
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+    - 结果：通过，`20/20`
+    - 关键信息：`keyboard-command-palette` 成功，`5` 步
+- 已关闭子代理：
+  - `Averroes / 019e9e5c-ef98-7131-b80f-aceb5f3a7c8a`
+  - `Hegel / 019e9e5d-2228-7e22-b23f-c924d06662e4`
+  - `Pasteur / 019e9e64-c997-76a1-839d-36980d907876`
+  - `Ampere / 019e9e6b-4cff-77f3-9376-d5ef16807534`
+- 已删除 worktree：
+  - `.worktrees/codex-real-page-wave8-keyboard-capture`
+  - `.worktrees/codex-real-page-wave8-keyboard-replay`
+- 已删除本地分支：
+  - `codex/real-page-wave8-keyboard-capture`
+  - `codex/real-page-wave8-keyboard-replay`
+- 回收后工作树状态：
+  - `git worktree list` 仅剩主工作区 `/Users/ling/codeHome/A_Mine/flowweave`
+- 当前结论：
+  - Wave 8 已把“键盘驱动录制回放”纳入主线稳定证据。
+  - `ArrowDown / ArrowUp` 录制与 `fill -> ArrowDown -> Enter` recorded replay 闭环均已具备 Node 20 验证证据。
