@@ -1892,3 +1892,71 @@
 - 风险评估评分：88
 - 综合评分：90
 - 建议：通过
+
+## 2026-06-07 Wave 5 统一验收
+
+### 验证范围
+
+- 协调分支 `codex/real-page-stability-program` 在最终收口补丁后，是否仍能在 `Node v20.19.6` 基线上通过：
+  - `pnpm lint`
+  - `pnpm smoke`
+  - `pnpm e2e:real-pages`
+- `packages/runtime/src/playwright-runner.test.ts` 的 lint 收口补丁是否只清理未使用常量，而未改变 Runtime 真实页面回归行为。
+- Wave 5 新增的真实页面矩阵观测能力是否能稳定输出成功态摘要、最慢场景排行与失败类型统计。
+
+### 验证结果
+
+1. lint 收口补丁验证通过。
+   - 当前唯一代码差异是删除 `packages/runtime/src/playwright-runner.test.ts` 中未使用的 `sessionExpiredRetryFixtureUrl`。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm lint`
+     - 结果：通过
+     - 摘要：`12 successful, 12 total`
+   - 结论：本轮补丁只修复 lint 噪音，没有引入新的生产代码差异。
+2. 仓库级烟测验证通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+     - 结果：通过
+   - 内含关键结果：
+     - `pnpm typecheck`：`19 successful, 19 total`
+     - `pnpm test`：通过
+     - `pnpm build`：`12 successful, 12 total`
+     - `pnpm e2e:login`：通过
+   - `e2e:login` 运行记录：
+     - 项目 ID：`a521acb1-f9ef-4389-803b-4742eb66c8cb`
+     - 执行 ID：`1d2e981a-2a6c-49e9-abc9-9c96d9f8a2ce`
+     - 状态：`success`
+     - 步骤：`4/4`
+3. 真实页面矩阵统一验收通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+     - 结果：通过
+     - 档位：`p6`
+     - 基准数量：`18`
+     - 成功 / 失败：`18 / 0`
+     - 总耗时：`26095ms`
+     - 平均耗时：`1450ms`
+     - 失败类型统计：`无`
+   - 关键输出已满足 Wave 5 观测目标：
+     - 成功态摘要按场景族输出完整
+     - 最慢场景排行 Top 5 输出完整
+     - `spa-route`、`session-expired-retry`、`bulk-cross-page-selection` 等 Wave 5 重点场景均成功
+4. 新阻塞未复现。
+   - 本轮复验没有再出现此前 Recorder 轨道的 `spa-route` 回归。
+   - Studio Failure Insight 相关能力未在仓库级验证中暴露新的行为冲突。
+
+### Findings
+
+1. 未发现阻塞级问题。
+   - 当前协调分支已经同时通过 lint、整仓 smoke 与真实页面矩阵，满足本轮“统一验收后再提交”的收口要求。
+2. 残余风险：真实页面矩阵耗时已接近半分钟。
+   - 当前 `18` 个场景总耗时 `26.095s`，仍在可接受范围，但后续继续扩矩阵时需要持续盯住总耗时增长。
+3. 残余风险：Node 24 仍未纳入本轮验收基线。
+   - 本轮全部证据继续基于 `Node v20.19.6`；若后续要切换到 Node 24，需要单独处理 `better-sqlite3` ABI 与相关依赖兼容问题。
+
+### 综合结论
+
+- 代码质量评分：97
+- 测试覆盖评分：97
+- 规范遵循评分：99
+- 战略匹配评分：97
+- 风险评估评分：94
+- 综合评分：97
+- 建议：通过

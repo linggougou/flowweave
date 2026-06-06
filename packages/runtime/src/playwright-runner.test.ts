@@ -28,9 +28,6 @@ const uploadFormFixtureUrl = pathToFileURL(join(fixturesDir, "upload-form.html")
 const contenteditableEditorFixtureUrl = pathToFileURL(
   join(fixturesDir, "contenteditable-editor.html"),
 ).href;
-const sessionExpiredRetryFixtureUrl = pathToFileURL(
-  join(fixturesDir, "session-expired-retry.html"),
-).href;
 const bulkCrossPageSelectionFixtureUrl = pathToFileURL(
   join(fixturesDir, "bulk-cross-page-selection.html"),
 ).href;

@@ -2839,3 +2839,54 @@
     - `StepLogTable` 缺独立组件测试属测试缺口，但当前已有 `failure-insights` 纯函数测试与 `DiagnosticInspector` 渲染测试兜底，不足以单独阻塞合并。
   - 非阻塞发现：
     - `failure-insights.ts` 的分类顺序会把一部分“先失败后成功”的通过步骤显示成 `当前页未找到目标 / 目标不可见 / 目标不唯一` 之类硬失败文案，和步骤状态 `passed` 的语义不完全一致。
+
+## 2026-06-07 Wave 5 统一验收续跑
+
+- 时间：2026-06-07 00:11:32 CST
+- 任务目标：承接上一轮 Wave 5 四轨并回后的最终收口，完成统一验收、补齐留痕并准备最终提交。
+- 当前分支与状态：
+  - 分支：`codex/real-page-stability-program`
+  - 当前唯一未提交代码改动：`packages/runtime/src/playwright-runner.test.ts`
+  - 改动内容：删除未使用常量 `sessionExpiredRetryFixtureUrl`，修复 `pnpm lint` 的收口问题。
+- 本轮执行约束：
+  - 继续使用 `Node v20.19.6` 作为唯一验收基线。
+  - 继续遵守“源码改动后先验证，再宣称完成”的收口原则。
+  - 继续维护 `.codex/operations-log.md` 与 `.codex/verification-report.md`，未补齐留痕前不进入提交。
+- 计划中的统一验收命令：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm lint`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+- 实际执行结果：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm lint`
+    - 结果：通过
+    - 摘要：`12 successful, 12 total`
+    - 收口说明：确认删除 `packages/runtime/src/playwright-runner.test.ts` 中未使用的 `sessionExpiredRetryFixtureUrl` 后，lint 不再报错。
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+    - 结果：通过
+    - 内含验证：
+      - `pnpm typecheck`：`19 successful, 19 total`
+      - `pnpm test`：通过
+      - `pnpm build`：`12 successful, 12 total`
+      - `pnpm e2e:login`：通过
+    - `e2e:login` 运行记录：
+      - 项目 ID：`a521acb1-f9ef-4389-803b-4742eb66c8cb`
+      - 执行 ID：`1d2e981a-2a6c-49e9-abc9-9c96d9f8a2ce`
+      - 步骤：`4`
+      - 状态：`success`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
+    - 结果：通过
+    - 档位：`p6`
+    - 场景：`18/18`
+    - 总耗时：`26095ms`
+    - 平均耗时：`1450ms`
+    - 失败类型统计：`无`
+    - 最慢 Top 5：
+      - `drawer-double-save`：`2477ms`
+      - `bulk-cross-page-selection`：`2381ms`
+      - `session-expired-retry`：`1941ms`
+      - `empty-results-retry`：`1935ms`
+      - `linked-filters`：`1866ms`
+- 本轮收口结论：
+  - Wave 5 协调分支当前验收基线完整通过。
+  - 未出现新的阻塞条件，不触发阻塞升级记录。
+  - 下一步进入最终提交与自动化回收评估。
