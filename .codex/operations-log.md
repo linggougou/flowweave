@@ -4884,3 +4884,18 @@
     - 结果：通过，`65/65`
   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
     - 结果：通过
+
+## 2026-06-07 Wave 11 轨道回收完成
+
+- 时间：2026-06-07 16:26:00 CST
+- 已回收 worktree：
+  - `.worktrees/codex-real-page-wave11-runtime-cause-expansion`
+  - `.worktrees/codex-real-page-wave11-benchmarks-p8`
+  - `.worktrees/codex-real-page-wave11-studio-runtime-categories`
+- 已删除本地分支：
+  - `codex/real-page-wave11-runtime-cause-expansion`
+  - `codex/real-page-wave11-benchmarks-p8`
+  - `codex/real-page-wave11-studio-runtime-categories`
+- 当前保留：
+  - 主工作区 `/Users/ling/codeHome/A_Mine/flowweave`
+  - 协调分支 `codex/real-page-stability-program`

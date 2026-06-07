@@ -55,6 +55,16 @@
      - 结果：通过，`24/24`
    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:real-pages`
      - 结果：通过，`23/23`
+5. 已验收轨道回收通过。
+   - 已回收 worktree：
+     - `.worktrees/codex-real-page-wave11-runtime-cause-expansion`
+     - `.worktrees/codex-real-page-wave11-benchmarks-p8`
+     - `.worktrees/codex-real-page-wave11-studio-runtime-categories`
+   - 已删除本地分支：
+     - `codex/real-page-wave11-runtime-cause-expansion`
+     - `codex/real-page-wave11-benchmarks-p8`
+     - `codex/real-page-wave11-studio-runtime-categories`
+   - 当前仅保留主工作区与协调分支 `codex/real-page-stability-program`。
 
 ### Findings
 
