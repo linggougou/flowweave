@@ -1,5 +1,144 @@
 # 验证报告
 
+## 2026-06-07 Studio DOM 结构脆弱性误报修复验收
+
+### 验证范围
+
+- `analyzeFlowFragility()` 是否仍然把稳定 `#id` / 属性锚点 CSS 误报成 `CSS_ONLY`。
+- `nth-of-type` 结构 CSS 是否还会被重复报成 `CSS_ONLY + CSS_NTH_OF_TYPE` 双重噪音。
+- Studio 消费 fragility 结果的渲染与历史执行兼容逻辑是否保持正常。
+- 截图中的真实 Flow 是否从“刷屏式告警”收敛到“仅保留真实结构风险”。
+
+### 验证结果
+
+1. 静态规则已按目标收紧。
+   - `packages/page-intelligence/src/fragility.ts` 新增：
+     - 结构组合符识别
+     - 稳定 CSS 锚点识别
+     - `shouldWarnCssOnly()` 分类判断
+   - 新行为：
+     - 单一稳定 `#id` / `[name=]` / `[data-testid=]` / `[aria-label=]` / `[placeholder=]` / `[for=]` 选择器，不再误报 `CSS_ONLY`
+     - `nth-of-type` 结构路径只保留 `CSS_NTH_OF_TYPE`
+     - 真正缺少稳定锚点的纯 CSS 仍继续报 `CSS_ONLY`
+2. TDD 失败测试先失败、后通过。
+   - 失败阶段：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/page-intelligence test -- fragility.test.ts`
+     - 结果：失败，3 条新增断言全部命中旧误报
+   - 修复后：
+     - 同一命令结果：通过，`19/19`
+3. 相关回归通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/page-intelligence test`
+     - 结果：通过，`20/20`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- FragilityNotice.test.tsx execution-fragility.test.ts`
+     - 结果：通过，`14/14`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+     - 结果：通过
+4. 截图中的真实 Flow 已明显收敛。
+   - 复验对象：
+     - `projectId`: `68fce3e8-c717-417f-b276-62177ef3ecc3`
+     - `flowId`: `flow-080c5fba-fb3e-4557-bfdc-91413376adcc`
+   - 重新计算结果：
+     - 总告警数：`9`
+     - 分布：`CSS_NTH_OF_TYPE: 9`
+   - 推论：
+     - 原先由稳定 `#email / #password` 这类纯 id 选择器触发的 `CSS_ONLY` 已被消除
+     - 剩余告警均为真正应修复的结构路径定位
+
+### Findings
+
+1. 根因不是 Studio 面板渲染错了，而是 `page-intelligence` 的 `CSS_ONLY` 规则过宽。
+   - 它过去把“所有纯 CSS”都当作同等级脆弱风险，没有区分稳定锚点与结构路径。
+2. 当前修复优先解决了“误报刷屏”，没有掩盖真实问题。
+   - `nth-of-type` 相关结构风险仍完整保留。
+3. 这轮没有自动修复旧 Flow 的结构路径本身。
+   - 也就是说，截图里的剩余 `9` 条风险仍建议后续通过重新录制、补 role/testId 或策略修复来处理。
+
+### 综合结论
+
+- 代码质量评分：95
+- 测试覆盖评分：95
+- 规范遵循评分：98
+- 战略匹配评分：94
+- 风险评估评分：90
+- 综合评分：95
+- 建议：通过
+
+## 2026-06-07 Studio 成品编译与启动验收
+
+### 验证范围
+
+- `Node v20.19.6` 下 `@flowweave/app-studio` 是否能成功生成生产构建产物。
+- 当前仓库中的 Studio 桌面端是否能真正启动，而不是只停留在“构建成功”。
+- 启动过程中暴露的运行时依赖缺口、知识库服务依赖和 Electron 原生模块 ABI 问题是否已定位并处理。
+- 是否能够给出实际成品界面证据，并明确当前“安装包能力”的真实边界。
+
+### 验证结果
+
+1. Studio 生产构建通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio build`
+     - 结果：通过
+   - 产物已生成：
+     - `apps/studio/dist/index.html`
+     - `apps/studio/dist/assets/*`
+     - `apps/studio/dist-electron/main.mjs`
+     - `apps/studio/dist-electron/preload.cjs`
+2. Studio 定向类型检查通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+     - 结果：通过
+3. 生产启动链路已跑通，但需要两项运行时补齐。
+   - 已在 `apps/studio/package.json` 补齐 Electron 主进程实际直接依赖：
+     - `better-sqlite3`
+     - `drizzle-orm`
+     - `zod`
+   - 已执行 `pnpm install`，`pnpm-lock.yaml` 已同步。
+4. 知识库本地 API 已验证可用。
+   - 启动命令：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm exec tsx apps/web/server/index.ts`
+   - 健康检查：
+     - `curl -sf http://127.0.0.1:3847/api/health`
+     - 结果：`{"ok":true}`
+   - 项目列表检查：
+     - `curl -sf http://127.0.0.1:3847/api/projects`
+     - 结果：返回现有项目列表 JSON
+5. Electron ABI 问题已通过预编译二进制补齐。
+   - 直接源码重编译失败，原因是当前机器缺少可用 `xcodebuild` / CLT。
+   - 改为在 `better-sqlite3` 包目录执行：
+     - `npm_config_runtime=electron npm_config_target=33.4.11 npm_config_disturl=https://electronjs.org/headers pnpm run install`
+   - 结果：成功落到 Electron 可加载的 `better_sqlite3.node`。
+6. 桌面成品已真实启动。
+   - 启动命令：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm exec electron .`
+   - 通过系统窗口查询确认窗口标题：
+     - `织流 Studio`
+   - 已生成成品截图：
+     - `/tmp/flowweave-studio-browser.png`
+7. 成品边界已明确。
+   - 当前仓库可以构建并运行 Studio 成品。
+   - 当前仓库仍不具备 `.app/.dmg/.pkg` 安装器产出入口。
+   - 当前桌面端首屏仍依赖本地知识库 API `127.0.0.1:3847`，尚未封装为完全独立桌面安装包。
+
+### Findings
+
+1. 已证明当前主线不是“不能编译”，而是“桌面运行时还缺两层成品化处理”。
+   - 第一层是 Electron 主进程运行时依赖声明不完整。
+   - 第二层是 `better-sqlite3` 需要 Electron 目标 ABI 对应二进制。
+2. 当前最大产品化缺口不是页面本身，而是交付形态。
+   - 现在能跑的是“可运行桌面构建 + 本地知识库 API”。
+   - 还不是“用户双击安装包即可独立使用”的最终桌面交付。
+3. 截图证据已具备，但截图是通过本地静态预览端口取图。
+   - 这张图对应的就是 `apps/studio/dist` 生产产物。
+   - 真正的 Electron 桌面壳也已单独验证启动成功。
+
+### 综合结论
+
+- 代码质量评分：93
+- 测试覆盖评分：90
+- 规范遵循评分：97
+- 战略匹配评分：91
+- 风险评估评分：85
+- 综合评分：91
+- 建议：通过，但应尽快补“独立桌面成品化”轨道
+
 ## 2026-06-07 Wave 11 真实页面执行韧性扩展验收
 
 ### 验证范围
@@ -3192,3 +3331,194 @@
 - 风险评估评分：96
 - 综合评分：98
 - 建议：通过
+
+## 2026-06-08 提交后 CLI 不通过排查验收
+
+### 审查范围
+
+- `packages/runtime/src/playwright-runner.test.ts`
+- `packages/runtime/src/playwright-runner.ts`
+- `scripts/doctor.mjs`
+- `package.json`
+- `.codex/context-summary-cli-post-commit-fail.md`
+- `.codex/operations-log.md`
+
+### 审查结果
+
+1. 这次故障已被拆成“源码回归”和“本地 Node ABI 漂移”两个层面，并分别收口。
+   - runtime 的 TypeScript 问题已修复，不再阻塞 `smoke` 的 `typecheck` 阶段。
+   - `better-sqlite3` 的本地 ABI 漂移不再等到中途测试才爆炸，而会在 `pnpm smoke` 开头被明确拦截。
+2. 前置守卫实现边界合理。
+   - 没有把“自动重装依赖”偷偷塞进测试链路，而是明确检测、明确报错、明确给修复命令。
+   - `SKIP_E2E=1` 时不会强制要求 Playwright，保持原有无 E2E smoke 语义。
+3. 本轮验证覆盖充分。
+   - Node 20 下已验证 `lint`、完整 `smoke`、`project-knowledge` 原生 SQLite 测试。
+   - Node 24 下已验证 `smoke:prepare`、runtime typecheck 与 `project-knowledge` 测试。
+   - 最终又切回 Node 20 重装确认，避免把本地工作区留在非默认 ABI 状态。
+
+### Findings
+
+1. 未发现新的阻塞级问题。
+   - 当前主分支的“提交后 CLI 不通过”已能稳定复现、解释和修复。
+2. 残余风险：本地单份 `node_modules` 仍不能同时兼容 Node 20 与 Node 24。
+   - 这是原生模块 ABI 的客观限制，不是本轮代码缺陷。
+   - 当前方案的目标是“更早失败并给出明确修复路径”，不是绕过 ABI 机制。
+
+### 综合结论
+
+- 代码质量评分：97
+- 测试覆盖评分：98
+- 规范遵循评分：99
+- 战略匹配评分：98
+- 风险评估评分：96
+- 综合评分：98
+- 建议：通过
+
+## 2026-06-08 当前项目状态审查
+
+### 审查范围
+
+- 主线文档：
+  - `docs/architecture/overview.md`
+  - `docs/superpowers/plans/2026-05-26-run-first-roadmap.md`
+  - `docs/releases/v1.0.0.md`
+  - `docs/guides/manual-qa.md`
+- 关键实现：
+  - `apps/extension/entrypoints/background.ts`
+  - `apps/extension/entrypoints/content.ts`
+  - `apps/studio/src/App.tsx`
+  - `apps/studio/electron/services.ts`
+  - `apps/web/server/index.ts`
+  - `packages/project-knowledge/src/repository.ts`
+  - `packages/recorder/src/normalize.ts`
+  - `packages/runtime/src/playwright-runner.ts`
+  - `packages/page-intelligence/src/fragility.ts`
+  - `packages/page-intelligence/src/snapshot.ts`
+  - `packages/network-intelligence/src/har-summary.ts`
+  - `packages/ai-orchestrator/src/generate.ts`
+  - `packages/ai-orchestrator/src/heuristic.ts`
+
+### Findings
+
+1. [P1] Web 端 Flow 版本恢复路由当前实际上不可达。  
+   文件：[apps/web/server/index.ts](/Users/ling/codeHome/A_Mine/flowweave/apps/web/server/index.ts:215)  
+   说明：外层只接受 `segments.length === 5`，但恢复路径 `/api/projects/:id/flow-versions/:versionId/restore` 实际长度为 `6`，因此 `POST restore` 永远不会命中。Web 控制台和 Studio 的 HTTP fallback 都会受影响。
+
+2. [P2] `app-web` 测试没有覆盖真实 HTTP 路由，导致服务端断路不会被发现。  
+   文件：[apps/web/server/api.test.ts](/Users/ling/codeHome/A_Mine/flowweave/apps/web/server/api.test.ts:1)  
+   说明：当前 2 条测试都直接调用 `ProjectKnowledgeRepository`，并未启动 `apps/web/server/index.ts` 或发起 HTTP 请求，所以“版本恢复路由不可达”这类问题能带着绿灯存在。
+
+3. [P2] `scroll` 录制能力处于协议已声明、实现未闭环的半成品状态。  
+   文件：
+   - [packages/shared/src/recording-protocol.ts](/Users/ling/codeHome/A_Mine/flowweave/packages/shared/src/recording-protocol.ts:4)
+   - [apps/extension/entrypoints/content.ts](/Users/ling/codeHome/A_Mine/flowweave/apps/extension/entrypoints/content.ts:393)
+   - [packages/flow-dsl/src/schema.ts](/Users/ling/codeHome/A_Mine/flowweave/packages/flow-dsl/src/schema.ts:58)  
+   说明：共享协议把 `scroll` 列为合法 `RecordedEvent`，但内容脚本没有 `scroll` 监听，recorder 没有对应归一化，DSL 也没有 `scroll` 步骤。这类“名义支持”会误导后续扩展和测试设计。
+
+### 已完成内容（按 v1 主线）
+
+- Monorepo、TS strict、pnpm / turbo 工具链
+- Flow DSL 8 类步骤
+- 扩展录制、导出 JSON、同步知识库
+- Recorder 归一化、变量占位符、去噪与 inferred wait
+- Runtime 执行、HAR、页面摘要、storage state、真实页面基准矩阵
+- SQLite 知识库与 Flow / 版本 / 执行 / 快照持久化
+- Studio 的运行、执行历史、Flow 版本、诊断与截图打开
+- Web 的项目 / 版本 / 执行历史查看
+
+### 写了一半 / 冻结中的内容
+
+- `ai-orchestrator`：仅启发式草案生成，未接 LLM、未接任一产品 UI
+- `network-intelligence`：仅 HAR 摘要解析
+- `page-intelligence`：仅 fragility + snapshot
+- `scroll` 录制闭环
+- Web / HTTP fallback 的环境与版本能力，不等价于 Electron Studio
+
+### 尚未开发内容
+
+- LLM / 自然语言编排产品化
+- 深度页面理解（a11y、区域、组件语义）
+- 深度接口理解（动作-请求映射、模板化、鉴权分析）
+- 批量执行、定时执行、断点续跑
+- 云端同步、多用户协作
+- DSL 规划步骤：`assert` / `extract` / `apiCall`
+
+### 本轮验证
+
+- `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-web test`
+  - 结果：通过，`2/2`
+- `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/page-intelligence test`
+  - 结果：通过，`20/20`
+- `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/ai-orchestrator test`
+  - 结果：通过，`1/1`
+
+### 综合结论
+
+- 代码质量评分：92
+- 测试覆盖评分：84
+- 规范遵循评分：98
+- 战略匹配评分：95
+- 风险评估评分：88
+- 综合评分：91
+- 建议：通过（需带着上述 3 个发现管理预期）
+
+## 2026-06-08 Wave 12 编排与 Foundation 闸口审查
+
+### 审查范围
+
+- 新增：
+  - `.codex/context-summary-wave12-web-scroll-orchestration.md`
+  - `docs/superpowers/plans/2026-06-08-real-page-stability-wave12-web-scroll-plan.md`
+  - `docs/superpowers/plans/2026-06-08-real-page-stability-wave12-web-scroll-orchestration.md`
+- 复核当前 Foundation 改动：
+  - `packages/page-intelligence/src/fragility.ts`
+  - `packages/page-intelligence/src/fragility.test.ts`
+  - `packages/runtime/src/playwright-runner.ts`
+  - `packages/runtime/src/playwright-runner.test.ts`
+  - `scripts/doctor.mjs`
+  - `package.json`
+  - `apps/studio/package.json`
+
+### 审查清单
+
+- 需求字段完整性：已满足
+  - 目标：明确为“Foundation 收口 + Web restore + scroll 闭环”
+  - 范围：限制在 Web / recorder / flow-dsl / runtime / smoke 基线
+  - 交付物：计划、编排板、上下文摘要、后续 worktree 轨道
+  - 审查要点：Node 20 基线、worktree 隔离、路由与协议缺口
+- 原始意图覆盖：已满足
+  - 用户要求“自主规划 + worktree + subagent 并行开发”已转化为可执行编排板
+- 交付物映射：已满足
+  - 计划文档对应具体轨道
+  - `.codex` 留痕对应上下文与验收
+- 依赖与风险评估：已满足
+  - 已识别 `packages/runtime` 高冲突、`apps/web` 顶层监听端口、`packages/shared` 单点协议等风险
+- 审查结论留痕：已满足
+  - 已更新 `operations-log.md`
+
+### 本轮验证
+
+- `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/page-intelligence test`
+  - 结果：通过，`20/20`
+- `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime typecheck`
+  - 结果：通过
+- `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke:prepare`
+  - 结果：通过
+- `CI=1 PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+  - 结果：通过
+  - 关键确认：`typecheck`、`test`、`build` 与 `e2e:login` 全部完成
+
+### 评分
+
+- 代码质量评分：94
+- 测试覆盖评分：93
+- 规范遵循评分：99
+- 需求匹配评分：97
+- 架构一致评分：95
+- 风险评估评分：92
+- 综合评分：95
+
+### 建议
+
+- 通过
+- 可以进入 Wave 12 的 worktree / subagent 并行开发阶段
