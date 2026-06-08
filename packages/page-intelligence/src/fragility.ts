@@ -1,8 +1,8 @@
-import type { FlowDocument, NormalizedStep } from "@flowweave/flow-dsl";
+import type { FlowDocument, NormalizedStep, Target } from "@flowweave/flow-dsl";
 import { extractTemplateVariables, interpolateTemplateString } from "@flowweave/shared";
 const leadingVariablePattern = /^\s*\{\{\s*[^{}]+\s*\}\}/;
 
-type StepTarget = Extract<NormalizedStep, { type: "click" }>["target"];
+type StepTarget = Target;
 
 export type FragilityAnalysisContext = {
   baseUrl?: string;
@@ -105,6 +105,8 @@ function extractExecutableVariableNames(step: NormalizedStep): string[] {
       return extractTargetVariableNames(step.target);
     case "press":
       return [...extractTargetVariableNames(step.target), ...extractVariableNames(step.key)];
+    case "scroll":
+      return extractTargetVariableNames(step.target);
     case "upload":
       return [...extractTargetVariableNames(step.target), ...step.files.flatMap(extractVariableNames)];
     case "wait":
@@ -126,6 +128,8 @@ function getTargetForFragilityCheck(step: NormalizedStep): StepTarget | undefine
     case "upload":
       return step.target;
     case "press":
+      return step.target;
+    case "scroll":
       return step.target;
     default:
       return undefined;

@@ -326,6 +326,39 @@ describe("analyzeFlowFragility", () => {
     expect(codes).not.toContain("WAIT_MAY_BE_UNSTABLE");
   });
 
+  it("对仅使用 css 的容器级 scroll 步骤给出 CSS_ONLY", () => {
+    const flow = baseFlow([
+      {
+        id: "s1",
+        type: "scroll",
+        x: 0,
+        y: 500,
+        target: {
+          strategies: [{ kind: "css", selector: ".virtual-list" }],
+        },
+      },
+    ]);
+
+    const codes = analyzeFlowFragility(flow).map((issue) => issue.code as string);
+    expect(codes).toContain("CSS_ONLY");
+  });
+
+  it("对页面级 scroll 步骤不产出 target 类风险", () => {
+    const flow = baseFlow([
+      {
+        id: "s1",
+        type: "scroll",
+        x: 0,
+        y: 500,
+      },
+    ]);
+
+    const codes = analyzeFlowFragility(flow).map((issue) => issue.code as string);
+    expect(codes).not.toContain("NO_STRATEGIES");
+    expect(codes).not.toContain("CSS_ONLY");
+    expect(codes).not.toContain("TEXT_ONLY");
+  });
+
   it("含 role 策略时不报 CSS_ONLY", () => {
     const flow = baseFlow([
       {

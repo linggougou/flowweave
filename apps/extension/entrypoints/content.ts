@@ -104,9 +104,12 @@ const PRESS_KEYS = new Set(["Enter", "Tab", "Escape"]);
 const NAVIGATION_PRESS_KEYS = new Set(["ArrowDown", "ArrowUp"]);
 const MODIFIER_KEYS = new Set(["Shift", "Control", "Alt", "Meta"]);
 const FILL_DEBOUNCE_MS = 400;
+const SCROLL_DEBOUNCE_MS = 150;
 
 let pendingFillElement: Element | null = null;
 let pendingFillTimer: ReturnType<typeof setTimeout> | undefined;
+const pendingScrollEvents = new Map<string, Omit<RecordedEvent, "id">>();
+const pendingScrollTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 function normalizePressKey(key: string): string {
   if (key === "Esc") {
@@ -217,6 +220,114 @@ function clearPendingFillTimer(): void {
     clearTimeout(pendingFillTimer);
     pendingFillTimer = undefined;
   }
+}
+
+function normalizeScrollOffset(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+function isPageScrollTarget(target: EventTarget | null): boolean {
+  return (
+    target === null ||
+    target === document ||
+    target === document.body ||
+    target === document.documentElement ||
+    target === document.scrollingElement
+  );
+}
+
+function readPageScrollPosition(): { x: number; y: number } {
+  const scrollingElement = document.scrollingElement;
+  const x =
+    typeof window.scrollX === "number"
+      ? window.scrollX
+      : scrollingElement instanceof Element
+        ? scrollingElement.scrollLeft
+        : 0;
+  const y =
+    typeof window.scrollY === "number"
+      ? window.scrollY
+      : scrollingElement instanceof Element
+        ? scrollingElement.scrollTop
+        : 0;
+
+  return {
+    x: normalizeScrollOffset(x),
+    y: normalizeScrollOffset(y),
+  };
+}
+
+function buildScrollTargetKey(payload: Record<string, unknown>): string {
+  const strategies = Array.isArray(payload.strategies) ? payload.strategies : [];
+  return strategies.length > 0 ? JSON.stringify(strategies) : "page";
+}
+
+function clearPendingScrollTimer(key: string): void {
+  const timer = pendingScrollTimers.get(key);
+  if (!timer) {
+    return;
+  }
+
+  clearTimeout(timer);
+  pendingScrollTimers.delete(key);
+}
+
+function flushPendingScroll(key: string): void {
+  const event = pendingScrollEvents.get(key);
+  if (!event) {
+    return;
+  }
+
+  pendingScrollEvents.delete(key);
+  clearPendingScrollTimer(key);
+  sendEvent(event);
+}
+
+function scheduleScrollRecord(target: EventTarget | null): void {
+  const timestamp = Date.now();
+  const pagePosition = readPageScrollPosition();
+
+  if (isPageScrollTarget(target)) {
+    const key = "page";
+    pendingScrollEvents.set(key, {
+      type: "scroll",
+      timestamp,
+      url: window.location.href,
+      payload: pagePosition,
+    });
+    clearPendingScrollTimer(key);
+    pendingScrollTimers.set(
+      key,
+      setTimeout(() => {
+        flushPendingScroll(key);
+      }, SCROLL_DEBOUNCE_MS),
+    );
+    return;
+  }
+
+  if (!(target instanceof Element)) {
+    return;
+  }
+
+  const payload = {
+    ...buildInteractionPayload(target, "click"),
+    x: normalizeScrollOffset(target.scrollLeft),
+    y: normalizeScrollOffset(target.scrollTop),
+  };
+  const key = buildScrollTargetKey(payload);
+  pendingScrollEvents.set(key, {
+    type: "scroll",
+    timestamp,
+    url: window.location.href,
+    payload,
+  });
+  clearPendingScrollTimer(key);
+  pendingScrollTimers.set(
+    key,
+    setTimeout(() => {
+      flushPendingScroll(key);
+    }, SCROLL_DEBOUNCE_MS),
+  );
 }
 
 function flushPendingFill(target?: EventTarget | null): boolean {
@@ -446,6 +557,14 @@ export default defineContentScript({
       "keydown",
       (ev) => {
         recordPress(ev);
+      },
+      true,
+    );
+
+    document.addEventListener(
+      "scroll",
+      (ev) => {
+        scheduleScrollRecord(ev.target);
       },
       true,
     );

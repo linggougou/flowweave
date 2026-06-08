@@ -16,6 +16,10 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string" && item.length > 0);
 }
 
+function isNonNegativeNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
 function isReplayableUploadInput(value: string): boolean {
   return (
     getSingleTemplateVariableName(value) !== null ||
@@ -38,6 +42,24 @@ export const recordedEventSchema = z.object({
       path: ["payload", "key"],
       message: "keypress 事件必须提供 key",
     });
+  }
+
+  if (event.type === "scroll") {
+    if (!isNonNegativeNumber(event.payload.x)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["payload", "x"],
+        message: "scroll 事件必须提供非负数 x",
+      });
+    }
+
+    if (!isNonNegativeNumber(event.payload.y)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["payload", "y"],
+        message: "scroll 事件必须提供非负数 y",
+      });
+    }
   }
 
   if (event.payload.inputType !== "file") {

@@ -56,6 +56,11 @@ type InteractionPayload = {
   scopeKind?: ScopeKind;
 };
 
+type ScrollPayload = InteractionPayload & {
+  x?: number;
+  y?: number;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -68,6 +73,11 @@ function readString(payload: Record<string, unknown>, key: string): string | und
 function readBoolean(payload: Record<string, unknown>, key: string): boolean | undefined {
   const value = payload[key];
   return typeof value === "boolean" ? value : undefined;
+}
+
+function readNonNegativeNumber(payload: Record<string, unknown>, key: string): number | undefined {
+  const value = payload[key];
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
 function readScopeKind(payload: Record<string, unknown>, key: string): ScopeKind | undefined {
@@ -243,6 +253,8 @@ function collectStepVariableNames(step: NormalizedStep): string[] {
       return extractTargetVariableNames(step.target);
     case "press":
       return [...extractTargetVariableNames(step.target), ...extractVariableNames(step.key)];
+    case "scroll":
+      return extractTargetVariableNames(step.target);
     case "upload":
       return [...extractTargetVariableNames(step.target), ...extractUploadVariableNames(step.files)];
     case "wait":
@@ -406,6 +418,33 @@ function normalizeKeypress(event: RecordedEvent): NormalizedStep | null {
   };
 }
 
+function normalizeScroll(event: RecordedEvent): NormalizedStep | null {
+  const payload = event.payload as ScrollPayload;
+  const x = readNonNegativeNumber(payload, "x");
+  const y = readNonNegativeNumber(payload, "y");
+  if (x === undefined || y === undefined) {
+    return null;
+  }
+
+  const target = buildTargetFromPayload(event.payload);
+  if (!target) {
+    return {
+      id: event.id,
+      type: "scroll",
+      x,
+      y,
+    };
+  }
+
+  return {
+    id: event.id,
+    type: "scroll",
+    x,
+    y,
+    target,
+  };
+}
+
 function targetOf(step: NormalizedStep): Target | undefined {
   switch (step.type) {
     case "click":
@@ -413,6 +452,7 @@ function targetOf(step: NormalizedStep): Target | undefined {
     case "select":
     case "setChecked":
     case "press":
+    case "scroll":
     case "upload":
       return step.target;
     default:
@@ -533,7 +573,19 @@ function insertInferredWaitSteps(steps: NormalizedStep[], events: RecordedEvent[
     }
     result.push(current);
 
-    const next = steps[index + 1];
+    let next: NormalizedStep | undefined;
+    for (let cursor = index + 1; cursor < steps.length; cursor += 1) {
+      const candidate = steps[cursor];
+      if (!candidate) {
+        continue;
+      }
+      if (candidate.type === "scroll") {
+        continue;
+      }
+      next = candidate;
+      break;
+    }
+
     if (!next) {
       continue;
     }
@@ -565,6 +617,8 @@ export function normalizeRecordedEvent(event: RecordedEvent): NormalizedStep | n
       return normalizeSelect(event);
     case "keypress":
       return normalizeKeypress(event);
+    case "scroll":
+      return normalizeScroll(event);
     default:
       return null;
   }

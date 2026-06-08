@@ -168,4 +168,66 @@ describe("flowDocumentSchema", () => {
       }),
     ).toThrow(/urlIncludes/i);
   });
+
+  it("支持页面级与容器级 scroll 步骤", () => {
+    const doc = parseFlowDocument({
+      schemaVersion: FLOW_SCHEMA_VERSION,
+      id: "flow_scroll",
+      projectId: "proj_1",
+      name: "滚动流程",
+      variables: [],
+      steps: [
+        {
+          id: "s1",
+          type: "scroll",
+          x: 0,
+          y: 480,
+        },
+        {
+          id: "s2",
+          type: "scroll",
+          x: 12,
+          y: 960,
+          target: {
+            strategies: [{ kind: "css", selector: "#activity-list" }],
+            hints: {
+              tagName: "div",
+            },
+          },
+        },
+      ],
+      meta: {
+        createdAt: "2026-06-08T00:00:00.000Z",
+        updatedAt: "2026-06-08T00:00:00.000Z",
+        source: "manual",
+      },
+    });
+
+    expect(doc.steps.map((step) => step.type)).toEqual(["scroll", "scroll"]);
+  });
+
+  it("拒绝负数 scroll 坐标", () => {
+    expect(() =>
+      parseFlowDocument({
+        schemaVersion: FLOW_SCHEMA_VERSION,
+        id: "flow_scroll_invalid",
+        projectId: "proj_1",
+        name: "非法滚动流程",
+        variables: [],
+        steps: [
+          {
+            id: "s1",
+            type: "scroll",
+            x: -1,
+            y: 100,
+          },
+        ],
+        meta: {
+          createdAt: "2026-06-08T00:00:00.000Z",
+          updatedAt: "2026-06-08T00:00:00.000Z",
+          source: "manual",
+        },
+      }),
+    ).toThrow(/nonnegative|greater than or equal to 0/i);
+  });
 });

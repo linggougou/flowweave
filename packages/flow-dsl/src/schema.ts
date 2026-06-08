@@ -88,6 +88,12 @@ const normalizedStepBaseSchema = z.discriminatedUnion("type", [
     key: z.string().min(1),
   }),
   stepBaseSchema.extend({
+    type: z.literal("scroll"),
+    target: targetSchema.optional(),
+    x: z.number().nonnegative(),
+    y: z.number().nonnegative(),
+  }),
+  stepBaseSchema.extend({
     type: z.literal("upload"),
     target: targetSchema,
     files: z.array(z.string().min(1)).min(1),

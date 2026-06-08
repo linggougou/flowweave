@@ -50,6 +50,8 @@ class FakeHTMLElement extends FakeElement {
   innerText = "";
   isContentEditable = false;
   id = "";
+  scrollLeft = 0;
+  scrollTop = 0;
   #attributes = new Map<string, string>();
 
   setAttribute(name: string, value: string): void {
@@ -115,6 +117,8 @@ async function setupContentHarness() {
   const windowStub = {
     location: { href: "https://app.example.com/search" },
     addEventListener: vi.fn(),
+    scrollX: 0,
+    scrollY: 0,
   };
   const historyStub = {
     pushState() {
@@ -488,5 +492,119 @@ describe("content upload placeholder contract", () => {
         }),
       }),
     ]);
+  });
+
+  it("页面级 scroll 发送不带 target 的坐标", async () => {
+    vi.useFakeTimers();
+
+    const { handlers, sendMessage } = await setupContentHarness();
+    const page = window as unknown as { scrollX: number; scrollY: number };
+    page.scrollX = 12;
+    page.scrollY = 480;
+
+    handlers.get("scroll")?.[0]?.({ target: document });
+    vi.advanceTimersByTime(180);
+
+    expect(readRecordedEvents(sendMessage)).toEqual([
+      expect.objectContaining({
+        type: "scroll",
+        payload: {
+          x: 12,
+          y: 480,
+        },
+      }),
+    ]);
+    expect(readRecordedEvents(sendMessage)[0]?.payload).not.toHaveProperty("selector");
+  });
+
+  it("容器级 scroll 发送带 target 的坐标", async () => {
+    vi.useFakeTimers();
+
+    const { handlers, sendMessage } = await setupContentHarness();
+    const container = new FakeHTMLElement();
+    container.id = "activity-list";
+    container.scrollLeft = 20;
+    container.scrollTop = 640;
+    container.setAttribute("role", "region");
+
+    handlers.get("scroll")?.[0]?.({ target: container });
+    vi.advanceTimersByTime(180);
+
+    expect(readRecordedEvents(sendMessage)).toEqual([
+      expect.objectContaining({
+        type: "scroll",
+        payload: expect.objectContaining({
+          selector: "#activity-list",
+          role: "region",
+          x: 20,
+          y: 640,
+        }),
+      }),
+    ]);
+  });
+
+  it("连续滚动只保留最后一次坐标", async () => {
+    vi.useFakeTimers();
+
+    const { handlers, sendMessage } = await setupContentHarness();
+    const container = new FakeHTMLElement();
+    container.id = "activity-list";
+
+    container.scrollTop = 120;
+    handlers.get("scroll")?.[0]?.({ target: container });
+
+    vi.advanceTimersByTime(60);
+    container.scrollTop = 420;
+    handlers.get("scroll")?.[0]?.({ target: container });
+
+    vi.advanceTimersByTime(180);
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(readRecordedEvents(sendMessage)[0]).toMatchObject({
+      type: "scroll",
+      payload: {
+        selector: "#activity-list",
+        x: 0,
+        y: 420,
+      },
+    });
+  });
+
+  it("输入后立刻滚动时，scroll 仍先于 debounce 后的 fill 发出", async () => {
+    vi.useFakeTimers();
+
+    const { handlers, sendMessage } = await setupContentHarness();
+    const input = new FakeHTMLInputElement();
+    input.id = "keyword";
+    input.value = "flowweave";
+
+    const container = new FakeHTMLElement();
+    container.id = "activity-list";
+    container.scrollTop = 360;
+
+    recorderMocks.shouldRecordFill.mockImplementation((element) => element === (input as unknown as Element));
+
+    handlers.get("input")?.[0]?.({ target: input });
+    handlers.get("scroll")?.[0]?.({ target: container });
+
+    vi.advanceTimersByTime(180);
+    expect(readRecordedEvents(sendMessage)).toEqual([
+      expect.objectContaining({
+        type: "scroll",
+        payload: expect.objectContaining({
+          selector: "#activity-list",
+          y: 360,
+        }),
+      }),
+    ]);
+
+    vi.advanceTimersByTime(260);
+    expect(readRecordedEvents(sendMessage)[1]).toMatchObject({
+      type: "fill",
+      payload: expect.objectContaining({
+        selector: "#keyword",
+        value: "flowweave",
+      }),
+    });
   });
 });

@@ -42,6 +42,8 @@ function formatTarget(step: NormalizedStep): string | undefined {
       return formatTargetStrategies(step.target);
     case "press":
       return step.target ? formatTargetStrategies(step.target) : undefined;
+    case "scroll":
+      return step.target ? formatTargetStrategies(step.target) : undefined;
     case "wait":
       return step.target ? formatTargetStrategies(step.target) : undefined;
     case "navigate":
@@ -72,6 +74,8 @@ function formatSummary(step: NormalizedStep): string {
       return step.checked ? "勾选" : "取消勾选";
     case "press":
       return `按键「${step.key}」`;
+    case "scroll":
+      return step.target ? `滚动容器到 (${step.x}, ${step.y})` : `滚动到 (${step.x}, ${step.y})`;
     case "upload":
       return `上传 ${step.files.length} 个文件`;
     case "wait":

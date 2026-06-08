@@ -492,17 +492,61 @@ describe("normalizeRecordedEvent", () => {
     });
   });
 
-  it("不支持的事件类型返回 null", () => {
-    expect(
-      normalizeRecordedEvent(
-        event({
-          id: "evt_scroll",
-          type: "scroll",
-          timestamp: 3000,
-          url: "https://example.com",
-        }),
-      ),
-    ).toBeNull();
+  it("将页面级 scroll 事件转为 scroll 步骤", () => {
+    const step = normalizeRecordedEvent(
+      parseRecordedEvent({
+        id: "evt_scroll_page",
+        type: "scroll",
+        timestamp: 3000,
+        url: "https://example.com/workbench",
+        payload: {
+          x: 0,
+          y: 860,
+        },
+      }),
+    );
+
+    expect(step).toEqual({
+      id: "evt_scroll_page",
+      type: "scroll",
+      x: 0,
+      y: 860,
+    });
+  });
+
+  it("将容器级 scroll 事件转为带 Target 的 scroll 步骤", () => {
+    const step = normalizeRecordedEvent(
+      parseRecordedEvent({
+        id: "evt_scroll_container",
+        type: "scroll",
+        timestamp: 3010,
+        url: "https://example.com/workbench",
+        payload: {
+          x: 24,
+          y: 420,
+          selector: "#activity-list",
+          role: "region",
+          name: "活动列表",
+          tagName: "div",
+        },
+      }),
+    );
+
+    expect(step).toEqual({
+      id: "evt_scroll_container",
+      type: "scroll",
+      x: 24,
+      y: 420,
+      target: {
+        strategies: [
+          { kind: "role", role: "region", name: "活动列表" },
+          { kind: "css", selector: "#activity-list" },
+        ],
+        hints: {
+          tagName: "div",
+        },
+      },
+    });
   });
 });
 
@@ -534,6 +578,10 @@ describe("buildFlowFromEvents", () => {
         type: "scroll",
         timestamp: 300,
         url: "https://example.com/login",
+        payload: {
+          x: 0,
+          y: 320,
+        },
       }),
     ];
 
@@ -544,8 +592,14 @@ describe("buildFlowFromEvents", () => {
     expect(flow.projectId).toBe("proj_1");
     expect(flow.name).toBe("录制流程");
     expect(flow.meta.source).toBe("recorded");
-    expect(flow.steps).toHaveLength(3);
-    expect(flow.steps.map((s) => s.type)).toEqual(["navigate", "fill", "click"]);
+    expect(flow.steps).toHaveLength(4);
+    expect(flow.steps.map((s) => s.type)).toEqual(["navigate", "fill", "click", "scroll"]);
+    expect(flow.steps[3]).toEqual({
+      id: "s4",
+      type: "scroll",
+      x: 0,
+      y: 320,
+    });
 
     expect(() => flowDocumentSchema.parse(flow)).not.toThrow();
   });
@@ -986,6 +1040,66 @@ describe("buildFlowFromEvents", () => {
     );
 
     expect(flow.steps.map((step) => step.type)).toEqual(["navigate", "click", "click"]);
+  });
+
+  it("构建 Flow 时在 click 与 fill 之间隔着 scroll 也不会丢失 wait 推断", () => {
+    const flow = buildFlowFromEvents(
+      [
+        event({
+          id: "n1",
+          type: "navigate",
+          timestamp: 0,
+          url: "https://app.example.com/workbench",
+        }),
+        event({
+          id: "c1",
+          type: "click",
+          timestamp: 100,
+          url: "https://app.example.com/workbench",
+          payload: {
+            selector: "#open-panel",
+            role: "button",
+            name: "展开详情",
+          },
+        }),
+        parseRecordedEvent({
+          id: "s1",
+          type: "scroll",
+          timestamp: 800,
+          url: "https://app.example.com/workbench",
+          payload: {
+            x: 0,
+            y: 480,
+          },
+        }),
+        event({
+          id: "f1",
+          type: "fill",
+          timestamp: 1100,
+          url: "https://app.example.com/workbench",
+          payload: {
+            selector: "#panel-title",
+            role: "textbox",
+            name: "详情标题",
+            value: "异步出现的输入框",
+          },
+        }),
+      ],
+      baseMeta,
+    );
+
+    expect(flow.steps.map((step) => step.type)).toEqual(["navigate", "click", "wait", "scroll", "fill"]);
+    expect(flow.steps[2]).toEqual({
+      id: "wait-auto-c1-f1",
+      type: "wait",
+      condition: "visible",
+      target: {
+        strategies: [
+          { kind: "role", role: "textbox", name: "详情标题" },
+          { kind: "css", selector: "#panel-title" },
+        ],
+      },
+    });
   });
 
   it("构建 Flow 时不会为命令面板导航按键自动插入 wait", () => {
