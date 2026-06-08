@@ -3522,3 +3522,161 @@
 
 - 通过
 - 可以进入 Wave 12 的 worktree / subagent 并行开发阶段
+
+## 2026-06-09 Wave 12 第一批轨道验收
+
+### 审查范围
+
+- `55a9004 fix: 修复 web flow 版本恢复路由`
+- `b11faae feat: 打通 scroll 录制与 dsl 合同`
+
+### Findings
+
+- 未发现阻塞性问题
+- 观察项：
+  1. `scroll capture` 并回后，若直接执行 `pnpm --filter @flowweave/recorder test` 而未先刷新 `flow-dsl dist`，会读到旧导出并出现假阳性失败；这是验证顺序问题，不是功能回归。
+  2. `GET /api/projects/:projectId/flows/:flowId/versions` 旧路由仍可进一步收紧路径长度，但不影响本轮 restore 合同修复。
+
+### 本轮验证
+
+- Web 主线复验：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-web test`
+    - 结果：通过，`3/3`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-web typecheck`
+    - 结果：通过
+- Scroll capture 主线复验：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/shared test`
+    - 结果：通过，`7/7`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/flow-dsl build`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test`
+    - 结果：通过，`50/50`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/flow-dsl typecheck`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension test`
+    - 结果：通过，`20/20`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension typecheck`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/page-intelligence test`
+    - 结果：通过，`22/22`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+    - 结果：通过
+- 第一批统一验收：
+  - `CI=1 PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+    - 结果：通过
+    - `e2e:login`：`4/4 success`
+
+### 评分
+
+- 代码质量评分：95
+- 测试覆盖评分：95
+- 规范遵循评分：99
+- 需求匹配评分：97
+- 架构一致评分：96
+- 风险评估评分：93
+- 综合评分：96
+
+### 建议
+
+- 通过
+- 第一批轨道可确认回收，进入第二批 `Scroll Runtime Contract`
+
+## 2026-06-09 语音识别技术现状排查验证
+
+### 验证范围
+
+- 当前仓库是否存在 ASR/STT、Web Speech API、Whisper、sherpa-onnx、ONNX Runtime 或麦克风采集链路。
+- 当前依赖和扩展权限是否间接暴露语音识别能力。
+- `k2-fsa/sherpa-onnx` 是否具备作为后续参考的基本适配面。
+
+### 验证结果
+
+- CodeGraph 未发现语音识别相关代码入口。
+- `rg` 关键词检索未发现 `SpeechRecognition`、`webkitSpeechRecognition`、`MediaRecorder`、`getUserMedia`、`whisper`、`sherpa`、`onnx` 等语音识别集成痕迹。
+- package manifest 与 `pnpm-lock.yaml` 未发现语音识别依赖。
+- `apps/extension/wxt.config.ts` 未申请麦克风权限。
+- 当前路线图明确 AI 编排与智能能力冻结，不接入 Studio / 扩展 / Web。
+- `sherpa-onnx` upstream 与 npm 信息显示其适合本地离线语音能力调研，但当前项目尚未采用。
+
+### 综合结论
+
+- 当前项目未使用语音识别技术。
+- `sherpa-onnx` 可以纳入后续智能阶段或语音输入阶段的技术调研候选，但不应在当前路线未解冻前直接引入依赖或产品入口。
+
+## 2026-06-09 Wave 12 Scroll Runtime Contract 验收
+
+### 验证范围
+
+- runtime 是否已支持页面级与容器级 `scroll` 步骤执行，而不是只在录制 / DSL 层定义协议。
+- `scroll-runtime-contract` 是否已被纳入 recorded replay 基线矩阵，并在 Node 20 下从仓库根入口真实通过。
+- 这次修复是否解决了用户实际遇到的“页面已滚动，但 runtime 仍误报失败”的执行不稳定问题。
+- 新增修复是否能与现有主线共同通过 `smoke`，不引入 CLI / build / login 回归。
+
+### 验证结果
+
+1. 根因已经被准确定位为 runtime 校验假阴性，而不是 fixture 本身无法滚动。
+   - 首次复现：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:recorded-pages`
+     - 结果：失败，`24/25`
+     - 唯一失败：`scroll-runtime-contract`
+     - 报错：`scroll 后页面位置未稳定到 (0, 480)`
+   - 失败截图里页面状态已显示“页面已滚动到目标位置”，说明页面状态达标，但 helper 误判。
+   - 对同一 `file://.../scroll-runtime-contract.html` 直接用 Playwright 脚本验证，确认 `scrollY` 可稳定到 `480`，排除 fixture 高度不足。
+2. runtime scroll 执行闭环已经打通。
+   - `packages/runtime/src/playwright-runner.ts`
+     - 新增 `scroll` 步骤执行分支。
+     - 页面级与容器级 scroll 校验改为 `page.waitForFunction()` 轮询，超时后再做一次同步读取兜底。
+     - 将 `scroll-position-reset` 纳入动作状态重置类 cause，保持诊断语义一致。
+   - `packages/runtime/src/playwright-runner.test.ts`
+     - 新增并收紧页面级 / 容器级 scroll 回归。
+     - 页面级用例已调整为与 recorded replay runtime-only 场景一致的完整点击链路。
+3. recorded replay 基线已纳入 scroll runtime-only 合同。
+   - `examples/recorded-replay-smoke.ts`
+     - 新增 `scroll-runtime-contract` runtime-only case
+     - 新增对应的临时 HTML fixture 生成逻辑
+   - `packages/runtime/src/recorded-replay-matrix.test.ts`
+     - 基线总数从 `24` 升到 `25`
+     - runtime-only 场景从 `1` 条增为 `2` 条
+4. Node 20 验证链路全部通过。
+   - 轨道内：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test`
+       - 结果：通过，`43/43`
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:recorded-pages`
+       - 结果：通过，`25/25`
+   - 并回主线后：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test`
+       - 结果：通过，`43/43`
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:recorded-pages`
+       - 结果：通过，`25/25`
+     - `CI=1 PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+       - 结果：通过
+       - `smoke:prepare` / `typecheck` / `test` / `build` / `e2e:login` 全部通过
+5. 轨道已回收，主线保持单一事实来源。
+   - 已删除 worktree：`.worktrees/codex-real-page-wave12-scroll-runtime-contract`
+   - 已删除本地分支：`codex/real-page-wave12-scroll-runtime-contract`
+
+### Findings
+
+1. 当前用户看到的“DOM 结构失效”里，至少有一部分不是 DOM 选择器真失效，而是 runtime 在 scroll 后的稳定确认过于脆弱。
+   - 这次修复后，页面已经滚动到位时不会再被 helper 误判成失败。
+2. Wave 12 现在已经补全了 scroll 的三段闭环。
+   - 捕获：`apps/extension` / `packages/recorder`
+   - 合同：`packages/flow-dsl`
+   - 执行：`packages/runtime` + recorded replay matrix
+3. 残余风险主要在“更多真实页面滚动形态”而不在当前合同。
+   - 例如惯性滚动、虚拟列表、嵌套 iframe、平滑滚动动画等，尚未进入当前基线。
+   - 但当前主线已经能稳定覆盖页面级与容器级常规 scroll 回放。
+
+### 评分
+
+- 代码质量评分：96
+- 测试覆盖评分：97
+- 规范遵循评分：97
+- 需求匹配评分：96
+- 架构一致评分：96
+- 风险评估评分：91
+- 综合评分：95
+
+### 建议
+
+- 通过

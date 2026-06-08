@@ -5309,3 +5309,303 @@
     1. 收 explorer 结果
     2. 提交 Foundation / 计划文档
     3. 创建并派发 `Web Restore Contract` 与 `Scroll Capture Contract`
+
+### Worktree 建立与基线校验
+
+- 时间：2026-06-08 23:59:00 CST
+- 已创建 worktree：
+  - `.worktrees/codex-real-page-wave12-web-restore-contract`
+    - 分支：`codex/real-page-wave12-web-restore-contract`
+    - 基线来源：`97a14a2 fix: 收紧本地执行与 fragility 基线`
+  - `.worktrees/codex-real-page-wave12-scroll-capture-contract`
+    - 分支：`codex/real-page-wave12-scroll-capture-contract`
+    - 基线来源：`97a14a2 fix: 收紧本地执行与 fragility 基线`
+- 初始化观察：
+  - 两个 worktree 初始直接跑包命令时都提示 `node_modules missing`，已按 worktree 局部执行 `pnpm install --frozen-lockfile`。
+  - 安装后继续发现：
+    - `app-web` / `recorder` 测试会因为本地 workspace 包尚未 build 而无法解析 `@flowweave/shared`
+    - 这属于 worktree 初始化细节，不是功能缺陷
+- 基线处理：
+  - `Web Restore Contract` worktree：
+    - 补跑 `@flowweave/shared`、`@flowweave/flow-dsl`、`@flowweave/page-intelligence`、`@flowweave/project-knowledge`、`@flowweave/ui` build
+    - 之后 `pnpm --filter @flowweave/app-web test` 通过
+    - `pnpm --filter @flowweave/app-web typecheck` 通过
+  - `Scroll Capture Contract` worktree：
+    - 补跑 `@flowweave/shared`、`@flowweave/flow-dsl` build
+    - 之后 `pnpm --filter @flowweave/recorder test` 通过，`48/48`
+    - `pnpm --filter @flowweave/flow-dsl typecheck` 通过
+- 结论：
+  - 两条第一批轨道 worktree 均已达到“可安全开发”状态
+
+### Explorer 结论吸收
+
+- `Web Restore` explorer：
+  - 核实了 restore 路由当前实际不可达的根因是 `segments.length === 5` 与 `segments[5] === "restore"` 互相矛盾
+  - 建议抽出 `server factory / request handler`，测试注入临时 repo 并用随机端口做真实 HTTP 覆盖
+- `Scroll Capture` explorer：
+  - 建议统一合同为 `{ id, type: "scroll", x, y, target? }`
+  - 明确 `packages/recorder/src/normalize.ts` 的自动 wait 推断是最高风险点
+  - 指出新增 `scroll` 后需最小补齐 `apps/studio/src/flow-step-format.ts` 与 `packages/page-intelligence/src/fragility.ts` 的分支完整性
+
+### 第一批子代理派发
+
+- 时间：2026-06-09 00:02:00 CST
+- 已派发：
+  - `Planck`：`019ea7ed-2541-7022-bda9-2bd7ca6b752b`
+    - 轨道：`Web Restore Contract`
+    - worktree：`.worktrees/codex-real-page-wave12-web-restore-contract`
+    - 授权写入：`apps/web/server/*`
+    - 目标：修复 restore 路由并补真实 HTTP 测试
+  - `Faraday`：`019ea7ed-996e-75e2-9eab-d4239e8730ca`
+    - 轨道：`Scroll Capture Contract`
+    - worktree：`.worktrees/codex-real-page-wave12-scroll-capture-contract`
+    - 授权写入：`packages/shared`、`apps/extension`、`packages/recorder`、`packages/flow-dsl`，以及 `app-studio/page-intelligence` 最小跟随修正
+    - 目标：补齐 scroll 录制与 DSL 合同闭环
+
+### Web Restore Contract 合并验收
+
+- 时间：2026-06-09 00:08:00 CST
+- 子代理结果：
+  - Agent：`Planck`（`019ea7ed-2541-7022-bda9-2bd7ca6b752b`）
+  - 轨道提交：`f24cc2b9c4f656eebf438503e89b9b4ad8a82c97`
+  - 关键改动：
+    - 新增 `apps/web/server/app.ts`
+    - `apps/web/server/index.ts` 收缩为生产 bootstrap
+    - `apps/web/server/api.test.ts` 升级为真实 HTTP 测试
+- 主代理自审：
+  - 目标对齐：是
+    - restore 路由已从不可达修复为显式匹配 `segments.length === 6 && segments[5] === "restore"`
+    - 真实 HTTP 测试已覆盖 GET 版本详情、POST restore、restore 后 Flow 恢复、缺失 versionId 失败路径
+  - 范围越界：无
+  - 观察到的残余风险：
+    - `GET /api/projects/:projectId/flows/:flowId/versions` 旧路由仍未显式收紧 `segments.length === 6`，但不影响本轮 restore 合同闭环
+- 并回动作：
+  - 已在协调分支执行：`git cherry-pick f24cc2b9c4f656eebf438503e89b9b4ad8a82c97`
+  - 新主线提交：`55a9004 fix: 修复 web flow 版本恢复路由`
+- 主线 Node 20 复验：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-web test`
+    - 结果：通过，`3/3`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-web typecheck`
+    - 结果：通过
+- 回收决议：
+  - `Web Restore Contract` 已达到“验收合格可回收”条件
+  - 下一步：关闭 `Planck`，回收 `.worktrees/codex-real-page-wave12-web-restore-contract`
+
+### Web Restore Contract 回收完成
+
+- 时间：2026-06-09 00:12:00 CST
+- 已执行：
+  - 关闭子代理 `Planck`
+  - 删除 worktree：`.worktrees/codex-real-page-wave12-web-restore-contract`
+  - 删除本地分支：`codex/real-page-wave12-web-restore-contract`
+- 当前状态：
+  - 第一批并行轨道剩余：`Scroll Capture Contract`
+  - 第二批后继轨道：`Scroll Runtime Contract` worktree 已预热完成
+
+### Scroll Runtime Contract 预热
+
+- 时间：2026-06-09 00:14:00 CST
+- 已创建 worktree：
+  - `.worktrees/codex-real-page-wave12-scroll-runtime-contract`
+  - 分支：`codex/real-page-wave12-scroll-runtime-contract`
+- 已执行初始化：
+  - `pnpm install --frozen-lockfile`
+  - `pnpm --filter @flowweave/shared build`
+  - `pnpm --filter @flowweave/flow-dsl build`
+  - `pnpm --filter @flowweave/recorder build`
+  - `pnpm --filter @flowweave/page-intelligence build`
+  - `pnpm --filter @flowweave/runtime typecheck`
+- 结果：
+  - 通过，runtime worktree 已达到“可立即承接第二批实现”状态
+
+### Scroll Capture Contract 合并验收
+
+- 时间：2026-06-09 00:20:00 CST
+- 子代理结果：
+  - Agent：`Faraday`（`019ea7ed-996e-75e2-9eab-d4239e8730ca`）
+  - 轨道提交：`4c8bde34330175166eeea0d78eef0b129e9b6d3f`
+  - 关键改动：
+    - `packages/shared`：新增 scroll payload 校验与单测
+    - `apps/extension`：新增页面级 / 容器级 scroll 录制、去抖与契约测试
+    - `packages/recorder`：新增 `normalizeScroll()`，并在自动 wait 推断中跳过 scroll 查找下一候选步骤
+    - `packages/flow-dsl`：新增 scroll step schema 与测试
+    - `apps/studio` / `packages/page-intelligence`：补齐 scroll 的格式化和 fragility 分支
+- 主代理自审：
+  - 目标对齐：是
+  - 范围越界：无
+  - 关键风险复核：
+    - `normalize.ts` 已通过“跳过 scroll 寻找下一有效步骤”的方式保护自动 wait 推断
+    - 扩展侧 scroll key 基于 `strategies`，不会把所有容器滚动错误压成同一类 page key
+- 并回动作：
+  - 已在协调分支执行：`git cherry-pick 4c8bde34330175166eeea0d78eef0b129e9b6d3f`
+  - 新主线提交：`b11faae feat: 打通 scroll 录制与 dsl 合同`
+- 主线 Node 20 复验：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/shared test`
+    - 结果：通过，`7/7`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension test`
+    - 结果：通过，`20/20`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/page-intelligence test`
+    - 结果：通过，`22/22`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/flow-dsl build`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/recorder test`
+    - 结果：在未先 build `flow-dsl` 时失败，原因是依赖包读取旧 `dist`
+    - 处理：先执行 `pnpm --filter @flowweave/flow-dsl build`，再复跑
+    - 复跑结果：通过，`50/50`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/flow-dsl typecheck`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-extension typecheck`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+    - 结果：通过
+- 验证结论：
+  - 本轮唯一异常是“直接测依赖包前需先刷新 `flow-dsl dist`”，属本地验证顺序问题，不是功能回归
+
+### 第一批统一主线验收
+
+- 时间：2026-06-09 00:28:00 CST
+- 命令：
+  - `CI=1 PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+- 结果：通过
+  - `smoke:prepare`：通过
+  - `turbo typecheck`：通过
+  - `turbo test`：通过
+  - `turbo build`：通过
+  - `e2e:login`：通过，`4/4 success`
+- 结论：
+  - 第一批 `Web Restore Contract` 与 `Scroll Capture Contract` 已全部通过主线统一验收
+
+### Scroll Capture Contract 回收完成
+
+- 时间：2026-06-09 00:30:00 CST
+- 已执行：
+  - 关闭子代理 `Faraday`
+  - 删除 worktree：`.worktrees/codex-real-page-wave12-scroll-capture-contract`
+  - 删除本地分支：`codex/real-page-wave12-scroll-capture-contract`
+
+### 第二批 Runtime 轨启动
+
+- 时间：2026-06-09 00:32:00 CST
+- 已执行：
+  - 将 `.worktrees/codex-real-page-wave12-scroll-runtime-contract` fast-forward 到主线 `b11faae`
+  - 派发子代理 `Harvey`（`019ea7ff-9b78-7160-8a57-a8f11f97efaf`）
+  - 轨道：`Scroll Runtime Contract`
+  - 目标：在 runtime 中执行 scroll 步骤，并补 recorded replay 级回归
+
+### Runtime 轨中途状态与继续指令
+
+- 时间：2026-06-09 00:36:00 CST
+- 子代理 `Harvey` 首次返回的不是实现结果，而是中途状态：
+  - 已确认 `runStep()` 缺少 `scroll` 分支
+  - 倾向用窄 helper 接入
+  - 初步考虑复用 recorded replay 现有 case，但尚未写代码、尚未跑测试
+- 主代理处理：
+  - 已明确继续指令，要求不要停在状态汇报
+  - 已要求按“红灯测试 -> 实现 -> Node 20 验收 -> 提交”完整跑完
+  - 已补充约束：若 `placeholder-disambiguation` 无法真实证明 scroll 生效，则新增更直接的本地 fixture
+
+### Runtime 轨主代理接管
+
+- 时间：2026-06-09 00:55:00 CST
+- 背景：
+  - 当前线程已进入默认协作模式，但用户仍授权主代理自主推进并持续开发。
+  - `sequential-thinking`、`desktop-commander`、`context7`、`github.search_code` 依然不可用，本轮继续沿用已记录的替代流程：`update_plan` + CodeGraph + `rg`/`sed`/`git diff`。
+- 当前状态确认：
+  - 主线分支：`codex/real-page-stability-program`
+  - runtime worktree：`.worktrees/codex-real-page-wave12-scroll-runtime-contract`
+  - runtime worktree 未提交改动：
+    - `examples/recorded-replay-smoke.ts`
+    - `packages/runtime/src/playwright-runner.ts`
+    - `packages/runtime/src/playwright-runner.test.ts`
+    - `packages/runtime/src/recorded-replay-matrix.test.ts`
+- 已完成的上下文收集：
+  - 新增 `.codex/context-summary-wave12-scroll-runtime-contract.md`
+  - 复核 `packages/runtime/src/playwright-runner.ts` 中 `scroll` 半成品实现、`playwright-runner.test.ts` 的页面级/容器级 fixture，以及 `examples/recorded-replay-smoke.ts` 中 `scroll-runtime-contract` runtime-only case。
+- 本轮执行计划：
+  1. 在 Node 20 下复现 `pnpm e2e:recorded-pages` 的真实失败现场。
+  2. 判定问题落在 runtime 通用实现还是 `scroll-runtime-contract` fixture 合同。
+  3. 仅修复真实根因，不无证据放宽 scroll 通用校验。
+  4. 通过 `pnpm --filter @flowweave/runtime test` 与 `pnpm e2e:recorded-pages` 后提交并回主线。
+
+## 2026-06-09 语音识别技术现状排查
+
+- 时间：2026-06-09 00:45:00 CST
+- 任务目标：回答当前 FlowWeave 是否已使用语音识别技术，并评估 `k2-fsa/sherpa-onnx` 是否可作为后续参考。
+- 上下文依据：
+  - `AGENTS.md`
+  - `docs/superpowers/plans/2026-05-26-run-first-roadmap.md`
+  - `docs/architecture/overview.md`
+  - `docs/adr/0008-ai-sdk-orchestrator.md`
+  - 根 `package.json`
+  - `apps/extension/package.json`
+  - `apps/extension/wxt.config.ts`
+  - `apps/studio/package.json`
+  - `packages/ai-orchestrator/package.json`
+- 路线锁确认：
+  - 项目根未发现 `PROJECT_ROUTE_LOCK.md`。
+  - 项目 `AGENTS.md` 已将 `docs/superpowers/plans/2026-05-26-run-first-roadmap.md` 标为当前有效路线图；本轮按等价路线锁处理，只做只读排查，不扩展功能。
+- 检索与验证：
+  - 使用 CodeGraph 查询 ASR/STT/Whisper/Web Speech/sherpa/onnx 相关入口，未发现项目内语音识别代码入口。
+  - 使用 `rg` 检索 `speech|voice|audio|microphone|mic|recognition|stt|asr|whisper|sherpa|onnx|SpeechRecognition|webkitSpeechRecognition|MediaRecorder|getUserMedia|语音|麦克风|听写` 等关键词。
+  - 结果：未发现语音识别依赖、浏览器麦克风采集、Web Speech API、Whisper 或 sherpa-onnx 集成。
+  - 扩展权限仅包含 `storage`、`sidePanel`、`tabs` 与本地 API host permission，未申请麦克风相关权限。
+  - `ai-orchestrator` 当前仅保留启发式占位，未接入 Vercel AI SDK，也未接入语音能力。
+- 外部参考核对：
+  - `sherpa-onnx` npm 当前版本为 `1.13.2`，许可证为 `Apache-2.0`。
+  - upstream README 显示其支持本地 ASR/STT、TTS、VAD、关键词唤醒、说话人相关能力，并支持 NodeJS 与 WebAssembly。
+- 结论：
+  - 当前项目未使用任何语音识别技术。
+  - `sherpa-onnx` 可作为后续“本地离线语音输入/命令触发”阶段的候选参考，但不属于当前路线主线；若接入，需要先更新路线锁与产品范围。
+
+### Scroll Runtime Contract 完成与主线验收
+
+- 时间：2026-06-09 00:58:00 CST
+- 失败复现：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:recorded-pages`
+    - 结果：失败，`25` 条基线中 `24/1`
+    - 唯一失败：`scroll-runtime-contract`
+    - 失败步骤：第 `2` 步 `scroll`
+    - 失败信息：`scroll 后页面位置未稳定到 (0, 480)`
+- 根因定位：
+  - 失败截图 `step-1.png` 中页面文案已经显示“页面已滚动到目标位置”，说明 `window.scrollTo(0, 480)` 实际已生效。
+  - 使用 `node --input-type=module` + `packages/runtime/node_modules/playwright/index.mjs` 对同一 `file://.../scroll-runtime-contract.html` 直接复现，确认页面最大滚动值可达 `480`，不是 fixture 高度不足。
+  - 使用 `pnpm exec tsx -e ... executeFlow(navigate + scroll)` 对同一 HTML 做最小复现，仍稳定失败，说明问题不在矩阵编排，而在 runtime `scroll` 稳定校验 helper。
+  - 结论：旧版 `verifyPageScrollPosition()` / `verifyLocatorScrollPosition()` 依赖页内 `requestAnimationFrame` 异步轮询，在当前 `executeFlow()` 路径下出现假阴性；页面已到位，但 helper 返回失败。
+- 修复动作：
+  - `packages/runtime/src/playwright-runner.ts`
+    - 保留 `scroll` 执行分支与 `scroll-position-reset` 失败因子。
+    - 将页面级与容器级 scroll 稳定校验改为 `page.waitForFunction()` 轮询，并在超时后补一次同步 `evaluate()` 兜底确认。
+  - `packages/runtime/src/playwright-runner.test.ts`
+    - 将页面级 scroll 单测收紧为与 `scroll-runtime-contract` 一致的真实合同：`scroll -> 点击状态 -> 点击确认按钮 -> 点击结果`。
+  - `examples/recorded-replay-smoke.ts`
+    - 新增 runtime-only 场景 `scroll-runtime-contract`，覆盖页面级 scroll 回放闭环。
+  - `packages/runtime/src/recorded-replay-matrix.test.ts`
+    - 更新基线数量与 runtime-only 清单，锁定新增合同必须参与矩阵回归。
+- 轨道内 Node 20 验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm exec tsx -e ... executeFlow(...)`
+    - 修复前：失败
+    - 修复后：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test`
+    - 结果：通过，`43/43`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:recorded-pages`
+    - 结果：通过，`25/25`
+- 轨道提交与并回：
+  - runtime worktree 提交：`6fd6397 feat: 支持 scroll 回放执行`
+  - 协调分支 cherry-pick 后主线提交：`ed3a0d9 feat: 支持 scroll 回放执行`
+- 主线 Node 20 复验：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test`
+    - 结果：通过，`43/43`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:recorded-pages`
+    - 结果：通过，`25/25`
+  - `CI=1 PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm smoke`
+    - 结果：通过
+    - `smoke:prepare`：通过
+    - `turbo typecheck`：通过
+    - `turbo test`：通过
+    - `turbo build`：通过
+    - `e2e:login`：通过，`4/4 success`
+- 轨道回收：
+  - 已删除 worktree：`.worktrees/codex-real-page-wave12-scroll-runtime-contract`
+  - 已删除本地分支：`codex/real-page-wave12-scroll-runtime-contract`
+  - 子代理 `Harvey` 此前已关闭，本轮无需再次处理
+  - 结论：Wave 12 的 `Scroll Runtime Contract` 已完整并回主线并完成验收
