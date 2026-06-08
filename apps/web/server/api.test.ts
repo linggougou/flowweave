@@ -1,77 +1,165 @@
+import { once } from "node:events";
 import { mkdtempSync, rmSync } from "node:fs";
+import type { Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
 import { ProjectKnowledgeRepository } from "@flowweave/project-knowledge";
-import { afterEach, describe, expect, it } from "vitest";
+import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-describe("web API 数据层", () => {
-  let dataDir: string;
+import { createWebServer } from "./app.js";
 
-  afterEach(() => {
+function buildFlow(projectId: string, flowId: string, name = "流程 A") {
+  return {
+    schemaVersion: FLOW_SCHEMA_VERSION,
+    id: flowId,
+    projectId,
+    name,
+    variables: [],
+    steps: [{ id: "s1", type: "navigate" as const, url: "https://example.com" }],
+    meta: {
+      createdAt: "2026-05-25T10:00:00.000Z",
+      updatedAt: "2026-05-25T10:00:00.000Z",
+      source: "recorded" as const,
+    },
+  };
+}
+
+async function startServer(repo: ProjectKnowledgeRepository): Promise<{
+  server: Server;
+  baseUrl: string;
+}> {
+  const server = createWebServer({ repo });
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address() as AddressInfo;
+  return {
+    server,
+    baseUrl: `http://127.0.0.1:${address.port}`,
+  };
+}
+
+async function stopServer(server?: Server): Promise<void> {
+  if (!server?.listening) {
+    return;
+  }
+  await new Promise<void>((resolve, reject) => {
+    server.close((err) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+describe("web API HTTP 路由", () => {
+  let dataDir = "";
+  let server: Server | undefined;
+  let baseUrl = "";
+  let repo: ProjectKnowledgeRepository;
+  let projectId = "";
+  let flowId = "";
+  let historyVersionId = "";
+
+  beforeEach(async () => {
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-web-http-"));
+    repo = new ProjectKnowledgeRepository({ dataDir });
+
+    const project = repo.createProject("Web HTTP 测试");
+    projectId = project.id;
+    flowId = "flow_web_restore";
+
+    const v1 = buildFlow(projectId, flowId, "流程 A");
+    repo.saveFlow(projectId, v1);
+    repo.saveFlow(
+      projectId,
+      {
+        ...v1,
+        name: "流程 B",
+        steps: [
+          ...v1.steps,
+          {
+            id: "s2",
+            type: "click" as const,
+            target: { strategies: [{ kind: "css" as const, selector: "button" }] },
+          },
+        ],
+      },
+      "新增点击步骤",
+    );
+
+    const versions = repo.listFlowVersions(projectId, flowId);
+    historyVersionId = versions[0]!.id;
+
+    const started = await startServer(repo);
+    server = started.server;
+    baseUrl = started.baseUrl;
+  });
+
+  afterEach(async () => {
+    await stopServer(server);
+    server = undefined;
+    baseUrl = "";
     if (dataDir) {
       rmSync(dataDir, { recursive: true, force: true });
+      dataDir = "";
     }
   });
 
-  it("listFlowVersions 与 restoreFlowVersion 可被控制台消费", () => {
-    dataDir = mkdtempSync(join(tmpdir(), "flowweave-web-"));
-    const repo = new ProjectKnowledgeRepository({ dataDir });
-    const project = repo.createProject("Web 测试");
-    const flowId = "flow_web_1";
-    const base = {
-      schemaVersion: FLOW_SCHEMA_VERSION,
-      id: flowId,
-      projectId: project.id,
-      name: "流程 A",
-      variables: [],
-      steps: [{ id: "s1", type: "navigate" as const, url: "https://example.com" }],
-      meta: {
-        createdAt: "2026-05-25T10:00:00.000Z",
-        updatedAt: "2026-05-25T10:00:00.000Z",
-        source: "recorded" as const,
-      },
-    };
-    repo.saveFlow(project.id, base);
-    repo.saveFlow(
-      project.id,
-      {
-        ...base,
-        name: "流程 B",
-        steps: [...base.steps, { id: "s2", type: "click" as const, target: { strategies: [{ kind: "css" as const, selector: "a" }] } }],
-      },
-      "加一步",
+  it("GET /api/projects/:projectId/flow-versions/:versionId 返回历史版本", async () => {
+    const response = await fetch(
+      `${baseUrl}/api/projects/${projectId}/flow-versions/${historyVersionId}`,
     );
 
-    const versions = repo.listFlowVersions(project.id, flowId);
-    expect(versions).toHaveLength(1);
-
-    repo.restoreFlowVersion(project.id, versions[0]!.id);
-    const current = repo.getFlowInProject(project.id, flowId);
-    expect(current?.name).toBe("流程 A");
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      id: string;
+      name: string;
+      steps: Array<unknown>;
+    };
+    expect(body.id).toBe(flowId);
+    expect(body.name).toBe("流程 A");
+    expect(body.steps).toHaveLength(1);
   });
 
-  it("saveFlow 支持扩展同步写入", () => {
-    dataDir = mkdtempSync(join(tmpdir(), "flowweave-web-save-"));
-    const repo = new ProjectKnowledgeRepository({ dataDir });
-    const project = repo.createProject("扩展同步");
-    const flowId = "flow_ext_sync";
-    const flow = {
-      schemaVersion: FLOW_SCHEMA_VERSION,
-      id: flowId,
-      projectId: project.id,
-      name: "扩展录制流程",
-      variables: [],
-      steps: [{ id: "s1", type: "navigate" as const, url: "https://example.com" }],
-      meta: {
-        createdAt: "2026-05-25T10:00:00.000Z",
-        updatedAt: "2026-05-25T10:00:00.000Z",
-        source: "recorded" as const,
-      },
+  it("POST /api/projects/:projectId/flow-versions/:versionId/restore 恢复当前 flow", async () => {
+    const beforeRestore = repo.getFlowInProject(projectId, flowId);
+    expect(beforeRestore?.name).toBe("流程 B");
+    expect(beforeRestore?.steps).toHaveLength(2);
+
+    const response = await fetch(
+      `${baseUrl}/api/projects/${projectId}/flow-versions/${historyVersionId}/restore`,
+      { method: "POST" },
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      id: string;
+      name: string;
+      steps: Array<unknown>;
     };
-    repo.saveFlow(project.id, flow, "扩展侧栏同步");
-    const loaded = repo.getFlowInProject(project.id, flowId);
-    expect(loaded?.name).toBe("扩展录制流程");
+    expect(body.id).toBe(flowId);
+    expect(body.name).toBe("流程 A");
+    expect(body.steps).toHaveLength(1);
+
+    const restored = repo.getFlowInProject(projectId, flowId);
+    expect(restored?.name).toBe("流程 A");
+    expect(restored?.steps).toHaveLength(1);
+  });
+
+  it("POST restore 在 versionId 不存在时返回 404", async () => {
+    const response = await fetch(
+      `${baseUrl}/api/projects/${projectId}/flow-versions/missing-version/restore`,
+      { method: "POST" },
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "版本不存在",
+    });
   });
 });
