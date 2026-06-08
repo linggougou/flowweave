@@ -28,6 +28,7 @@ type MatrixRuntimeAssets = {
   storageStatePath: string;
   expiredStorageStatePath: string;
   placeholderFixtureUrl: string;
+  scrollFixtureUrl: string;
 };
 
 export type RecordedReplayMatrixProfile = "baseline";
@@ -61,7 +62,10 @@ export type RecordedReplayCaseCatalogItem = {
   fixtureFile?: string;
 };
 
-const RECORDED_REPLAY_RUNTIME_ONLY_CASE_NAMES = new Set(["placeholder-disambiguation"]);
+const RECORDED_REPLAY_RUNTIME_ONLY_CASE_NAMES = new Set([
+  "placeholder-disambiguation",
+  "scroll-runtime-contract",
+]);
 const RECORDED_REPLAY_CASE_ORDER = [
   "checkbox-select",
   "delayed-panel",
@@ -87,6 +91,7 @@ const RECORDED_REPLAY_CASE_ORDER = [
   "rerender-action-panel",
   "dialog-save-surface",
   "placeholder-disambiguation",
+  "scroll-runtime-contract",
 ] as const satisfies readonly string[];
 
 const RECORDED_REPLAY_CATALOG_STUB_ASSETS: MatrixRuntimeAssets = {
@@ -95,6 +100,7 @@ const RECORDED_REPLAY_CATALOG_STUB_ASSETS: MatrixRuntimeAssets = {
   storageStatePath: "/tmp/flowweave-recorded-catalog-session.json",
   expiredStorageStatePath: "/tmp/flowweave-recorded-catalog-session-expired.json",
   placeholderFixtureUrl: "file:///tmp/placeholder-disambiguation.html",
+  scrollFixtureUrl: "file:///tmp/scroll-runtime-contract.html",
 };
 
 function buildRecordedFlowMeta(flowId: string, name: string): BuildFlowFromEventsMeta {
@@ -213,6 +219,78 @@ function buildPlaceholderDisambiguationHtml(): string {
 </html>`;
 }
 
+function buildScrollRuntimeContractHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <style>
+      body {
+        margin: 0;
+        min-height: 1600px;
+        font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+
+      #page-scroll-status,
+      #scroll-result,
+      #scroll-acknowledge {
+        position: fixed;
+        left: 16px;
+      }
+
+      #page-scroll-status {
+        top: 16px;
+      }
+
+      #scroll-acknowledge {
+        top: 56px;
+      }
+
+      #scroll-result {
+        top: 96px;
+      }
+
+      .spacer {
+        height: 1280px;
+      }
+    </style>
+  </head>
+  <body>
+    <p id="page-scroll-status" data-ready="false" data-x="0" data-y="0">尚未滚动到目标位置</p>
+    <button id="scroll-acknowledge" type="button" disabled>确认滚动完成</button>
+    <p id="scroll-result" hidden data-ready="false">尚未确认</p>
+    <div class="spacer"></div>
+
+    <script>
+      const pageScrollStatus = document.getElementById("page-scroll-status");
+      const scrollAcknowledge = document.getElementById("scroll-acknowledge");
+      const scrollResult = document.getElementById("scroll-result");
+
+      function syncScrollState() {
+        const x = Math.round(window.scrollX);
+        const y = Math.round(window.scrollY);
+        const reached = x === 0 && y === 480;
+        pageScrollStatus.dataset.x = String(x);
+        pageScrollStatus.dataset.y = String(y);
+        pageScrollStatus.dataset.ready = reached ? "true" : "false";
+        pageScrollStatus.textContent = reached
+          ? "页面已滚动到目标位置"
+          : "当前页面滚动：" + x + ", " + y;
+        scrollAcknowledge.disabled = !reached;
+      }
+
+      window.addEventListener("scroll", syncScrollState, { passive: true });
+      syncScrollState();
+
+      scrollAcknowledge.addEventListener("click", () => {
+        scrollResult.hidden = false;
+        scrollResult.dataset.ready = "true";
+        scrollResult.textContent = "滚动确认完成";
+      });
+    </script>
+  </body>
+</html>`;
+}
+
 function buildMatrixRuntimeAssets(baseUrl: string, workspaceDir: string): MatrixRuntimeAssets {
   const uploadFileA = join(workspaceDir, "evidence-a.txt");
   const uploadFileB = join(workspaceDir, "evidence-b.txt");
@@ -241,6 +319,8 @@ function buildMatrixRuntimeAssets(baseUrl: string, workspaceDir: string): Matrix
 
   const placeholderFixturePath = join(workspaceDir, "placeholder-disambiguation.html");
   writeFileSync(placeholderFixturePath, buildPlaceholderDisambiguationHtml(), "utf-8");
+  const scrollFixturePath = join(workspaceDir, "scroll-runtime-contract.html");
+  writeFileSync(scrollFixturePath, buildScrollRuntimeContractHtml(), "utf-8");
 
   return {
     uploadFileA,
@@ -248,6 +328,7 @@ function buildMatrixRuntimeAssets(baseUrl: string, workspaceDir: string): Matrix
     storageStatePath,
     expiredStorageStatePath,
     placeholderFixtureUrl: pathToFileURL(placeholderFixturePath).href,
+    scrollFixtureUrl: pathToFileURL(scrollFixturePath).href,
   };
 }
 
@@ -1705,6 +1786,65 @@ function buildBaselineMatrixCases(baseUrl: string, assets: MatrixRuntimeAssets):
           }),
         ],
         buildRecordedFlowMeta("flow_recorded_placeholder_disambiguation", "录制输入框消解流程"),
+      ),
+    },
+    {
+      name: "scroll-runtime-contract",
+      flow: buildFlowFromEvents(
+        [
+          parseRecordedEvent({
+            id: "evt_nav_scroll_runtime_contract",
+            type: "navigate",
+            timestamp: 0,
+            url: assets.scrollFixtureUrl,
+            payload: {
+              url: assets.scrollFixtureUrl,
+              waitUntil: "domcontentloaded",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_scroll_page_runtime_contract",
+            type: "scroll",
+            timestamp: 100,
+            url: assets.scrollFixtureUrl,
+            payload: {
+              x: 0,
+              y: 480,
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_scroll_status_runtime_contract",
+            type: "click",
+            timestamp: 200,
+            url: assets.scrollFixtureUrl,
+            payload: {
+              selector: "#page-scroll-status[data-ready='true'][data-x='0'][data-y='480']",
+              text: "页面已滚动到目标位置",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_scroll_acknowledge_runtime_contract",
+            type: "click",
+            timestamp: 300,
+            url: assets.scrollFixtureUrl,
+            payload: {
+              selector: "#scroll-acknowledge",
+              role: "button",
+              name: "确认滚动完成",
+            },
+          }),
+          parseRecordedEvent({
+            id: "evt_click_scroll_result_runtime_contract",
+            type: "click",
+            timestamp: 400,
+            url: assets.scrollFixtureUrl,
+            payload: {
+              selector: "#scroll-result[data-ready='true']",
+              text: "滚动确认完成",
+            },
+          }),
+        ],
+        buildRecordedFlowMeta("flow_recorded_scroll_runtime_contract", "录制滚动回放合同流程"),
       ),
     },
   ];

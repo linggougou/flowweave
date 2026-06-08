@@ -44,12 +44,17 @@ describe("runRecordedReplayMatrix baseline", () => {
 
     expect(summary.profile).toBe("baseline");
     expect(summary.baseUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/$/);
-    expect(caseCatalog).toHaveLength(24);
+    expect(caseCatalog).toHaveLength(25);
     expect(fixtureCases).toHaveLength(23);
     expect(runtimeOnlyCases).toEqual([
       {
         name: "placeholder-disambiguation",
         stepCount: 4,
+        sourceKind: "runtime-generated",
+      },
+      {
+        name: "scroll-runtime-contract",
+        stepCount: 5,
         sourceKind: "runtime-generated",
       },
     ]);
@@ -67,7 +72,7 @@ describe("runRecordedReplayMatrix baseline", () => {
       true,
     );
     expect(summary.failed).toHaveLength(0);
-    expect(summary.successCount).toBe(24);
+    expect(summary.successCount).toBe(25);
     expect(summary.failureCount).toBe(0);
     expect(summary.totalDurationMs).toBeGreaterThan(0);
     expect(summary.averageDurationMs).toBeGreaterThan(0);

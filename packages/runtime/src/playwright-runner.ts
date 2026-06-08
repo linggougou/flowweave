@@ -62,11 +62,14 @@ type CandidateResolution =
 
 const MIN_DISAMBIGUATION_SCORE = 4;
 const SUGGEST_READY_TIMEOUT_MS = 1_200;
+const SCROLL_SETTLE_TIMEOUT_MS = 1_200;
+const SCROLL_POSITION_TOLERANCE_PX = 1;
 const NAVIGATION_PRESS_KEYS = new Set(["ArrowDown", "ArrowUp"]);
 const ACTION_STATE_RESET_CAUSES = new Set([
   "fill-value-reset",
   "select-value-reset",
   "checked-state-reset",
+  "scroll-position-reset",
   "upload-files-reset",
 ]);
 
@@ -928,6 +931,101 @@ async function waitForBrowserFrame(page: Page): Promise<void> {
     .catch(() => undefined);
 }
 
+function resolveScrollSettleTimeout(timeoutMs: number): number {
+  return Math.max(100, Math.min(timeoutMs, SCROLL_SETTLE_TIMEOUT_MS));
+}
+
+async function verifyPageScrollPosition(
+  page: Page,
+  expectedX: number,
+  expectedY: number,
+  timeoutMs: number,
+): Promise<boolean> {
+  const settleTimeoutMs = resolveScrollSettleTimeout(timeoutMs);
+  const position = {
+    x: expectedX,
+    y: expectedY,
+    tolerancePx: SCROLL_POSITION_TOLERANCE_PX,
+  };
+
+  const settled = await page
+    .waitForFunction(
+      ({ x, y, tolerancePx }) =>
+        Math.abs(window.scrollX - x) <= tolerancePx &&
+        Math.abs(window.scrollY - y) <= tolerancePx,
+      position,
+      { timeout: settleTimeoutMs },
+    )
+    .then(() => true)
+    .catch(() => false);
+  if (settled) {
+    return true;
+  }
+
+  return page
+    .evaluate(
+      ({ x, y, tolerancePx }) =>
+        Math.abs(window.scrollX - x) <= tolerancePx &&
+        Math.abs(window.scrollY - y) <= tolerancePx,
+      position,
+    )
+    .catch(() => false);
+}
+
+async function verifyLocatorScrollPosition(
+  page: Page,
+  locator: Locator,
+  expectedX: number,
+  expectedY: number,
+  timeoutMs: number,
+): Promise<boolean> {
+  const handle = await locator.elementHandle().catch(() => null);
+  if (!handle) {
+    return false;
+  }
+
+  const settleTimeoutMs = resolveScrollSettleTimeout(timeoutMs);
+  const payload = {
+    element: handle,
+    x: expectedX,
+    y: expectedY,
+    tolerancePx: SCROLL_POSITION_TOLERANCE_PX,
+  };
+
+  try {
+    const settled = await page
+      .waitForFunction(
+        ({ element, x, y, tolerancePx }) =>
+          element instanceof HTMLElement &&
+          Math.abs(element.scrollLeft - x) <= tolerancePx &&
+          Math.abs(element.scrollTop - y) <= tolerancePx,
+        payload,
+        { timeout: settleTimeoutMs },
+      )
+      .then(() => true)
+      .catch(() => false);
+    if (settled) {
+      return true;
+    }
+
+    return locator
+      .evaluate(
+        (element, { x, y, tolerancePx }) =>
+          element instanceof HTMLElement &&
+          Math.abs(element.scrollLeft - x) <= tolerancePx &&
+          Math.abs(element.scrollTop - y) <= tolerancePx,
+        {
+          x: expectedX,
+          y: expectedY,
+          tolerancePx: SCROLL_POSITION_TOLERANCE_PX,
+        },
+      )
+      .catch(() => false);
+  } finally {
+    await handle.dispose().catch(() => undefined);
+  }
+}
+
 type SuggestTargetSnapshot = {
   expanded: string | null;
   activeDescendantId: string | null;
@@ -1734,6 +1832,51 @@ async function runStep(
           await page.keyboard.press(resolvedStep.key);
         }
         await waitForPageSettled(page, Math.min(timeoutMs, 8_000));
+        break;
+      }
+      case "scroll": {
+        if (resolvedStep.target) {
+          await performRecoveredLocatorAction(page, resolvedStep.target, timeoutMs, {
+            action: async (locator) => {
+              await locator.evaluate(
+                (element, position) => {
+                  if (!(element instanceof HTMLElement)) {
+                    throw new Error("scroll 目标不是 HTMLElement");
+                  }
+
+                  element.scrollTo(position.x, position.y);
+                },
+                { x: resolvedStep.x, y: resolvedStep.y },
+              );
+              await waitForBrowserFrame(page);
+            },
+            verify: (locator) =>
+              verifyLocatorScrollPosition(page, locator, resolvedStep.x, resolvedStep.y, timeoutMs),
+            failureMessage: `scroll 后容器位置未稳定到 (${resolvedStep.x}, ${resolvedStep.y})`,
+            failureCause: "scroll-position-reset",
+          });
+        } else {
+          await page.evaluate(
+            ({ x, y }) => {
+              window.scrollTo(x, y);
+            },
+            { x: resolvedStep.x, y: resolvedStep.y },
+          );
+          await waitForBrowserFrame(page);
+          const matched = await verifyPageScrollPosition(
+            page,
+            resolvedStep.x,
+            resolvedStep.y,
+            timeoutMs,
+          );
+          if (!matched) {
+            throw new FlowWeaveError(
+              "RUNTIME_STEP_FAILED",
+              `scroll 后页面位置未稳定到 (${resolvedStep.x}, ${resolvedStep.y})`,
+              { cause: "scroll-position-reset" },
+            );
+          }
+        }
         break;
       }
       case "upload": {

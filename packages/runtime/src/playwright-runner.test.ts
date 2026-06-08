@@ -626,6 +626,170 @@ function buildRepeatedRowActionsHtml(options?: { duplicateScope?: boolean }): st
 </html>`;
 }
 
+function buildPageScrollFixtureHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <style>
+      body {
+        margin: 0;
+        min-height: 1600px;
+        font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+
+      #page-scroll-status,
+      #scroll-result,
+      #scroll-acknowledge {
+        position: fixed;
+        left: 16px;
+      }
+
+      #page-scroll-status {
+        top: 16px;
+      }
+
+      #scroll-acknowledge {
+        top: 56px;
+      }
+
+      #scroll-result {
+        top: 96px;
+      }
+
+      .spacer {
+        height: 1280px;
+      }
+    </style>
+  </head>
+  <body>
+    <p id="page-scroll-status" data-ready="false" data-x="0" data-y="0">尚未滚动到目标位置</p>
+    <button id="scroll-acknowledge" type="button" disabled>确认滚动完成</button>
+    <p id="scroll-result" hidden data-ready="false">尚未确认</p>
+    <div class="spacer"></div>
+
+    <script>
+      const pageScrollStatus = document.getElementById("page-scroll-status");
+      const scrollAcknowledge = document.getElementById("scroll-acknowledge");
+      const scrollResult = document.getElementById("scroll-result");
+
+      function syncPageScrollStatus() {
+        const x = Math.round(window.scrollX);
+        const y = Math.round(window.scrollY);
+        const reached = x === 0 && y === 480;
+        pageScrollStatus.dataset.x = String(x);
+        pageScrollStatus.dataset.y = String(y);
+        pageScrollStatus.dataset.ready = reached ? "true" : "false";
+        pageScrollStatus.textContent = reached
+          ? "页面已滚动到目标位置"
+          : "当前页面滚动：" + x + ", " + y;
+        scrollAcknowledge.disabled = !reached;
+      }
+
+      window.addEventListener("scroll", syncPageScrollStatus, { passive: true });
+      syncPageScrollStatus();
+
+      scrollAcknowledge.addEventListener("click", () => {
+        scrollResult.hidden = false;
+        scrollResult.dataset.ready = "true";
+        scrollResult.textContent = "滚动确认完成";
+      });
+    </script>
+  </body>
+</html>`;
+}
+
+function buildContainerScrollFixtureHtml(): string {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <style>
+      body {
+        margin: 0;
+        padding: 24px;
+        font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      }
+
+      #activity-region {
+        width: 280px;
+        height: 180px;
+        overflow: auto;
+        border: 1px solid #9fb3aa;
+        border-radius: 16px;
+      }
+
+      #activity-canvas {
+        position: relative;
+        width: 640px;
+        height: 960px;
+        background:
+          linear-gradient(180deg, rgba(32, 112, 90, 0.08), rgba(32, 112, 90, 0)),
+          linear-gradient(90deg, rgba(32, 112, 90, 0.06), rgba(32, 112, 90, 0));
+      }
+
+      .activity-card {
+        position: absolute;
+        width: 220px;
+        padding: 12px;
+        border-radius: 12px;
+        background: #fff;
+        border: 1px solid #c8d7d0;
+        box-shadow: 0 10px 24px rgba(30, 56, 48, 0.08);
+      }
+
+      #container-scroll-status,
+      #container-result {
+        margin-top: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="activity-region" role="region" aria-label="活动列表">
+      <div id="activity-canvas">
+        <div class="activity-card" style="left: 24px; top: 24px;">活动卡片 A</div>
+        <div class="activity-card" style="left: 320px; top: 120px;">活动卡片 B</div>
+        <div class="activity-card" style="left: 280px; top: 520px;">活动卡片 C</div>
+        <div class="activity-card" style="left: 340px; top: 760px;">活动卡片 D</div>
+      </div>
+    </div>
+
+    <p id="container-scroll-status" data-ready="false" data-left="0" data-top="0">
+      容器尚未滚动到目标位置
+    </p>
+    <button id="container-follow-up" type="button" disabled>继续处理</button>
+    <p id="container-result" hidden data-ready="false">尚未继续处理</p>
+
+    <script>
+      const activityRegion = document.getElementById("activity-region");
+      const containerScrollStatus = document.getElementById("container-scroll-status");
+      const containerFollowUp = document.getElementById("container-follow-up");
+      const containerResult = document.getElementById("container-result");
+
+      function syncContainerScrollStatus() {
+        const left = Math.round(activityRegion.scrollLeft);
+        const top = Math.round(activityRegion.scrollTop);
+        const reached = left === 24 && top === 420;
+        containerScrollStatus.dataset.left = String(left);
+        containerScrollStatus.dataset.top = String(top);
+        containerScrollStatus.dataset.ready = reached ? "true" : "false";
+        containerScrollStatus.textContent = reached
+          ? "容器已滚动到目标位置"
+          : "当前容器滚动：" + left + ", " + top;
+        containerFollowUp.disabled = !reached;
+      }
+
+      activityRegion.addEventListener("scroll", syncContainerScrollStatus, { passive: true });
+      syncContainerScrollStatus();
+
+      containerFollowUp.addEventListener("click", () => {
+        containerResult.hidden = false;
+        containerResult.dataset.ready = "true";
+        containerResult.textContent = "已继续处理";
+      });
+    </script>
+  </body>
+</html>`;
+}
+
 function buildPlaceholderDisambiguationHtml(): string {
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -1849,6 +2013,138 @@ describe("executeFlow", () => {
     );
 
     expect(result.status).toBe("success");
+  });
+
+  it("支持页面级 scroll 后继续执行后续点击链路", async () => {
+    const fixtureDir = mkdtempSync(join(tmpdir(), "fw-runtime-page-scroll-"));
+    cleanupPaths.add(fixtureDir);
+    const fixturePath = join(fixtureDir, "page-scroll.html");
+    writeFileSync(fixturePath, buildPageScrollFixtureHtml(), "utf-8");
+    const fixtureUrl = pathToFileURL(fixturePath).href;
+
+    const result = await executeFlow(
+      buildFlow("flow_page_scroll", "页面滚动流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: fixtureUrl,
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "scroll",
+          x: 0,
+          y: 480,
+        },
+        {
+          id: "s3",
+          type: "click",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector: "#page-scroll-status[data-ready='true'][data-x='0'][data-y='480']",
+              },
+            ],
+          },
+        },
+        {
+          id: "s4",
+          type: "click",
+          target: {
+            strategies: [{ kind: "role", role: "button", name: "确认滚动完成" }],
+          },
+        },
+        {
+          id: "s5",
+          type: "click",
+          target: {
+            strategies: [{ kind: "css", selector: "#scroll-result[data-ready='true']" }],
+          },
+        },
+      ]),
+      { headless: true },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.steps.map((step) => step.type)).toEqual([
+      "navigate",
+      "scroll",
+      "click",
+      "click",
+      "click",
+    ]);
+  });
+
+  it("支持容器级 scroll 后继续定位后续步骤", async () => {
+    const fixtureDir = mkdtempSync(join(tmpdir(), "fw-runtime-container-scroll-"));
+    cleanupPaths.add(fixtureDir);
+    const fixturePath = join(fixtureDir, "container-scroll.html");
+    writeFileSync(fixturePath, buildContainerScrollFixtureHtml(), "utf-8");
+    const fixtureUrl = pathToFileURL(fixturePath).href;
+
+    const result = await executeFlow(
+      buildFlow("flow_container_scroll", "容器滚动流程", [
+        {
+          id: "s1",
+          type: "navigate",
+          url: fixtureUrl,
+          waitUntil: "domcontentloaded",
+        },
+        {
+          id: "s2",
+          type: "scroll",
+          x: 24,
+          y: 420,
+          target: {
+            strategies: [
+              { kind: "role", role: "region", name: "活动列表" },
+              { kind: "css", selector: "#activity-region" },
+            ],
+            hints: {
+              tagName: "div",
+            },
+          },
+        },
+        {
+          id: "s3",
+          type: "click",
+          target: {
+            strategies: [
+              {
+                kind: "css",
+                selector:
+                  "#container-scroll-status[data-ready='true'][data-left='24'][data-top='420']",
+              },
+            ],
+          },
+        },
+        {
+          id: "s4",
+          type: "click",
+          target: {
+            strategies: [{ kind: "role", role: "button", name: "继续处理" }],
+          },
+        },
+        {
+          id: "s5",
+          type: "click",
+          target: {
+            strategies: [{ kind: "css", selector: "#container-result[data-ready='true']" }],
+          },
+        },
+      ]),
+      { headless: true },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.steps.map((step) => step.type)).toEqual([
+      "navigate",
+      "scroll",
+      "click",
+      "click",
+      "click",
+    ]);
   });
 
   it("在 suggest / combobox 上会等待 fill 后列表就绪与 ArrowDown 选中状态生效", async () => {
