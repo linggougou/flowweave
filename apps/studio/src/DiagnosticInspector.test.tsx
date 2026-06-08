@@ -348,4 +348,72 @@ describe("DiagnosticInspector", () => {
     expect(html).toContain("订单 A-102 / 张三");
     expect(html).toContain("订单 A-103 / 李四");
   });
+
+  it("对单个成功策略直接完成的消歧命中，也展示候选收窄洞察与漂移风险", () => {
+    const html = renderToStaticMarkup(
+      <DiagnosticInspector
+        steps={[
+          buildStep({
+            label: "编辑订单行",
+            status: "passed",
+            message: "runtime 已从多个候选中收窄到唯一目标",
+            diagnostic: {
+              stepId: "s9",
+              stepIndex: 8,
+              url: "https://staging.example.com/orders",
+              title: "订单列表",
+              strategyAttempts: [
+                {
+                  label: "role=button[name=编辑]",
+                  matchedCount: 2,
+                  visibleCount: 2,
+                  success: true,
+                  selectedIndex: 1,
+                  candidateSummaries: [
+                    {
+                      index: 0,
+                      score: 34,
+                      visible: true,
+                      scopeKind: "row",
+                      scopeText: "订单 A-102 / 张三",
+                      labelText: "编辑",
+                      matchedHints: ["labelText"],
+                    },
+                    {
+                      index: 1,
+                      score: 46,
+                      visible: true,
+                      scopeKind: "row",
+                      scopeText: "订单 A-103 / 李四",
+                      labelText: "编辑",
+                      matchedHints: ["scopeText", "labelText", "tagName"],
+                    },
+                  ],
+                },
+              ],
+              targetHints: {
+                tagName: "button",
+                labelText: "编辑",
+                scopeKind: "row",
+                scopeText: "订单 A-103 / 李四",
+              },
+            },
+          }),
+        ]}
+        selectedStepIndex={8}
+        onSelectStepIndex={() => {}}
+        onOpenPath={() => {}}
+      />,
+    );
+
+    expect(html).toContain("已完成候选收窄");
+    expect(html).toContain("补强已选中列表行的唯一线索");
+    expect(html).toContain("候选细节");
+    expect(html).toContain("选中候选");
+    expect(html).toContain("#2");
+    expect(html).toContain("帮助收窄");
+    expect(html).toContain("scopeText、labelText、tagName");
+    expect(html).toContain("仍不足");
+    expect(html).toContain("订单 A-103 / 李四");
+  });
 });

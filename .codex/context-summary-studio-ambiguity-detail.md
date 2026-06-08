@@ -54,3 +54,19 @@
 - 该 worktree 起初没有可用依赖目录，测试与类型检查无法直接启动。
 - 为了只在当前 worktree 做本地验证，临时创建了指向主工作区依赖目录的未跟踪 `node_modules` 符号链接。
 - 这些依赖目录仅用于本地验证，不属于本轨道提交内容，提交前需保持未纳入版本控制。
+
+## 2026-06-09 审查修正补充
+
+- 审查指出上一轮只闭环了失败歧义与“先失败后成功”场景，没有覆盖“单个成功 strategy 直接完成候选收窄”的成功路径。
+- 本轮补充内容：
+  - `failure-insights.ts` 新增成功消歧分支：当单个成功 attempt 自带 `selectedIndex / candidateSummaries` 时，输出“已完成候选收窄”而不是退回通用执行报错摘要。
+  - `repair-suggestions.ts` 新增成功消歧漂移提示：说明 runtime 为何选中该候选、当前命中了哪些收窄线索，以及为何仍建议补唯一标识。
+  - 测试新增 3 条成功路径覆盖：
+    - `failure-insights` 成功消歧洞察
+    - `repair-suggestions` 成功消歧漂移建议
+    - `DiagnosticInspector` 成功消歧展示
+- 本轮验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- DiagnosticInspector.test.tsx src/shared/failure-insights.test.ts src/shared/repair-suggestions.test.ts`
+    - 结果：通过，`39/39`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+    - 结果：通过

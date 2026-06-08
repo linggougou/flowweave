@@ -189,6 +189,23 @@ function describeCandidateHintCoverage(
   return helpfulHints.length > 0 ? helpfulHints.join("、") : undefined;
 }
 
+function hasDisambiguationMetadata(attempt: StudioDiagnosticStrategyAttempt): boolean {
+  return (
+    attempt.selectedIndex !== undefined ||
+    Boolean(attempt.ambiguityReason?.trim()) ||
+    (attempt.candidateSummaries?.length ?? 0) > 0
+  );
+}
+
+function resolveCandidateCount(attempt: StudioDiagnosticStrategyAttempt): number {
+  return (
+    attempt.candidateSummaries?.filter((candidate) => candidate.visible).length ||
+    attempt.candidateSummaries?.length ||
+    attempt.visibleCount ||
+    attempt.matchedCount
+  );
+}
+
 function hasAmbiguityTieSignal(attempt: StudioDiagnosticStrategyAttempt): boolean {
   return includesKeyword(`${attempt.ambiguityReason ?? ""} ${attempt.error ?? ""}`, [
     "tie",
@@ -402,6 +419,47 @@ function buildMissingScopeSuggestion(
   };
 }
 
+function buildSuccessfulDisambiguationSuggestion(
+  step: ExecutionStepLog,
+  attempt: StudioDiagnosticStrategyAttempt,
+  targetHints?: StudioDiagnosticTargetHints,
+): RankedRepairSuggestion {
+  const selectedCandidate = resolveRelevantCandidates(attempt)[0];
+  const scopeKind =
+    targetHints?.scopeKind ?? selectedCandidate?.scopeKind;
+  const scopeText =
+    targetHints?.scopeText?.trim() ?? selectedCandidate?.scopeText?.trim();
+  const scopeKindLabel = formatScopeKind(scopeKind) ?? "区域";
+  const hintCoverage = describeCandidateHintCoverage(attempt);
+  const candidateCount = resolveCandidateCount(attempt);
+  const selectedLabel =
+    attempt.selectedIndex !== undefined ? `候选 #${attempt.selectedIndex + 1}` : "当前候选";
+
+  return {
+    id: `strategy:successful-disambiguation:${step.stepId}`,
+    source: "strategy",
+    severity: "warning",
+    priority: 0,
+    title: scopeText ? `补强已选中${scopeKindLabel}的唯一线索` : "补唯一线索，避免候选漂移",
+    action: scopeText
+      ? `当前虽然已经命中包含“${scopeText}”的${scopeKindLabel}，但仍建议重新录制并保留该${scopeKindLabel}里的主键、编号或 testId，避免后续新增同名目标时漂移。`
+      : "当前步骤虽然已通过，但 runtime 仍是从多个候选里选中的。建议补 testId、唯一文案或更稳定上下文后重新录制，减少后续漂移。",
+    reason: [
+      buildAttemptReason(
+        attempt,
+        attempt.ambiguityReason?.trim() ?? `runtime 选中${selectedLabel}`,
+      ),
+      hintCoverage ? `命中的收窄线索有 ${hintCoverage}。` : undefined,
+      scopeText ? `当前命中的是 ${scopeKindLabel}“${scopeText}”。` : undefined,
+      candidateCount > 1
+        ? `当前页面上仍有 ${candidateCount} 个相似候选，缺少长期稳定的唯一标识。`
+        : "当前产物还没有记录到足够稳定的唯一线索。",
+    ]
+      .filter((part): part is string => Boolean(part))
+      .join(""),
+  };
+}
+
 export function buildFragilityRepairSuggestions(
   warnings: FragilityIssue[],
 ): RepairSuggestion[] {
@@ -459,8 +517,24 @@ export function buildDiagnosticRepairSuggestions(
   }
 
   const failedAttempts = diagnostic.strategyAttempts.filter((attempt) => !attempt.success);
+  const successfulDisambiguationAttempt =
+    step.status === "passed" && failedAttempts.length === 0
+      ? diagnostic.strategyAttempts.find(
+          (attempt) => attempt.success && hasDisambiguationMetadata(attempt),
+        )
+      : undefined;
   const targetHints = diagnostic.targetHints;
   const targetHintSummary = describeTargetHints(targetHints);
+
+  if (successfulDisambiguationAttempt) {
+    ranked.push(
+      buildSuccessfulDisambiguationSuggestion(
+        step,
+        successfulDisambiguationAttempt,
+        targetHints,
+      ),
+    );
+  }
 
   const broadAttempt = failedAttempts.find(
     (attempt) =>

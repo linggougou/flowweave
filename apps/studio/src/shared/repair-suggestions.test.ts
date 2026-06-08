@@ -320,6 +320,67 @@ describe("buildDiagnosticRepairSuggestions", () => {
     ).toBe(true);
   });
 
+  it("对单个成功策略里的消歧命中，给出补唯一线索的漂移风险提示", () => {
+    const suggestions = buildDiagnosticRepairSuggestions(
+      buildStep({
+        status: "passed",
+        message: "runtime 已从多个候选中收窄到唯一目标",
+        label: "编辑订单行",
+        diagnostic: {
+          stepId: "s9",
+          stepIndex: 8,
+          url: "https://staging.example.com/orders",
+          title: "订单列表",
+          strategyAttempts: [
+            {
+              label: "role=button[name=编辑]",
+              matchedCount: 2,
+              visibleCount: 2,
+              success: true,
+              selectedIndex: 1,
+              candidateSummaries: [
+                {
+                  index: 0,
+                  score: 34,
+                  visible: true,
+                  scopeKind: "row",
+                  scopeText: "订单 A-102 / 张三",
+                  labelText: "编辑",
+                  matchedHints: ["labelText"],
+                },
+                {
+                  index: 1,
+                  score: 46,
+                  visible: true,
+                  scopeKind: "row",
+                  scopeText: "订单 A-103 / 李四",
+                  labelText: "编辑",
+                  matchedHints: ["scopeText", "labelText", "tagName"],
+                },
+              ],
+            },
+          ],
+          targetHints: {
+            tagName: "button",
+            labelText: "编辑",
+            scopeKind: "row",
+            scopeText: "订单 A-103 / 李四",
+          },
+        },
+      }),
+    );
+
+    expect(suggestions[0]).toMatchObject({
+      source: "strategy",
+      severity: "warning",
+      title: "补强已选中列表行的唯一线索",
+    });
+    expect(suggestions[0]?.reason).toContain("选中候选 #2");
+    expect(suggestions[0]?.reason).toContain("scopeText、labelText、tagName");
+    expect(suggestions[0]?.reason).toContain("仍有 2 个相似候选");
+    expect(suggestions[0]?.action).toContain("订单 A-103 / 李四");
+  });
+
   it("对多命中但缺少作用域线索的失败，提示补上上下文后再重录", () => {
     const suggestions = buildDiagnosticRepairSuggestions(
       buildStep({

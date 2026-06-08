@@ -12,6 +12,7 @@ import {
 
 export type FailureInsightCategory =
   | "ambiguous-target"
+  | "disambiguated-target"
   | "hidden-target"
   | "missing-target"
   | "page-state"
@@ -74,15 +75,46 @@ function resolveCandidateHintLabels(attempt: StudioDiagnosticStrategyAttempt): s
   return uniqueStrings(candidates.flatMap((candidate) => candidate.matchedHints));
 }
 
-function describeAmbiguousAttempt(attempt: StudioDiagnosticStrategyAttempt): string | undefined {
-  const ambiguityReason = attempt.ambiguityReason?.trim();
-  const helpfulHints = resolveCandidateHintLabels(attempt);
-  const candidateCount =
-    resolveRelevantCandidates(attempt).length ||
+function hasDisambiguationMetadata(attempt: StudioDiagnosticStrategyAttempt): boolean {
+  return (
+    attempt.selectedIndex !== undefined ||
+    Boolean(attempt.ambiguityReason?.trim()) ||
+    (attempt.candidateSummaries?.length ?? 0) > 0
+  );
+}
+
+function resolveSelectedCandidate(
+  attempt: StudioDiagnosticStrategyAttempt,
+): StudioDiagnosticCandidateSummary | undefined {
+  if (attempt.selectedIndex === undefined) {
+    return undefined;
+  }
+
+  return attempt.candidateSummaries?.find((candidate) => candidate.index === attempt.selectedIndex);
+}
+
+function resolveCandidateCount(attempt: StudioDiagnosticStrategyAttempt): number {
+  return (
     attempt.candidateSummaries?.filter((candidate) => candidate.visible).length ||
     attempt.candidateSummaries?.length ||
     attempt.visibleCount ||
-    attempt.matchedCount;
+    attempt.matchedCount
+  );
+}
+
+function resolveSuccessfulHintLabels(attempt: StudioDiagnosticStrategyAttempt): string[] {
+  const selectedCandidate = resolveSelectedCandidate(attempt);
+  if (selectedCandidate) {
+    return uniqueStrings(selectedCandidate.matchedHints);
+  }
+
+  return resolveCandidateHintLabels(attempt);
+}
+
+function describeAmbiguousAttempt(attempt: StudioDiagnosticStrategyAttempt): string | undefined {
+  const ambiguityReason = attempt.ambiguityReason?.trim();
+  const helpfulHints = resolveCandidateHintLabels(attempt);
+  const candidateCount = resolveCandidateCount(attempt);
   const sentences = [
     `${attempt.label} 同时命中 ${attempt.matchedCount} 个候选，当前定位范围过宽。`,
     ambiguityReason ? `runtime 反馈：${ambiguityReason}。` : undefined,
@@ -93,6 +125,42 @@ function describeAmbiguousAttempt(attempt: StudioDiagnosticStrategyAttempt): str
   ];
 
   return sentences.filter((sentence): sentence is string => Boolean(sentence)).join("");
+}
+
+function describeSuccessfulDisambiguation(attempt: StudioDiagnosticStrategyAttempt): string {
+  const helpfulHints = resolveSuccessfulHintLabels(attempt);
+  const candidateCount = resolveCandidateCount(attempt);
+  const selectedLabel =
+    attempt.selectedIndex !== undefined ? `候选 #${attempt.selectedIndex + 1}` : "当前候选";
+  const sentences = [
+    `${attempt.label} 在 ${attempt.matchedCount} 个候选里选中了${selectedLabel}。`,
+    attempt.ambiguityReason?.trim() ? `runtime 反馈：${attempt.ambiguityReason}。` : undefined,
+    helpfulHints.length > 0 ? `这次命中的收窄线索：${helpfulHints.join("、")}。` : undefined,
+    candidateCount > 1
+      ? `仍不足：当前页面上仍有 ${candidateCount} 个相似候选，缺少更稳定的唯一标识。`
+      : "仍不足：当前产物还没有记录到足够稳定的唯一线索。",
+  ];
+
+  return sentences.filter((sentence): sentence is string => Boolean(sentence)).join("");
+}
+
+function resolveSuccessfulDisambiguation(
+  step: ExecutionStepLog,
+): StudioDiagnosticStrategyAttempt | null {
+  const diagnostic = isTargetResolutionDiagnostic(step.diagnostic) ? step.diagnostic : undefined;
+  if (!diagnostic || step.status !== "passed") {
+    return null;
+  }
+
+  if (diagnostic.strategyAttempts.some((attempt) => !attempt.success)) {
+    return null;
+  }
+
+  return (
+    diagnostic.strategyAttempts.find(
+      (attempt) => attempt.success && hasDisambiguationMetadata(attempt),
+    ) ?? null
+  );
 }
 
 function resolveFallbackSuccess(
@@ -201,12 +269,21 @@ function resolveInsightCategory(step: ExecutionStepLog): {
   const attempts = targetDiagnostic?.strategyAttempts ?? [];
   const failedAttempts = attempts.filter((attempt) => !attempt.success);
   const fallbackSuccess = resolveFallbackSuccess(step);
+  const successfulDisambiguation = resolveSuccessfulDisambiguation(step);
 
   if (fallbackSuccess) {
     return {
       category: "fallback-success",
       categoryLabel: "备用策略已命中",
       summary: `主策略已有 ${fallbackSuccess.failedAttempts.length} 次失败，但 ${fallbackSuccess.successLabel} 最终命中，本次执行已通过，建议后续补强首选定位避免回放漂移。`,
+    };
+  }
+
+  if (successfulDisambiguation) {
+    return {
+      category: "disambiguated-target",
+      categoryLabel: "已完成候选收窄",
+      summary: describeSuccessfulDisambiguation(successfulDisambiguation),
     };
   }
 

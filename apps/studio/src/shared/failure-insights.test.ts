@@ -351,6 +351,67 @@ describe("buildFailureInsight", () => {
     expect(insight?.recommendedAction).toContain("订单 A-103 / 李四");
   });
 
+  it("对单个成功策略里的消歧命中输出可执行洞察，而不是退回通用摘要", () => {
+    const insight = buildFailureInsight(
+      buildStep({
+        status: "passed",
+        message: "runtime 已从多个候选中收窄到唯一目标",
+        label: "编辑订单行",
+        diagnostic: {
+          stepId: "s7",
+          stepIndex: 6,
+          url: "https://staging.example.com/orders",
+          title: "订单列表",
+          strategyAttempts: [
+            {
+              label: "role=button[name=编辑]",
+              matchedCount: 2,
+              visibleCount: 2,
+              success: true,
+              selectedIndex: 1,
+              candidateSummaries: [
+                {
+                  index: 0,
+                  score: 34,
+                  visible: true,
+                  scopeKind: "row",
+                  scopeText: "订单 A-102 / 张三",
+                  labelText: "编辑",
+                  matchedHints: ["labelText"],
+                },
+                {
+                  index: 1,
+                  score: 46,
+                  visible: true,
+                  scopeKind: "row",
+                  scopeText: "订单 A-103 / 李四",
+                  labelText: "编辑",
+                  matchedHints: ["scopeText", "labelText", "tagName"],
+                },
+              ],
+            },
+          ],
+          targetHints: {
+            tagName: "button",
+            labelText: "编辑",
+            scopeKind: "row",
+            scopeText: "订单 A-103 / 李四",
+          },
+        },
+      }),
+    );
+
+    expect(insight).toMatchObject({
+      category: "disambiguated-target",
+      categoryLabel: "已完成候选收窄",
+      title: "补强已选中列表行的唯一线索",
+    });
+    expect(insight?.summary).toContain("选中了候选 #2");
+    expect(insight?.summary).toContain("scopeText、labelText、tagName");
+    expect(insight?.summary).toContain("仍有 2 个相似候选");
+    expect(insight?.recommendedAction).toContain("订单 A-103 / 李四");
+  });
+
   it("把命中但不可见的失败识别为页面状态问题", () => {
     const insight = buildFailureInsight(
       buildStep({
