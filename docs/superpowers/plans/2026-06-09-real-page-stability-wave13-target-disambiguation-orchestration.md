@@ -1,5 +1,7 @@
 # 真实页面稳定性 Wave 13 并行编排板
 
+> **状态更新（2026-06-09）**：本文档依赖的“Wave 13 主体尚未实现”前提已失效，现已**过时**。请改以 `docs/superpowers/plans/2026-06-09-real-page-stability-residual-gaps-orchestration.md` 作为当前有效编排板。
+
 ## 1. 当前状态
 
 - 协调分支：`codex/real-page-stability-program`

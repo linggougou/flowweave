@@ -1,5 +1,7 @@
 # 真实页面稳定性 Wave 13：Target Disambiguation 与 Studio 基线收口 Implementation Plan
 
+> **状态更新（2026-06-09）**：本文档基于“target disambiguation 主体尚未实现”的旧前提编写，现已**过时**。请改以 `docs/superpowers/plans/2026-06-09-real-page-stability-residual-gaps-plan.md` 作为当前有效计划真源。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 先把当前已验证的 Studio 桌面壳恢复与布局修复收成干净协调基线，再并行补齐真实页面“重复元素 / 相似文案 / 列表行操作”下的歧义目标消解能力，让 FlowWeave 从“能跑”提升到“更可能命中对的元素”。
@@ -306,4 +308,3 @@ Expected:
   - 记录：
     - 每条轨道的根因、变更范围、Node 20 验收命令、是否已回收
     - 若仍有残余风险，明确标注为后续独立问题，不包装成“全部完成”
-

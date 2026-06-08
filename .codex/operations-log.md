@@ -1,5 +1,44 @@
 # FlowWeave 操作日志
 
+## 2026-06-09 残余缺口计划纠偏与并行编排重建
+
+- 时间：2026-06-09 21:30:00 CST
+- 任务目标：把此前误判为“Wave 13 尚未实现”的计划纠偏为“残余缺口收口”计划，并按用户授权重建 worktree + subagent 并行编排。
+- 用户授权说明：
+  - 用户已明确授权“自主规划任务、持续开发、无需指示、全权限开放”。
+  - 本轮据此直接完成设计纠偏、计划落盘、worktree 编排与后续 subagent 派发，不等待额外人工确认。
+- 路线与边界：
+  - 项目根仍无物理 `PROJECT_ROUTE_LOCK.md`，本轮继续按项目 `AGENTS.md` 指定的 `docs/superpowers/plans/2026-05-26-run-first-roadmap.md` 作为等效路线真源。
+  - 继续限定在“真实页面稳定录制与执行增强”主线，不进入 `P3` 深度冻结扩张与 `P4 ai-orchestrator` 冻结区。
+- 技能与运行时：
+  - `brainstorming`：用于纠偏设计边界与拆分真正独立的并行轨道。
+  - `writing-plans`：用于重新编写残余缺口实施计划。
+  - `using-git-worktrees`：用于清理错误方向 worktree 并建立新的隔离工作区。
+  - `dispatching-parallel-agents` / `subagent-driven-development`：用于后续按轨道派发与回收 subagent。
+- 审计结论：
+  - 此前新建的 `Wave 13 Target Disambiguation` 文档与 3 个 worktree，建立在“target disambiguation 主体尚未实现”的错误前提上。
+  - 经再次核对，以下能力已在主线完成：
+    - `packages/flow-dsl/src/schema.ts` 已有 `scopeText / scopeKind`
+    - `packages/recorder/src/target-from-dom.ts`、`normalize.ts` 已保真作用域线索
+    - `packages/runtime/src/playwright-runner.ts` 已有候选打分、`selectedIndex`、`ambiguityReason`、`candidateSummaries`
+    - `packages/runtime/src/playwright-runner.test.ts` 已有歧义命中 / 并列失败回归
+    - `apps/studio/src/DiagnosticInspector.tsx`、`repair-suggestions.ts` 已具备基础作用域线索解释
+    - `examples/recorded-replay-smoke.ts` 与 `packages/runtime/src/recorded-replay-matrix.test.ts` 已扩展到 `25` 条 recorded replay case
+  - 当前真正剩余的高价值缺口收敛为 4 条：
+    1. Electron bundle 完整性 / 签名残余风险仍未收口
+    2. Studio 尚未完整消费并展示 runtime 的 `selectedIndex / ambiguityReason / candidateSummaries`
+    3. Studio 左侧滚动与右侧无堆叠虽已修复，但缺少自动化布局 contract
+    4. `docs/guides/recorded-replay-matrix.md` 统计口径已过期，仍停留在 `13` 条
+- 本轮文档动作：
+  - 新增 `.codex/context-summary-real-page-residual-gaps.md`
+  - 新增 `docs/superpowers/plans/2026-06-09-real-page-stability-residual-gaps-plan.md`
+  - 新增 `docs/superpowers/plans/2026-06-09-real-page-stability-residual-gaps-orchestration.md`
+  - 在旧 `Wave 13 Target Disambiguation` 计划与编排板顶部补“已过时 / 已被新计划取代”说明
+- 接下来要执行：
+  1. 清理 3 个未使用的错误方向 worktree
+  2. 按残余缺口重建 4 条有效 worktree 轨道
+  3. 派发 subagent 并在 Node 20 基线下逐轨验收与回收
+
 ## 2026-06-09 Wave 13 规划与并行编排启动
 
 - 时间：2026-06-09 11:40:00 CST
