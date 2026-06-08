@@ -4,10 +4,13 @@ import { describe, expect, it } from "vitest";
 
 import type { FlowDocument } from "@flowweave/flow-dsl";
 import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
+import type { StudioFlowRef, StudioProject } from "./shared/studio-api-types.js";
+import type { VariableInputs } from "./shared/run-input-state.js";
 
-import { App, type AppInitialState } from "./App.js";
+import { App } from "./App.js";
 
 const STYLESHEET = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
+const LAYOUT_CONTRACT_STATE_KEY = Symbol.for("flowweave.studio.layout-contract-state");
 const VOID_TAGS = new Set([
   "area",
   "base",
@@ -53,23 +56,38 @@ function buildFlow(): FlowDocument {
   };
 }
 
-function buildInitialState(): AppInitialState {
+type LayoutContractRenderState = {
+  projects: StudioProject[];
+  selectedProjectId: string;
+  flows: StudioFlowRef[];
+  selectedFlowId: string;
+  currentFlow: FlowDocument;
+  selectedEnvironmentName: string;
+  baseUrlDraft: string;
+  storageStatePathDraft: string;
+  variableInputs: VariableInputs;
+};
+
+function buildProjects(): StudioProject[] {
+  return Array.from({ length: 40 }, (_, index) => ({
+    id: `project-${index + 1}`,
+    name: `项目 ${index + 1}`,
+    createdAt: "2026-06-09T00:00:00.000Z",
+    baseUrl: `https://example-${index + 1}.test`,
+    environments: [
+      {
+        name: "预发环境",
+        baseUrl: `https://example-${index + 1}.test`,
+        isDefault: true,
+        storageStatePath: `/tmp/project-${index + 1}.json`,
+      },
+    ],
+  }));
+}
+
+function buildLayoutContractRenderState(): LayoutContractRenderState {
   return {
-    tab: "flow",
-    projects: Array.from({ length: 40 }, (_, index) => ({
-      id: `project-${index + 1}`,
-      name: `项目 ${index + 1}`,
-      createdAt: "2026-06-09T00:00:00.000Z",
-      baseUrl: `https://example-${index + 1}.test`,
-      environments: [
-        {
-          name: "预发环境",
-          baseUrl: `https://example-${index + 1}.test`,
-          isDefault: true,
-          storageStatePath: `/tmp/project-${index + 1}.json`,
-        },
-      ],
-    })),
+    projects: buildProjects(),
     selectedProjectId: "project-1",
     flows: [
       {
@@ -80,16 +98,6 @@ function buildInitialState(): AppInitialState {
     ],
     selectedFlowId: "flow_layout_contract",
     currentFlow: buildFlow(),
-    executionHistory: [
-      {
-        executionId: "execution_recent",
-        flowId: "flow_layout_contract",
-        status: "passed",
-        startedAt: "2026-06-09T00:01:00.000Z",
-        finishedAt: "2026-06-09T00:02:00.000Z",
-        environmentName: "预发环境",
-      },
-    ],
     selectedEnvironmentName: "预发环境",
     baseUrlDraft: "https://example-1.test",
     storageStatePathDraft: "/tmp/project-1.json",
@@ -100,7 +108,16 @@ function buildInitialState(): AppInitialState {
 }
 
 function renderApp() {
-  return renderToStaticMarkup(<App initialState={buildInitialState()} />);
+  const testGlobal = globalThis as typeof globalThis & {
+    [LAYOUT_CONTRACT_STATE_KEY]?: LayoutContractRenderState;
+  };
+
+  testGlobal[LAYOUT_CONTRACT_STATE_KEY] = buildLayoutContractRenderState();
+  try {
+    return renderToStaticMarkup(<App />);
+  } finally {
+    delete testGlobal[LAYOUT_CONTRACT_STATE_KEY];
+  }
 }
 
 function findElementRange(html: string, marker: string): { start: number; end: number } {
@@ -119,6 +136,9 @@ function findElementRange(html: string, marker: string): { start: number; end: n
 
   while ((match = tagRegex.exec(html)) !== null) {
     const [token, rawTagName] = match;
+    if (!rawTagName) {
+      throw new Error(`标记 ${marker} 缺少标签名`);
+    }
     const tagName = rawTagName.toLowerCase();
     const isClosingTag = token.startsWith("</");
     const isSelfClosing = token.endsWith("/>") || VOID_TAGS.has(tagName);
@@ -158,10 +178,18 @@ describe("Studio layout contract", () => {
       html,
       'class="sidebar-section sidebar-section-projects"',
     );
+    const projectList = findElementRange(html, 'class="project-list"');
+    const sidebarHtml = html.slice(sidebarScroll.start, sidebarScroll.end);
+    const projectListHtml = html.slice(projectList.start, projectList.end);
 
     expect(projectSection.start).toBeGreaterThan(sidebarScroll.start);
     expect(projectSection.end).toBeLessThanOrEqual(sidebarScroll.end);
-    expect(html.match(/class="project-item(?: active)?"/g)).toHaveLength(40);
+    expect(projectList.start).toBeGreaterThan(projectSection.start);
+    expect(projectList.end).toBeLessThanOrEqual(projectSection.end);
+    expect(projectList.end).toBeLessThanOrEqual(sidebarScroll.end);
+    expect(sidebarHtml).toContain('class="project-list"');
+    expect(projectListHtml.match(/class="project-item(?: active)?"/g)).toHaveLength(40);
+    expect(sidebarHtml.match(/class="project-item(?: active)?"/g)).toHaveLength(40);
   });
 
   it("为左侧滚动链路保留必要的 flex 与 overflow 合同", () => {
