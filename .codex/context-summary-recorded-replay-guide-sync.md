@@ -11,7 +11,7 @@
 
 ## 当前目标
 
-在不触碰 runtime / studio 代码、不改共享 `.codex/operations-log.md` 的前提下，同步 recorded replay 文档口径，使其与当前 runtime 测试和 smoke runner 保持一致：
+在不触碰 runtime / studio 代码、且本轨只直写限定文档文件的前提下，同步 recorded replay 文档口径，使其与当前 runtime 测试和 smoke runner 保持一致：
 
 1. `docs/guides/recorded-replay-matrix.md` 从旧的 `13` 条口径更新为当前真实口径。
 2. 明确区分 `fixture` 与 `runtime-generated` 两类 case。
@@ -20,13 +20,15 @@
 
 ## 写入边界
 
-- 允许修改：
+- 本轨直接写入：
   - `docs/guides/recorded-replay-matrix.md`
   - `docs/guides/fixture-matrix.md`（仅在 recorded replay 统计或命名口径不一致时做最小同步）
   - `.codex/context-summary-recorded-replay-guide-sync.md`
-- 禁止修改：
-  - 共享 `.codex/operations-log.md`
+- 共享留痕文件：
+  - `.codex/operations-log.md`
   - `.codex/verification-report.md`
+  - 本轨不直接编辑；若需要记录验证结果，以协调侧统一吸收的共享留痕为准。
+- 禁止修改：
   - runtime / studio / examples 源码
   - 其他任意仓库文件
 
@@ -72,7 +74,7 @@
 
 1. 两份文档对齐到 `25 = 23 fixture + 2 runtime-generated`。
 2. `scroll-runtime-contract` 与 `placeholder-disambiguation` 均有明确说明。
-3. 运行以下命令并确认通过：
+3. 已执行以下命令并确认通过；共享验证结果由协调侧统一吸收到共享留痕，本轨不直接编辑共享日志文件：
    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- recorded-replay-matrix.test.ts`
    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:recorded-pages`
 
@@ -81,4 +83,4 @@
 - 不增删任何 recorded replay case
 - 不修改 `examples/recorded-replay-smoke.ts`、runtime 测试或 fixture 文件
 - 不扩大到 real-page 其他档位说明重写
-- 不补写共享操作日志或验证报告
+- 不直接补写共享操作日志或验证报告

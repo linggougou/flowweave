@@ -2,7 +2,7 @@
 
 本矩阵起始于 `Benchmarks` 轨道第一阶段，用于沉淀稳定、可复现的本地 HTML fixture。
 
-当前 Wave 11 的收口目标，是把 `examples/fixtures/`、`examples/real-page-smoke.ts`、`examples/recorded-replay-smoke.ts` 与 runtime 矩阵测试的场景口径统一到一份总表里，并为动作韧性新增独立 `p8` 档位。
+这份总表最初在 Wave 11 收口阶段统一了 `examples/fixtures/`、`examples/real-page-smoke.ts`、`examples/recorded-replay-smoke.ts` 与 runtime 矩阵测试的场景口径，并在当时为动作韧性新增了独立 `p8` 档位；当前文档继续沿用这份统一口径。
 
 - `examples/real-page-smoke.ts`
 - `examples/run-real-page-smoke.ts`
