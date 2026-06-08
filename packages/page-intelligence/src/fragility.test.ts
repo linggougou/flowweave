@@ -149,7 +149,7 @@ describe("analyzeFlowFragility", () => {
       {
         id: "s1",
         type: "click",
-        target: { strategies: [{ kind: "css", selector: "#btn" }] },
+        target: { strategies: [{ kind: "css", selector: ".submit-btn" }] },
       },
     ]);
     const issues = analyzeFlowFragility(flow);
@@ -157,7 +157,38 @@ describe("analyzeFlowFragility", () => {
     expect(issues[0]?.code).toBe("CSS_ONLY");
   });
 
-  it("对包含 nth-of-type 的 css 步骤额外给出 CSS_NTH_OF_TYPE", () => {
+  it("对仅依赖稳定 id 锚点的 css 步骤不误报 CSS_ONLY", () => {
+    const flow = baseFlow([
+      {
+        id: "s1",
+        type: "fill",
+        target: {
+          strategies: [{ kind: "css", selector: "#username" }],
+        },
+        value: "alice",
+      },
+    ]);
+
+    const codes = analyzeFlowFragility(flow).map((issue) => issue.code as string);
+    expect(codes).not.toContain("CSS_ONLY");
+  });
+
+  it("对仅依赖稳定属性锚点的 css 步骤不误报 CSS_ONLY", () => {
+    const flow = baseFlow([
+      {
+        id: "s1",
+        type: "click",
+        target: {
+          strategies: [{ kind: "css", selector: 'button[name="save-draft"]' }],
+        },
+      },
+    ]);
+
+    const codes = analyzeFlowFragility(flow).map((issue) => issue.code as string);
+    expect(codes).not.toContain("CSS_ONLY");
+  });
+
+  it("对包含 nth-of-type 的结构 css 步骤只给出更具体的 CSS_NTH_OF_TYPE", () => {
     const flow = baseFlow([
       {
         id: "s1",
@@ -169,8 +200,8 @@ describe("analyzeFlowFragility", () => {
     ]);
 
     const codes = analyzeFlowFragility(flow).map((issue) => issue.code as string);
-    expect(codes).toContain("CSS_ONLY");
     expect(codes).toContain("CSS_NTH_OF_TYPE");
+    expect(codes).not.toContain("CSS_ONLY");
   });
 
   it("对仅文本策略的步骤给出 TEXT_ONLY", () => {
@@ -194,7 +225,7 @@ describe("analyzeFlowFragility", () => {
         id: "s1",
         type: "select",
         target: {
-          strategies: [{ kind: "css", selector: "#city" }],
+          strategies: [{ kind: "css", selector: "form select" }],
         },
         values: ["shanghai"],
       },
@@ -204,7 +235,7 @@ describe("analyzeFlowFragility", () => {
     expect(codes).toContain("CSS_ONLY");
   });
 
-  it("对依赖 nth-of-type 的 setChecked 步骤给出 CSS_NTH_OF_TYPE", () => {
+  it("对依赖 nth-of-type 的 setChecked 步骤仅给出 CSS_NTH_OF_TYPE", () => {
     const flow = baseFlow([
       {
         id: "s1",
@@ -217,8 +248,8 @@ describe("analyzeFlowFragility", () => {
     ]);
 
     const codes = analyzeFlowFragility(flow).map((issue) => issue.code as string);
-    expect(codes).toContain("CSS_ONLY");
     expect(codes).toContain("CSS_NTH_OF_TYPE");
+    expect(codes).not.toContain("CSS_ONLY");
   });
 
   it("对仅文本策略的 upload 步骤给出 TEXT_ONLY", () => {

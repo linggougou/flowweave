@@ -19,9 +19,12 @@
     "@flowweave/runtime": "workspace:*",
     "@flowweave/shared": "workspace:*",
     "@flowweave/ui": "workspace:*",
+    "better-sqlite3": "12.1.1",
+    "drizzle-orm": "^0.38.3",
     "playwright": "^1.49.1",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

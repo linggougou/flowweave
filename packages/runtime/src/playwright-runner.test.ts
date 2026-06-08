@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { buildFlowFromEvents } from "@flowweave/recorder";
 import { FLOW_SCHEMA_VERSION, parseRecordedEvent } from "@flowweave/shared";
 import type { FlowDocument } from "@flowweave/flow-dsl";
-import { executeFlow as executeFlowFromIndex } from "./index.ts";
+import { executeFlow as executeFlowFromIndex } from "./index.js";
 import { executeFlow } from "./playwright-runner.js";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");

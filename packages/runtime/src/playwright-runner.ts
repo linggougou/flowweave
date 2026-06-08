@@ -6,7 +6,7 @@ import { buildPageSnapshotSummary } from "@flowweave/page-intelligence";
 import { FlowWeaveError, interpolateTemplateString } from "@flowweave/shared";
 
 type LocatorStrategy = Target["strategies"][number];
-import { chromium, type Locator, type Page } from "playwright";
+import { chromium, type ElementHandle, type Locator, type Page } from "playwright";
 import type {
   DiagnosticCandidateSummary,
   ExecutionOptions,
@@ -1737,13 +1737,17 @@ async function runStep(
         break;
       }
       case "upload": {
-        let uploadAttemptHandle: Awaited<ReturnType<Locator["elementHandle"]>> | null = null;
+        const uploadAttemptState: {
+          handle: ElementHandle<SVGElement | HTMLElement> | null;
+        } = { handle: null };
         try {
           await performRecoveredLocatorAction(page, resolvedStep.target, timeoutMs, {
             desiredState: "attached",
             action: async (locator, attemptIndex) => {
-              await uploadAttemptHandle?.dispose().catch(() => undefined);
-              uploadAttemptHandle = await locator.elementHandle().catch(() => null);
+              if (uploadAttemptState.handle) {
+                await uploadAttemptState.handle.dispose().catch(() => undefined);
+              }
+              uploadAttemptState.handle = await locator.elementHandle().catch(() => null);
               if (attemptIndex > 0) {
                 await locator.setInputFiles([]);
                 await waitForBrowserFrame(page);
@@ -1758,11 +1762,11 @@ async function runStep(
                 return false;
               }
 
-              if (!uploadAttemptHandle) {
+              if (!uploadAttemptState.handle) {
                 return true;
               }
 
-              return uploadAttemptHandle
+              return uploadAttemptState.handle
                 .evaluate((element) => element.isConnected)
                 .catch(() => false);
             },
@@ -1770,7 +1774,9 @@ async function runStep(
             failureCause: "upload-files-reset",
           });
         } finally {
-          await uploadAttemptHandle?.dispose().catch(() => undefined);
+          if (uploadAttemptState.handle) {
+            await uploadAttemptState.handle.dispose().catch(() => undefined);
+          }
         }
         break;
       }

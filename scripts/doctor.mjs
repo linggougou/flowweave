@@ -13,6 +13,8 @@ const rootDir = join(dirname(fileURLToPath(import.meta.url)), "..");
 const WEB_API_HEALTH_URL =
   process.env.FLOWWEAVE_WEB_API_HEALTH ?? "http://127.0.0.1:3847/api/health";
 const FLOWWEAVE_HOME = join(homedir(), ".flowweave");
+const isSmokeMode = process.argv.includes("--smoke");
+const shouldCheckPlaywright = !isSmokeMode || process.env.SKIP_E2E !== "1";
 
 const MIN_NODE_MAJOR = 20;
 
@@ -50,6 +52,11 @@ function checkNodeVersion() {
 }
 
 function checkPlaywrightChromium() {
+  if (!shouldCheckPlaywright) {
+    report("ok", "已跳过 Playwright Chromium 检查（SKIP_E2E=1）");
+    return;
+  }
+
   const pnpmCmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
   const result = spawnSync(
     pnpmCmd,
@@ -83,6 +90,44 @@ function checkPlaywrightChromium() {
     [
       stderr || stdout || "未检测到已安装的 Chromium 浏览器",
       "修复：pnpm --filter @flowweave/runtime exec playwright install chromium",
+    ].join("\n"),
+  );
+}
+
+function checkBetterSqlite3Binding() {
+  const pnpmCmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+  const result = spawnSync(
+    pnpmCmd,
+    [
+      "--filter",
+      "@flowweave/project-knowledge",
+      "exec",
+      "node",
+      "-e",
+      "const Database=require('better-sqlite3'); const db=new Database(':memory:'); db.prepare('select 1').get(); db.close();",
+    ],
+    {
+      cwd: rootDir,
+      encoding: "utf8",
+      shell: process.platform === "win32",
+    },
+  );
+
+  if (result.status === 0) {
+    report("ok", "better-sqlite3 原生模块已就绪");
+    return;
+  }
+
+  hasCriticalFailure = true;
+  const stderr = (result.stderr ?? "").trim();
+  const stdout = (result.stdout ?? "").trim();
+  report(
+    "fail",
+    "better-sqlite3 原生模块与当前 Node ABI 不匹配",
+    [
+      stderr || stdout || "未能加载 better-sqlite3",
+      "修复：切换 Node 20 / 24 主版本后执行 pnpm install --force --frozen-lockfile",
+      "替代：仅重建原生模块可执行 pnpm rebuild better-sqlite3",
     ].join("\n"),
   );
 }
@@ -136,17 +181,29 @@ function checkFlowweaveHome() {
   );
 }
 
-console.log("FlowWeave 环境自检\n");
+console.log(isSmokeMode ? "FlowWeave smoke 前置自检\n" : "FlowWeave 环境自检\n");
 
 checkNodeVersion();
+checkBetterSqlite3Binding();
 checkPlaywrightChromium();
-await checkWebApiHealth();
-checkFlowweaveHome();
+
+if (!isSmokeMode) {
+  await checkWebApiHealth();
+  checkFlowweaveHome();
+}
 
 console.log("");
 if (hasCriticalFailure) {
-  console.log("自检未通过：请先修复上述 ✗ 项后再运行 pnpm smoke。");
+  console.log(
+    isSmokeMode
+      ? "smoke 前置自检未通过：请先修复上述 ✗ 项后再运行 pnpm smoke。"
+      : "自检未通过：请先修复上述 ✗ 项后再运行 pnpm smoke。",
+  );
   process.exit(1);
 }
 
-console.log("自检完成：关键依赖正常。Web API 或数据目录警告可忽略（按需启动服务或运行 e2e）。");
+console.log(
+  isSmokeMode
+    ? "smoke 前置自检完成：关键依赖正常。"
+    : "自检完成：关键依赖正常。Web API 或数据目录警告可忽略（按需启动服务或运行 e2e）。",
+);

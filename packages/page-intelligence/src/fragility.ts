@@ -139,6 +139,102 @@ function hasNthOfTypeSelector(target: StepTarget): boolean {
   );
 }
 
+function hasStructuralCssCombinator(selector: string): boolean {
+  let inQuote: '"' | "'" | null = null;
+  let bracketDepth = 0;
+  let parenDepth = 0;
+
+  for (const char of selector) {
+    if (inQuote) {
+      if (char === inQuote) {
+        inQuote = null;
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'") {
+      inQuote = char;
+      continue;
+    }
+
+    if (char === "[") {
+      bracketDepth += 1;
+      continue;
+    }
+    if (char === "]") {
+      bracketDepth = Math.max(0, bracketDepth - 1);
+      continue;
+    }
+    if (char === "(") {
+      parenDepth += 1;
+      continue;
+    }
+    if (char === ")") {
+      parenDepth = Math.max(0, parenDepth - 1);
+      continue;
+    }
+
+    if (bracketDepth > 0 || parenDepth > 0) {
+      continue;
+    }
+
+    if (char === ">" || char === "+" || char === "~") {
+      return true;
+    }
+
+    if (/\s/.test(char)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function hasStableCssAnchor(selector: string): boolean {
+  if (/#[-_a-zA-Z][\w-]*/.test(selector)) {
+    return true;
+  }
+
+  const stableAttributePattern =
+    /\[\s*(data-testid|data-test|data-qa|id|name|for|aria-label|placeholder)\s*=\s*(['"]).+?\2\s*\]/i;
+
+  return stableAttributePattern.test(selector);
+}
+
+function isStableCssSelector(selector: string): boolean {
+  const normalized = selector.trim();
+  if (!normalized) {
+    return false;
+  }
+
+  if (/:nth-of-type\(\s*\d+\s*\)/.test(normalized)) {
+    return false;
+  }
+
+  if (hasStructuralCssCombinator(normalized)) {
+    return false;
+  }
+
+  return hasStableCssAnchor(normalized);
+}
+
+function shouldWarnCssOnly(target: StepTarget): boolean {
+  const cssStrategies = target.strategies.filter(
+    (strategy): strategy is Extract<typeof strategy, { kind: "css" }> =>
+      strategy.kind === "css",
+  );
+
+  if (cssStrategies.length === 0 || cssStrategies.length !== target.strategies.length) {
+    return false;
+  }
+
+  if (cssStrategies.some((strategy) => /:nth-of-type\(\s*\d+\s*\)/.test(strategy.selector))) {
+    return false;
+  }
+
+  return cssStrategies.some((strategy) => !isStableCssSelector(strategy.selector));
+}
+
 function hasOnlyTextStrategies(target: StepTarget): boolean {
   return target.strategies.every((strategy) => strategy.kind === "text");
 }
@@ -159,8 +255,7 @@ function inspectStep(step: NormalizedStep, stepIndex: number): FragilityIssue[] 
       });
       return issues;
     }
-    const onlyCss = strategies.every((s) => s.kind === "css");
-    if (onlyCss) {
+    if (shouldWarnCssOnly(target)) {
       issues.push({
         stepId: step.id,
         stepIndex,
