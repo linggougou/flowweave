@@ -1,0 +1,68 @@
+#!/usr/bin/env node
+import { execFileSync } from "node:child_process";
+import { lstatSync, readFileSync, rmSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+
+function report(message) {
+  console.log(`[ensure-electron-dist] ${message}`);
+}
+
+function hasValidFrameworkSymlink(frameworkLinkPath) {
+  try {
+    return lstatSync(frameworkLinkPath).isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+if (process.platform !== "darwin") {
+  report("非 macOS 环境，跳过 Electron bundle 结构校正");
+  process.exit(0);
+}
+
+const requireFromHere = createRequire(import.meta.url);
+const electronPackageJsonPath = requireFromHere.resolve("electron/package.json");
+const electronPackageDir = dirname(electronPackageJsonPath);
+const electronRequire = createRequire(electronPackageJsonPath);
+
+const electronPackage = JSON.parse(readFileSync(electronPackageJsonPath, "utf8"));
+const { downloadArtifact } = electronRequire("@electron/get");
+const checksums = electronRequire("./checksums.json");
+
+const distDir = process.env.ELECTRON_OVERRIDE_DIST_PATH ?? join(electronPackageDir, "dist");
+const frameworkLinkPath = join(
+  distDir,
+  "Electron.app",
+  "Contents",
+  "Frameworks",
+  "Electron Framework.framework",
+  "Electron Framework",
+);
+
+if (hasValidFrameworkSymlink(frameworkLinkPath)) {
+  report("Electron bundle 结构正常，跳过修复");
+  process.exit(0);
+}
+
+report("检测到 Electron Framework symlink 缺失，开始使用 ditto 重新解压官方 zip");
+
+const zipPath = await downloadArtifact({
+  version: electronPackage.version,
+  artifactName: "electron",
+  platform: "darwin",
+  arch: process.arch,
+  cacheRoot: process.env.electron_config_cache,
+  checksums,
+});
+
+rmSync(distDir, { recursive: true, force: true });
+execFileSync("ditto", ["-x", "-k", zipPath, distDir], {
+  stdio: "inherit",
+});
+
+if (!hasValidFrameworkSymlink(frameworkLinkPath)) {
+  throw new Error("Electron bundle 修复后仍缺少 framework symlink");
+}
+
+report("Electron bundle 结构修复完成");

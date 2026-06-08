@@ -574,79 +574,78 @@ export function App() {
           <h1>{APP_DISPLAY_NAME} Studio</h1>
           <p>P2 工作台：录制、回放与执行历史</p>
         </div>
-
-        <section className="sidebar-section sidebar-section-projects">
-          <div className="sidebar-section-head">
-            <h2>项目</h2>
-            <button
-              type="button"
-              className="sidebar-icon-btn"
-              title="新建项目"
-              aria-label="新建项目"
-              onClick={() => {
-                setShowNewProjectForm((v) => !v);
-                setError(null);
-              }}
-            >
-              +
-            </button>
-          </div>
-          {showNewProjectForm ? (
-            <form className="new-project-form" onSubmit={(e) => void handleCreateProject(e)}>
-              <input
-                type="text"
-                value={newProjectName}
-                placeholder="项目名称"
-                maxLength={64}
-                autoFocus
-                disabled={creatingProject}
-                onChange={(e) => setNewProjectName(e.target.value)}
-              />
-              <div className="new-project-actions">
-                <button type="submit" disabled={creatingProject || !newProjectName.trim()}>
-                  {creatingProject ? "创建中…" : "创建"}
-                </button>
-                <button
-                  type="button"
-                  className="sidebar-text-btn"
-                  disabled={creatingProject}
-                  onClick={() => {
-                    setShowNewProjectForm(false);
-                    setNewProjectName("");
-                  }}
-                >
-                  取消
-                </button>
-              </div>
-            </form>
-          ) : null}
-          <ul className="project-list">
-            {projects.map((project) => (
-              <li key={project.id}>
-                <button
-                  type="button"
-                  className={
-                    project.id === selectedProjectId
-                      ? "project-item active"
-                      : "project-item"
-                  }
-                  onClick={() => handleSelectProject(project.id)}
-                >
-                  <span className="project-item-name">{project.name}</span>
-                  {project.baseUrl ? (
-                    <span className="project-item-env" title={project.baseUrl}>
-                      {project.baseUrl.length > 36
-                        ? `…${project.baseUrl.slice(-32)}`
-                        : project.baseUrl}
-                    </span>
-                  ) : null}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-
         <div className="sidebar-scroll">
+          <section className="sidebar-section sidebar-section-projects">
+            <div className="sidebar-section-head">
+              <h2>项目</h2>
+              <button
+                type="button"
+                className="sidebar-icon-btn"
+                title="新建项目"
+                aria-label="新建项目"
+                onClick={() => {
+                  setShowNewProjectForm((v) => !v);
+                  setError(null);
+                }}
+              >
+                +
+              </button>
+            </div>
+            {showNewProjectForm ? (
+              <form className="new-project-form" onSubmit={(e) => void handleCreateProject(e)}>
+                <input
+                  type="text"
+                  value={newProjectName}
+                  placeholder="项目名称"
+                  maxLength={64}
+                  autoFocus
+                  disabled={creatingProject}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                />
+                <div className="new-project-actions">
+                  <button type="submit" disabled={creatingProject || !newProjectName.trim()}>
+                    {creatingProject ? "创建中…" : "创建"}
+                  </button>
+                  <button
+                    type="button"
+                    className="sidebar-text-btn"
+                    disabled={creatingProject}
+                    onClick={() => {
+                      setShowNewProjectForm(false);
+                      setNewProjectName("");
+                    }}
+                  >
+                    取消
+                  </button>
+                </div>
+              </form>
+            ) : null}
+            <ul className="project-list">
+              {projects.map((project) => (
+                <li key={project.id}>
+                  <button
+                    type="button"
+                    className={
+                      project.id === selectedProjectId
+                        ? "project-item active"
+                        : "project-item"
+                    }
+                    onClick={() => handleSelectProject(project.id)}
+                  >
+                    <span className="project-item-name">{project.name}</span>
+                    {project.baseUrl ? (
+                      <span className="project-item-env" title={project.baseUrl}>
+                        {project.baseUrl.length > 36
+                          ? `…${project.baseUrl.slice(-32)}`
+                          : project.baseUrl}
+                      </span>
+                    ) : null}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+
           {selectedProjectId ? (
             <section className="sidebar-section sidebar-section-primary">
               <h2>Flow 列表</h2>

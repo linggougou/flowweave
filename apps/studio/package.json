@@ -5,12 +5,14 @@
   "type": "module",
   "main": "dist-electron/main.mjs",
   "scripts": {
+    "ensure:electron-dist": "node ./scripts/ensure-electron-dist.mjs",
+    "postinstall": "node ./scripts/ensure-electron-dist.mjs",
     "build:electron": "node ./scripts/build-electron.mjs",
-    "build": "pnpm build:electron && vite build",
+    "build": "node ./scripts/ensure-electron-dist.mjs && pnpm build:electron && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.electron.json",
     "lint": "eslint src electron",
     "test": "vitest run --passWithNoTests",
-    "dev": "pnpm build:electron && concurrently -k \"node ./scripts/watch-electron.mjs\" \"vite\" \"wait-on http://127.0.0.1:5173 && node ./scripts/dev-electron.mjs\""
+    "dev": "node ./scripts/ensure-electron-dist.mjs && pnpm build:electron && concurrently -k \"node ./scripts/watch-electron.mjs\" \"vite\" \"wait-on http://127.0.0.1:5173 && node ./scripts/dev-electron.mjs\""
   },
   "dependencies": {
     "@flowweave/flow-dsl": "workspace:*",

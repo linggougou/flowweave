@@ -1,5 +1,82 @@
 # FlowWeave 操作日志
 
+## 2026-06-09 Wave 13 规划与并行编排启动
+
+- 时间：2026-06-09 11:40:00 CST
+- 任务目标：在用户授权“自主规划任务、持续开发、使用 worktree + subagent 并行推进”前提下，为 `codex/real-page-stability-program` 制定下一轮完整开发计划，并按计划启动新的并行轨道。
+- 路线与边界：
+  - 项目根缺少物理 `PROJECT_ROUTE_LOCK.md`，本轮按项目 `AGENTS.md` 指定的
+    `docs/superpowers/plans/2026-05-26-run-first-roadmap.md` 作为当前等效路线真源。
+  - 当前主线继续限定在“真实页面稳定录制与执行增强”范围内，不进入 `P3` 深度冻结区和 `P4 ai-orchestrator` 冻结区。
+- 技能使用：
+  - `writing-plans`：编写完整下一轮实施计划。
+  - `using-git-worktrees`：按 `.worktrees/` 目录建立隔离工作区，并先验证已被 `.gitignore` 忽略。
+  - `dispatching-parallel-agents`：只对低耦合轨道做并行派发。
+  - `subagent-driven-development`：后续按任务级 worktree / agent 执行与回收。
+- 当前已确认事实：
+  - `.worktrees/` 已存在且被 `.gitignore` 正确忽略，可直接复用。
+  - 当前无活跃 worktree，需要重新建立并行轨道。
+  - 当前工作区存在已验证但未收口的 Studio 基线改动：
+    - Electron dist 恢复脚本
+    - `app-studio` 运行依赖补齐
+    - 左侧滚动 / 右侧文字堆叠修复
+    - 相应 `.codex` 留痕与截图证据
+  - Wave 12 的 `scroll` 三段闭环已经并回主线，Node 20 下 `pnpm smoke`、`pnpm e2e:recorded-pages`、`pnpm e2e:real-pages` 已通过。
+  - 当前最贴近用户真实痛点的剩余高价值缺口，已经从“某步骤不存在”切换为“重复元素页面容易命中错对象”。
+- 规划结论：
+  - 下一轮主目标定为 **Wave 13：Target Disambiguation 与 Studio 基线收口**。
+  - 先由主工作区完成 `Baseline Absorption`，再并行启动：
+    - `Recorder Scope Hints`
+    - `Runtime Disambiguation`
+    - `Studio Ambiguity Insight`
+  - 待前两条合同轨稳定后，再启动：
+    - `Benchmarks Repeated Targets`
+- 本轮新增文档：
+  - `.codex/context-summary-wave13-target-disambiguation-plan.md`
+  - `docs/superpowers/plans/2026-06-09-real-page-stability-wave13-target-disambiguation-plan.md`
+  - `docs/superpowers/plans/2026-06-09-real-page-stability-wave13-target-disambiguation-orchestration.md`
+- 下一步：
+  1. 收口当前 Studio 基线改动并形成可派生协调头。
+  2. 按编排板创建首批 `.worktrees/*`。
+  3. 以不继承会话历史的独立 subagent 派发第一批三条轨道。
+
+## 2026-06-09 Studio 布局回归修复
+
+- 时间：2026-06-09 10:55:00 CST
+- 任务目标：修复 Studio 左侧侧栏无法滚动，以及右侧“运行环境 / 变量注入 / 运行前检查”与下方 Flow 区块出现文字堆叠的问题。
+- 上下文依据：
+  - `.codex/context-summary-studio-layout-regression.md`
+  - `docs/superpowers/plans/2026-05-26-run-first-roadmap.md`
+  - `apps/studio/src/App.tsx`
+  - `apps/studio/src/styles.css`
+  - `apps/studio/output/playwright/studio-layout/layout-fixed.png`
+- 工具与环境说明：
+  - 项目根未提供物理 `PROJECT_ROUTE_LOCK.md`，本轮按项目 `AGENTS.md` 指定的
+    `docs/superpowers/plans/2026-05-26-run-first-roadmap.md` 作为等效路线真源。
+  - 当前环境未提供 `sequential-thinking`，本轮改用结构化根因分析、代码对照与本地显式验证替代。
+  - 当前环境未提供 `desktop-commander`，改用本地命令、CodeGraph、`apply_patch` 与项目内截图证据。
+  - 前一轮尝试使用 Playwright MCP 直接做浏览器验证时，遇到 daemon / socket 连接异常；本轮沿用仓库已安装的 `playwright` 包与 `Node v20.19.6` 脚本做 DOM 级替代验证，不跳过本地验证。
+  - 本轮继续统一使用 `Node v20.19.6` 作为首要验收基线。
+- 技能使用：
+  - `systematic-debugging`：先确认根因，再做最小修复，不做猜测式 CSS 热补丁。
+- 当前已确认事实：
+  - 左侧问题根因是“项目”区块之前渲染在 `.sidebar-scroll` 之外，导致滚动层无法覆盖项目列表全文。
+  - 右侧问题根因是 `.main` 为纵向 flex 容器时，两个 `.flow-content-panel` 允许纵向收缩，叠加默认标题 / 段落 margin 后，出现上方面板内容视觉上压入下方面板的现象。
+  - 该问题属于展示层回归，不涉及 runtime、project-knowledge 或 fragility 计算逻辑错误。
+- 实现说明：
+  - `apps/studio/src/App.tsx`
+    - 已将“项目”区块移动到 `.sidebar-scroll` 内部，使项目列表、Flow 列表、最近执行共享同一滚动容器。
+  - `apps/studio/src/styles.css`
+    - 为 `.sidebar` 补充 `min-height: 0`，避免内部滚动层被父容器最小高度卡住。
+    - 为 `.sidebar-scroll` 补充底部留白，保证滚动到底后底部内容可见。
+    - 为 `.execution-history-meta` 清零默认 `margin`，减少段落挤压。
+    - 为 `.main > *` 添加 `flex-shrink: 0`，阻止主内容区块在纵向上被压缩。
+    - 将 `.flow-content-panel` 改为 `flex: 0 0 auto; min-height: auto;`，恢复按内容自然高度排布。
+    - 将 `.flow-preview > h3, .flow-preview > h4` 默认 `margin` 归零，消除卡片内标题堆叠感。
+- 补充观察：
+  - 用户附件中的 pasted text 实际是一次 Electron 崩溃报告，主题为 `Code Signature Invalid`。
+  - 该问题会影响后续桌面壳成品复验，但与本轮 UI 布局回归不是同一根因；本轮先收口布局问题，再在桌面壳复验阶段继续跟进。
+
 ## 2026-06-08 提交后 CLI 不通过排查
 
 - 时间：2026-06-08 10:05:00 CST
@@ -5609,3 +5686,129 @@
   - 已删除本地分支：`codex/real-page-wave12-scroll-runtime-contract`
   - 子代理 `Harvey` 此前已关闭，本轮无需再次处理
   - 结论：Wave 12 的 `Scroll Runtime Contract` 已完整并回主线并完成验收
+
+### Web 手机预览状态确认
+
+- 时间：2026-06-09 01:15:00 CST
+- 背景：
+  - 用户要求确认“现在到什么状态了”，并将项目运行到手机上查看当前成品状态。
+  - 本轮不修改业务代码，只启动已有 `app-web` 入口做局域网预览。
+- 当前仓库状态：
+  - 分支：`codex/real-page-stability-program`
+  - 最近提交：
+    - `9afa684 docs: 补齐 wave12 runtime 验收留痕`
+    - `ed3a0d9 feat: 支持 scroll 回放执行`
+    - `b11faae feat: 打通 scroll 录制与 dsl 合同`
+  - 工作区仅剩用户本地未跟踪目录：`.idea/`
+- 上下文确认：
+  - `apps/web/vite.config.ts` 默认前端端口为 `5174`，并将 `/api` 代理到 `http://127.0.0.1:3847`
+  - `apps/web/server/index.ts` 默认 API 监听 `127.0.0.1:3847`
+  - `docs/guides/quickstart.md` / `docs/guides/web-console.md` 均确认 `pnpm dev:web` 是 Web 控制台主入口
+- 启动方式：
+  - API：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-web exec tsx watch server/index.ts`
+  - 前端：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-web exec vite --host 0.0.0.0 --port 5174`
+  - 目的：
+    - 保持 API 仅本机监听，由 Vite 代理 `/api`
+    - 前端对局域网开放，便于手机直接访问
+- 运行结果：
+  - API 已启动：`http://127.0.0.1:3847`
+  - 前端本机地址：`http://localhost:5174/`
+  - 前端局域网地址：
+    - `http://192.168.1.9:5174/`
+    - 另有虚拟网卡地址 `172.30.205.172:5174`、`198.18.0.1:5174`
+- 本地验证：
+  - `curl -sf http://127.0.0.1:3847/api/health`
+    - 结果：`{"ok":true}`
+  - `curl -I http://127.0.0.1:5174`
+    - 结果：`HTTP/1.1 200 OK`
+  - `curl -I http://192.168.1.9:5174`
+    - 结果：`HTTP/1.1 200 OK`
+  - `curl -sf http://127.0.0.1:3847/api/projects`
+    - 结果：返回多条 `e2e-*` 项目，不是空库
+  - `curl -sf http://127.0.0.1:3847/api/projects/e7bf07a4-2c5c-43c2-9a6b-fd21de7dbd7d/flows`
+    - 结果：返回 `flow_e2e_login / E2E 登录`
+- 当前可供用户手机查看的状态：
+  - Web 控制台可打开
+  - 项目列表已有历史 e2e 数据
+  - 至少最新项目中已有 `E2E 登录` Flow 可查看
+
+## 2026-06-09 Studio 桌面端签名链恢复排查
+
+- 时间：2026-06-09 09:15:00 CST
+- 任务目标：延续“在当前电脑上直接运行 Studio 桌面应用”的目标，修复当前 Electron GUI 启动即崩溃的问题。
+- 路线与边界：
+  - 项目根缺少物理 `PROJECT_ROUTE_LOCK.md`，本轮按项目 `AGENTS.md` 明示的
+    `docs/superpowers/plans/2026-05-26-run-first-roadmap.md` 作为当前等效路线真源。
+  - 本轮只处理本地桌面启动链路，不扩展业务功能，不改 UI/DSL/runtime 主逻辑。
+  - `.idea/` 继续不触碰。
+- 技能使用：
+  - `using-superpowers`：确认本轮需按 skill 触发处理。
+  - `systematic-debugging`：按“先找根因，再修复”推进，不继续猜测式重签。
+  - `build-macos-apps:build-run-debug`：按 macOS App 启动/签名排障路径处理。
+- 上下文依据：
+  - `.codex/context-summary-studio-signing-recovery.md`
+  - `apps/studio/package.json`
+  - `apps/studio/electron/main.ts`
+  - `apps/studio/electron/services.ts`
+  - `docs/architecture/overview.md`
+  - 用户粘贴崩溃文本：`/Users/ling/.codex/attachments/1d12b604-b893-4671-9513-54b77fcd466f/pasted-text.txt`
+- 当前已确认事实：
+  - `better-sqlite3` Electron ABI 修复仍然有效，模块文件为 `Mach-O 64-bit bundle arm64`。
+  - `ELECTRON_RUN_AS_NODE=1 PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio exec electron -e "console.log(process.versions);require('better-sqlite3');console.log('loaded')"`
+    - 结果：成功输出 `loaded`
+    - 结论：`better-sqlite3` 原生模块本体并未损坏，也不是当前 GUI 崩溃主因。
+  - `codesign --verify --deep --strict --verbose=4 node_modules/.pnpm/electron@33.4.11/node_modules/electron/dist/Electron.app`
+    - 结果：`code has no resources but signature indicates they must be present`
+  - `spctl --assess --type execute --verbose=4 node_modules/.pnpm/electron@33.4.11/node_modules/electron/dist/Electron.app`
+    - 结果：同样指向 bundle 签名资源异常。
+  - `codesign -dv --verbose=4 node_modules/.pnpm/electron@33.4.11/node_modules/electron/dist/Electron.app`
+    - 当前显示 `adhoc, linker-signed`
+  - `xattr -lr` 显示 Electron bundle 与 `better_sqlite3.node` 均含 `com.apple.provenance`，但当前更高优先级异常是 Electron bundle 自身签名资源损坏。
+- 根因假设：
+  - 上一轮对 `Electron.app` 的手动重签尝试留下了半损状态，导致 GUI 模式启动时 bundle 校验失败。
+  - 当前真正需要恢复的是 `electron/dist/Electron.app` 的完整包体，而不是继续围绕 `better_sqlite3.node` 做猜测性修补。
+- 下一步：
+  - 仅定向恢复 `electron@33.4.11` 的 `dist` 包体。
+  - 保留当前已可用的 `better-sqlite3` Electron ABI。
+  - 恢复后重新用 `Node 20.19.6` 构建并启动 Studio 做本机验证。
+- 新增根因证据：
+  - 通过检查 Electron 缓存 zip：
+    - 路径：`~/Library/Caches/electron/4b092cc678b6ff8448c5ab35fabca1710dccc91cfbff065280601a184126b0fe/electron-v33.4.11-darwin-arm64.zip`
+  - `zipinfo -l` 结果显示：
+    - `Electron Framework.framework/Electron Framework`
+    - `Resources`
+    - `Helpers`
+    - `Libraries`
+    - 这些条目在官方 zip 内本来是 `symlink`
+  - 当前 `node_modules/.pnpm/electron@33.4.11/.../dist` 中对应条目却变成了实体文件/目录。
+  - 结论：真正的机械性根因不是 Electron 官方 zip 本身损坏，而是 `install.js -> extract-zip` 解压后丢失了 framework symlink，导致嵌入式 framework 结构失真，并进一步触发 GUI 启动时的签名/装载异常。
+- 仓库内修复：
+  - 新增 `apps/studio/scripts/ensure-electron-dist.mjs`
+    - 仅在 macOS 执行
+    - 若发现 `Electron Framework.framework/Electron Framework` 不是 symlink，则调用 Electron 官方缓存下载接口拿到 zip，并使用 macOS 原生 `ditto -x -k` 重新解压 `dist`
+    - 修复后再次校验 symlink 是否恢复
+  - 已更新 `apps/studio/package.json`
+    - 新增 `ensure:electron-dist`
+    - 新增 `postinstall`
+    - `build` / `dev` 在构建前自动执行该校正脚本
+- Node 20 验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH node ./scripts/ensure-electron-dist.mjs`
+    - 结果：实际修复当前 `node_modules` 中的 Electron dist，framework symlink 已恢复
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio build`
+    - 结果：通过，脚本日志为 `Electron bundle 结构正常，跳过修复`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH ELECTRON_RUN_AS_NODE=1 pnpm --filter @flowweave/app-studio exec electron -e "require('better-sqlite3');console.log('loaded')"`
+    - 结果：输出 `loaded`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio exec electron .`
+    - 结果：成功启动桌面应用，未再出现 `Code Signature Invalid`
+  - 窗口检查：
+    - `osascript -e 'tell application "System Events" to tell process "Electron" to get {visible, frontmost, (count of windows), name of every window}'`
+    - 结果：`true, true, 1, 织流 Studio`
+  - 成品截图：
+    - `/tmp/flowweave-studio-desktop.png`
+- 当前状态：
+  - 桌面应用已通过项目真实依赖目录正常运行。
+  - 当前 Electron 会话保持打开，便于用户直接查看。

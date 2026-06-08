@@ -1,5 +1,83 @@
 # 验证报告
 
+## 2026-06-09 Studio 布局回归修复验收
+
+### 验证范围
+
+- 左侧侧栏在项目较多时是否可以滚动到底，且滚动容器是否真正覆盖项目列表。
+- 右侧“运行环境”面板与下方 Flow 内容区是否还会发生纵向压缩与文字堆叠。
+- `Node v20.19.6` 下 `@flowweave/app-studio` 的类型检查、测试、构建是否继续通过。
+- 当前电脑上的 Electron 桌面壳是否仍能真实启动，以及是否存在与本轮 UI 修复无关的残余启动风险。
+
+### 验证结果
+
+1. Node 20 基线通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+     - 结果：通过
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
+     - 结果：通过，`65/65`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio build`
+     - 结果：通过
+2. 页面级布局复验通过。
+   - 复验基于已运行的本地 Studio 预览：`http://127.0.0.1:4175`
+   - 知识库 API 健康检查：
+     - `curl -sf http://127.0.0.1:3847/api/health`
+     - 结果：`{"ok":true}`
+   - 使用 `@flowweave/app-studio` 内已安装的 `playwright` 在 `Node v20.19.6` 下进行 DOM 量测，结果：
+     - `projectCount = 40`
+     - `scrollState.clientHeight = 994`
+     - `scrollState.scrollHeight = 2867`
+     - `scrollState.scrollTop = 1873`
+     - `scrollState.canScroll = true`
+     - `scrollState.atBottom = true`
+     - `panelOverlap = false`
+     - `fragilityHeadingCount = 0`
+     - `hasError = false`
+   - 结论：
+     - 左侧侧栏滚动链路已恢复，项目列表可滚动到底部。
+     - 右侧两个主内容面板之间不存在边界重叠，原先“变量注入 / 运行前检查”文字压入下方面板的现象已消失。
+3. 修复后视觉证据已更新。
+   - 新截图：
+     - `apps/studio/output/playwright/studio-layout/layout-fixed-recheck.png`
+   - 之前同问题的留档截图仍保留：
+     - `apps/studio/output/playwright/studio-layout/layout-fixed.png`
+4. Electron 桌面壳可以启动并出窗，但仍有独立签名残余风险。
+   - 启动命令：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm exec electron .`
+   - 系统窗口检查：
+     - `osascript -e 'tell application "System Events" to tell process "Electron" to get name of every window'`
+     - 结果：返回 `织流 Studio`
+   - 可见性检查：
+     - `osascript -e 'tell application "System Events" to tell process "Electron" to get {frontmost, visible}'`
+     - 结果：`false, true`
+   - 同时，签名校验仍失败：
+     - `codesign --verify --deep --strict node_modules/.pnpm/electron@33.4.11/node_modules/electron/dist/Electron.app`
+     - 结果：`code has no resources but signature indicates they must be present`
+   - 判断：
+     - 本轮布局修复不受此问题影响。
+     - 当前机器上的桌面壳已能真实启动窗口，但 Electron 包体签名状态仍需单独收口，避免后续再次触发启动不稳定。
+
+### Findings
+
+1. 左侧问题根因已被代码结构修复，而不是被样式掩盖。
+   - 现在项目列表已经进入真正的滚动容器。
+2. 右侧问题根因是 flex 收缩策略，不是 fragility 卡片、文本内容或数据映射异常。
+   - 通过限制主内容子项收缩和恢复自然高度，重叠问题已消除。
+3. 当前没有补单元测试来断言这次 CSS 布局回归。
+   - 这轮主要依赖 `Node 20` 构建链、DOM 量测和截图证据验收。
+4. Electron 签名问题仍是后续独立风险。
+   - 它不会否定本轮 UI 修复，但会影响“桌面成品完全稳定分发 / 启动”的可信度。
+
+### 综合结论
+
+- 代码质量评分：95
+- 测试覆盖评分：89
+- 规范遵循评分：97
+- 战略匹配评分：95
+- 风险评估评分：88
+- 综合评分：93
+- 建议：通过；UI 布局问题已修复，后续应单独收口 Electron bundle 签名残留
+
 ## 2026-06-07 Studio DOM 结构脆弱性误报修复验收
 
 ### 验证范围
@@ -3521,6 +3599,134 @@
 ### 建议
 
 - 通过
+
+## 2026-06-09 Studio 桌面端签名/解压修复验收
+
+### 验证范围
+
+- 当前 `@flowweave/app-studio` 在本机无法启动的真实根因，是否已从“猜测性的原生模块问题”收敛到可重复证明的安装/包体问题。
+- 新增的 Electron bundle 自愈脚本，是否能在 `Node 20.19.6` 下修复真实 `node_modules` 中损坏的 framework 结构。
+- 修复后，Studio 是否能通过仓库自身的 Electron 命令真正启动到可见窗口。
+
+### 验证结果
+
+1. 根因已明确，不再停留在 ABI 猜测。
+   - `ELECTRON_RUN_AS_NODE=1 ... require('better-sqlite3')`
+     - 结果：`loaded`
+   - 说明 `better-sqlite3` Electron ABI 已可用，GUI 崩溃主因不在原生模块本体。
+   - 继续检查 Electron 缓存 zip 与当前解压结果后，确认官方 zip 中的 framework 顶层条目本为 symlink，但 `node_modules` 里的解压结果丢失了这些 symlink。
+   - 结论：
+     - `extract-zip` 解压后的 Electron framework 结构失真，才是 GUI 启动失败的根因。
+2. 仓库内修复已落地。
+   - 新增文件：
+     - `apps/studio/scripts/ensure-electron-dist.mjs`
+   - 更新脚本：
+     - `apps/studio/package.json`
+       - 新增 `ensure:electron-dist`
+       - 新增 `postinstall`
+       - `build` / `dev` 前自动执行结构校正
+   - 修复策略：
+     - 仅在 macOS 下执行
+     - 若发现 `Electron Framework.framework/Electron Framework` 不是 symlink，则使用 `@electron/get` 获取官方 zip，并用 `ditto -x -k` 重新解压 `dist`
+3. Node 20 下本地验证通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH node ./scripts/ensure-electron-dist.mjs`
+     - 结果：修复成功
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+     - 结果：通过
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio build`
+     - 结果：通过
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH ELECTRON_RUN_AS_NODE=1 pnpm --filter @flowweave/app-studio exec electron -e "require('better-sqlite3');console.log('loaded')"`
+     - 结果：通过，输出 `loaded`
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio exec electron .`
+     - 结果：通过，桌面端正常启动
+4. 可视窗口证据已确认。
+   - 进程检查：
+     - Electron 主进程、GPU helper、Renderer helper 均存在
+   - 窗口检查：
+     - `true, true, 1, 织流 Studio`
+   - 成品截图：
+     - `/tmp/flowweave-studio-desktop.png`
+
+### Findings
+
+1. 当前阻塞不是业务代码 bug，而是 Electron macOS 安装产物结构在本机被错误解压。
+   - 根因与 `better-sqlite3` 逻辑无关。
+2. 单靠“反复重签 Electron.app”不是根修复。
+   - 当 framework symlink 已丢失时，签名层只会持续报 bundle 结构异常。
+3. 这次修复已经把问题前移到安装/构建入口。
+   - 以后在 macOS 上执行 `pnpm install` 后，`postinstall` 会自动校正 Electron dist。
+   - `pnpm dev:studio` / `pnpm --filter @flowweave/app-studio build` 也会重复兜底。
+
+### 综合结论
+
+- 代码质量评分：95
+- 可重复性评分：96
+- 规范遵循评分：97
+- 需求匹配评分：98
+- 风险评估评分：92
+- 综合评分：96
+- 建议：通过
+
+## 2026-06-09 Web 手机预览运行验证
+
+### 验证范围
+
+- 当前主线是否处于可运行状态，而不是只完成代码提交。
+- `app-web` 是否能以手机可访问的方式启动。
+- 手机访问时是否会看到真实项目数据，而不是空白页或断开的 API。
+
+### 验证结果
+
+1. 当前主线状态清晰。
+   - 分支：`codex/real-page-stability-program`
+   - 最近关键提交：
+     - `ed3a0d9 feat: 支持 scroll 回放执行`
+     - `9afa684 docs: 补齐 wave12 runtime 验收留痕`
+   - 工作区除用户本地 `.idea/` 外无未提交代码改动。
+2. Web 控制台已成功对局域网开放。
+   - API 启动命令：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-web exec tsx watch server/index.ts`
+   - 前端启动命令：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-web exec vite --host 0.0.0.0 --port 5174`
+   - 可访问地址：
+     - 本机：`http://localhost:5174/`
+     - 手机局域网：`http://192.168.1.9:5174/`
+3. 服务健康与页面访问已验证。
+   - `curl -sf http://127.0.0.1:3847/api/health`
+     - 结果：`{"ok":true}`
+   - `curl -I http://127.0.0.1:5174`
+     - 结果：`HTTP/1.1 200 OK`
+   - `curl -I http://192.168.1.9:5174`
+     - 结果：`HTTP/1.1 200 OK`
+4. 页面打开后有真实数据可看。
+   - `GET /api/projects` 返回多条 `e2e-*` 项目
+   - `GET /api/projects/e7bf07a4-2c5c-43c2-9a6b-fd21de7dbd7d/flows`
+     - 返回：`flow_e2e_login / E2E 登录`
+   - 结论：手机打开后不是空状态页，至少可以看到项目列表与登录示例 Flow。
+
+### Findings
+
+1. 当前最适合手机查看的是 `apps/web`，不是 `Studio`。
+   - `Studio` 是 Electron 桌面壳，不适合直接投到手机上。
+2. 这次手机预览没有改动仓库代码。
+   - 只是把现有 Web 控制台以局域网方式启动并验证可访问性。
+3. API 仍然只监听本机 `127.0.0.1:3847`。
+   - 但手机访问的是 Vite 前端 `5174`，由前端代理 `/api`，因此不影响手机预览。
+
+### 评分
+
+- 代码质量评分：95
+- 测试覆盖评分：92
+- 规范遵循评分：98
+- 需求匹配评分：97
+- 架构一致评分：96
+- 风险评估评分：90
+- 综合评分：95
+
+### 建议
+
+- 通过
+- 可直接让用户在同一局域网下用手机访问 `http://192.168.1.9:5174/`
 - 可以进入 Wave 12 的 worktree / subagent 并行开发阶段
 
 ## 2026-06-09 Wave 12 第一批轨道验收
