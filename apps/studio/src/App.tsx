@@ -80,23 +80,56 @@ function formatExecutionTime(iso?: string): string {
 
 type MainTab = "flow" | "executions" | "versions";
 
-export function App() {
-  const [tab, setTab] = useState<MainTab>("flow");
-  const [projects, setProjects] = useState<StudioProject[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [flows, setFlows] = useState<StudioFlowRef[]>([]);
-  const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
+export type AppInitialState = {
+  tab?: MainTab;
+  projects?: StudioProject[];
+  selectedProjectId?: string | null;
+  flows?: StudioFlowRef[];
+  selectedFlowId?: string | null;
+  currentFlow?: FlowDocument | null;
+  executionHistory?: ExecutionSummary[];
+  execution?: StudioExecution | null;
+  showBrowser?: boolean;
+  error?: string | null;
+  selectedEnvironmentName?: string;
+  baseUrlDraft?: string;
+  storageStatePathDraft?: string;
+  variableInputs?: VariableInputs;
+};
+
+type AppProps = {
+  initialState?: AppInitialState;
+};
+
+export function App({ initialState }: AppProps = {}) {
+  const [tab, setTab] = useState<MainTab>(initialState?.tab ?? "flow");
+  const [projects, setProjects] = useState<StudioProject[]>(initialState?.projects ?? []);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    initialState?.selectedProjectId ?? null,
+  );
+  const [flows, setFlows] = useState<StudioFlowRef[]>(initialState?.flows ?? []);
+  const [selectedFlowId, setSelectedFlowId] = useState<string | null>(
+    initialState?.selectedFlowId ?? null,
+  );
   const [versions, setVersions] = useState<StudioFlowVersion[]>([]);
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [previewVersion, setPreviewVersion] = useState<FlowDocument | null>(null);
-  const [currentFlow, setCurrentFlow] = useState<FlowDocument | null>(null);
+  const [currentFlow, setCurrentFlow] = useState<FlowDocument | null>(
+    initialState?.currentFlow ?? null,
+  );
   const [flowLoading, setFlowLoading] = useState(false);
   const [restoringId, setRestoringId] = useState<string | null>(null);
-  const [executionHistory, setExecutionHistory] = useState<ExecutionSummary[]>([]);
-  const [execution, setExecution] = useState<StudioExecution | null>(null);
+  const [executionHistory, setExecutionHistory] = useState<ExecutionSummary[]>(
+    initialState?.executionHistory ?? [],
+  );
+  const [execution, setExecution] = useState<StudioExecution | null>(
+    initialState?.execution ?? null,
+  );
   const [loading, setLoading] = useState(false);
-  const [showBrowser, setShowBrowser] = useState(readShowBrowserPreference);
-  const [error, setError] = useState<string | null>(null);
+  const [showBrowser, setShowBrowser] = useState(
+    initialState?.showBrowser ?? readShowBrowserPreference,
+  );
+  const [error, setError] = useState<string | null>(initialState?.error ?? null);
   const [showNewProjectForm, setShowNewProjectForm] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [creatingProject, setCreatingProject] = useState(false);
@@ -104,10 +137,16 @@ export function App() {
   const [renamingFlowId, setRenamingFlowId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [renaming, setRenaming] = useState(false);
-  const [selectedEnvironmentName, setSelectedEnvironmentName] = useState("");
-  const [baseUrlDraft, setBaseUrlDraft] = useState("");
-  const [storageStatePathDraft, setStorageStatePathDraft] = useState("");
-  const [variableInputs, setVariableInputs] = useState<VariableInputs>({});
+  const [selectedEnvironmentName, setSelectedEnvironmentName] = useState(
+    initialState?.selectedEnvironmentName ?? "",
+  );
+  const [baseUrlDraft, setBaseUrlDraft] = useState(initialState?.baseUrlDraft ?? "");
+  const [storageStatePathDraft, setStorageStatePathDraft] = useState(
+    initialState?.storageStatePathDraft ?? "",
+  );
+  const [variableInputs, setVariableInputs] = useState<VariableInputs>(
+    initialState?.variableInputs ?? {},
+  );
   const [selectedDiagnosticStepIndex, setSelectedDiagnosticStepIndex] = useState<number | null>(
     null,
   );
