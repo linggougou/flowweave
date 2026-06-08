@@ -16,14 +16,14 @@
 - `examples/fixtures/` 当前共有 `24` 个 HTML。
 - 其中 `23` 个属于 Benchmarks fixture 矩阵，会被 `examples/real-page-smoke.ts` 的 `p8` 最新档位完整覆盖。
 - `examples/fixtures/login.html` 只服务 `pnpm e2e:login`，不纳入 real-page / recorded replay 矩阵总数。
-- `placeholder-disambiguation` 属于 recorded replay 的运行期临时页，不在 `examples/fixtures/` 目录内，也不计入 fixture 总数。
-- `examples/recorded-replay-smoke.ts` 当前 `baseline` 会执行 `23` 个真实 fixture 场景，再补 `1` 个运行期临时页，总数 `24`。
+- `placeholder-disambiguation` 与 `scroll-runtime-contract` 属于 recorded replay 的运行期临时页，不在 `examples/fixtures/` 目录内，也不计入 fixture 总数。
+- `examples/recorded-replay-smoke.ts` 当前 `baseline` 会执行 `23` 个真实 fixture 场景，再补 `2` 个运行期临时页，总数 `25`。
 
 | 分类               | 数量 | 覆盖口径                                                                             |
 | ------------------ | ---- | ------------------------------------------------------------------------------------ |
 | Benchmarks fixture | `23` | `real-page p8` 完整覆盖；`recorded replay baseline` 也完整覆盖这 `23` 条真实 fixture |
 | 登录专用 fixture   | `1`  | `examples/fixtures/login.html` 仅供 `pnpm e2e:login`                                 |
-| 运行期临时页       | `1`  | `placeholder-disambiguation` 仅供 `recorded replay baseline`                         |
+| 运行期临时页       | `2`  | `placeholder-disambiguation` 与 `scroll-runtime-contract` 仅供 `recorded replay baseline` |
 
 Benchmarks `23` 条真实 fixture 名单如下：`checkbox-select`、`delayed-panel`、`upload-form`、`spa-route`、`session-dashboard`、`keyboard-command-palette`、`async-command-palette`、`filterable-list`、`modal-bulk-action`、`session-expired-dashboard`、`paginated-list`、`drawer-edit-form`、`toast-popconfirm`、`tabbed-workspace`、`contenteditable-editor`、`empty-results-retry`、`linked-filters`、`session-expired-retry`、`bulk-cross-page-selection`、`drawer-double-save`、`repeated-row-actions`、`rerender-action-panel`、`dialog-save-surface`。
 
@@ -78,6 +78,7 @@ Benchmarks `23` 条真实 fixture 名单如下：`checkbox-select`、`delayed-pa
 | `dialog-save-surface`        | `examples/fixtures/dialog-save-surface.html`       | `p8`       | `baseline`      | Dialog 二段式保存表面                   |
 | `login`                      | `examples/fixtures/login.html`                     | 不纳入     | 不纳入          | 专供 `pnpm e2e:login`                   |
 | `placeholder-disambiguation` | 运行期临时生成                                     | 不纳入     | `baseline`      | 非仓库 fixture，仅验证 placeholder 消歧 |
+| `scroll-runtime-contract`    | 运行期临时生成                                     | 不纳入     | `baseline`      | 非仓库 fixture，仅验证 scroll 回放合同  |
 
 ## 总览矩阵
 
@@ -408,7 +409,7 @@ Benchmarks `23` 条真实 fixture 名单如下：`checkbox-select`、`delayed-pa
 - `examples/run-real-page-smoke.ts`
   - 当前默认执行 `p8` 档位，并打印成功数、失败数、总耗时、平均耗时、成功态摘要、最慢场景排行、失败类型统计与每个 case 的产物目录。
 - `examples/recorded-replay-smoke.ts`
-  - 当前统一执行 `baseline` recorded replay 矩阵，覆盖 `23` 个真实 fixture 与 `1` 个运行期临时页。
+  - 当前统一执行 `baseline` recorded replay 矩阵，覆盖 `23` 个真实 fixture 与 `2` 个运行期临时页。
 - `pnpm e2e:real-pages`
   - 独立执行当前最新的 `p8` 增强矩阵，适合局部回归 Benchmarks 轨道。
 - `pnpm e2e:recorded-pages`
@@ -426,7 +427,7 @@ Benchmarks `23` 条真实 fixture 名单如下：`checkbox-select`、`delayed-pa
 - 当前权威口径是：
   - `examples/fixtures/` 共 `24` 个 HTML。
   - 其中 `23` 个属于 Benchmarks fixture 矩阵，`login.html` 单独服务登录 E2E。
-  - recorded replay 额外包含 `placeholder-disambiguation` 这 `1` 个运行期临时页。
+  - recorded replay 额外包含 `placeholder-disambiguation` 与 `scroll-runtime-contract` 这 `2` 个运行期临时页。
 - `keyboard-command-palette` 与 `async-command-palette` 已回灌到 `baseline`，因此 real-page `baseline` 当前固定为 `13` 条，而不是早期文档里的 `11` 条。
-- Wave 11 收口后，real-page 最新档位固定为 `23` 条，recorded replay 基线固定为 `24` 条（`23` 真实 fixture + `1` 运行期临时页）。
+- Wave 11 收口后，real-page 最新档位固定为 `23` 条，recorded replay 基线当前固定为 `25` 条（`23` 真实 fixture + `2` 运行期临时页）。
 - 矩阵脚本直接从 `packages/*/src/index.ts` 导入 live implementation，避免脚本误吃旧 `dist` 产物，导致基准结果与当前源码脱节。
