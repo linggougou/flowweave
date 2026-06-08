@@ -3,8 +3,11 @@ import { buildFailureInsight } from "./shared/failure-insights.js";
 import { buildDiagnosticRepairSuggestions } from "./shared/repair-suggestions.js";
 import type {
   ExecutionStepLog,
+  StudioDiagnosticCandidateSummary,
+  StudioDiagnosticStrategyAttempt,
   StudioStepDiagnostic,
   StudioDiagnosticTargetHints,
+  StudioTargetResolutionDiagnostic,
 } from "./shared/studio-api-types.js";
 import {
   formatStudioRuntimeRecoverySummary,
@@ -80,6 +83,10 @@ function includesKeyword(value: string | undefined, keywords: string[]): boolean
   return keywords.some((keyword) => normalized.includes(keyword));
 }
 
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
 function formatScopeKind(
   scopeKind?: StudioDiagnosticTargetHints["scopeKind"],
 ): string {
@@ -111,6 +118,7 @@ function buildAmbiguityClues(step: ExecutionStepLog): string[] {
       !attempt.success &&
       (attempt.matchedCount > 1 ||
         (attempt.visibleCount !== undefined && attempt.visibleCount > 1) ||
+        Boolean(attempt.ambiguityReason?.trim()) ||
         includesKeyword(attempt.error, [
           "strict mode violation",
           "resolved to",
@@ -150,7 +158,10 @@ function buildAmbiguityClues(step: ExecutionStepLog): string[] {
     );
   }
 
-  if (
+  if (ambiguousAttempt.ambiguityReason?.trim()) {
+    clues.push(`runtime 反馈：${ambiguousAttempt.ambiguityReason}。`);
+    clues.push("这些线索已经帮助收窄范围，但仍不足以唯一确认目标。");
+  } else if (
     includesKeyword(ambiguousAttempt.error, [
       "tie",
       "tied",
@@ -166,6 +177,125 @@ function buildAmbiguityClues(step: ExecutionStepLog): string[] {
   }
 
   return clues;
+}
+
+function formatCandidateScopeKind(
+  scopeKind?: StudioDiagnosticCandidateSummary["scopeKind"],
+): string | undefined {
+  return scopeKind ? formatScopeKind(scopeKind) : undefined;
+}
+
+function resolveAttemptCandidates(
+  attempt: StudioDiagnosticStrategyAttempt,
+): StudioDiagnosticCandidateSummary[] {
+  return attempt.candidateSummaries ?? [];
+}
+
+function resolveCandidateFocusHints(attempt: StudioDiagnosticStrategyAttempt): string[] {
+  const candidates = resolveAttemptCandidates(attempt);
+  if (candidates.length === 0) {
+    return [];
+  }
+
+  if (attempt.selectedIndex !== undefined) {
+    const selectedCandidate = candidates.find(
+      (candidate) => candidate.index === attempt.selectedIndex,
+    );
+    return uniqueStrings(selectedCandidate?.matchedHints ?? []);
+  }
+
+  const topScore = Math.max(...candidates.map((candidate) => candidate.score));
+  const topCandidates = candidates.filter((candidate) => candidate.score === topScore);
+  const sharedHints = uniqueStrings(topCandidates[0]?.matchedHints ?? []).filter((hint) =>
+    topCandidates.every((candidate) => candidate.matchedHints.includes(hint)),
+  );
+  if (sharedHints.length > 0) {
+    return sharedHints;
+  }
+
+  return uniqueStrings(topCandidates.flatMap((candidate) => candidate.matchedHints));
+}
+
+function resolveCandidateRemainingGap(attempt: StudioDiagnosticStrategyAttempt): string {
+  const candidates = resolveAttemptCandidates(attempt);
+  const visibleCandidateCount = candidates.filter((candidate) => candidate.visible).length;
+  const candidateCount = visibleCandidateCount || candidates.length || attempt.visibleCount || 0;
+
+  if (attempt.ambiguityReason?.trim()) {
+    const focusHints = resolveCandidateFocusHints(attempt);
+    const hintSummary =
+      focusHints.length > 0 ? `当前这些线索都已命中 ${focusHints.join("、")}，` : "";
+    return `${hintSummary}但仍只能把范围缩到 ${candidateCount || attempt.matchedCount} 个候选。`;
+  }
+
+  if (attempt.selectedIndex !== undefined && candidateCount > 1) {
+    return `runtime 已选中候选 #${attempt.selectedIndex + 1}，但页面上仍有 ${candidateCount} 个相似候选，后续页面改版后仍可能漂移。`;
+  }
+
+  if (candidateCount > 1) {
+    return `当前页面上仍有 ${candidateCount} 个相似候选。`;
+  }
+
+  return "当前产物没有记录到更多可区分的候选差异。";
+}
+
+function formatCandidateSummary(candidate: StudioDiagnosticCandidateSummary): string {
+  const parts = [
+    `候选 #${candidate.index + 1}`,
+    `${candidate.score} 分`,
+    candidate.visible ? "可见" : "不可见",
+  ];
+
+  const scopeKindLabel = formatCandidateScopeKind(candidate.scopeKind);
+  if (candidate.scopeText) {
+    parts.push(
+      scopeKindLabel ? `${scopeKindLabel}“${candidate.scopeText}”` : `scope=${candidate.scopeText}`,
+    );
+  }
+  if (candidate.labelText) {
+    parts.push(`label=${candidate.labelText}`);
+  }
+  if (candidate.placeholder) {
+    parts.push(`placeholder=${candidate.placeholder}`);
+  }
+  if (candidate.nameAttr) {
+    parts.push(`name=${candidate.nameAttr}`);
+  }
+  if (candidate.textSample) {
+    parts.push(`text=${candidate.textSample}`);
+  }
+  if (candidate.matchedHints.length > 0) {
+    parts.push(`命中 ${candidate.matchedHints.join("、")}`);
+  }
+
+  return parts.join(" · ");
+}
+
+function buildCandidateDetails(
+  diagnostic?: StudioTargetResolutionDiagnostic,
+): Array<{
+  attempt: StudioDiagnosticStrategyAttempt;
+  helpfulHints: string[];
+  remainingGap: string;
+  candidateSummaries: StudioDiagnosticCandidateSummary[];
+}> {
+  if (!diagnostic) {
+    return [];
+  }
+
+  return diagnostic.strategyAttempts
+    .filter(
+      (attempt) =>
+        attempt.selectedIndex !== undefined ||
+        Boolean(attempt.ambiguityReason?.trim()) ||
+        (attempt.candidateSummaries?.length ?? 0) > 0,
+    )
+    .map((attempt) => ({
+      attempt,
+      helpfulHints: resolveCandidateFocusHints(attempt),
+      remainingGap: resolveCandidateRemainingGap(attempt),
+      candidateSummaries: resolveAttemptCandidates(attempt),
+    }));
 }
 
 export function DiagnosticInspector({
@@ -203,6 +333,7 @@ export function DiagnosticInspector({
     ? buildDiagnosticRepairSuggestions(activeStep)
     : [];
   const ambiguityClues = targetDiagnostic ? buildAmbiguityClues(activeStep) : [];
+  const candidateDetails = buildCandidateDetails(targetDiagnostic);
 
   return (
     <section className="flow-preview">
@@ -372,6 +503,53 @@ export function DiagnosticInspector({
         </div>
       ) : null}
 
+      {candidateDetails.length > 0 ? (
+        <div className="flow-preview" style={{ margin: "0 0 16px" }}>
+          <strong>候选细节</strong>
+          <div
+            style={{
+              display: "grid",
+              gap: 12,
+              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+              marginTop: 12,
+            }}
+          >
+            {candidateDetails.map(({ attempt, helpfulHints, remainingGap, candidateSummaries }, index) => (
+              <div className="flow-preview" style={{ margin: 0 }} key={`${attempt.label}-${index}`}>
+                <strong>{attempt.label}</strong>
+                <p className="flow-content-meta" style={{ margin: "8px 0 0" }}>
+                  选中候选：{attempt.selectedIndex !== undefined ? `#${attempt.selectedIndex + 1}` : "—"}
+                </p>
+                <p className="flow-content-meta" style={{ margin: "4px 0 0" }}>
+                  歧义原因：{attempt.ambiguityReason?.trim() || "—"}
+                </p>
+                <p className="flow-content-meta" style={{ margin: "4px 0 0" }}>
+                  帮助收窄：
+                  {helpfulHints.length > 0
+                    ? helpfulHints.join("、")
+                    : "当前产物没有记录到命中的收窄线索。"}
+                </p>
+                <p className="flow-content-meta" style={{ margin: "4px 0 0" }}>
+                  仍不足：{remainingGap}
+                </p>
+                {candidateSummaries.length > 0 ? (
+                  <>
+                    <strong style={{ display: "block", marginTop: 12 }}>候选摘要列表</strong>
+                    <ul style={{ margin: "8px 0 0", paddingLeft: 20, display: "grid", gap: 8 }}>
+                      {candidateSummaries.map((candidate) => (
+                        <li key={`${attempt.label}-candidate-${candidate.index}`}>
+                          <span className="flow-content-meta">{formatCandidateSummary(candidate)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {insight && insight.artifacts.length > 0 ? (
         <div className="flow-preview" style={{ margin: "0 0 16px" }}>
           <strong>产物入口</strong>
@@ -459,7 +637,9 @@ export function DiagnosticInspector({
                     <th>策略</th>
                     <th>匹配数</th>
                     <th>可见数</th>
+                    <th>选中候选</th>
                     <th>结果</th>
+                    <th>歧义原因</th>
                     <th>错误</th>
                   </tr>
                 </thead>
@@ -469,7 +649,11 @@ export function DiagnosticInspector({
                       <td>{attempt.label}</td>
                       <td>{attempt.matchedCount}</td>
                       <td>{formatCount(attempt.visibleCount)}</td>
+                      <td>
+                        {attempt.selectedIndex !== undefined ? `#${attempt.selectedIndex + 1}` : "—"}
+                      </td>
                       <td>{attempt.success ? "成功" : "失败"}</td>
+                      <td>{attempt.ambiguityReason?.trim() || "—"}</td>
                       <td>{attempt.error ?? "—"}</td>
                     </tr>
                   ))}

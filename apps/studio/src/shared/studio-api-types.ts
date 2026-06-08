@@ -78,12 +78,30 @@ export type StudioDiagnosticTargetHints = {
   scopeKind?: "row" | "listitem" | "dialog" | "tabpanel" | "section" | "card";
 };
 
+export type StudioDiagnosticCandidateSummary = {
+  index: number;
+  visible: boolean;
+  tagName?: string;
+  inputType?: string;
+  nameAttr?: string;
+  placeholder?: string;
+  labelText?: string;
+  textSample?: string;
+  scopeKind?: StudioDiagnosticTargetHints["scopeKind"];
+  scopeText?: string;
+  score: number;
+  matchedHints: string[];
+};
+
 export type StudioDiagnosticStrategyAttempt = {
   label: string;
   matchedCount: number;
   visibleCount?: number;
   success: boolean;
   error?: string;
+  selectedIndex?: number;
+  ambiguityReason?: string;
+  candidateSummaries?: StudioDiagnosticCandidateSummary[];
 };
 
 export const studioActionStateResetCauses = [

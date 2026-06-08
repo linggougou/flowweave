@@ -2,6 +2,7 @@ import type { FragilityIssue } from "@flowweave/page-intelligence";
 
 import type {
   ExecutionStepLog,
+  StudioDiagnosticCandidateSummary,
   StudioDiagnosticStrategyAttempt,
   StudioDiagnosticTargetHints,
 } from "./studio-api-types.js";
@@ -144,8 +145,52 @@ function includesKeyword(value: string | undefined, keywords: string[]): boolean
   return keywords.some((keyword) => normalized.includes(keyword));
 }
 
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function resolveRelevantCandidates(
+  attempt: StudioDiagnosticStrategyAttempt,
+): StudioDiagnosticCandidateSummary[] {
+  const candidates = attempt.candidateSummaries ?? [];
+  if (candidates.length === 0) {
+    return [];
+  }
+
+  if (attempt.selectedIndex !== undefined) {
+    const selectedCandidate = candidates.find(
+      (candidate) => candidate.index === attempt.selectedIndex,
+    );
+    if (selectedCandidate) {
+      return [selectedCandidate];
+    }
+  }
+
+  const topScore = Math.max(...candidates.map((candidate) => candidate.score));
+  return candidates.filter((candidate) => candidate.score === topScore);
+}
+
+function describeCandidateHintCoverage(
+  attempt: StudioDiagnosticStrategyAttempt,
+): string | undefined {
+  const candidates = resolveRelevantCandidates(attempt);
+  if (candidates.length === 0) {
+    return undefined;
+  }
+
+  const sharedHints = uniqueStrings(candidates[0]?.matchedHints ?? []).filter((hint) =>
+    candidates.every((candidate) => candidate.matchedHints.includes(hint)),
+  );
+  const helpfulHints =
+    sharedHints.length > 0
+      ? sharedHints
+      : uniqueStrings(candidates.flatMap((candidate) => candidate.matchedHints));
+
+  return helpfulHints.length > 0 ? helpfulHints.join("、") : undefined;
+}
+
 function hasAmbiguityTieSignal(attempt: StudioDiagnosticStrategyAttempt): boolean {
-  return includesKeyword(attempt.error, [
+  return includesKeyword(`${attempt.ambiguityReason ?? ""} ${attempt.error ?? ""}`, [
     "tie",
     "tied",
     "same score",
@@ -305,9 +350,22 @@ function buildScopedRetargetSuggestion(
     priority: 0,
     title: `重新录制到正确${scopeKindLabel}`,
     action: `回到包含“${scopeText}”的${scopeKindLabel}重新录制这一步，再直接点击该${scopeKindLabel}里的目标，尽量保留标题、编号或主键文案这类上下文。`,
-    reason: hasAmbiguityTieSignal(attempt)
-      ? `${buildAttemptReason(attempt, "runtime 判断候选并列")}当前记录的作用域线索是 ${scopeKindLabel}“${scopeText}”，但还不足以唯一确认目标。`
-      : `${buildAttemptReason(attempt, "当前目标仍可能落到错误位置")}当前记录的作用域线索是 ${scopeKindLabel}“${scopeText}”。`,
+    reason: [
+      hasAmbiguityTieSignal(attempt)
+        ? buildAttemptReason(
+            attempt,
+            attempt.ambiguityReason?.trim() ?? "runtime 判断候选并列",
+          )
+        : buildAttemptReason(attempt, "当前目标仍可能落到错误位置"),
+      describeCandidateHintCoverage(attempt)
+        ? `候选摘要里共同命中的线索有 ${describeCandidateHintCoverage(attempt)}。`
+        : undefined,
+      hasAmbiguityTieSignal(attempt)
+        ? `当前记录的作用域线索是 ${scopeKindLabel}“${scopeText}”，但还不足以唯一确认目标。`
+        : `当前记录的作用域线索是 ${scopeKindLabel}“${scopeText}”。`,
+    ]
+      .filter((part): part is string => Boolean(part))
+      .join(""),
   };
 }
 
@@ -329,7 +387,18 @@ function buildMissingScopeSuggestion(
     title: "补上作用域线索后再重录",
     action:
       "如果这是列表行、卡片或弹层内的操作，重新录制时先进入对应上下文，再点击目标本身，让 Flow 带回更可区分的标题、编号或主键文案。",
-    reason: `${buildAttemptReason(attempt, "页面上存在多个同名候选")}${reasonSuffix}`,
+    reason: [
+      buildAttemptReason(
+        attempt,
+        attempt.ambiguityReason?.trim() ?? "页面上存在多个同名候选",
+      ),
+      describeCandidateHintCoverage(attempt)
+        ? `候选摘要里已经命中了 ${describeCandidateHintCoverage(attempt)}，但还缺少唯一上下文。`
+        : undefined,
+      reasonSuffix,
+    ]
+      .filter((part): part is string => Boolean(part))
+      .join(""),
   };
 }
 
@@ -397,7 +466,16 @@ export function buildDiagnosticRepairSuggestions(
     (attempt) =>
       attempt.matchedCount > 1 ||
       (attempt.visibleCount !== undefined && attempt.visibleCount > 1) ||
-      includesKeyword(attempt.error, ["strict mode violation", "resolved to"]),
+      Boolean(attempt.ambiguityReason?.trim()) ||
+      includesKeyword(`${attempt.ambiguityReason ?? ""} ${attempt.error ?? ""}`, [
+        "strict mode violation",
+        "resolved to",
+        "tie",
+        "tied",
+        "same score",
+        "并列",
+        "无法唯一确认",
+      ]),
   );
   const tieAttempt = failedAttempts.find(hasAmbiguityTieSignal);
   const scopedRetargetSuggestion =

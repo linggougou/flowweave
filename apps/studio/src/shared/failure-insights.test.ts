@@ -289,6 +289,68 @@ describe("buildFailureInsight", () => {
     ]);
   });
 
+  it("把候选并列失败总结成更可执行的歧义洞察", () => {
+    const insight = buildFailureInsight(
+      buildStep({
+        label: "编辑订单行",
+        diagnostic: {
+          stepId: "s6",
+          stepIndex: 5,
+          url: "https://staging.example.com/orders",
+          title: "订单列表",
+          strategyAttempts: [
+            {
+              label: "role=button[name=编辑]",
+              matchedCount: 2,
+              visibleCount: 2,
+              success: false,
+              error: "候选评分并列，无法唯一确认目标",
+              ambiguityReason: "最高分 40 并列，无法唯一确定候选",
+              candidateSummaries: [
+                {
+                  index: 0,
+                  score: 40,
+                  visible: true,
+                  scopeKind: "row",
+                  scopeText: "订单 A-102 / 张三",
+                  labelText: "编辑",
+                  textSample: "编辑订单",
+                  matchedHints: ["scopeText", "labelText"],
+                },
+                {
+                  index: 1,
+                  score: 40,
+                  visible: true,
+                  scopeKind: "row",
+                  scopeText: "订单 A-103 / 李四",
+                  labelText: "编辑",
+                  textSample: "编辑订单",
+                  matchedHints: ["scopeText", "labelText"],
+                },
+              ],
+            },
+          ],
+          targetHints: {
+            tagName: "button",
+            labelText: "编辑",
+            scopeKind: "row",
+            scopeText: "订单 A-103 / 李四",
+          },
+        },
+      }),
+    );
+
+    expect(insight).toMatchObject({
+      category: "ambiguous-target",
+      categoryLabel: "目标不唯一",
+      title: "重新录制到正确列表行",
+    });
+    expect(insight?.summary).toContain("最高分 40 并列，无法唯一确定候选");
+    expect(insight?.summary).toContain("scopeText、labelText");
+    expect(insight?.summary).toContain("仍不足");
+    expect(insight?.recommendedAction).toContain("订单 A-103 / 李四");
+  });
+
   it("把命中但不可见的失败识别为页面状态问题", () => {
     const insight = buildFailureInsight(
       buildStep({

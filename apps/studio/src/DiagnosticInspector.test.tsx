@@ -249,4 +249,103 @@ describe("DiagnosticInspector", () => {
     expect(html).toContain("候选并列");
     expect(html).toContain("重新录制到正确列表行");
   });
+
+  it("展示 runtime 候选细节，包括选中序号、歧义原因和仍不足的线索", () => {
+    const html = renderToStaticMarkup(
+      <DiagnosticInspector
+        steps={[
+          buildStep({
+            label: "编辑订单行",
+            status: "passed",
+            message: "首个策略发生歧义，备用策略已选中候选 #2",
+            diagnostic: {
+              stepId: "s8",
+              stepIndex: 7,
+              url: "https://staging.example.com/orders",
+              title: "订单列表",
+              strategyAttempts: [
+                {
+                  label: "role=button[name=编辑]",
+                  matchedCount: 2,
+                  visibleCount: 2,
+                  success: false,
+                  error: "候选评分并列，无法唯一确认目标",
+                  ambiguityReason: "最高分 40 并列，无法唯一确定候选",
+                  candidateSummaries: [
+                    {
+                      index: 0,
+                      score: 40,
+                      visible: true,
+                      scopeKind: "row",
+                      scopeText: "订单 A-102 / 张三",
+                      labelText: "编辑",
+                      textSample: "编辑订单",
+                      matchedHints: ["scopeText", "labelText"],
+                    },
+                    {
+                      index: 1,
+                      score: 40,
+                      visible: true,
+                      scopeKind: "row",
+                      scopeText: "订单 A-103 / 李四",
+                      labelText: "编辑",
+                      textSample: "编辑订单",
+                      matchedHints: ["scopeText", "labelText"],
+                    },
+                  ],
+                },
+                {
+                  label: "css=.order-row button:nth-of-type(1)",
+                  matchedCount: 2,
+                  visibleCount: 2,
+                  success: true,
+                  selectedIndex: 1,
+                  candidateSummaries: [
+                    {
+                      index: 0,
+                      score: 34,
+                      visible: true,
+                      scopeKind: "row",
+                      scopeText: "订单 A-102 / 张三",
+                      labelText: "编辑",
+                      matchedHints: ["labelText"],
+                    },
+                    {
+                      index: 1,
+                      score: 46,
+                      visible: true,
+                      scopeKind: "row",
+                      scopeText: "订单 A-103 / 李四",
+                      labelText: "编辑",
+                      matchedHints: ["scopeText", "labelText", "tagName"],
+                    },
+                  ],
+                },
+              ],
+              targetHints: {
+                tagName: "button",
+                labelText: "编辑",
+                scopeKind: "row",
+                scopeText: "订单 A-103 / 李四",
+              },
+            },
+          }),
+        ]}
+        selectedStepIndex={7}
+        onSelectStepIndex={() => {}}
+        onOpenPath={() => {}}
+      />,
+    );
+
+    expect(html).toContain("候选细节");
+    expect(html).toContain("歧义原因");
+    expect(html).toContain("最高分 40 并列，无法唯一确定候选");
+    expect(html).toContain("选中候选");
+    expect(html).toContain("#2");
+    expect(html).toContain("帮助收窄");
+    expect(html).toContain("scopeText");
+    expect(html).toContain("仍不足");
+    expect(html).toContain("订单 A-102 / 张三");
+    expect(html).toContain("订单 A-103 / 李四");
+  });
 });

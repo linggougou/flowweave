@@ -6,6 +6,7 @@ import {
   isRuntimeErrorDiagnostic,
   isTargetResolutionDiagnostic,
   type ExecutionStepLog,
+  type StudioDiagnosticCandidateSummary,
   type StudioDiagnosticStrategyAttempt,
 } from "./studio-api-types.js";
 
@@ -39,6 +40,59 @@ export type FailureInsight = {
 function includesKeyword(value: string | undefined, keywords: string[]): boolean {
   const normalized = value?.toLowerCase() ?? "";
   return keywords.some((keyword) => normalized.includes(keyword));
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function resolveRelevantCandidates(
+  attempt: StudioDiagnosticStrategyAttempt,
+): StudioDiagnosticCandidateSummary[] {
+  const candidates = attempt.candidateSummaries ?? [];
+  if (candidates.length === 0) {
+    return [];
+  }
+
+  const topScore = Math.max(...candidates.map((candidate) => candidate.score));
+  return candidates.filter((candidate) => candidate.score === topScore);
+}
+
+function resolveCandidateHintLabels(attempt: StudioDiagnosticStrategyAttempt): string[] {
+  const candidates = resolveRelevantCandidates(attempt);
+  if (candidates.length === 0) {
+    return [];
+  }
+
+  const sharedHints = uniqueStrings(candidates[0]?.matchedHints ?? []).filter((hint) =>
+    candidates.every((candidate) => candidate.matchedHints.includes(hint)),
+  );
+  if (sharedHints.length > 0) {
+    return sharedHints;
+  }
+
+  return uniqueStrings(candidates.flatMap((candidate) => candidate.matchedHints));
+}
+
+function describeAmbiguousAttempt(attempt: StudioDiagnosticStrategyAttempt): string | undefined {
+  const ambiguityReason = attempt.ambiguityReason?.trim();
+  const helpfulHints = resolveCandidateHintLabels(attempt);
+  const candidateCount =
+    resolveRelevantCandidates(attempt).length ||
+    attempt.candidateSummaries?.filter((candidate) => candidate.visible).length ||
+    attempt.candidateSummaries?.length ||
+    attempt.visibleCount ||
+    attempt.matchedCount;
+  const sentences = [
+    `${attempt.label} 同时命中 ${attempt.matchedCount} 个候选，当前定位范围过宽。`,
+    ambiguityReason ? `runtime 反馈：${ambiguityReason}。` : undefined,
+    helpfulHints.length > 0 ? `已命中的收窄线索：${helpfulHints.join("、")}。` : undefined,
+    candidateCount > 1
+      ? `仍不足：这些线索最多只能把范围缩到 ${candidateCount} 个高分候选。`
+      : "仍不足：当前产物还没有给出足够稳定的唯一线索。",
+  ];
+
+  return sentences.filter((sentence): sentence is string => Boolean(sentence)).join("");
 }
 
 function resolveFallbackSuccess(
@@ -160,13 +214,24 @@ function resolveInsightCategory(step: ExecutionStepLog): {
     (attempt) =>
       attempt.matchedCount > 1 ||
       (attempt.visibleCount !== undefined && attempt.visibleCount > 1) ||
-      includesKeyword(attempt.error, ["strict mode violation", "resolved to"]),
+      Boolean(attempt.ambiguityReason?.trim()) ||
+      includesKeyword(`${attempt.ambiguityReason ?? ""} ${attempt.error ?? ""}`, [
+        "strict mode violation",
+        "resolved to",
+        "tie",
+        "tied",
+        "same score",
+        "并列",
+        "无法唯一确认",
+      ]),
   );
   if (broadAttempt) {
     return {
       category: "ambiguous-target",
       categoryLabel: "目标不唯一",
-      summary: `${broadAttempt.label} 同时命中 ${broadAttempt.matchedCount} 个候选，当前定位范围过宽，建议先收敛到唯一目标。`,
+      summary:
+        describeAmbiguousAttempt(broadAttempt) ??
+        `${broadAttempt.label} 同时命中 ${broadAttempt.matchedCount} 个候选，当前定位范围过宽，建议先收敛到唯一目标。`,
     };
   }
 

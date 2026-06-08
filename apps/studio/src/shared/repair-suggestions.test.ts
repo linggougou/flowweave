@@ -274,6 +274,29 @@ describe("buildDiagnosticRepairSuggestions", () => {
               visibleCount: 2,
               success: false,
               error: "候选评分并列，无法唯一确认目标",
+              ambiguityReason: "最高分 40 并列，无法唯一确定候选",
+              candidateSummaries: [
+                {
+                  index: 0,
+                  score: 40,
+                  visible: true,
+                  scopeKind: "row",
+                  scopeText: "订单 A-102 / 张三",
+                  labelText: "编辑",
+                  textSample: "编辑订单",
+                  matchedHints: ["scopeText", "labelText"],
+                },
+                {
+                  index: 1,
+                  score: 40,
+                  visible: true,
+                  scopeKind: "row",
+                  scopeText: "订单 A-103 / 李四",
+                  labelText: "编辑",
+                  textSample: "编辑订单",
+                  matchedHints: ["scopeText", "labelText"],
+                },
+              ],
             },
           ],
           targetHints: {
@@ -291,7 +314,8 @@ describe("buildDiagnosticRepairSuggestions", () => {
         (item) =>
           item.title === "重新录制到正确列表行" &&
           item.action.includes("订单 A-102 / 张三") &&
-          item.reason.includes("候选并列"),
+          item.reason.includes("最高分 40 并列，无法唯一确定候选") &&
+          item.reason.includes("scopeText、labelText"),
       ),
     ).toBe(true);
   });
