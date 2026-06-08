@@ -34,10 +34,74 @@
   - 新增 `docs/superpowers/plans/2026-06-09-real-page-stability-residual-gaps-plan.md`
   - 新增 `docs/superpowers/plans/2026-06-09-real-page-stability-residual-gaps-orchestration.md`
   - 在旧 `Wave 13 Target Disambiguation` 计划与编排板顶部补“已过时 / 已被新计划取代”说明
+- 已完成验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- recorded-replay-matrix.test.ts`
+    - 结果：通过，`1/1`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+    - 结果：通过
+- worktree 重建：
+  - 已移除未使用的旧轨道：
+    - `.worktrees/codex-real-page-wave13-recorder-scope-hints`
+    - `.worktrees/codex-real-page-wave13-runtime-disambiguation`
+    - `.worktrees/codex-real-page-wave13-studio-ambiguity-insight`
+  - 已新建残余缺口轨道：
+    - `.worktrees/codex-real-page-residual-electron-bundle`
+    - `.worktrees/codex-real-page-residual-studio-ambiguity-detail`
+    - `.worktrees/codex-real-page-residual-studio-layout-contract`
+    - `.worktrees/codex-real-page-residual-recorded-replay-guide`
+- 已派发 subagent：
+  - `Kant`：Electron Bundle Integrity
+  - `Descartes`：Studio Ambiguity Detail Insight
+  - `Singer`：Studio Layout Contract
+  - `Ampere`：Recorded Replay Guide Sync
+- 已回收并合并：
+  - `Recorded Replay Guide Sync`
+    - 合并提交：
+      - `37da043 docs: 同步 recorded replay 指南口径`
+      - `830fc23 docs: 收口 recorded replay 指南审查意见`
+    - 回收结论：
+      - recorded replay 指南已统一到 `25 = 23 fixture + 2 runtime-generated`
+      - `placeholder-disambiguation` 与 `scroll-runtime-contract` 已写清职责
+      - `fixture-matrix.md` 中残留的旧 “当前 Wave 11” 时态已收口
+  - `Studio Layout Contract`
+    - 合并提交：
+      - `18bb9d0 test: 补 Studio 布局 contract`
+      - `095d0e0 fix: 收紧 Studio 布局 contract`
+    - 回收结论：
+      - 已新增自动化布局 contract
+      - 不再依赖真实 Electron 窗口
+      - 测试锁住了左侧滚动容器与右侧面板非收缩合同
+  - `Electron Bundle Integrity`
+    - 合并提交：
+      - `19edb4b fix: 收口 electron bundle 完整性修复`
+      - `10554a2 fix: 收紧 electron bundle 签名失败语义`
+    - 回收结论：
+      - 已知 residual error 会触发定向 ad-hoc 重签名
+      - 未知签名错误与重签名失败会显式失败，不再静默放行
+      - 串行主线复验已确认 `build`、`codesign verify`、删 `dist` 后重建三条链路都通过
+  - `Studio Ambiguity Detail Insight`
+    - 合并提交：
+      - `4e88fb6 feat(studio): 补齐歧义候选细节诊断`
+      - `df1def3 fix(studio): 闭环成功消歧洞察`
+    - 回收结论：
+      - 已补齐 `selectedIndex / ambiguityReason / candidateSummaries` 的 Studio 消费
+      - 已覆盖失败歧义、先失败后成功、单个成功策略直接收窄三条路径
+      - 主线 `@flowweave/app-studio` 类型、测试、构建全部通过
+- 合并后主线复验：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
+    - 结果：通过，`68/68`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio build`
+    - 结果：通过
+  - `codesign --verify --deep --strict node_modules/.pnpm/electron@33.4.11/node_modules/electron/dist/Electron.app`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH rm -rf node_modules/.pnpm/electron@33.4.11/node_modules/electron/dist && PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH node apps/studio/scripts/ensure-electron-dist.mjs`
+    - 结果：通过；先重解压恢复 symlink，再定向 ad-hoc 重签名并复验通过
 - 接下来要执行：
-  1. 清理 3 个未使用的错误方向 worktree
-  2. 按残余缺口重建 4 条有效 worktree 轨道
-  3. 派发 subagent 并在 Node 20 基线下逐轨验收与回收
+  1. 清理已完成的残余缺口 worktree
+  2. 收紧当前主线共享留痕提交
+  3. 若后续继续推进，再从本轮收口后的主线重新派生下一批轨道
 
 ## 2026-06-09 Wave 13 规划与并行编排启动
 

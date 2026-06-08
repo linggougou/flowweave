@@ -1,5 +1,68 @@
 # 验证报告
 
+## 2026-06-09 残余缺口已合并轨道复验
+
+### 验证范围
+
+- `Recorded Replay Guide Sync` 合并后是否仍与当前 recorded replay 真实口径一致。
+- `Studio Layout Contract` 合并后是否仍保持 `@flowweave/app-studio` 的 Node 20 基线通过。
+
+### 验证结果
+
+1. `Recorded Replay Guide Sync` 口径已并回主线。
+   - 合并提交：
+     - `37da043 docs: 同步 recorded replay 指南口径`
+     - `830fc23 docs: 收口 recorded replay 指南审查意见`
+   - 当前主线文档结论：
+     - recorded replay catalog = `25`
+     - `23` 个真实 fixture
+     - `2` 个 runtime-generated case
+     - `placeholder-disambiguation` 与 `scroll-runtime-contract` 均已写清职责
+2. `Studio Layout Contract` 主线复验通过。
+   - 合并提交：
+     - `18bb9d0 test: 补 Studio 布局 contract`
+     - `095d0e0 fix: 收紧 Studio 布局 contract`
+   - Node 20 复验：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+       - 结果：通过
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
+       - 结果：通过，`68/68`
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio build`
+       - 结果：通过
+3. `Electron Bundle Integrity` 主线复验通过。
+   - 合并提交：
+     - `19edb4b fix: 收口 electron bundle 完整性修复`
+     - `10554a2 fix: 收紧 electron bundle 签名失败语义`
+   - Node 20 复验：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio build`
+       - 结果：通过
+     - `codesign --verify --deep --strict node_modules/.pnpm/electron@33.4.11/node_modules/electron/dist/Electron.app`
+       - 结果：通过
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH rm -rf node_modules/.pnpm/electron@33.4.11/node_modules/electron/dist && PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH node apps/studio/scripts/ensure-electron-dist.mjs`
+       - 结果：通过；重解压恢复 symlink 后，定向 ad-hoc 重签名与严格复验均通过
+4. `Studio Ambiguity Detail Insight` 主线复验通过。
+   - 合并提交：
+     - `4e88fb6 feat(studio): 补齐歧义候选细节诊断`
+     - `df1def3 fix(studio): 闭环成功消歧洞察`
+   - Node 20 复验：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+       - 结果：通过
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
+       - 结果：通过，`73/73`
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio build`
+       - 结果：通过
+
+### Findings
+
+1. 布局 contract 已从“人工 DOM 量测 + 截图证据”升级为“可重复执行的自动化回归测试”。
+2. 文档口径与当前 recorded replay case catalog 已重新对齐，不再停留在旧的 `13` / `24` 条说法。
+3. Electron bundle 脚本现在明确区分“已知 residual error 可修复”与“未知签名错误必须失败”，减少了静默吞错风险。
+4. Studio 诊断体验已覆盖成功与失败两类歧义收窄路径，不再只解释失败场景。
+
+### 综合结论
+
+- 当前建议：通过；本轮 residual gaps 4 条轨道均已并回并通过主线 Node 20 复验
+
 ## 2026-06-09 Studio 布局回归修复验收
 
 ### 验证范围
