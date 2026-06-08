@@ -49,23 +49,23 @@ function ensureBundleSignature(appPath) {
   }
 
   if (!initialVerification.output.includes(RESIDUAL_SIGNATURE_ERROR)) {
-    report(
-      `警告：Electron bundle 严格签名校验未通过，保留当前可启动链路，请人工处理：${initialVerification.output}`,
+    throw new Error(
+      `Electron bundle 严格签名校验未通过，且不属于已确认 residual error，停止继续执行：${initialVerification.output}`,
     );
-    return;
   }
 
-  report("检测到 Electron bundle 缺少 CodeResources，开始执行本地 ad-hoc 重签名");
+  report(
+    "检测到已确认 residual signature error，开始仅针对当前本机 Electron bundle 执行 ad-hoc 重签名",
+  );
 
   try {
     execFileSync("codesign", ["--force", "--deep", "--sign", "-", appPath], {
       stdio: "inherit",
     });
   } catch (error) {
-    report(
-      `警告：Electron bundle 重签名失败，当前仍可尝试启动，但严格签名校验未通过：${formatExecError(error) || error.message}`,
+    throw new Error(
+      `Electron bundle ad-hoc 重签名失败，停止继续执行：${formatExecError(error) || error.message}`,
     );
-    return;
   }
 
   const finalVerification = verifyBundleSignature(appPath);
@@ -74,8 +74,8 @@ function ensureBundleSignature(appPath) {
     return;
   }
 
-  report(
-    `警告：Electron bundle 重签名后严格签名校验仍未通过，当前仍可尝试启动：${finalVerification.output}`,
+  throw new Error(
+    `Electron bundle 重签名后严格签名校验仍未通过，停止继续执行：${finalVerification.output}`,
   );
 }
 
