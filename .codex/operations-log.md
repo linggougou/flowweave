@@ -1,5 +1,240 @@
 # FlowWeave 操作日志
 
+## 2026-06-10 vNext 后台管理类交互式流程模板架构评估
+
+- 时间：2026-06-10 23:41:46 CST
+- 任务目标：基于当前仓库结构，评估“后台管理类网站交互式流程模板”在下一大版本是否成立、难点在哪、第一版应如何收边界，并显式回应产品与 UX 的中间观点。
+- 生命周期判断：
+  - 当前项目路线锁仍为 `P2 收口 / v1 先跑通版维护`
+  - 本轮需求不属于当前 P2 主线缺口
+  - 按生命周期协议归类为 **S9 后续版本 / 变更管理** 下的 vNext 架构评估
+- 路线与边界：
+  - 不改当前版本代码，不触碰 P2 主线实现
+  - 不解冻 `P3` / `P4`
+  - 仅输出架构可行性、能力盘点、缺口分层与产品收边界建议
+- 使用的流程能力与结构化工具：
+  - `using-superpowers`：检查会话技能适配
+  - `brainstorming`：用于设计型问题先做边界澄清与方案判断
+  - CodeGraph：用于交叉确认 Studio / Runtime / DSL / persistence 的调用与契约关系
+- 重点读取文件：
+  - `PROJECT_ROUTE_LOCK.md`
+  - `docs/architecture/overview.md`
+  - `docs/domain/flow-dsl.md`
+  - `docs/superpowers/plans/2026-05-26-run-first-roadmap.md`
+  - `packages/flow-dsl/src/schema.ts`
+  - `packages/runtime/src/playwright-runner.ts`
+  - `packages/runtime/src/types.ts`
+  - `packages/shared/src/template-variables.ts`
+  - `packages/recorder/src/normalize.ts`
+  - `packages/recorder/src/target-from-dom.ts`
+  - `packages/page-intelligence/src/fragility.ts`
+  - `apps/studio/src/App.tsx`
+  - `apps/studio/src/shared/run-input-state.ts`
+  - `apps/studio/src/shared/studio-api-types.ts`
+  - `apps/studio/electron/main.ts`
+  - `apps/studio/electron/preload.ts`
+  - `apps/studio/electron/services.ts`
+  - `apps/web/server/app.ts`
+  - `packages/project-knowledge/src/repository.ts`
+- 已确认的复用能力：
+  - 变量定义、模板变量提取与 runtime 递归插值链路已存在
+  - Studio 已支持运行前统一收集变量、类型解析、最近一次运行值回填
+  - recorder / runtime 已支持 `scopeText / scopeKind` 消歧
+  - runtime 已覆盖 suggest / combobox 的稳定等待
+  - knowledge 层已具备 `saveFlow`、Flow 版本历史、执行上下文落库
+- 已确认的关键缺口：
+  - DSL 尚无显式输入节点
+  - Studio 还没有可保存的步骤编辑器与行内绑定 UI
+  - runtime 仍是单次 Promise 执行模型，缺少 pause / input-required / resume
+  - Electron IPC 仍是 request/response，不支持执行会话内的多轮输入交互
+  - 当前变量模型过于扁平，无法表达 prompt 分组、说明、敏感性与依赖关系
+- 对新增产品约束的判断：
+  - “第一版是任务模板，不是通用编排器”明显有助于降复杂度，且最贴合现有线性 `steps[]` + 原子动作执行模型
+  - “步骤中心 + 显式输入节点 + 行内绑定”比重新发明高阶节点更贴合当前 Flow DSL 和 runtime 插值方式
+  - “搜索后选择实体”拆成搜索词绑定与选择动作依赖两段表达，明显优于抽象成智能复合节点，更契合现有 `fill + press/click + wait` 能力
+- 结论摘要：
+  - 该方向在当前架构下 **可以成立**
+  - 但应限定为 vNext 的 **Studio-only 线性任务模板**
+  - 第一版不宜承诺通用编排、自动抽象、批量执行、多人协作与复杂恢复语义
+- 产出文件：
+  - `.codex/context-summary-vnext-admin-template-evaluation.md`
+- 本轮代码与配置改动：
+  - 无产品代码改动
+  - 仅补 `.codex/` 留痕
+- 结束状态：已结束；待在答复中向用户输出分层结论与边界建议
+
+## 2026-06-10 Studio「录制后参数化编辑」UX 讨论
+
+- 时间：2026-06-10 22:40:00 CST
+- 任务目标：基于已确认产品前提，定义后台管理类网站场景下 Studio 的「录制后参数化编辑」核心体验，并识别最容易引发困惑的交互点，为后续 spec 讨论提供高质量输入。
+- 路线与边界：
+  - 继续遵循 `PROJECT_ROUTE_LOCK.md` 当前 P2 收口主线。
+  - 不进入 P3 深度页面/网络理解，不引入 P4 AI 编排，不扩展为新的复杂流程编排系统。
+  - 输出聚焦 UX 心智与交互对象，不落到底层实现方案。
+- 本轮读取真源：
+  - `PROJECT_ROUTE_LOCK.md`
+  - `docs/architecture/overview.md`
+  - `docs/domain/flow-dsl.md`
+  - `docs/adr/README.md`
+  - `docs/superpowers/plans/2026-05-26-run-first-roadmap.md`
+  - `docs/superpowers/specs/2026-05-25-web-automation-platform-design.md`
+  - `docs/superpowers/specs/2026-06-06-real-page-stability-design.md`
+  - `docs/superpowers/specs/2026-06-06-real-page-stability-autonomous-wave-design.md`
+  - `apps/studio/src/App.tsx`
+  - `apps/studio/src/shared/run-input-state.ts`
+  - `apps/studio/src/DiagnosticInspector.tsx`
+- 关键判断：
+  - 第一版应围绕“原始录制步骤 + 显式变量绑定”展开，而不是过早引入高级复合节点。
+  - 弹窗节点在用户心智上更适合作为“此处需要输入”的运行时采集点，而不是“系统弹窗处理”或“页面弹窗识别”。
+  - 后续步骤绑定最需要可视化表达的是“值从哪里来”，而不是“这一步技术上怎么执行”。
+  - 对后台管理场景，运行中暂停/继续的重点不是复杂控制台，而是让用户明确：当前卡在哪一步、为什么停下、补完后会从哪里继续。
+- 留痕产物：
+  - `.codex/context-summary-studio-parameterized-editing-ux.md`
+- 本轮未执行：
+  - 未修改业务代码
+  - 未运行构建、测试或桌面端 smoke
+  - 未更新产品正式 spec 文档
+
+## 2026-06-10 vNext 后台管理类网站方向反方评估
+
+- 时间：2026-06-10 23:38:19 CST
+- 任务目标：按用户要求，以“反方 / 挑战者”视角评估 FlowWeave 下一大版本的后台管理类网站方向，重点挑错、收边界、识别伪需求，不进入实现。
+- 生命周期判断：
+  - 当前项目主线仍为 `PROJECT_ROUTE_LOCK.md` 中的 `P2 收口 / v1 先跑通版维护`。
+  - 本轮任务属于 `S9 后续版本 / 变更管理` 与 `S1 产品定义` 讨论，不属于当前主线功能开发。
+- 最小可验收闭环：
+  - 基于项目真源与用户已确认前提，输出一份可用于团队讨论的反方产品评估。
+- 明确非目标：
+  - 不修改当前版本范围。
+  - 不解冻 `P3` / `P4`。
+  - 不输出技术方案、数据结构、节点设计或开发计划。
+- 读取与核对：
+  - `AGENTS.md`
+  - `PROJECT_ROUTE_LOCK.md`
+  - `.codex/operations-log.md`
+  - `.codex/verification-report.md`
+  - `docs/architecture/overview.md`
+  - `docs/domain/flow-dsl.md`
+  - `docs/superpowers/specs/2026-05-25-web-automation-platform-design.md`
+  - `docs/superpowers/specs/2026-06-06-real-page-stability-design.md`
+  - `docs/superpowers/plans/2026-05-26-run-first-roadmap.md`
+  - `.codex/context-summary-vnext-backoffice-interactive-template-direction.md`
+- 关键结论：
+  - 团队最容易做错的三条路是：把产品做成通用编排器、过早做协作 / 模板分发平台、以及被单一行业样例反向定义产品。
+  - 第一版不应做无限变量引擎、条件分支 / 循环 / 子流程、批量导入执行、自动抽象变量、条件触发弹窗、页面理解式万能选择等“听起来合理”的扩张项。
+  - 建议把 vNext 第一版收敛为“面向后台管理网站的交互式任务模板”产品，而不是步骤编辑器或行业专用脚本器。
+  - 产品核心单位建议站队“任务模板”，步骤、变量、弹窗节点都只是模板内部部件。
+- 产出：
+  - 新增 `.codex/context-summary-vnext-backoffice-counter-evaluation.md`
+  - 向用户输出反方产品评估结论
+- 状态：已结束
+
+## 2026-06-10 vNext 后台模板化需求并行讨论
+
+- 时间：2026-06-10 21:42:00 CST
+- 任务目标：按用户要求，不立即开发；先围绕下一大版本需求做产品层讨论，并分派 4 个 agent 从产品、反方产品、用户体验、架构可行性四个视角并行形成阶段性结论。
+- 当前讨论边界：
+  - 当前版本不动。
+  - 下一大版本先聚焦后台管理类网站。
+  - 酒店创建流程只是样例，不作为产品定义本身。
+  - 用户期待的目标流程为：
+    1. 先手动录制真实流程
+    2. 在 Studio 中编辑录制流程
+    3. 显式加入弹窗节点以收集运行时输入
+    4. 后续步骤绑定前述变量
+    5. 运行时按流程走到弹窗节点再输入并继续
+  - 弹窗节点是流程显式节点，可一次性收集整组信息，也可按流程分段收集。
+  - 下一大版本第一版不优先做大量高级复合节点，而优先围绕原始录制步骤 + 变量绑定建模。
+  - 后台场景中“搜索后选择实体”比“直接点列表”更高频。
+- 本轮技能与流程：
+  - `brainstorming`：用于在实现前先定义产品与范围。
+  - `dispatching-parallel-agents`：用于并行拉起 4 个独立角色讨论。
+- 本轮主工作区本地核对：
+  - 已读取 `PROJECT_ROUTE_LOCK.md`、`docs/superpowers/plans/2026-05-26-run-first-roadmap.md`
+  - 已核对当前代码中已有的变量与执行链能力：
+    - `packages/flow-dsl/src/schema.ts`
+    - `apps/studio/src/shared/run-input-state.ts`
+    - `apps/studio/src/shared/studio-api-types.ts`
+    - `packages/runtime/src/playwright-runner.ts`
+    - `packages/shared/src/template-variables.ts`
+- 已派发 agent：
+  - 产品经理 A：总体产品方向与版本主张
+  - 产品经理 B：反方评估、边界收窄与伪需求识别
+  - UX agent：Studio 编辑态 / 运行态体验定义
+  - 架构师 agent：基于现有代码结构评估可行性与第一版收边界建议
+- 预期输出：
+  - 先形成阶段性共识
+  - 若仍存在无法协调的高影响决策，再回收给用户拍板
+
+## 2026-06-10 vNext 后台任务模板设计定稿
+
+- 时间：2026-06-10 23:58:00 CST
+- 任务目标：将本轮产品讨论结论正式落盘为 vNext 设计稿，并在不进入实现的前提下完成 spec 自审与提交前留痕。
+- 新增文档：
+  - `docs/superpowers/specs/2026-06-10-backoffice-interactive-task-template-design.md`
+- 设计定稿结论：
+  - 下一大版本定义为“后台管理类网站的交互式任务模板工作台”
+  - 第一版边界锁定为：
+    - Studio-only
+    - 线性流程
+    - 显式输入节点
+    - 原始录制步骤行内变量绑定
+    - 聚焦表单填写、筛选查询、搜索后选择实体
+- 本轮显式不推进：
+  - 条件分支、循环、批量数据执行
+  - 多人协作、模板分发、审批权限
+  - 自动抽变量、AI 改流程、开放式高级 DSL
+- Spec 自审结果：
+  - 已检查是否仍被“酒店场景”绑死，结论：未绑死，已提升到后台管理类任务结构
+  - 已检查是否与当前路线锁冲突，结论：无冲突；该文档明确属于下一大版本设计，不插入当前 P2 主线
+  - 已检查是否存在未定义核心单位，结论：已统一为“任务模板 / 输入节点 / 变量绑定 / 执行实例”
+  - 已检查是否遗漏第一版非目标，结论：已明确列出
+
+## 2026-06-10 vNext 后台交互式流程模板方向收敛
+
+- 时间：2026-06-10 22:14:00 CST
+- 任务目标：基于用户已确认的 10 条前提，收敛“产品经理 A”视角的下一大版本总体方向主张。
+- 路线与生命周期判断：
+  - 当前项目主线仍是 `P2 收口 / v1 先跑通版维护`，不变。
+  - 本轮属于 `S9 后续版本 / 变更管理` 下的产品定义讨论，不进入实现。
+- 本轮新增读取与参考：
+  - `docs/domain/flow-dsl.md`
+  - `docs/superpowers/specs/2026-06-07-real-page-target-disambiguation-design.md`
+  - `docs/superpowers/plans/2026-06-07-real-page-stability-wave9-async-suggest-plan.md`
+  - `/Users/ling/.codex/project-lifecycle-protocol.md`
+  - `/Users/ling/.codex/project-codex-traceability.md`
+- 关键收敛结论：
+  - vNext 不应被定义为“更强录制器”，而应被定义为“面向后台管理网站的交互式流程模板工作台”。
+  - 产品升级的核心不是继续增加录制步骤覆盖面，而是把录制产物转成可编辑、可参数化、可在运行时分段收集输入的模板资产。
+  - 第一版变量能力不能只服务于 fill，还必须覆盖后台高频的“搜索并选择实体”任务。
+  - 为控制范围，第一版仍以“原始录制步骤 + 显式弹窗节点 + 有限变量绑定”为主，不先走万能变量引擎，也不先抽象大量高级节点。
+  - 当前主用户依然定义为“录制者自己反复执行”，但模板结构要预留“录制者创建、同事执行”的未来迁移空间。
+- 本轮产出落盘：
+  - `.codex/context-summary-vnext-backoffice-interactive-template-direction.md`
+- 阶段结论：
+  - 已形成可直接用于团队讨论的一句话产品定义、目标用户边界、MVP、非目标、方向论证与风险点。
+- 结束状态：
+  - 已完成；等待向用户输出结论。
+
+## 2026-06-10 vNext 角色观点对齐收口
+
+- 时间：2026-06-10 22:24:00 CST
+- 任务目标：将反方 PM 与 UX 的中间观点并入最终产品方向，明确哪些观点对齐、哪些需要修正。
+- 新增输入观点：
+  - 反方 PM：第一版必须定义成“任务模板”，而不是通用编排器；不做条件分支、循环、批量执行、多人协作、自动抽变量、AI 改流程。
+  - UX：界面里不叫“弹窗节点”，更接近“运行时提问节点 / 输入节点”；Studio 第一版应是步骤中心 + 显式输入节点 + 行内绑定；需要清楚表达“搜索步骤绑定搜索词，选择步骤未必自动参数化”。
+- 收口判断：
+  - 对反方 PM：总体对齐。
+    - 补充修正：对外产品叙事可叫“交互式任务模板”，内部承载仍是流程模板；用户买的是任务完成，不是编排能力。
+  - 对 UX：总体对齐，且建议采用其命名收敛。
+    - 对外文案优先“输入节点”或“运行时提问节点”，少用“弹窗节点”这种实现感更强的称呼。
+    - 搜索与选择必须拆开表达：第一版至少明确“搜索词可参数化”，而“从结果中选中哪一个对象”只覆盖有限的高频模式，不承诺自动泛化所有选择行为。
+- 影响到最终口径的补充：
+  - 下一大版本第一版产品定义要更明确地站在“任务模板”而非“流程编排器”一侧。
+  - UI 概念层命名与产品文案层命名分离：产品讲“输入节点 / 运行时提问”，内部实现再落到具体弹窗机制。
+- 结束状态：
+  - 已完成；纳入最终回复口径。
+
 ## 2026-06-10 重新提交并推送前收口
 
 - 时间：2026-06-10 21:29:31 CST
