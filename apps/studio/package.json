@@ -6,8 +6,9 @@
   "main": "dist-electron/main.mjs",
   "scripts": {
     "ensure:electron-dist": "node ./scripts/ensure-electron-dist.mjs",
+    "ensure:electron-native-binding": "node ./scripts/ensure-electron-native-binding.mjs",
     "postinstall": "node ./scripts/ensure-electron-dist.mjs",
-    "build:electron": "node ./scripts/build-electron.mjs",
+    "build:electron": "node ./scripts/build-electron.mjs && node ./scripts/ensure-electron-native-binding.mjs",
     "build": "node ./scripts/ensure-electron-dist.mjs && pnpm build:electron && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.electron.json",
     "lint": "eslint src electron",

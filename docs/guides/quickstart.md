@@ -2,9 +2,9 @@
 
 本指南帮助你在 **30 分钟内** 跑通 FlowWeave 主链路：验证工程 → 录制 → 同步知识库 → Studio 回放 → Web 查看。
 
-**要求**：Node.js **20**（默认稳定基线，见仓库根目录 `.nvmrc`）或 **24**、pnpm、macOS / Linux / Windows。
+**要求**：Node.js **24**（默认稳定基线，见仓库根目录 `.nvmrc`）或 **20**（兼容）、pnpm、macOS / Linux / Windows。
 
-**验证口径**：GitHub Actions 会同时覆盖 `Node 20 / 24`；本地开发、排障和交付前自验默认仍以 Node 20 为准。
+**验证口径**：GitHub Actions 会同时覆盖 `Node 20 / 24`；本地开发、排障和交付前自验默认以 Node 24 为准。
 
 ---
 

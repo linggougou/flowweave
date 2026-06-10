@@ -1,5 +1,41 @@
 # FlowWeave 操作日志
 
+## 2026-06-10 提交前验证与收口提交
+
+- 时间：2026-06-10 18:05:46 CST
+- 任务目标：按用户“代码需要提交一下”的要求，对当前主线未提交改动做提交前核验、补齐留痕，并生成一次干净提交。
+- 路线与边界：
+  - 当前仍遵循项目根 `PROJECT_ROUTE_LOCK.md` 的 P2 稳定化收口主线。
+  - 不扩展到 P3 / P4 冻结范围，不改路线、不改门禁，只收口既有改动并提交。
+- 技能与运行时：
+  - `using-superpowers`：会话起始检查技能适配。
+  - `verification-before-completion`：提交前必须先拿到新鲜验证证据。
+- 本轮确认的提交内容：
+  - 将仓库默认开发基线切到 `.nvmrc` 的 Node 24，并同步 README、架构与 quickstart / manual QA / web-console 等入口文档口径。
+  - 新增物理 `PROJECT_ROUTE_LOCK.md`，把当前主线、DoD、冻结边界与验收门禁显式落盘。
+  - `packages/runtime` 改为在 headed 模式下使用带禁翻译 / 关密码管理的临时持久化 profile，并补相应测试。
+  - `packages/project-knowledge` 支持显式传入 `better-sqlite3` `nativeBinding`。
+  - `apps/studio` 为 Electron 进程补单窗口聚焦逻辑、better-sqlite3 Electron 原生 binding 注入与构建期校验脚本。
+  - 文档与 `.codex` 证据统一到 recorded replay `25 = 23 fixture + 2 runtime-generated` 与 Node 24 默认基线。
+- 本轮显式不纳入提交的本地产物：
+  - `.idea/`
+  - `apps/studio/output/`
+  - 根目录 `output/`
+- 验证过程中发现并修复的问题：
+  - `pnpm lint` 首次失败，原因是 `packages/runtime/src/playwright-runner.ts` 中解构出的 `context` 未再使用。
+  - 已做最小修复：移除未使用解构变量后重新验证。
+- 提交前完成的本地验证：
+  - `source "$HOME/.nvm/nvm.sh" && nvm use && pnpm lint`
+    - 结果：通过
+  - `source "$HOME/.nvm/nvm.sh" && nvm use && pnpm smoke`
+    - 结果：通过；包含 `doctor + typecheck + test + build + e2e:login`
+  - `source "$HOME/.nvm/nvm.sh" && nvm use && pnpm e2e:recorded-pages`
+    - 结果：通过，`25 / 25`
+  - `source "$HOME/.nvm/nvm.sh" && nvm use && pnpm --filter @flowweave/app-studio build`
+    - 结果：通过
+  - `codesign --verify --deep --strict node_modules/.pnpm/electron@33.4.11/node_modules/electron/dist/Electron.app`
+    - 结果：通过
+
 ## 2026-06-09 残余缺口计划纠偏与并行编排重建
 
 - 时间：2026-06-09 21:30:00 CST
@@ -5915,3 +5951,291 @@
 - 当前状态：
   - 桌面应用已通过项目真实依赖目录正常运行。
   - 当前 Electron 会话保持打开，便于用户直接查看。
+
+## 2026-06-09 项目入口文档补齐
+
+- 时间：2026-06-09 09:31:23 CST
+- 任务目标：补齐当前项目的入口真源文档，确保路线锁、架构说明与主路线计划对齐 2026-06-09 的稳定基线状态。
+- 路线与边界：
+  - 本轮仅补项目文档，不改业务代码、测试逻辑、构建链和未跟踪产物目录。
+  - 继续以 `docs/superpowers/plans/2026-05-26-run-first-roadmap.md` 作为当前主线事实来源，并将其同步为项目根物理 `PROJECT_ROUTE_LOCK.md`。
+  - P3 深度能力与 P4 AI 继续冻结，不借本次文档任务扩展新需求。
+- 当前已确认缺口：
+  - 项目根缺少物理 `PROJECT_ROUTE_LOCK.md`，与全局/项目规范要求不完全一致。
+  - `docs/architecture/overview.md` 仍停留在 2026-05-25 版本说明，未显式声明当前稳定基线和冻结边界。
+  - `docs/superpowers/plans/2026-05-26-run-first-roadmap.md` 尚未在顶部直接同步 2026-06-09 residual gaps 收口完成状态。
+- 计划改动范围：
+  - 新建 `PROJECT_ROUTE_LOCK.md`
+  - 更新 `README.md`
+  - 更新 `docs/architecture/overview.md`
+  - 更新 `docs/superpowers/plans/2026-05-26-run-first-roadmap.md`
+- 预期验证：
+  - `git diff --check`
+  - `rg "PROJECT_ROUTE_LOCK|residual gaps|Node 20"` 做入口文档口径复核
+  - 使用 Node 20 执行至少一条相关验证命令，确认文档提到的稳定基线仍可自验
+- 实际改动结果：
+  - 已新建项目根 `PROJECT_ROUTE_LOCK.md`
+  - `README.md` 已新增路线锁入口与 2026-06-09 当前状态说明
+  - `docs/architecture/overview.md` 已更新版本时间，并补上当前稳定基线 / 冻结边界
+  - `docs/superpowers/plans/2026-05-26-run-first-roadmap.md` 已补 2026-06-09 收口更新与当前主线结论
+- 验证结果：
+  - `git diff --check`
+    - 结果：通过
+  - `rg -n "PROJECT_ROUTE_LOCK|当前状态（2026-06-09）|当前稳定基线（2026-06-09）|2026-06-09 更新|25 = 23 fixture \\+ 2 runtime-generated|Node 20 / 24" README.md PROJECT_ROUTE_LOCK.md docs/architecture/overview.md docs/superpowers/plans/2026-05-26-run-first-roadmap.md`
+    - 结果：通过，关键入口文档均已命中新口径
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+    - 结果：通过
+- 当前工作区状态：
+  - 本轮源码 / 文档改动均未提交
+  - 用户已有未跟踪目录 `.idea/`、`apps/studio/output/`、`output/` 继续保持不动
+
+## 2026-06-09 Node 基线口径澄清
+
+- 时间：2026-06-09 19:42:27 CST
+- 任务目标：澄清当前仓库是否“必须 Node 20”，以及为什么近期开发 / 验收口径频繁使用 Node 20。
+- 结论：
+  - 当前仓库不是“只能 Node 20”。
+  - `package.json` 的 `engines.node` 为 `>=20`。
+  - `.github/workflows/ci.yml` 当前真实矩阵为 `Node 20 / 24`。
+  - 本地默认稳定基线仍是 `.nvmrc` 指向的 Node 20。
+- 原因说明：
+  - 仓库包含 `better-sqlite3` 与 Electron / SQLite 原生模块链路，切换 Node 主版本后会遇到 ABI 产物残留。
+  - 2026-06-06 的兼容性验收已确认：Node 24 可运行，但本地从 Node 24 切回 Node 20 时，普通 `pnpm install` 不足以恢复原生模块，必须执行 `pnpm install --force`。
+  - 因此近期所有主线排障和统一验收继续固定 Node 20，只是为了降低环境噪声，不代表 Node 24 不再受支持。
+- 证据来源：
+  - `package.json`
+  - `.nvmrc`
+  - `.github/workflows/ci.yml`
+  - `docs/guides/quickstart.md`
+  - `.codex/verification-report.md` 中 `better-sqlite3 Node 24 兼容落地验收` 与 `Node 24 CI 双基线验收`
+
+## 2026-06-09 默认开发基线切换到 Node 24
+
+- 时间：2026-06-09 19:42:27 CST
+- 任务目标：在用户明确确认后，把仓库默认开发基线从 Node 20 切换到 Node 24，同时保留 Node 20 兼容口径。
+- 路线与边界：
+  - 这属于默认环境基线与门禁口径调整，已获得用户确认后实施。
+  - 本轮不重写构建链、不移除 Node 20 兼容，也不大规模改写历史 wave 文档。
+  - 重点只覆盖当前真源入口、活跃指南和默认环境文件。
+- 计划修改范围：
+  - `.nvmrc`
+  - `PROJECT_ROUTE_LOCK.md`
+  - `README.md`
+  - `docs/architecture/overview.md`
+  - `docs/superpowers/plans/2026-05-26-run-first-roadmap.md`
+  - `docs/guides/quickstart.md`
+  - `docs/guides/manual-qa.md`
+  - `docs/guides/p1-e2e.md`
+  - `docs/guides/web-console.md`
+  - `scripts/doctor.mjs`（若需要同步默认提示）
+- 预期验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm install --force`
+  - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm smoke`
+  - 必要时补充 `@flowweave/app-studio` 定向验证
+- 实际改动结果：
+  - `.nvmrc` 已从 `20` 切到 `24`
+  - `PROJECT_ROUTE_LOCK.md` 已将默认稳定基线改为 Node 24，并保留 Node 20 / 24 双基线说明
+  - `README.md`、`docs/architecture/overview.md`、`docs/superpowers/plans/2026-05-26-run-first-roadmap.md`
+    已同步“Node 24 默认、Node 20 兼容”口径
+  - 活跃开发指南 `quickstart.md`、`manual-qa.md`、`p1-e2e.md`、`web-console.md`
+    已从 Node 20 默认改为 Node 24 默认
+- Node 24 验证结果：
+  - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm install --force`
+    - 结果：通过
+    - 期间 `apps/studio` 的 `postinstall` 自动修复 Electron Framework symlink，并完成 bundle 重签名与严格签名校验
+  - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm smoke`
+    - 结果：通过
+    - `doctor --smoke` 识别 `Node.js v24.14.0`
+    - `better-sqlite3` 原生模块检查通过
+    - `typecheck / test / build / e2e:login` 全部通过
+    - `e2e:login`
+      - 项目 ID：`4a1594dc-ec7f-46e1-8890-de0c7a819c60`
+      - 执行 ID：`e5d06e6c-debb-4b47-b77a-772032bdc146`
+  - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm e2e:recorded-pages`
+    - 结果：通过，`25 / 25`
+- 当前说明：
+  - 本轮把默认开发基线切到了 Node 24，但没有移除 Node 20 支持。
+  - 历史 wave 编排 / 归档文档里仍保留大量 Node 20 验收记录，本轮未做大规模归档文档改写。
+
+## 2026-06-09 本机运行当前版本
+
+- 时间：2026-06-09 20:07:46 CST
+- 任务目标：在当前电脑上直接运行 Studio 当前版本，确认构建与 GUI 启动状态。
+- 路线与边界：
+  - 不新增功能，不改业务逻辑。
+  - 继续沿用当前 Node 24 默认基线。
+  - 仅验证桌面应用启动链路与窗口状态。
+- 计划命令：
+  - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/app-studio build`
+  - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/app-studio exec electron .`
+  - 使用 `osascript` / `System Events` 确认窗口状态
+
+- 实际执行补充：
+  - 在 Node 24 下，`@flowweave/app-studio build` 首次已通过，但直接启动 GUI 时暴露出两个真实运行时问题：
+    - `better-sqlite3` 被 Node 24 安装出的 native binary 与 Electron 33 ABI 不匹配。
+    - Electron 主窗口未被模块级引用持有，macOS 下会出现“进程仍在，但窗口数为 0”。
+  - 为避免 Node 24 CLI 与 Electron 33 共用同一份 native binary：
+    - `packages/project-knowledge` 为数据库打开链路新增 `nativeBinding` 透传。
+    - `apps/studio/electron/services.ts` 改为显式注入 `apps/studio/dist-electron/native/better_sqlite3.node`。
+    - 新增 `apps/studio/scripts/ensure-electron-native-binding.mjs`，在 Electron 运行时环境下单独准备并校验专用 binding。
+  - 为修复窗口丢失：
+    - `apps/studio/electron/main.ts` 增加模块级 `mainWindow` 持有与复用逻辑。
+  - 已补齐对应回归测试：
+    - `packages/project-knowledge/src/db/client.test.ts`
+    - `apps/studio/electron/services.test.ts`
+    - `apps/studio/electron/main.test.ts`
+
+- 最新验证结果：2026-06-09 20:28:40 CST
+  - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/project-knowledge test -- src/db/client.test.ts`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/app-studio test -- electron/services.test.ts`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/app-studio test`
+    - 结果：通过，`74/74`
+  - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/app-studio build`
+    - 结果：通过
+    - `ensure-electron-native-binding` 已输出 Electron 专用 `better-sqlite3` binding 就绪
+  - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm smoke`
+    - 结果：通过
+    - `smoke:prepare / typecheck / test / build / e2e:login` 全部通过
+    - `e2e:login`
+      - 项目 ID：`e6ea88fd-5bd8-45ca-9553-6a6c8e573674`
+      - 执行目录：`/Users/ling/.flowweave/projects/e6ea88fd-5bd8-45ca-9553-6a6c8e573674/runs/134fe4fc-8f4a-462b-98ac-3b6a421a2b32`
+  - GUI 当前状态：
+    - 启动命令：`PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/app-studio exec electron .`
+    - `osascript` 结果：`true, true, 1, 织流 Studio`
+    - 当前截图：`/tmp/flowweave-studio-node24-fixed.png`
+
+- 当前结论：
+  - 当前版本已能在本机 Node 24 默认环境下完成构建、通过 smoke，并成功打开可见的 Studio GUI 窗口。
+  - 这轮不是“只跑起来”，而是顺手修掉了 Node 24 + Electron 33 下会阻塞真实使用的 ABI 与窗口持有问题。
+
+## 2026-06-09 运行流程时浏览器窗口抖动排查
+
+- 时间：2026-06-09 20:58:02 CST
+- 任务目标：修复用户在执行 `flow-6cfdd436-5b73-45ab-9388-43609c16c2ee` 时看到的“浏览器来回大小切换”问题。
+- 路线与边界：
+  - 不改 Flow 内容，不改 Studio 交互，只收口运行时 headed 浏览器的干扰 UI。
+  - 优先确认是不是 Playwright / runtime 真的反复 resize 主窗口，避免误修。
+- 根因调查：
+  - 已从本地知识库定位到目标 Flow：
+    - 项目：`117b8652-45d3-4ade-97b9-3907ae5c611f`
+    - Flow：`flow-6cfdd436-5b73-45ab-9388-43609c16c2ee`
+  - 对该 Flow 做 headed 复现并持续轮询 `Google Chrome for Testing` 的窗口列表后，确认主窗口标题始终是 `酒店系统 - Google Chrome for Testing`，主窗口并未反复变更尺寸。
+  - 真正来回出现的是浏览器自带小窗：
+    - 第一类：`翻译此页？`
+    - 第二类：`要保存密码吗？` / `更改您的密码`
+  - 因此用户感知到的“大小切换”本质上不是 runtime 每步 resize，而是 Chrome for Testing 的翻译 / 密码管理浮层在真实站点登录过程中反复弹出。
+- 实施方案：
+  - `packages/runtime/src/playwright-runner.ts`
+    - 新增 headed 专用临时 profile 初始化。
+    - headed 模式改为 `launchPersistentContext(...)`，不再直接复用无偏好的临时上下文。
+    - 预写入 `Default/Preferences`，显式关闭：
+      - `translate.enabled`
+      - `credentials_enable_service`
+      - `profile.password_manager_enabled`
+      - `profile.password_manager_leak_detection`
+    - 保留 headless 路径现有 `chromium.launch(...)` 逻辑，减少影响面。
+  - 新增回归测试：
+    - `packages/runtime/src/playwright-launch-options.test.ts`
+      - headed 模式必须走临时 profile
+      - profile 偏好里必须写入禁用翻译与密码管理提示
+      - headless 模式继续走普通 launch
+- 本轮验证：
+  - 红灯：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- src/playwright-launch-options.test.ts`
+    - 结果：失败，证明 headed 运行链路原先没有 profile 偏好保护
+  - 绿灯：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- src/playwright-launch-options.test.ts`
+      - 结果：通过
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test`
+      - 结果：通过，`45/45`
+  - 真实 Flow headed 复验：
+    - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm exec tsx --eval "... executeFlow(flow-6cfdd436, { headless: false }) ..."`
+      - 结果：通过
+      - `executionId`：`32a113b2-572b-4c6f-8e19-0abf756b8f90`
+      - 轮询 `Google Chrome for Testing` 窗口列表时，仅看到主窗口 `酒店系统 - Google Chrome for Testing`
+      - 未再出现 `翻译此页？`、`要保存密码吗？`、`更改您的密码`
+- 当前结论：
+  - 用户反馈的“浏览器会来回大小切换”已经被准确定位为浏览器内建浮层干扰。
+  - 当前修复已把翻译与密码管理提示从 headed 执行链路中移除，真实登录 Flow 复验通过。
+
+## 2026-06-09 重新启动 Studio 查看当前状态
+
+- 时间：2026-06-09 22:45:00 CST
+- 任务目标：按当前主线代码重新启动项目，向用户展示这版桌面应用的实际运行状态。
+- 执行步骤：
+  - 先关闭旧的 `Electron` 实例，确认不是复用旧窗口。
+  - 使用 Node 24 重新构建 `@flowweave/app-studio`。
+  - 重新启动 `pnpm --filter @flowweave/app-studio exec electron .`。
+  - 用 `System Events` 校验窗口状态，并抓取桌面截图。
+- 本轮结果：
+  - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/app-studio build`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/app-studio exec electron .`
+    - 结果：成功启动
+  - `osascript`
+    - 结果：`true, true, 1, 织流 Studio`
+  - 当前截图：
+    - `/tmp/flowweave-studio-rerun-20260609.png`
+- 当前界面状态：
+  - Studio 已前台可见。
+  - 左侧项目列表正常显示。
+  - 当前选中 Flow 为 `flow-6cfdd436-5b73-45ab-9388-43609c16c2ee`，界面显示 `17` 步。
+  - 运行参数面板与 fragility / warning 区域已渲染。
+
+## 2026-06-10 再次重新运行 Studio
+
+- 时间：2026-06-10 00:17:00 CST
+- 任务目标：按用户要求重新运行当前项目，确认 6 月 10 日这次新实例启动状态。
+- 执行步骤：
+  - 关闭当前 `Electron` 实例。
+  - 使用 `Node 24` 重新构建 `@flowweave/app-studio`。
+  - 重新执行 `pnpm --filter @flowweave/app-studio exec electron .`。
+  - 校验窗口状态并抓取新的桌面截图。
+- 本轮结果：
+  - 旧实例退出确认：
+    - `System Events` 已无法获取 `process "Electron"`
+  - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/app-studio build`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/app-studio exec electron .`
+    - 结果：成功启动
+  - `osascript`
+    - 结果：`true, true, 1, 织流 Studio`
+  - 当前截图：
+    - `/tmp/flowweave-studio-rerun-20260610.png`
+- 当前界面状态：
+  - Studio 已前台可见。
+  - 当前仍停留在 `flow-6cfdd436-5b73-45ab-9388-43609c16c2ee` 的运行面板。
+  - Flow 显示 `17` 步，警告区与执行环境面板可见。
+
+## 2026-06-10 录屏复核：`录屏2026-06-10 00.20.31.mov`
+
+- 时间：2026-06-10 00:28:00 CST
+- 任务目标：复核用户提供的录屏，判断界面异常发生在哪个阶段，以及更像 DOM 问题还是浏览器渲染 / 窗口问题。
+- 输入文件：
+  - `/Users/ling/Desktop/录屏2026-06-10 00.20.31.mov`
+- 基础信息：
+  - 时长：`7.57s`
+  - 分辨率：`2788 x 1824`
+- 取证方式：
+  - 使用 `mdls` 读取时长与像素尺寸。
+  - 使用 `AVFoundation + AVAssetImageGenerator` 抽取关键帧，不依赖本机未安装的 `ffmpeg`。
+  - 产物：
+    - 总览图：`/tmp/flowweave-avframes/contact-sheet.png`
+    - 细粒度过渡图：`/tmp/flowweave-avframes-near/contact-near.png`
+- 观察结论：
+  - `0.5s ~ 1.5s`
+    - 登录页正常显示，用户名 / 密码已填。
+  - `2.5s`
+    - 已进入酒店列表，并出现“是否继续切换到创维酒店2025”的确认弹窗。
+    - 此时浏览器仍是正常页面，不是白屏或布局错乱。
+  - `2.6s ~ 3.2s`
+    - 确认弹窗持续可见，页面内容仍正常。
+  - `3.4s` 起直到结尾
+    - 整个浏览器内容区域突变为黑屏，只剩鼠标光标。
+    - 黑屏一直持续到录屏结束，没有恢复成页面内容。
+- 当前判断：
+  - 这段录屏里的核心异常不是“DOM 文字堆叠”或“左侧不能滚动”，而是更底层的浏览器可视内容在某一步后整体黑掉。
+  - 黑屏发生点非常接近“切换酒店确认弹窗的确认动作”之后。
+  - 从关键帧看，更像 headed Chromium / 渲染 surface / GPU 相关问题，或者页面切换后浏览器窗口内容没有继续正确绘制，而不是单纯某个 DOM 片段布局错乱。

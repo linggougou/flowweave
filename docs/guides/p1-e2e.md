@@ -4,7 +4,7 @@
 
 ```bash
 corepack enable
-export PATH="$HOME/.nvm/versions/node/v20.19.6/bin:$PATH"  # 与 .nvmrc 一致
+nvm use  # 读取仓库 .nvmrc，默认 Node 24
 pnpm install
 pnpm exec playwright install chromium
 pnpm e2e:login

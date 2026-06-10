@@ -1,6 +1,6 @@
 # FlowWeave 架构总览
 
-> 版本：0.1.0 · 更新：2026-05-25
+> 版本：0.1.1 · 更新：2026-06-09
 
 ## 1. 产品与技术目标
 
@@ -10,6 +10,18 @@
 2. 以 Playwright 为执行内核，在上层实现定位策略、重试、诊断与自愈。
 3. 以 Project 为聚合根，统一存储页面知识、接口知识、流程与执行记录。
 4. 三端（扩展 / 桌面 / Web）共享同一套领域包，避免重复实现引擎。
+
+## 1.1 当前稳定基线（2026-06-09）
+
+- 当前路线锁：[`PROJECT_ROUTE_LOCK.md`](../../PROJECT_ROUTE_LOCK.md)
+- 当前执行主线：[`docs/superpowers/plans/2026-05-26-run-first-roadmap.md`](../superpowers/plans/2026-05-26-run-first-roadmap.md)
+- 当前稳定口径：
+  - 本地自验默认以 Node 24 为准，GitHub Actions 兼容覆盖 Node 20 / 24
+  - recorded replay 基线为 `25 = 23 fixture + 2 runtime-generated`
+  - Studio 已补齐布局 contract、歧义候选诊断与 Electron bundle integrity 收口
+- 当前冻结边界：
+  - P3 仅保留现有基础能力，不继续扩展深度 page / network intelligence
+  - P4 `ai-orchestrator` 保留包骨架，不接入 Studio / 扩展 / Web
 
 ## 2. 逻辑架构
 
@@ -142,16 +154,18 @@ sequenceDiagram
 
 ## 7. 分阶段交付
 
-| 阶段 | 目标 | 关键包 |
-|------|------|--------|
-| P0 | 工程基座、规范、CI | shared、工具链 |
-| P1 | 录制 + 回放闭环 | recorder、flow-dsl、runtime、extension、studio |
-| P2 | 知识库 + 调试回放 | project-knowledge |
-| P3 | 页面 / 接口理解 | page-intelligence、network-intelligence |
-| P4 | AI 编排与体检 | ai-orchestrator |
+| 阶段 | 目标 | 关键包 | 当前状态 |
+|------|------|--------|----------|
+| P0 | 工程基座、规范、CI | shared、工具链 | ✅ 已完成 |
+| P1 | 录制 + 回放闭环 | recorder、flow-dsl、runtime、extension、studio | ✅ 已完成 |
+| P2 | 知识库 + 调试回放 + 真实页面稳定性 | project-knowledge、runtime、studio | ✅ 当前稳定主线 |
+| P3 | 页面 / 接口理解 | page-intelligence、network-intelligence | ⏸ 冻结扩展 |
+| P4 | AI 编排与体检 | ai-orchestrator | ⏸ 冻结 |
 
 ## 8. 相关文档
 
+- [项目路线锁](../../PROJECT_ROUTE_LOCK.md)
+- [先跑通开发计划](../superpowers/plans/2026-05-26-run-first-roadmap.md)
 - [Flow DSL 规范](../domain/flow-dsl.md)
 - [ADR 索引](../adr/README.md)
 - [产品设计](../superpowers/specs/2026-05-25-web-automation-platform-design.md)

@@ -1,5 +1,58 @@
 # 验证报告
 
+## 2026-06-10 提交前主线复验
+
+### 验证范围
+
+- 当前未提交主线改动在 Node 24 默认基线下是否满足提交前最小可信门禁。
+- runtime headed 浏览器 profile、project-knowledge Electron native binding、Studio Electron 构建链是否保持可用。
+- recorded replay 基线、登录闭环与 Electron 严格签名校验是否继续通过。
+
+### 验证结果
+
+1. `pnpm lint` 通过。
+   - 命令：
+     - `source "$HOME/.nvm/nvm.sh" && nvm use && pnpm lint`
+   - 结果：
+     - 首次执行暴露 `packages/runtime/src/playwright-runner.ts` 未使用变量 `context`。
+     - 移除未使用解构变量后复跑通过。
+2. `pnpm smoke` 通过。
+   - 命令：
+     - `source "$HOME/.nvm/nvm.sh" && nvm use && pnpm smoke`
+   - 结果：
+     - `doctor` 通过：Node 24、`better-sqlite3`、Playwright Chromium 正常。
+     - `typecheck`、`test`、`build` 全部通过。
+     - `e2e:login` 通过：`flow_e2e_login` 执行成功，`4/4` 步骤成功。
+3. recorded replay 基线通过。
+   - 命令：
+     - `source "$HOME/.nvm/nvm.sh" && nvm use && pnpm e2e:recorded-pages`
+   - 结果：
+     - baseline 总数 `25`
+     - 成功 / 失败：`25 / 0`
+     - 口径保持 `23` 个真实 fixture + `2` 个 runtime-generated case
+4. `@flowweave/app-studio` 显式构建通过。
+   - 命令：
+     - `source "$HOME/.nvm/nvm.sh" && nvm use && pnpm --filter @flowweave/app-studio build`
+   - 结果：
+     - `ensure-electron-dist` 通过
+     - `ensure-electron-native-binding` 报告 “Electron 专用 better-sqlite3 native binding 已就绪”
+     - Vite 生产构建通过
+5. Electron 严格签名校验通过。
+   - 命令：
+     - `codesign --verify --deep --strict node_modules/.pnpm/electron@33.4.11/node_modules/electron/dist/Electron.app`
+   - 结果：
+     - 退出码 `0`
+
+### Findings
+
+1. 这批改动在 Node 24 默认口径下已完成一次新鲜、完整的提交前复验。
+2. runtime 的 headed 启动路径、Studio 的 Electron native binding、project-knowledge 的 `nativeBinding` 透传都没有破坏主线验证链。
+3. 本轮没有把 `.idea/`、`apps/studio/output/`、根目录 `output/` 这类本地产物纳入提交范围。
+
+### 综合结论
+
+- 建议：通过；可以在当前分支生成提交
+
 ## 2026-06-09 残余缺口已合并轨道复验
 
 ### 验证范围
@@ -3658,6 +3711,293 @@
 - 架构一致评分：95
 - 风险评估评分：92
 - 综合评分：95
+
+### 建议
+
+- 通过
+
+## 2026-06-10 Studio 再次重启状态
+
+### 验证范围
+
+- 6 月 10 日当前工作区下，Studio 是否能再次完成“关闭旧实例 → 重建 → 启动新实例”的闭环。
+- 当前可见窗口是否为新拉起的前台实例。
+- UI 是否仍正确渲染到用户关注的 Flow 面板。
+
+### 验证结果
+
+1. 旧实例已被清理。
+   - `osascript -e 'tell application "Electron" to quit'`
+     - 结果：执行成功
+   - 随后 `System Events` 无法再读取 `process "Electron"`，说明旧实例已退出。
+2. Node 24 下重新构建通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/app-studio build`
+     - 结果：通过
+3. 新实例启动成功并处于前台。
+   - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/app-studio exec electron .`
+     - 结果：通过
+   - `osascript -e 'tell application "Electron" to activate' -e 'tell application "System Events" to tell process "Electron" to get {visible, frontmost, (count of windows), name of every window}'`
+     - 结果：`true, true, 1, 织流 Studio`
+4. 当前 UI 渲染正常。
+   - 桌面截图：`/tmp/flowweave-studio-rerun-20260610.png`
+   - 截图中可见：
+     - 应用标题为 `织流 Studio`
+     - 当前界面仍停留在 `flow-6cfdd436-5b73-45ab-9388-43609c16c2ee`
+     - Flow 显示 `17` 步
+     - 运行环境面板、变量注入区、警告区均正常渲染
+
+### Findings
+
+1. 当前主线代码在 2026-06-10 的新实例启动链路依旧稳定。
+2. 这次截图对应的是重新拉起的新窗口，不是旧实例残留。
+
+### 建议
+
+- 通过
+
+## 2026-06-09 Studio 重启展示状态
+
+### 验证范围
+
+- 当前主线代码是否能在 Node 24 默认环境下重新构建并启动 Studio。
+- 这次是否是真正的新实例启动，而不是复用旧窗口。
+- 当前桌面应用是否有可见窗口，并能渲染到用户正在关注的 Flow 状态页。
+
+### 验证结果
+
+1. 旧实例已先关闭。
+   - `osascript -e 'tell application "Electron" to quit'`
+     - 结果：执行成功
+   - 后续读取 `System Events` 时已拿不到旧 `Electron` 进程，说明不是沿用旧窗口。
+2. Node 24 下重新构建通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/app-studio build`
+     - 结果：通过
+     - `ensure-electron-native-binding` 正常输出 Electron 专用 native binding 已就绪
+3. 新实例启动成功且窗口在前台。
+   - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/app-studio exec electron .`
+     - 结果：通过
+   - `osascript -e 'tell application "Electron" to activate' -e 'tell application "System Events" to tell process "Electron" to get {visible, frontmost, (count of windows), name of every window}'`
+     - 结果：`true, true, 1, 织流 Studio`
+4. 当前 UI 已渲染到目标 Flow 状态页。
+   - 桌面截图：`/tmp/flowweave-studio-rerun-20260609.png`
+   - 截图中可见：
+     - 左侧项目列表正常显示
+     - 当前选中 Flow：`flow-6cfdd436-5b73-45ab-9388-43609c16c2ee`
+     - Flow 显示 `17` 步
+     - “显示浏览器窗口”选项与“运行流程”按钮正常渲染
+     - 警告 / fragility 面板可见
+
+### Findings
+
+1. 当前项目已经能稳定完成“关闭旧实例 → 重新构建 → 启动新实例 → 呈现主界面”的闭环。
+2. 这次截图对应的是新启动的应用实例，不是旧窗口残留。
+
+### 建议
+
+- 通过
+
+## 2026-06-09 Headed 浏览器浮层干扰修复
+
+### 验证范围
+
+- 用户反馈的“运行流程时浏览器会来回大小切换”是否真的是 runtime / Playwright 反复 resize 主窗口。
+- headed 执行链路是否会被 Chrome for Testing 的翻译或密码管理浮层干扰。
+- 修复后，真实 Flow `flow-6cfdd436-5b73-45ab-9388-43609c16c2ee` 是否能在可见浏览器模式下稳定执行且不再弹出干扰小窗。
+
+### 验证结果
+
+1. 根因已定位为浏览器内建浮层，而不是主窗口尺寸抖动。
+   - 对目标 Flow 的 headed 运行过程持续轮询 `Google Chrome for Testing` 窗口列表后，确认主窗口一直是 `酒店系统 - Google Chrome for Testing`。
+   - 初始复现中看到反复出现的小窗是：
+     - `翻译此页？`
+     - `要保存密码吗？`
+     - `更改您的密码`
+   - 因此用户体感中的“来回大小切换”来自浏览器自带浮层，不是 runtime 每一步都在改主窗口大小。
+2. runtime 已为 headed 模式补齐独立 profile 防护。
+   - `packages/runtime/src/playwright-runner.ts`
+     - headed 模式改为 `launchPersistentContext(...)`
+     - 启动前写入临时 `Default/Preferences`
+     - 显式关闭：
+       - `translate.enabled`
+       - `credentials_enable_service`
+       - `profile.password_manager_enabled`
+       - `profile.password_manager_leak_detection`
+   - headless 模式继续保留原 `chromium.launch(...)` 路径，避免扩大变更面。
+3. TDD 回归已补齐并通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- src/playwright-launch-options.test.ts`
+     - 首次结果：失败
+     - 失败原因：原实现没有 headed 专用 profile 偏好，也没有禁用密码管理提示
+     - 修复后结果：通过，`2/2`
+4. Node 20 runtime 全量回归通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test`
+     - 结果：通过，`45/45`
+5. 真实 Flow 的 Node 24 headed 复验通过，且干扰小窗消失。
+   - 目标 Flow：
+     - 项目：`117b8652-45d3-4ade-97b9-3907ae5c611f`
+     - Flow：`flow-6cfdd436-5b73-45ab-9388-43609c16c2ee`
+   - 复验命令：
+     - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm exec tsx --eval "... executeFlow(flow-6cfdd436, { headless: false }) ..."`
+   - 结果：
+     - `executionId`：`32a113b2-572b-4c6f-8e19-0abf756b8f90`
+     - `status`：`success`
+     - `steps`：`17`
+   - 运行过程中轮询窗口列表，仅出现：
+     - `酒店系统 - Google Chrome for Testing`
+   - 未再出现：
+     - `翻译此页？`
+     - `要保存密码吗？`
+     - `更改您的密码`
+
+### Findings
+
+1. 这次问题不是 DOM 回放逻辑本身失效，而是 headed 浏览器环境缺少“反干扰 UI”配置。
+2. 只关翻译提示还不够，登录场景还会触发密码保存 / 密码变更提示；必须一起关掉，才能把真实登录流收稳。
+3. 当前修复把干扰控制收敛在 headed 专用临时 profile 内，对 headless 基线与现有测试面影响最小。
+
+### 建议
+
+- 通过
+
+## 2026-06-09 Node 24 Studio 本机运行复验
+
+### 验证范围
+
+- 在默认 Node 24 基线下，`@flowweave/app-studio` 是否能完成构建、通过全仓 `smoke`，并在本机真正打开可见窗口。
+- Node 24 与 Electron 33 组合下，`better-sqlite3` 是否仍存在 ABI 不匹配导致的 GUI 启动失败。
+- macOS 下 Electron 主进程是否存在“进程存活但窗口未持有”的假启动问题。
+
+### 验证结果
+
+1. Node 24 下的真实启动阻塞点已经被定位并修复，而不是仅靠“命令返回 0”判定成功。
+   - 直接用 Electron runtime 触发数据库实例化时，已稳定复现 `better-sqlite3` ABI 错配：
+     - Node 24 安装出的 native module ABI = `137`
+     - Electron 33 需要 ABI = `130`
+   - 另外，`apps/studio/electron/main.ts` 原实现未持有 `BrowserWindow`，会出现 Electron 进程仍在但窗口数为 `0` 的问题。
+2. Electron 专用 `better-sqlite3` binding 方案已打通。
+   - `packages/project-knowledge` 已支持透传 `nativeBinding`。
+   - `apps/studio/electron/services.ts` 默认注入 `apps/studio/dist-electron/native/better_sqlite3.node`。
+   - `apps/studio/scripts/ensure-electron-native-binding.mjs` 会在构建时准备并校验 Electron 专用 native binding。
+   - 定向回归：
+     - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/project-knowledge test -- src/db/client.test.ts`
+       - 结果：通过
+     - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/app-studio test -- electron/services.test.ts`
+       - 结果：通过
+     - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH ELECTRON_RUN_AS_NODE=1 pnpm --filter @flowweave/app-studio exec electron -e "const Database=require('better-sqlite3'); const db=new Database(':memory:', { nativeBinding: '/Users/ling/codeHome/A_Mine/flowweave/apps/studio/dist-electron/native/better_sqlite3.node' }); db.prepare('select 1').get(); db.close(); console.log('electron-native-binding-ok')"`
+       - 结果：通过，输出 `electron-native-binding-ok`
+3. 主窗口持有问题已修复，GUI 不是假启动。
+   - `apps/studio/electron/main.ts` 已改为模块级持有 `mainWindow`，并在复用 / 关闭时维护引用。
+   - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/app-studio test`
+     - 结果：通过，`74/74`
+   - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm --filter @flowweave/app-studio exec electron .`
+     - 结果：通过，窗口成功显示
+   - `osascript -e 'tell application "System Events" to tell process "Electron" to get {visible, frontmost, (count of windows), name of every window}'`
+     - 结果：`true, true, 1, 织流 Studio`
+4. Node 24 默认基线的全仓链路已通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm smoke`
+     - 结果：通过
+     - `smoke:prepare / typecheck / test / build / e2e:login` 全部通过
+     - `e2e:login`
+       - 项目 ID：`e6ea88fd-5bd8-45ca-9553-6a6c8e573674`
+       - 执行目录：`/Users/ling/.flowweave/projects/e6ea88fd-5bd8-45ca-9553-6a6c8e573674/runs/134fe4fc-8f4a-462b-98ac-3b6a421a2b32`
+5. 当前本机截图与运行态证据已具备。
+   - GUI 截图：`/tmp/flowweave-studio-node24-fixed.png`
+   - 当前 Electron 会话存在且窗口在前台。
+
+### Findings
+
+1. 之前“CLI 能过但本机打开失败”的关键原因，不是前端页面本身，而是 Electron 原生依赖与窗口生命周期处理不完整。
+2. 现在仓库已经从“Node 24 文档口径可用”推进到“Node 24 默认环境下本机可构建、可 smoke、可真正打开 GUI”。
+3. 当前残余风险已从“启动级阻塞”下降到后续真实录制 / DOM 稳定性体验问题，后者需要在后续功能轨道继续收口。
+
+### 建议
+
+- 通过
+
+## 2026-06-09 默认开发基线切换到 Node 24 验收
+
+### 验证范围
+
+- `.nvmrc` 与当前真源入口文档是否已从“Node 20 默认”切换为“Node 24 默认”
+- Node 24 下主线开发链是否可真实通过，而不是只停留在历史结论
+- recorded replay 基线是否也能在 Node 24 下保持通过
+
+### 验证结果
+
+1. 默认环境真源已切换。
+   - `.nvmrc` 已从 `20` 更新为 `24`
+   - `PROJECT_ROUTE_LOCK.md`、`README.md`、`docs/architecture/overview.md`
+     与 `docs/superpowers/plans/2026-05-26-run-first-roadmap.md`
+     已统一为“Node 24 默认、Node 20 兼容”
+   - `docs/guides/quickstart.md`、`docs/guides/manual-qa.md`、
+     `docs/guides/p1-e2e.md`、`docs/guides/web-console.md`
+     已同步新口径
+2. Node 24 依赖安装与 Electron 后处理通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm install --force`
+     - 结果：通过
+     - `apps/studio` 的 `postinstall` 自动完成：
+       - Electron Framework symlink 修复
+       - residual signature 定向重签名
+       - 严格签名校验通过
+3. Node 24 主线 smoke 完整通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm smoke`
+     - 结果：通过
+     - `doctor --smoke` 输出 `Node.js v24.14.0`
+     - `better-sqlite3` 原生模块检查通过
+     - `typecheck / test / build / e2e:login` 全部通过
+     - `e2e:login`
+       - 项目 ID：`4a1594dc-ec7f-46e1-8890-de0c7a819c60`
+       - 执行 ID：`e5d06e6c-debb-4b47-b77a-772032bdc146`
+4. Node 24 下 recorded replay 基线通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v24.14.0/bin:$PATH pnpm e2e:recorded-pages`
+     - 结果：通过，`25 / 25`
+     - 基线口径保持 `23 fixture + 2 runtime-generated`
+
+### 风险与备注
+
+- 本轮把默认开发基线切到 Node 24，但没有取消 Node 20 兼容；CI 仍保持 `Node 20 / 24` 双矩阵。
+- 历史 wave 方案、编排文档与 `.codex` 归档中仍保留大量 Node 20 验收记录；这些属于历史事实，本轮未做大规模追改。
+- 切换 Node 20 / 24 主版本后，仍需执行 `pnpm install --force`，否则 `better-sqlite3` 可能残留旧 ABI 产物。
+
+### 建议
+
+- 通过
+
+## 2026-06-09 项目入口文档补齐验收
+
+### 验证范围
+
+- 是否已补齐项目根物理 `PROJECT_ROUTE_LOCK.md`
+- `README.md`、架构总览与主路线计划是否同步到 2026-06-09 的稳定基线
+- 文档变更是否保持基本格式正确，并且至少有一条 Node 20 相关验证通过
+
+### 验证结果
+
+1. 项目根路线锁已落地。
+   - 新增 `PROJECT_ROUTE_LOCK.md`
+   - 内容已覆盖当前路线一句话、当前阶段、里程碑状态、产品 / 设计 / 技术真源、验收门禁与冻结边界
+2. 三个高价值入口文档已同步当前稳定口径。
+   - `README.md`
+     - 新增路线锁入口
+     - 新增 “当前状态（2026-06-09）” 小节
+   - `docs/architecture/overview.md`
+     - 版本更新时间已从 `2026-05-25` 更新到 `2026-06-09`
+     - 新增当前稳定基线与冻结边界说明
+   - `docs/superpowers/plans/2026-05-26-run-first-roadmap.md`
+     - 顶部已补 `2026-06-09 更新`
+     - 已同步 residual gaps 收口结果与 CI `Node 20 / 24` 口径
+3. 文档一致性检查通过。
+   - `git diff --check`
+     - 结果：通过
+   - `rg -n "PROJECT_ROUTE_LOCK|当前状态（2026-06-09）|当前稳定基线（2026-06-09）|2026-06-09 更新|25 = 23 fixture \\+ 2 runtime-generated|Node 20 / 24" README.md PROJECT_ROUTE_LOCK.md docs/architecture/overview.md docs/superpowers/plans/2026-05-26-run-first-roadmap.md`
+     - 结果：通过，入口文档均命中新口径
+4. Node 20 最小验证通过。
+   - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
+     - 结果：通过
+
+### 风险与备注
+
+- 本轮是文档补齐任务，没有重新执行仓库级 `pnpm smoke`；当前仅补做了 Node 20 最小验证。
+- `.idea/`、`apps/studio/output/`、`output/` 仍为用户现有未跟踪目录，本轮未触碰。
 
 ### 建议
 

@@ -4,7 +4,7 @@
 
 ## 准备
 
-- [ ] Node 20，`pnpm install`，`pnpm doctor` 无致命错误
+- [ ] Node 24，`pnpm install`，`pnpm doctor` 无致命错误（若从 Node 20 切换过来，先执行 `pnpm install --force`）
 - [ ] `pnpm exec playwright install chromium`（若 doctor 提示）
 - [ ] `SKIP_E2E=1 pnpm smoke` 或 `pnpm smoke:full` 通过
 

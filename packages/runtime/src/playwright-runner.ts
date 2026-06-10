@@ -1,4 +1,5 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
 import type { FlowDocument, NormalizedStep, Target } from "@flowweave/flow-dsl";
@@ -6,7 +7,7 @@ import { buildPageSnapshotSummary } from "@flowweave/page-intelligence";
 import { FlowWeaveError, interpolateTemplateString } from "@flowweave/shared";
 
 type LocatorStrategy = Target["strategies"][number];
-import { chromium, type ElementHandle, type Locator, type Page } from "playwright";
+import { chromium, type BrowserContext, type ElementHandle, type Locator, type Page } from "playwright";
 import type {
   DiagnosticCandidateSummary,
   ExecutionOptions,
@@ -72,6 +73,23 @@ const ACTION_STATE_RESET_CAUSES = new Set([
   "scroll-position-reset",
   "upload-files-reset",
 ]);
+const HEADED_BROWSER_ARGS = ["--no-first-run", "--no-default-browser-check"] as const;
+const HEADED_BROWSER_PREFERENCES = {
+  translate: {
+    enabled: false,
+  },
+  credentials_enable_service: false,
+  profile: {
+    password_manager_enabled: false,
+    password_manager_leak_detection: false,
+  },
+} as const;
+
+type ExecutionSession = {
+  context: BrowserContext;
+  page: Page;
+  close: () => Promise<void>;
+};
 
 type RuntimeRecoveryMetadata = {
   runtimeCauseCategory?: RuntimeCauseCategory;
@@ -81,6 +99,70 @@ type RuntimeRecoveryMetadata = {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function createHeadedBrowserProfile(): string {
+  const userDataDir = mkdtempSync(join(tmpdir(), "flowweave-runtime-profile-"));
+  const defaultDir = join(userDataDir, "Default");
+  mkdirSync(defaultDir, { recursive: true });
+  writeFileSync(
+    join(defaultDir, "Preferences"),
+    JSON.stringify(HEADED_BROWSER_PREFERENCES, null, 2),
+    "utf-8",
+  );
+  return userDataDir;
+}
+
+async function openExecutionSession(
+  headless: boolean,
+  options: ExecutionOptions,
+  harPath?: string,
+): Promise<ExecutionSession> {
+  const contextOptions = {
+    ...(harPath ? { recordHar: { path: harPath, mode: "minimal" as const } } : {}),
+    ...(options.storageStatePath ? { storageState: options.storageStatePath } : {}),
+  };
+
+  if (headless) {
+    const browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext(contextOptions);
+    if (options.cookies?.length) {
+      await context.addCookies(options.cookies);
+    }
+    const page = await context.newPage();
+    return {
+      context,
+      page,
+      close: async () => {
+        await context.close();
+        await browser.close();
+      },
+    };
+  }
+
+  const userDataDir = createHeadedBrowserProfile();
+  try {
+    const context = await chromium.launchPersistentContext(userDataDir, {
+      headless: false,
+      ...contextOptions,
+      args: [...HEADED_BROWSER_ARGS],
+    });
+    if (options.cookies?.length) {
+      await context.addCookies(options.cookies);
+    }
+    const page = context.pages()[0] ?? (await context.newPage());
+    return {
+      context,
+      page,
+      close: async () => {
+        await context.close();
+        rmSync(userDataDir, { recursive: true, force: true });
+      },
+    };
+  } catch (error) {
+    rmSync(userDataDir, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 function formatUnknownError(error: unknown): string {
@@ -2049,13 +2131,9 @@ export async function executeFlow(
   const recordHar = artifactDir ? (options.recordHar ?? true) : false;
   const harPath = artifactDir && recordHar ? join(artifactDir, "network.har") : undefined;
 
-  const browser = await chromium.launch({ headless });
+  const session = await openExecutionSession(headless, options, harPath);
   try {
-    const context = await browser.newContext({
-      ...(harPath ? { recordHar: { path: harPath, mode: "minimal" as const } } : {}),
-      ...(options.storageStatePath ? { storageState: options.storageStatePath } : {}),
-    });
-    const page = await context.newPage();
+    const { page } = session;
     page.setDefaultTimeout(timeoutMs);
 
     for (let stepIndex = 0; stepIndex < flow.steps.length; stepIndex++) {
@@ -2074,7 +2152,6 @@ export async function executeFlow(
       );
       stepLogs.push(log);
       if (log.status === "failed") {
-        await context.close();
         return {
           executionId,
           status: "failed",
@@ -2086,7 +2163,6 @@ export async function executeFlow(
       }
     }
 
-    await context.close();
     return {
       executionId,
       status: "success",
@@ -2095,6 +2171,6 @@ export async function executeFlow(
       pageSnapshots,
     };
   } finally {
-    await browser.close();
+    await session.close();
   }
 }

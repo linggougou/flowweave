@@ -24,4 +24,5 @@ export {
   closeProjectDatabase,
   resolveProjectStorePath,
 } from "./db/client.js";
+export type { ProjectDatabaseNativeOptions } from "./db/client.js";
 export * as projectKnowledgeSchema from "./db/schema.js";

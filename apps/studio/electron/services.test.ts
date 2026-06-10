@@ -23,6 +23,7 @@ const mockApiRestoreFlowVersion = vi.fn();
 const mockApiSaveExecution = vi.fn();
 const mockApiSaveFlow = vi.fn();
 const mockApiSavePageSnapshot = vi.fn();
+const mockProjectKnowledgeRepositoryCtor = vi.fn();
 const mockRepoGetDefaultEnvironment = vi.fn();
 const mockRepoSaveEnvironment = vi.fn();
 const mockRepoGetLatestExecutionForFlow = vi.fn();
@@ -41,6 +42,10 @@ vi.mock("@flowweave/runtime", () => ({
 
 vi.mock("@flowweave/project-knowledge", () => ({
   ProjectKnowledgeRepository: class {
+    constructor(...args: unknown[]) {
+      mockProjectKnowledgeRepositoryCtor(...args);
+    }
+
     getDefaultEnvironment(...args: unknown[]) {
       return mockRepoGetDefaultEnvironment(...args);
     }
@@ -135,10 +140,23 @@ describe("getExecution 缓存命中策略", () => {
     mockApiSaveExecution.mockReset();
     mockApiSaveFlow.mockReset();
     mockApiSavePageSnapshot.mockReset();
+    mockProjectKnowledgeRepositoryCtor.mockReset();
     mockExecuteFlow.mockReset();
     mockRepoGetDefaultEnvironment.mockReset();
     mockRepoSaveEnvironment.mockReset();
     mockRepoGetLatestExecutionForFlow.mockReset();
+  });
+
+  it("默认向知识库仓库注入 Electron 专用 better-sqlite3 nativeBinding 路径", async () => {
+    await loadServicesModule();
+
+    expect(mockProjectKnowledgeRepositoryCtor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nativeBinding: expect.stringContaining(
+          "apps/studio/dist-electron/native/better_sqlite3.node",
+        ),
+      }),
+    );
   });
 
   it("缓存里缺少 flowSnapshot 时，会继续回源知识库", async () => {

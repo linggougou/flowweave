@@ -4,6 +4,13 @@
 > **原则**：现阶段不开发 AI 相关功能；优先让「录制 → 入库 → 回放 → 可查」在本地稳定跑通。  
 > **AI 编排（原 P4）**：整体冻结，保留 `@flowweave/ai-orchestrator` 占位与已有启发式代码，**不接入 Studio / 扩展 / Web**。
 
+> **2026-06-09 更新**
+> - 真实页面稳定性 residual gaps 已收口并回主线。
+> - 当前 recorded replay 基线已统一为 `25 = 23 fixture + 2 runtime-generated`。
+> - 其中 runtime-generated 场景为 `placeholder-disambiguation` 与 `scroll-runtime-contract`。
+> - Studio 已补齐布局 contract、歧义候选诊断细节；Electron 已补 bundle integrity 自修复与显式失败语义。
+> - 仓库默认开发基线已切到 `.nvmrc` 的 Node 24，Node 20 继续保留兼容。
+
 ---
 
 ## 1. 当前基线（已完成）
@@ -19,8 +26,11 @@
 | Web 控制台 + 本地 API（3847） | ✅ |
 | `pnpm e2e:login` 端到端脚本 | ✅ |
 | 脆弱性体检（纯 CSS 警告）、HAR 录制、页面 JSON 快照 | ✅（基础版，非主线阻塞） |
+| recorded replay 稳定基线（23 fixture + 2 runtime-generated） | ✅ |
+| Studio 布局 contract + 歧义候选诊断细节 | ✅ |
+| Electron bundle integrity 自修复与显式失败 | ✅ |
 
-**结论**：P0 + P1 已闭环；P2 主体完成。当前缺口不在「有没有代码」，而在 **本地启动体验、三端联调文档、Studio 选 Flow 运行、工程 smoke 脚本**。
+**结论**：P0 + P1 已闭环；P2 主体与 2026-06-09 residual gaps 收口均已完成。当前主线重点从“补功能”转为“守住稳定基线、补齐真源文档、为后续阶段保留清晰冻结边界”。
 
 ---
 
@@ -31,7 +41,7 @@
 1. 新开发者 **30 分钟内** 能在本机跑通：安装 → 验证 → 扩展录制 → 同步知识库 → Studio 回放。
 2. 三端共用 **同一份** `~/.flowweave/projects/` 数据，行为可预期。
 3. **不依赖** API Key、LLM、云端服务。
-4. CI（Node 20）typecheck / lint / test / build 稳定绿。
+4. CI（Node 20 / 24）验证链稳定；本地开发、排障和交付前自验默认以 Node 24 为准。
 
 ### 明确不做（冻结至后续「智能阶段」）
 
@@ -143,7 +153,7 @@ M5 可选增强
 ## 6. 验证命令（本阶段标准）
 
 ```bash
-# 环境：Node 20（.nvmrc）
+# 环境：Node 24（.nvmrc，Node 20 兼容）
 pnpm install
 pnpm doctor                           # 环境自检
 pnpm exec playwright install chromium   # doctor 提示缺失时

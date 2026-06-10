@@ -8,6 +8,9 @@ import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3"
 import * as schema from "./schema.js";
 
 export type ProjectDatabase = BetterSQLite3Database<typeof schema>;
+export type ProjectDatabaseNativeOptions = {
+  nativeBinding?: string;
+};
 
 const STORE_FILENAME = "store.sqlite";
 
@@ -120,11 +123,14 @@ export function resolveProjectStorePath(
 export function openProjectDatabase(
   projectId: string,
   dataDir = "~/.flowweave/projects",
+  options: ProjectDatabaseNativeOptions = {},
 ): { db: ProjectDatabase; sqlite: Database.Database; storePath: string } {
   const storePath = resolveProjectStorePath(projectId, dataDir);
   mkdirSync(dirname(storePath), { recursive: true });
 
-  const sqlite = new Database(storePath);
+  const sqlite = options.nativeBinding
+    ? new Database(storePath, { nativeBinding: options.nativeBinding })
+    : new Database(storePath);
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
   sqlite.exec(INIT_SQL);

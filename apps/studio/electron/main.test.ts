@@ -16,17 +16,33 @@ const mockShellOpenPath = vi.fn();
 const mockLoadURL = vi.fn();
 const mockLoadFile = vi.fn();
 const mockOpenDevTools = vi.fn();
+const mockWindowOn = vi.fn();
+const windowInstances: Array<{ isDestroyed: ReturnType<typeof vi.fn>; focus: ReturnType<typeof vi.fn> }> = [];
 
 vi.mock("electron", () => ({
   app: mockApp,
   BrowserWindow: class {
     static getAllWindows() {
-      return [];
+      return windowInstances;
     }
 
     webContents = {
       openDevTools: mockOpenDevTools,
     };
+
+    private readonly destroyed = vi.fn(() => false);
+    private readonly focusWindow = vi.fn();
+
+    constructor() {
+      windowInstances.push({
+        isDestroyed: this.destroyed,
+        focus: this.focusWindow,
+      });
+    }
+
+    on = mockWindowOn;
+    isDestroyed = this.destroyed;
+    focus = this.focusWindow;
 
     async loadURL(url: string) {
       mockLoadURL(url);
@@ -68,6 +84,8 @@ describe("electron main runFlow IPC", () => {
     mockLoadURL.mockReset();
     mockLoadFile.mockReset();
     mockOpenDevTools.mockReset();
+    mockWindowOn.mockReset();
+    windowInstances.length = 0;
     mockApp.on.mockReset();
     mockApp.whenReady.mockClear();
     mockApp.getAppPath.mockClear();

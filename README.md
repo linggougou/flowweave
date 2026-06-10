@@ -44,6 +44,7 @@ flowweave/
 
 | 文档 | 说明 |
 |------|------|
+| [PROJECT_ROUTE_LOCK.md](PROJECT_ROUTE_LOCK.md) | 当前路线锁、阶段门禁与冻结边界 |
 | **[快速启动](docs/guides/quickstart.md)** | **本地跑通（推荐首读）** |
 | [v1.0.0 发行说明](docs/releases/v1.0.0.md) | 第一版能力范围 |
 | [v1 手测清单](docs/guides/manual-qa.md) | 验收录制→回放闭环 |
@@ -53,6 +54,15 @@ flowweave/
 | [ADR](docs/adr/README.md) | 架构决策记录 |
 | [AGENTS.md](AGENTS.md) | AI / 开发者协作规范 |
 | [产品设计](docs/superpowers/specs/2026-05-25-web-automation-platform-design.md) | 产品定义 |
+
+## 当前状态（2026-06-09）
+
+- 主线维持 “先跑通、再稳定、后智能”，当前物理路线锁见 [PROJECT_ROUTE_LOCK.md](PROJECT_ROUTE_LOCK.md)。
+- 仓库默认开发基线已切到 `.nvmrc` 的 Node 24，同时继续保留 Node 20 兼容。
+- recorded replay 基线已统一为 `25 = 23 fixture + 2 runtime-generated`，其中新增 `placeholder-disambiguation` 与 `scroll-runtime-contract`。
+- Studio 已补齐左侧滚动 / 右侧布局 contract，并增强歧义候选诊断细节展示。
+- Electron 桌面端已补 bundle integrity 自修复与显式失败语义，可在当前电脑稳定构建与启动。
+- P3 深度 page / network intelligence 与 P4 AI 继续冻结，不在当前主线扩展。
 
 ## 本地开发
 
@@ -74,11 +84,11 @@ pnpm dev:extension   # 浏览器扩展（WXT 热更新）
 
 详见 [快速启动](docs/guides/quickstart.md)、[P1 端到端](docs/guides/p1-e2e.md)。
 
-要求 Node.js ≥ 20（仓库默认基线仍是 `.nvmrc` 的 Node 20）。
+要求 Node.js ≥ 20；仓库默认开发基线已切到 `.nvmrc` 的 Node 24。
 
 如需在 Node 20 / 24 之间切换，请在切换主版本后执行一次 `pnpm install --force`，让 `better-sqlite3` 等原生模块按当前 Node ABI 重新落盘。
 
-GitHub Actions 当前保持 `Node 20 / 24` 双基线矩阵；本地开发、排障和交付前自验仍以 `.nvmrc` 的 Node 20 作为稳定口径。
+GitHub Actions 当前保持 `Node 20 / 24` 双基线矩阵；本地开发、排障和交付前自验默认以 `.nvmrc` 的 Node 24 为准。
 
 ## 交付阶段
 

@@ -54,9 +54,14 @@ import {
 } from "./knowledge-client.js";
 
 const executions = new Map<string, StudioExecution>();
-const projectKnowledgeRepository = new ProjectKnowledgeRepository();
-
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+const electronNativeBindingPath = join(
+  repoRoot,
+  "apps/studio/dist-electron/native/better_sqlite3.node",
+);
+const projectKnowledgeRepository = new ProjectKnowledgeRepository({
+  nativeBinding: electronNativeBindingPath,
+});
 const loginFixtureUrl = pathToFileURL(
   join(repoRoot, "examples/fixtures/login.html"),
 ).href;

@@ -9,6 +9,7 @@ import {
   closeProjectDatabase,
   expandHomePath,
   openProjectDatabase,
+  type ProjectDatabaseNativeOptions,
   resolveProjectStorePath,
 } from "./db/client.js";
 import { ensureRunDirectory } from "./paths.js";
@@ -194,13 +195,19 @@ function parseExecutionRunContext(
 export type ProjectKnowledgeRepositoryOptions = {
   /** 覆盖默认数据目录，测试时传入临时目录 */
   dataDir?: string;
+  /** 显式指定 better-sqlite3 原生模块路径，供 Electron 等特殊 ABI 使用 */
+  nativeBinding?: string;
 };
 
 export class ProjectKnowledgeRepository {
   private readonly dataDir: string;
+  private readonly databaseOptions: ProjectDatabaseNativeOptions;
 
   constructor(options: ProjectKnowledgeRepositoryOptions = {}) {
     this.dataDir = expandHomePath(options.dataDir ?? "~/.flowweave/projects");
+    this.databaseOptions = {
+      nativeBinding: options.nativeBinding,
+    };
   }
 
   /** 为单次执行创建 `runs/<executionId>/` 目录 */
@@ -211,7 +218,7 @@ export class ProjectKnowledgeRepository {
   createProject(name: string): ProjectRef {
     const id = randomUUID();
     const now = new Date().toISOString();
-    const { db, sqlite } = openProjectDatabase(id, this.dataDir);
+    const { db, sqlite } = openProjectDatabase(id, this.dataDir, this.databaseOptions);
 
     try {
       db.insert(dbSchema.projects)
@@ -247,7 +254,7 @@ export class ProjectKnowledgeRepository {
   ): ProjectEnvironment {
     const id = randomUUID();
     const now = new Date().toISOString();
-    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
     try {
       ensureProjectEnvironmentStorageStateColumn(sqlite);
       if (isDefault) {
@@ -281,7 +288,7 @@ export class ProjectKnowledgeRepository {
   }
 
   getDefaultEnvironment(projectId: string): ProjectEnvironment | null {
-    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
     try {
       ensureProjectEnvironmentStorageStateColumn(sqlite);
       const row =
@@ -317,7 +324,7 @@ export class ProjectKnowledgeRepository {
     snapshotPath?: string,
   ): PageSnapshotRecord {
     const id = randomUUID();
-    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
     try {
       db.insert(dbSchema.pageSnapshots)
         .values({
@@ -344,7 +351,7 @@ export class ProjectKnowledgeRepository {
   }
 
   listPageSnapshots(projectId: string, limit = 20): PageSnapshotRecord[] {
-    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
     try {
       return db
         .select()
@@ -374,7 +381,7 @@ export class ProjectKnowledgeRepository {
     };
     const documentJson = JSON.stringify(document);
 
-    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
     try {
       const now = new Date().toISOString();
       const row = {
@@ -413,7 +420,7 @@ export class ProjectKnowledgeRepository {
   }
 
   getFlowInProject(projectId: string, flowId: string): FlowDocument | null {
-    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
     try {
       const row = db
         .select()
@@ -430,7 +437,7 @@ export class ProjectKnowledgeRepository {
   }
 
   listFlowVersions(projectId: string, flowId: string, limit = 50): FlowVersionRecord[] {
-    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
     try {
       return db
         .select()
@@ -451,7 +458,7 @@ export class ProjectKnowledgeRepository {
   }
 
   getFlowVersion(projectId: string, versionId: string): FlowDocument | null {
-    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
     try {
       const row = db
         .select()
@@ -528,7 +535,7 @@ export class ProjectKnowledgeRepository {
   }
 
   saveExecution(projectId: string, result: ExecutionResult): void {
-    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
     try {
       ensureExecutionRunContextColumns(sqlite);
       ensureExecutionStepDiagnosticPathColumn(sqlite);
@@ -587,7 +594,7 @@ export class ProjectKnowledgeRepository {
         continue;
       }
 
-      const { db, sqlite } = openProjectDatabase(entry, this.dataDir);
+      const { db, sqlite } = openProjectDatabase(entry, this.dataDir, this.databaseOptions);
       try {
         const row = db.select().from(dbSchema.projects).get();
         if (row) {
@@ -606,7 +613,7 @@ export class ProjectKnowledgeRepository {
   }
 
   listFlows(projectId: string): Array<{ id: string; name: string; createdAt: string }> {
-    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
     try {
       return db
         .select({
@@ -629,7 +636,7 @@ export class ProjectKnowledgeRepository {
       throw new Error("Flow 名称不能为空");
     }
 
-    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
     try {
       const row = db
         .select()
@@ -682,7 +689,7 @@ export class ProjectKnowledgeRepository {
         continue;
       }
 
-      const { db, sqlite } = openProjectDatabase(entry, this.dataDir);
+      const { db, sqlite } = openProjectDatabase(entry, this.dataDir, this.databaseOptions);
       try {
         const row = db
           .select()
@@ -701,7 +708,7 @@ export class ProjectKnowledgeRepository {
   }
 
   listExecutions(projectId: string, limit = 50): ExecutionResult[] {
-    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
     try {
       ensureExecutionRunContextColumns(sqlite);
       ensureExecutionStepDiagnosticPathColumn(sqlite);
@@ -720,7 +727,7 @@ export class ProjectKnowledgeRepository {
   }
 
   getLatestExecutionForFlow(projectId: string, flowId: string): ExecutionResult | null {
-    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir);
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
     try {
       ensureExecutionRunContextColumns(sqlite);
       ensureExecutionStepDiagnosticPathColumn(sqlite);
@@ -758,7 +765,7 @@ export class ProjectKnowledgeRepository {
         continue;
       }
 
-      const { db, sqlite } = openProjectDatabase(entry, this.dataDir);
+      const { db, sqlite } = openProjectDatabase(entry, this.dataDir, this.databaseOptions);
       try {
         ensureExecutionRunContextColumns(sqlite);
         ensureExecutionStepDiagnosticPathColumn(sqlite);

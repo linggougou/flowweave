@@ -5,7 +5,7 @@
 ## 启动
 
 ```bash
-# 需 Node 20
+# 默认 Node 24（Node 20 兼容）
 pnpm dev:web
 ```
 

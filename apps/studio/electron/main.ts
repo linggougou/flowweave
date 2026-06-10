@@ -18,6 +18,8 @@ import {
   runFlow,
 } from "./services.js";
 
+let mainWindow: BrowserWindow | null = null;
+
 function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.listProjects, () => listProjects());
 
@@ -164,9 +166,14 @@ function registerIpcHandlers(): void {
 }
 
 async function createWindow(): Promise<void> {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.focus();
+    return;
+  }
+
   const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 
-  const win = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     title: "织流 Studio",
@@ -177,12 +184,15 @@ async function createWindow(): Promise<void> {
       sandbox: false,
     },
   });
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+  });
 
   if (devServerUrl) {
-    await win.loadURL(devServerUrl);
-    win.webContents.openDevTools({ mode: "detach" });
+    await mainWindow.loadURL(devServerUrl);
+    mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
-    await win.loadFile(path.join(app.getAppPath(), "dist", "index.html"));
+    await mainWindow.loadFile(path.join(app.getAppPath(), "dist", "index.html"));
   }
 }
 
