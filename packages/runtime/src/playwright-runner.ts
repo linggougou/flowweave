@@ -144,6 +144,7 @@ async function openExecutionSession(
   try {
     const context = await chromium.launchPersistentContext(userDataDir, {
       headless: false,
+      viewport: null,
       ...contextOptions,
       args: [...HEADED_BROWSER_ARGS],
     });

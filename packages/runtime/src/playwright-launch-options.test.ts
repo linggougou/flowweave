@@ -71,6 +71,13 @@ describe("executeFlow launch options", () => {
 
     expect(launchPersistentContextMock).toHaveBeenCalledOnce();
     expect(launchMock).not.toHaveBeenCalled();
+    expect(launchPersistentContextMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        headless: false,
+        viewport: null,
+      }),
+    );
     expect(JSON.parse(capturedPreferences)).toMatchObject({
       translate: {
         enabled: false,

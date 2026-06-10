@@ -1,5 +1,149 @@
 # 验证报告
 
+## 2026-06-10 重新提交并推送前定向复验
+
+### 验证范围
+
+- headed persistent context 的尺寸修复是否以 `viewport: null` 的最终形态通过定向测试。
+- runtime 构建产物与 `apps/studio` 成品链路是否继续可构建。
+
+### 验证结果
+
+1. runtime 定向测试通过。
+   - 命令：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- src/playwright-launch-options.test.ts`
+   - 结果：
+     - 通过，`2 / 2`
+2. runtime 构建通过。
+   - 命令：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime build`
+   - 结果：
+     - 通过
+3. Studio 构建通过。
+   - 命令：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio build`
+   - 结果：
+     - 通过
+
+### 综合结论
+
+- 当前建议：通过；可以重新提交并推送当前变更
+
+## 2026-06-10 Studio 重启复看验收
+
+### 验证范围
+
+- 当前电脑上 `apps/studio` 是否能在 Node 20 环境下重新启动。
+- 当前出窗是否为 `织流 Studio` 主窗口，而不是其他 Electron 宿主的默认欢迎页。
+
+### 验证结果
+
+1. 桌面端已在 Node 20 下重新启动。
+   - 命令：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm exec electron .`
+   - 目录：
+     - `apps/studio`
+   - 结果：
+     - 进程成功拉起并保持运行
+2. 前台窗口身份已核实。
+   - `System Events` 返回：
+     - `frontmost = true`
+     - `visible = true`
+     - `window title = 织流 Studio`
+     - `AXMain = true`
+     - `AXMinimized = false`
+3. 误抓默认 Electron 欢迎页的问题已排除。
+   - 原因：
+     - 系统里存在其他 Electron 宿主，共用 `com.github.Electron`
+   - 处理：
+     - 改用窗口标题与系统窗口编号精确抓图
+   - 当前有效截图：
+     - `/tmp/flowweave-captures/studio-windowid-10006.png`
+
+### 综合结论
+
+- 当前建议：通过；`织流 Studio` 已重新启动并处于可见主窗口状态
+
+## 2026-06-10 Headed 浏览器尺寸抽搐修复验收
+
+### 验证范围
+
+- 用户录屏中“浏览器内容区域持续缩小放大、抽搐”是否来自 headed persistent context 的尺寸策略，而不是页面自身逻辑异常。
+- `packages/runtime` 的源码、构建产物与 `apps/studio` 成品链路是否都已使用正确修复。
+- Node 20 基线下 runtime 测试、runtime 构建、Studio 构建与真实录制 Flow 回放是否保持通过。
+
+### 验证结果
+
+1. launch 参数合同已改为当前 Playwright 版本真实支持的 `viewport: null`。
+   - 命令：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- src/playwright-launch-options.test.ts`
+   - 结果：
+     - 通过，`2 / 2`
+     - `packages/runtime/src/playwright-launch-options.test.ts` 已锁定 headed `launchPersistentContext(...)` 必须带 `viewport: null`
+2. runtime 全量测试通过。
+   - 命令：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test`
+   - 结果：
+     - 通过，`45 / 45`
+3. runtime 构建与类型产物通过。
+   - 命令：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime build`
+   - 结果：
+     - 通过
+     - `packages/runtime/dist/index.js` 已含 `viewport: null`
+     - `d.ts` 同步成功生成，说明修复不再依赖错误字段名
+4. Studio 成品构建通过。
+   - 命令：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio build`
+   - 结果：
+     - 通过
+     - 说明桌面端已重新消费最新 `@flowweave/runtime` 产物
+5. 真实录制 Flow 在修复后成品链路中不再出现 viewport 锁死。
+   - 验证对象：
+     - `flow-6cfdd436-5b73-45ab-9388-43609c16c2ee`
+     - 数据源：`~/.flowweave/projects/117b8652-45d3-4ade-97b9-3907ae5c611f/store.sqlite`
+   - 命令：
+     - 使用 `packages/runtime/dist/index.js` 回放该 Flow，并在页面侧注入 `resize` 埋点
+   - 结果：
+     - `17 / 17` 步成功
+     - telemetry 仅记录一次 `init`
+     - 指标：
+       - `innerWidth = 1200`
+       - `visualViewportWidth = 1200`
+       - `outerWidth = 1200`
+       - `innerHeight = 901`
+       - `visualViewportHeight = 901`
+     - 结论：
+       - 页面可视区已跟随宿主窗口尺寸，没有再被固定在默认 viewport 中
+6. 人为去掉 `viewport: null` 后，可复现旧的尺寸失配特征。
+   - 命令：
+     - 使用同一条 Flow、同一份构建产物，在 `launchPersistentContext` 包装层中临时移除 `viewport`
+   - 结果：
+     - `17 / 17` 步成功
+     - telemetry 同样仅记录一次 `init`
+     - 指标：
+       - `innerWidth = 1280`
+       - `visualViewportWidth = 1280`
+       - `outerWidth = 1282`
+       - `innerHeight = 720`
+       - `outerHeight = 846`
+     - 结论：
+       - 旧行为会把页面内容固定在默认 `1280x720` 视口，而宿主窗口明显更大
+       - 这正对应用户录屏里的“左上角小块、周围灰区、视觉上抽搐”的现象
+
+### Findings
+
+1. 先前尝试的 `noDefaultViewport` 并不是当前 Playwright 1.60 `launchPersistentContext()` 支持的字段。
+   - 它既不能通过 `d.ts` 构建，也不能作为可信的最终修复。
+2. 真正的根因是 headed persistent context 的默认 viewport 仿真，而不是页面逻辑持续触发 `resize`。
+   - 修复后与“强制移除修复”的对照数据已经把这一点坐实。
+3. 只改 `packages/runtime/src` 不够，必须重建 `packages/runtime/dist`，并重新构建 `apps/studio`。
+   - 否则桌面端仍可能继续运行旧产物。
+
+### 综合结论
+
+- 当前建议：通过；浏览器尺寸抽搐问题已在源码、产物和真实录制 Flow 三个层面完成闭环修复与 Node 20 验证
+
 ## 2026-06-10 提交前主线复验
 
 ### 验证范围

@@ -1,5 +1,103 @@
 # FlowWeave 操作日志
 
+## 2026-06-10 重新提交并推送前收口
+
+- 时间：2026-06-10 21:29:31 CST
+- 任务目标：按用户“再重新把代码提交并推送到线上”的要求，将 2026-06-10 晚间新增的 runtime 修复与留痕重新提交并推送到远端分支。
+- 变更范围：
+  - `packages/runtime/src/playwright-runner.ts`
+    - headed `launchPersistentContext(...)` 明确传入 `viewport: null`
+  - `packages/runtime/src/playwright-launch-options.test.ts`
+    - 增加对 `viewport: null` 的显式断言
+  - `.codex/operations-log.md`
+  - `.codex/verification-report.md`
+- 显式不纳入提交：
+  - `.idea/`
+  - `apps/studio/output/`
+  - 根目录 `output/`
+- 提交前新鲜验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- src/playwright-launch-options.test.ts`
+    - 结果：通过，`2/2`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime build`
+    - 结果：通过
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio build`
+    - 结果：通过
+
+## 2026-06-10 Studio 重启复看
+
+- 时间：2026-06-10 18:52:00 CST
+- 任务目标：按用户“重新启动给我看看”的要求，使用当前已修复的 runtime / studio 构建产物重新启动桌面端，并确认实际出窗的是 `织流 Studio` 而非其他 Electron 默认窗口。
+- 操作过程：
+  - 使用 Node 20 从 `apps/studio` 目录执行：
+    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm exec electron .`
+  - 进程保持前台运行，不额外退出，便于用户直接查看当前桌面端状态。
+  - 通过 `System Events` 确认：
+    - `process = Electron`
+    - `window = 织流 Studio`
+    - `frontmost = true`
+    - `visible = true`
+    - `AXMain = true`
+    - `AXMinimized = false`
+- 额外核验：
+  - 由于系统中存在其他 Electron 宿主，`Computer Use` 首次抓到的是无关的默认 Electron 欢迎页。
+  - 已改用系统窗口枚举 + 指定窗口编号方式精确抓图，避免误把别的 Electron 窗口当成当前成品。
+  - 当前有效窗口截图：
+    - `/tmp/flowweave-captures/studio-windowid-10006.png`
+- 结论：
+  - 当前电脑上 `织流 Studio` 已重新启动并保持运行，用户现在看到的是新构建后的桌面端窗口。
+
+## 2026-06-10 视频复核后续：headed 浏览器尺寸抽搐修复
+
+- 时间：2026-06-10 18:38:00 CST
+- 任务目标：针对用户指出的“不是黑屏，而是浏览器内容区域持续缩小放大、抽搐”，复核录屏并修复真实运行链路中的 headed 浏览器尺寸错配问题。
+- 路线与边界：
+  - 继续限定在 `PROJECT_ROUTE_LOCK.md` 的 P2“真实页面稳定录制与执行增强”主线。
+  - 不扩展 P3 / P4 冻结范围，不改产品路线；仅修复 runtime headed 执行时的浏览器尺寸策略。
+- 技能与运行时：
+  - `systematic-debugging`：先复核视频现象、对照真实 Flow 与运行链路，再做最小修复。
+  - `verification-before-completion`：必须在 Node 20 下完成 fresh test / build / 真实 Flow 复验后才能宣称修复成立。
+- 关键排查过程：
+  - 用户纠正了我先前把录屏后段误判为“黑屏”的方向，真实问题是页面内容区域看起来在左上角缩放、抽搐。
+  - 先在 `packages/runtime/src/playwright-runner.ts` 中尝试加入 `noDefaultViewport: true`，并补了对应测试；定向测试通过，但后续 `@flowweave/runtime build` 暴露出该字段不属于当前 Playwright 1.60 `launchPersistentContext()` 类型。
+  - 继续核对本地 Playwright 类型定义后确认：当前版本真正支持、且语义正确的字段是 `viewport: null`，表示关闭默认 `1280x720` 一致性 viewport 仿真，让页面可视区跟随宿主窗口大小。
+  - 额外发现一层关键运行链路事实：
+    - `apps/studio/electron/services.ts` 运行时依赖 `@flowweave/runtime`
+    - 实际执行用的是 `packages/runtime/dist/index.js`
+    - 只改 `src/` 不重建 `dist` 时，Studio / Electron 仍可能继续运行旧行为
+- 最终代码修复：
+  - `packages/runtime/src/playwright-runner.ts`
+    - headed `launchPersistentContext(...)` 改为传 `viewport: null`
+  - `packages/runtime/src/playwright-launch-options.test.ts`
+    - 将 launch 参数断言从 `noDefaultViewport: true` 改为 `viewport: null`
+- 真实链路对照验证：
+  - 使用用户提到的真实录制 Flow：
+    - `flow-6cfdd436-5b73-45ab-9388-43609c16c2ee`
+    - 所属项目库：`~/.flowweave/projects/117b8652-45d3-4ade-97b9-3907ae5c611f/store.sqlite`
+  - 基于 `packages/runtime/dist/index.js` 做两次埋点回放对照：
+    1. 保留修复后的 `viewport: null`
+       - 结果：`17` 步成功
+       - 页面侧仅记录到一次 `init`
+       - 尺寸：`innerWidth=1200`、`visualViewportWidth=1200`、`outerWidth=1200`
+       - 结论：页面可视区已跟随宿主窗口，不再被固定在默认 viewport
+    2. 人为删除 `viewport`，模拟旧行为
+       - 结果：同样 `17` 步成功
+       - 页面侧仅记录到一次 `init`
+       - 尺寸：`innerWidth=1280`、`visualViewportWidth=1280`、`outerWidth=1282`、`outerHeight=846`
+       - 结论：旧行为确实把页面固定在默认 `1280x720` 视口中，宿主窗口尺寸与内容区域失配，这正是用户看到“左上角一小块 / 灰色空区 / 抽搐感”的根因
+- 本轮 Node 20 验证：
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test -- src/playwright-launch-options.test.ts`
+    - 结果：通过，`2/2`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime build`
+    - 结果：通过，含 `d.ts`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/runtime test`
+    - 结果：通过，`45/45`
+  - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio build`
+    - 结果：通过
+- 结论：
+  - 先前 `noDefaultViewport` 属于错误字段名，不能作为最终修复。
+  - 当前修复应以 `viewport: null` 为准，并要求 `runtime build + studio build` 后再复验成品。
+  - 该问题的根因是 headed persistent context 的默认 viewport 仿真，而不是页面自身持续触发 `resize`。
+
 ## 2026-06-10 提交前验证与收口提交
 
 - 时间：2026-06-10 18:05:46 CST
