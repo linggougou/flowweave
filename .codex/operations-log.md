@@ -6705,3 +6705,46 @@
   - `verify (node 24)`：成功。
   - Node 24 已在真实 Ubuntu runner 越过原 `@flowweave/app-studio#build` 失败点。
 - 最终结论：本地与远端双基线门禁均通过，P2 收口条件恢复；本轮任务已结束。
+## 2026-07-15 v1 main 集成与 macOS 发布打包启动
+
+- 用户授权：继续执行状态梳理后的下一优先级，先合并稳定主线，再补 v1 正式交付能力。
+- main 集成：
+  - 已确认 `origin/main` 是当前稳定 HEAD 的祖先，差异为 `0 / 160`。
+  - 已执行 `git push origin HEAD:main`，main 从 `527a164` 快进到 `0067363`，没有合并提交或历史重写。
+  - main CI run `29421201895` 已启动，Node 20 / 24 会签待完成。
+- 生命周期：P2/M4 发布准备缺口，属于 S7 发布判断中发现的当前阶段交付缺口，回到 S5-S6 小步补齐。
+- 最小闭环：配置合同 -> `.app` -> DMG -> native binding/启动/挂载验证 -> 文档 -> CI。
+- 研究结论：
+  - 当前 manifest 均为 `0.1.0`，发布文档为 `v1.0.0`。
+  - Studio 当前没有任何 Electron 打包器、安装包脚本或产物配置。
+  - 本机 `security find-identity -v -p codesigning` 返回 `0 valid identities found`。
+  - 仓库没有正式 `.icns` 图标。
+- 技术选择：使用 electron-builder v26 稳定线建立未签名本地 `.app + .dmg`，不替换技术栈，不绕过 Electron native binding 校验。
+- Skills：使用 `documentation-lookup` 核对打包器配置；Context7 不可用，替代为 electron-builder 官方站点、官方仓库 README 与 npm registry。使用 `packaging-notarization` 区分本地包、正式签名和公证状态。
+- 明确非目标：Windows/Linux 安装器、自动更新、自动发布、伪造签名/公证、AI/P3/P4。
+
+## 2026-07-15 v1 macOS 发布打包完成
+
+- main 会签：GitHub Actions run `29421201895` 的 Node 20、Node 24 job 均成功。
+- 实施结果：
+  - 根项目、Studio、Web、Extension manifest 统一为 `1.0.0`。
+  - Studio 新增 electron-builder 目录包与 DMG 打包链路。
+  - 打包应用通过 `Contents/Resources` 加载 SQLite native binding、登录 fixture 与 Playwright Chromium。
+  - 打包模式直连本地 `ProjectKnowledgeRepository`，不再要求先启动 `127.0.0.1:3847` Web API。
+  - 无 Developer ID 时执行 ad-hoc 深度签名与严格校验；未宣称 Apple 公证或正式外部分发就绪。
+- Node 24 验证：
+  - 发布/资源定向测试：`16/16` 通过。
+  - Studio typecheck、lint 通过。
+  - `CI=1 pnpm smoke` 通过。
+  - `pnpm e2e:recorded-pages`：`25/25` 通过。
+- Node 20 兼容验证：Studio 测试 `86/86`、Studio typecheck 通过。
+- 实机产物验证：
+  - `.app` 在 API 端口未启动时可显示窗口，日志无 `ECONNREFUSED 3847`。
+  - 包内 headed Chromium 与 headless shell 均可启动并打开登录 fixture。
+  - `codesign --verify --deep --strict` 通过。
+  - DMG 挂载、从镜像启动和卸载通过。
+  - DMG：`apps/studio/release/FlowWeave-Studio-1.0.0-arm64.dmg`，约 347 MB。
+  - SHA-256：`a4b8717e2c562d60a44a22b06b3b93098b6cd997857327fed04b3f63c6475db8`。
+- 发布限制：本机没有 Developer ID，有效签名身份为 0；正式 `.icns` 图标尚未提供，当前包只用于本机或内部验收。
+- 工具替代：Context7 不可用，原用途为核对 electron-builder 配置；使用 electron-builder 官方文档、官方仓库和 npm 元数据完成研究与验证。
+- 最终判断：v1 macOS 本地预览包最小闭环通过，执行计划归档；P3/P4 继续冻结。

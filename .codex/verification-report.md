@@ -4851,3 +4851,31 @@
 - 风险控制：94
 - 综合评分：96
 - 建议：本地通过，推送后等待 Node 20 / 24 双矩阵会签。
+
+## 2026-07-15 v1 macOS 本地预览包验收
+
+### 验收结果
+
+- 版本与配置合同：通过；workspace 应用 manifest 已统一为 `1.0.0`。
+- 发布/资源定向测试：Node 24 下 `16/16` 通过。
+- Studio：Node 24 typecheck、lint 通过；Node 20 测试 `86/86`、typecheck 通过。
+- 主线回归：Node 24 `CI=1 pnpm smoke` 通过，recorded replay `25/25` 通过。
+- 远端会签：main CI run `29421201895` 的 Node 20、Node 24 均成功。
+- 应用启动：API 端口 `3847` 未启动时仍可显示 Studio 窗口，未出现 API 拒绝连接日志。
+- 本地知识库：打包应用从 Resources 加载 Electron ABI 的 `better_sqlite3.node`，项目、Flow、执行记录、版本和截图走本地 SQLite。
+- 浏览器：包内 headed Chromium 与 headless shell 均成功启动并打开登录 fixture。
+- Bundle：`codesign --verify --deep --strict` 通过；该结果仅代表 ad-hoc bundle 完整性，不代表 Developer ID 签名或 Apple 公证。
+- DMG：生成、挂载、镜像内启动、卸载均通过；SHA-256 为 `a4b8717e2c562d60a44a22b06b3b93098b6cd997857327fed04b3f63c6475db8`。
+- 差异卫生：`git diff --check` 通过，变更文件敏感信息扫描无发现。
+
+### 残余发布阻塞
+
+- 本机无 Developer ID Application 证书，无法完成正式分发签名。
+- Apple 公证尚未配置和执行。
+- 正式 `.icns` 品牌图标尚未提供，当前使用 Electron 默认图标。
+
+### 结论
+
+- v1 macOS 本地预览包：通过，可用于当前电脑和内部验收。
+- 面向外部用户的正式发布包：未通过，必须补齐 Developer ID 签名、Apple 公证和正式图标。
+- P3/P4 状态：保持冻结。

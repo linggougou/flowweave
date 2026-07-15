@@ -74,6 +74,14 @@ pnpm dev:studio
 pnpm dev:extension
 ```
 
+Build a local macOS preview installer / 构建 macOS 本地预览安装包：
+
+```bash
+pnpm --filter @flowweave/app-studio package:mac
+```
+
+The DMG includes the matching Playwright Chromium. Developer ID signing, notarization, and the final app icon remain release prerequisites. / DMG 已包含匹配版本的 Playwright Chromium；Developer ID 签名、Apple 公证和正式图标仍是公开发布前置条件。
+
 ## Repository Map / 仓库结构
 
 ```text

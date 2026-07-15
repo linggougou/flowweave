@@ -18,13 +18,25 @@ SKIP_E2E=1 pnpm smoke    # 或 pnpm smoke:full
 
 ### 构建与加载应用
 
-| 应用 | 开发 | 生产构建 |
-|------|------|----------|
-| Web + API | `pnpm dev:web` | `pnpm --filter @flowweave/app-web build && pnpm --filter @flowweave/app-web start` |
-| Studio | `pnpm dev:studio` | `pnpm --filter @flowweave/app-studio build` 后 `electron .`（在 `apps/studio`） |
-| 扩展 | `pnpm dev:extension` | `pnpm --filter @flowweave/app-extension build`，Chrome 加载 `apps/extension/dist/chrome-mv3` |
+| 应用      | 开发                 | 生产构建                                                                                     |
+| --------- | -------------------- | -------------------------------------------------------------------------------------------- |
+| Web + API | `pnpm dev:web`       | `pnpm --filter @flowweave/app-web build && pnpm --filter @flowweave/app-web start`           |
+| Studio    | `pnpm dev:studio`    | `pnpm --filter @flowweave/app-studio build` 后 `electron .`（在 `apps/studio`）              |
+| 扩展      | `pnpm dev:extension` | `pnpm --filter @flowweave/app-extension build`，Chrome 加载 `apps/extension/dist/chrome-mv3` |
 
 扩展同步知识库前需先启动 Web API（`dev:web`）。
+
+### macOS 本地预览包
+
+```bash
+# 生成可直接启动的 .app 目录包
+pnpm --filter @flowweave/app-studio package:dir
+
+# 生成包含 Playwright Chromium 的 arm64 DMG
+pnpm --filter @flowweave/app-studio package:mac
+```
+
+产物位于 `apps/studio/release/`。未配置 `CSC_LINK` / `CSC_NAME` 时，构建会执行 ad-hoc 深度签名与严格 bundle 校验，只适合本机预览和内部验证。公开分发前仍需 Developer ID Application 签名、Apple 公证和正式 `.icns` 图标。
 
 ## 分支与提交
 

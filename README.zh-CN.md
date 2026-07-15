@@ -106,6 +106,14 @@ pnpm doctor
 pnpm --filter @flowweave/runtime exec playwright install chromium
 ```
 
+### macOS 本地预览安装包
+
+```bash
+pnpm --filter @flowweave/app-studio package:mac
+```
+
+DMG 会包含匹配版本的 Playwright Chromium，可在不启动 Web API 的情况下使用 Studio 本地知识库。当前产物采用 ad-hoc 签名，仅用于本机或内部验收；公开分发前仍需 Developer ID 签名、Apple 公证和正式应用图标。
+
 ### 2. 一键验证主链路
 
 ```bash

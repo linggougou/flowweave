@@ -106,6 +106,14 @@ If Playwright Chromium is missing:
 pnpm --filter @flowweave/runtime exec playwright install chromium
 ```
 
+### Local macOS Preview Installer
+
+```bash
+pnpm --filter @flowweave/app-studio package:mac
+```
+
+The DMG bundles the matching Playwright Chromium and Studio uses the local knowledge store without requiring the Web API. This artifact is ad-hoc signed for local or internal validation only; public distribution still requires a Developer ID signature, Apple notarization, and a final app icon.
+
 ### 2. Verify the Mainline
 
 ```bash
