@@ -6748,3 +6748,4 @@
 - 发布限制：本机没有 Developer ID，有效签名身份为 0；正式 `.icns` 图标尚未提供，当前包只用于本机或内部验收。
 - 工具替代：Context7 不可用，原用途为核对 electron-builder 配置；使用 electron-builder 官方文档、官方仓库和 npm 元数据完成研究与验证。
 - 最终判断：v1 macOS 本地预览包最小闭环通过，执行计划归档；P3/P4 继续冻结。
+- 发布分支远端会签：GitHub Actions run `29423379300` 完成，`verify (node 20)` 与 `verify (node 24)` 均成功。
