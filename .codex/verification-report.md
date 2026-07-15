@@ -4832,6 +4832,15 @@
 - 当前本地门禁：通过。
 - 当前远端门禁：待推送复验。
 
+### 远端会签
+
+- GitHub Actions CI #20：`29415998102`。
+- `verify (node 20)`：通过。
+- `verify (node 24)`：通过。
+- Node 24 在真实 Ubuntu runner 中完成 `pnpm install`、Playwright 安装、lint 与 smoke，原 Studio build 阻塞已关闭。
+- 最终门禁：通过。
+- 最终建议：通过，可继续 P2 稳定版本发布准备；P3/P4 仍保持冻结。
+
 ### 评分
 
 - 代码质量：96

@@ -6692,3 +6692,16 @@
   - `git diff --check`：通过。
   - 变更文件敏感信息扫描：未发现 API Key、私钥或 OpenAI key 形态内容。
 - 当前门禁判断：本地门禁通过；远端 Node 20 / 24 CI 待推送后复验。
+
+### 2026-07-15 远端 CI 会签与任务结束
+
+- 推送提交：
+  - `f3cb4d0 fix(ci): 恢复缺失的 Electron 可执行包`
+  - `d91ecb3 docs: 完善多语言 README 与验收记录`
+  - 同步推送此前领先远端的 `8a7f054 docs: 定义 vNext 后台任务模板方向`
+- GitHub Actions：CI #20，run id `29415998102`。
+- 远端结果：
+  - `verify (node 20)`：成功。
+  - `verify (node 24)`：成功。
+  - Node 24 已在真实 Ubuntu runner 越过原 `@flowweave/app-studio#build` 失败点。
+- 最终结论：本地与远端双基线门禁均通过，P2 收口条件恢复；本轮任务已结束。
