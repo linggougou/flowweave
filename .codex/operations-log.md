@@ -1,5 +1,74 @@
 # FlowWeave 操作日志
 
+## 2026-07-12 本地项目关闭
+
+- 时间：2026-07-12 20:08:00 CST
+- 任务目标：按用户“关闭项目”的要求，关闭刚才启动的 FlowWeave Web/API 与 Studio 本地运行环境。
+- 处理结果：
+  - 原先的工具会话已结束，无法通过会话 ID 发送 `Ctrl-C`。
+  - 改用端口与进程检查确认当前无残留 FlowWeave 服务。
+- 验证结果：
+  - `5174` 无监听进程
+  - `3847` 无监听进程
+  - `5173` 无监听进程
+  - 未发现工作目录 `/Users/ling/codeHome/A_Mine/flowweave` 下的 `pnpm` / `vite` / `tsx` / Electron Studio 残留进程
+- 结论：本地项目已关闭。
+
+## 2026-07-12 本地项目启动
+
+- 时间：2026-07-12 20:02:00 CST
+- 任务目标：按用户“运行一下项目”的要求，在当前电脑启动 FlowWeave 本地 Web/API 与 Studio 桌面端，确认可访问与可见窗口状态。
+- 当前路线与边界：
+  - 遵循 `PROJECT_ROUTE_LOCK.md` 的 P2 稳定化收口主线。
+  - 本轮只运行项目并记录状态，不修改产品代码，不处理未提交文档改动。
+- 启动前状态：
+  - 分支：`codex/real-page-stability-program`
+  - 相对远端：ahead 1
+  - 工作区存在 README 多语言文档、`.codex` 留痕、`docs/assets/` 预览图等未提交改动；`.idea/`、`apps/studio/output/`、`output/` 为本地未跟踪产物，未纳入处理。
+- 启动命令：
+  - Web/API：
+    - `source "$HOME/.nvm/nvm.sh" && nvm use >/dev/null && pnpm dev:web`
+  - Studio：
+    - `source "$HOME/.nvm/nvm.sh" && nvm use >/dev/null && pnpm dev:studio`
+- 运行结果：
+  - Web Vite：`http://127.0.0.1:5174/`
+  - 本地 API：`http://127.0.0.1:3847`
+  - Studio Vite：`http://127.0.0.1:5173/`
+  - Electron 窗口：`织流 Studio`
+- 观察：
+  - `ensure-electron-dist` 报告 Electron Framework symlink 正常，bundle 严格签名校验通过。
+  - `ensure-electron-native-binding` 报告 Electron 专用 `better-sqlite3` native binding 已就绪。
+  - Electron DevTools 输出了 `Autofill.enable` / `Autofill.setAddresses` 相关控制台噪音；未阻塞窗口启动。
+
+## 2026-06-10 README 多语言重构
+
+- 时间：2026-06-10 19:08:00 CST
+- 任务目标：按用户要求把项目主入口 README 重写为更完善的多语言文档，并与当前路线锁、架构文档和 quickstart 保持一致。
+- 路线与边界：
+  - 继续限定在 `PROJECT_ROUTE_LOCK.md` 的 P2 稳定化收口主线。
+  - 本轮只重构项目入口文档，不新增路线外功能，不修改运行时能力边界。
+- 文档策略：
+  - 根 `README.md` 改为双语入口页，保留 GitHub 首屏摘要、快速启动、仓库结构和文档导航。
+  - 新增 `README.zh-CN.md` 作为中文完整版。
+  - 新增 `README.en.md` 作为英文完整版。
+- 写入内容：
+  - 项目定位与当前能力范围
+  - 当前稳定口径与冻结边界
+  - Node 24 默认基线与 Node 20 兼容说明
+  - 快速开始、常用命令、典型使用路径
+  - 仓库结构、核心包说明、数据与运行产物位置
+  - 文档导航、协作与贡献入口
+- 约束处理：
+  - 全文口径与 `PROJECT_ROUTE_LOCK.md`、`docs/architecture/overview.md`、`docs/guides/quickstart.md`、`docs/releases/v1.0.0.md` 对齐。
+  - 不在 README 中承诺 P3 / P4 冻结范围外的能力。
+  - 不引入新的脚本、依赖或文档体系分叉。
+- 后续补强：
+  - 新增 README 首屏状态徽章
+  - 新增 Mermaid 架构快照
+  - 从 `apps/studio/output/playwright/studio-layout/layout-fixed-recheck.png` 提取并落盘 README 预览图：
+    - `docs/assets/readme/studio-overview.png`
+  - 三份 README 现都包含界面预览与结构快照，更适合 GitHub 首屏展示
+
 ## 2026-06-10 vNext 后台管理类交互式流程模板架构评估
 
 - 时间：2026-06-10 23:41:46 CST
@@ -6572,3 +6641,54 @@
   - 这段录屏里的核心异常不是“DOM 文字堆叠”或“左侧不能滚动”，而是更底层的浏览器可视内容在某一步后整体黑掉。
   - 黑屏发生点非常接近“切换酒店确认弹窗的确认动作”之后。
   - 从关键帧看，更像 headed Chromium / 渲染 surface / GPU 相关问题，或者页面切换后浏览器窗口内容没有继续正确绘制，而不是单纯某个 DOM 片段布局错乱。
+## 2026-07-15 Node 24 Linux CI 与提交收口启动
+
+- 用户授权：按“先修 CI、整理提交边界、双版本验收、拆分提交并推送”的顺序执行。
+- 生命周期：S6 测试与问题处理；目标是在完成本地和远端验证后进入 S7 验收判断。
+- 路线依据：`PROJECT_ROUTE_LOCK.md` P2 收口，服务 Node 24 默认基线与 Node 20 兼容矩阵，不解冻 P3/P4。
+- 里程碑真源：`PROJECT_ROUTE_LOCK.md`、`docs/superpowers/plans/2026-05-26-run-first-roadmap.md`。
+- 最小闭环：真实 CI 失败证据 -> TDD 脚本合同 -> 修复 -> 双版本验证 -> 拆分提交 -> 推送 -> 远端 CI 复验。
+- 文件边界：只修改 Electron 构建脚本及测试、`.gitignore`、README 提交与 `.codex` 留痕；不修改业务主链路和页面体系。
+- 工作区现状：分支 `codex/real-page-stability-program` 领先远端 1 个提交；多语言 README 与图片未提交；`.idea/`、`apps/studio/output/`、`output/` 为本地产物。
+- 远端根因证据：
+  - CI #19 的 Node 20 job 通过。
+  - Node 24 job 在 `@flowweave/app-studio#build` 失败。
+  - Electron 专用 `better-sqlite3` binding 已生成，但调用 `electron/cli.js` 校验时出现 `Electron failed to install correctly`。
+  - 根因收敛为 Electron npm 包缺少 `path.txt` 或对应可执行文件，当前 native-binding 脚本没有缺失恢复合同。
+- 工具替代：
+  - 缺失 `gh`，原用途是读取 Actions 状态与日志；替代为 GitHub REST API + Git credential 只读下载日志，已获得完整失败栈。
+  - 缺失 Docker，原用途是本地 Linux 复现；替代为真实远端 Linux 日志 + 可注入文件系统/执行器的脚本单测。
+  - 当前环境无 CodeGraph 工具；替代为 `rg`、源码、现有测试与 CI 日志影响分析。
+- Skills：使用 `tdd-workflow` 约束先红后绿，交付前使用 `verification-loop` 执行构建、类型、lint、测试、差异与安全检查。
+- 并行判断：修复、忽略规则、README 与 `.codex` 最终需要共享提交边界，采用单 Agent 串行，避免覆盖现有未提交改动。
+
+### 2026-07-15 Node 24 Linux CI 本地修复与验证结果
+
+- TDD 红灯：
+  - 新增 `scripts/electron-installation.test.mjs` 并纳入 Studio Vitest 后，因 `electron-installation.mjs` 尚不存在而失败。
+  - 结果符合预期，证明现有脚本缺少 Electron 安装完整性恢复合同。
+- 实施：
+  - 新增 `apps/studio/scripts/electron-installation.mjs`。
+  - native binding 校验前检查 Electron `path.txt` 与对应可执行文件。
+  - 缺失时显式调用 Electron npm 包自带的 `install.js`，并移除会跳过下载的 `ELECTRON_SKIP_BINARY_DOWNLOAD`。
+  - 安装后仍缺失时明确失败，不绕过 native binding 校验。
+  - 完整安装直接复用，不重复执行安装脚本。
+  - `.gitignore` 新增 `.idea/` 与 `output/`，屏蔽 IDE 和 Playwright 本地产物。
+- Node 24 主验收：
+  - Studio Electron 安装合同：通过，最终 `3/3`。
+  - `pnpm lint`：通过，`12/12` tasks。
+  - `CI=1 pnpm smoke`：通过；typecheck、test、build、e2e:login 全部通过。
+  - Studio 测试：通过，`76/76`。
+  - `pnpm e2e:recorded-pages`：通过，`25/25`。
+- Node 20 兼容验收：
+  - `pnpm install --force --frozen-lockfile`：通过。
+  - `CI=1 pnpm smoke`：通过；包含原生 SQLite 自检、全仓门禁与登录 E2E。
+- 默认环境恢复：
+  - 已用 Node 24 重新执行 `pnpm install --force --frozen-lockfile`。
+  - Node 24 `smoke:prepare`、Studio `76/76`、Studio build 均通过。
+- 文档与差异：
+  - 三语言 README Prettier：通过。
+  - README 本地链接与图片目标：全部存在。
+  - `git diff --check`：通过。
+  - 变更文件敏感信息扫描：未发现 API Key、私钥或 OpenAI key 形态内容。
+- 当前门禁判断：本地门禁通过；远端 Node 20 / 24 CI 待推送后复验。

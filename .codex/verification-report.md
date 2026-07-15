@@ -1,5 +1,128 @@
 # 验证报告
 
+## 2026-07-12 本地项目关闭验收
+
+### 验证范围
+
+- Web 控制台端口 `5174` 是否已释放。
+- 本地 API 端口 `3847` 是否已释放。
+- Studio Vite 端口 `5173` 是否已释放。
+- 是否存在 FlowWeave 工作目录下的本地运行残留进程。
+
+### 验证结果
+
+1. 端口释放检查通过。
+   - `lsof -nP -iTCP:5174 -sTCP:LISTEN`
+     - 结果：无监听进程
+   - `lsof -nP -iTCP:3847 -sTCP:LISTEN`
+     - 结果：无监听进程
+   - `lsof -nP -iTCP:5173 -sTCP:LISTEN`
+     - 结果：无监听进程
+2. 进程残留检查通过。
+   - 命令：
+     - `ps -ax -o pid=,command= | rg '/Users/ling/codeHome/A_Mine/flowweave|@flowweave|apps/studio|apps/web|dist-electron|dev-electron|tsx watch server/index|vite'`
+   - 结果：
+     - 未发现除检查命令自身外的 FlowWeave 运行进程。
+
+### 综合结论
+
+- 当前建议：通过；本地 FlowWeave 运行环境已关闭
+
+## 2026-07-12 本地项目启动验收
+
+### 验证范围
+
+- Web 控制台、Web 本地 API 与 Studio 桌面端是否在当前电脑启动成功。
+- Electron bundle 与 native binding 启动前检查是否通过。
+- Studio 桌面窗口是否真实可见。
+
+### 验证结果
+
+1. Web/API 启动成功。
+   - 命令：
+     - `source "$HOME/.nvm/nvm.sh" && nvm use >/dev/null && pnpm dev:web`
+   - 结果：
+     - Vite: `http://127.0.0.1:5174/`
+     - API: `http://127.0.0.1:3847`
+     - `curl -sf http://127.0.0.1:3847/api/health` 返回 `{"ok":true}`
+     - `curl -sf http://127.0.0.1:5174` 成功
+2. Studio 启动成功。
+   - 命令：
+     - `source "$HOME/.nvm/nvm.sh" && nvm use >/dev/null && pnpm dev:studio`
+   - 结果：
+     - `ensure-electron-dist` 通过
+     - Electron bundle 严格签名校验通过
+     - Electron 专用 `better-sqlite3` native binding 已就绪
+     - Studio Vite: `http://127.0.0.1:5173/`
+     - `curl -sf http://127.0.0.1:5173` 成功
+3. Studio 桌面窗口可见。
+   - 系统窗口检查：
+     - `frontmost = true`
+     - `visible = true`
+     - 窗口列表包含 `织流 Studio`
+   - 同时打开了 `Developer Tools - http://127.0.0.1:5173/`
+
+### 综合结论
+
+- 当前建议：通过；FlowWeave 本地 Web/API 与 Studio 桌面端已运行，可直接查看当前状态
+
+## 2026-06-10 README 多语言重构验收
+
+### 验证范围
+
+- 根 `README.md` 是否已升级为多语言入口。
+- 中文与英文完整版 README 是否覆盖项目定位、运行方式、仓库结构和文档导航。
+- README 中的本地相对链接与格式是否可用。
+- README 口径是否与当前路线锁保持一致。
+
+### 验证结果
+
+1. 多语言入口已建立。
+   - 文件：
+     - `README.md`
+     - `README.zh-CN.md`
+     - `README.en.md`
+   - 结果：
+     - 根 README 现为中英双语入口页
+     - 中文、英文各有一份完整说明文档
+2. 本地链接自检通过。
+   - 命令：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH node <<'NODE' ... NODE`
+   - 结果：
+     - 输出 `README local links OK (Node 20)`
+     - 三份 README 的本地相对链接均指向存在文件
+3. 文档格式检查通过。
+   - 命令：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm exec prettier --check README.md README.zh-CN.md README.en.md`
+     - 初次失败后执行：
+       - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm exec prettier --write README.zh-CN.md README.en.md`
+     - 再次执行：
+       - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm exec prettier --check README.md README.zh-CN.md README.en.md`
+   - 结果：
+     - 通过
+4. 口径对齐完成。
+   - 核对来源：
+     - `PROJECT_ROUTE_LOCK.md`
+     - `docs/architecture/overview.md`
+     - `docs/guides/quickstart.md`
+     - `docs/releases/v1.0.0.md`
+   - 结果：
+     - README 中的 Node 基线、P2 主线、`25 = 23 fixture + 2 runtime-generated`、Studio / Web / Extension 范围与当前真源一致
+5. README 首屏增强资源已补齐且可访问。
+   - 新增内容：
+     - 首屏状态徽章
+     - Mermaid 架构快照
+     - 预览图 `docs/assets/readme/studio-overview.png`
+   - 命令：
+     - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH node <<'NODE' ... NODE`
+   - 结果：
+     - 输出 `README links and image paths OK (Node 20)`
+     - 图片路径与本地相对链接均有效
+
+### 综合结论
+
+- 当前建议：通过；项目主入口 README 已升级为带徽章、架构图和预览图的多语言版本
+
 ## 2026-06-10 vNext 后台任务模板设计稿自审
 
 ### 验证范围
@@ -4663,3 +4786,59 @@
 ### 建议
 
 - 通过
+## 2026-07-15 Node 24 Linux Studio CI 收口验收
+
+### 验证范围
+
+- GitHub Actions Node 24 为什么只在 `@flowweave/app-studio#build` 失败。
+- Electron npm 包安装不完整时，native binding 构建是否可以定向恢复而不是绕过校验。
+- 修复是否保持 Node 20 / 24 双基线、macOS 本机构建与 recorded replay 稳定基线。
+- README 与本地产物提交边界是否清晰。
+
+### 根因证据
+
+1. CI #19 的 Node 20 job 成功，Node 24 job 失败。
+2. Node 24 中 `better-sqlite3` Electron binding 已完成生成，失败发生在验证阶段。
+3. `electron/cli.js` 报错 `Electron failed to install correctly`，对应 Electron 包缺失 `path.txt` 或可执行文件。
+4. 原脚本直接假设 Electron npm 包安装完整，没有恢复或明确失败合同。
+
+### 修复验证
+
+- Electron 安装合同测试：`3/3` 通过。
+  - 已安装时直接复用，不重复安装。
+  - 缺失时调用官方 `install.js`，并移除 `ELECTRON_SKIP_BINARY_DOWNLOAD`。
+  - 官方安装结束后仍缺失时明确抛错。
+- Node 24：
+  - `pnpm lint`：通过，`12/12` tasks。
+  - `CI=1 pnpm smoke`：通过。
+  - Studio 测试：`76/76` 通过。
+  - Studio build：通过。
+  - recorded replay：`25/25` 通过。
+- Node 20：
+  - 强制重装当前 ABI 后 `CI=1 pnpm smoke` 通过。
+- 最终环境：
+  - 已恢复 Node 24 依赖 ABI。
+  - `smoke:prepare`、Studio `76/76`、Studio build 再次通过。
+- 文档与提交边界：
+  - README 三语言格式检查通过。
+  - README 本地链接与图片目标检查通过。
+  - `.idea/`、根 `output/`、`apps/studio/output/` 已被忽略。
+  - 敏感信息扫描无发现。
+
+### 风险与门禁
+
+- 本机缺少 Docker，Linux 侧不以本地模拟替代真实 CI；修复依据真实 Actions 日志与可注入脚本合同，最终仍需推送后以 GitHub Linux runner 验收。
+- 本轮没有改变 Electron、SQLite、pnpm 或 CI Node 矩阵，没有绕过 native binding 校验。
+- 当前本地门禁：通过。
+- 当前远端门禁：待推送复验。
+
+### 评分
+
+- 代码质量：96
+- 测试覆盖：95
+- 规范遵循：97
+- 需求匹配：98
+- 架构一致：97
+- 风险控制：94
+- 综合评分：96
+- 建议：本地通过，推送后等待 Node 20 / 24 双矩阵会签。

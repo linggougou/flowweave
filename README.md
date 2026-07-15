@@ -1,101 +1,114 @@
-# 织流 / FlowWeave
+# FlowWeave / 织流
 
-织流是一个通用网页流程自动化与页面智能分析平台。
+[简体中文](./README.zh-CN.md) | [English](./README.en.md)
 
-它的目标不是简单录制网页点击，而是把网页项目逐步沉淀为可执行、可维护、可诊断、可优化的自动化资产。
+![Phase](https://img.shields.io/badge/phase-P2%20hardening-2563eb)
+![Node 24 Default](https://img.shields.io/badge/node-24%20default-339933?logo=nodedotjs&logoColor=white)
+![Node 20 Compatible](https://img.shields.io/badge/node-20%20compatible-0f766e?logo=nodedotjs&logoColor=white)
+![Playwright Runtime](https://img.shields.io/badge/runtime-Playwright-2D8CFF?logo=playwright&logoColor=white)
+![Desktop Studio](https://img.shields.io/badge/desktop-Electron%20Studio-47848F?logo=electron&logoColor=white)
+![Local First](https://img.shields.io/badge/storage-local--first-F59E0B)
 
-## 技术栈（P0 已落地）
+FlowWeave is a local-first web automation and page intelligence platform. It turns recorded browser interactions into executable, diagnosable, versioned workflow assets.
 
-- **Monorepo**：pnpm workspaces + Turborepo
-- **语言**：TypeScript（strict）
-- **流程契约**：Zod Flow DSL（`@flowweave/flow-dsl`）
-- **执行内核（P1）**：Playwright（`@flowweave/runtime`）
-- **桌面端（P1）**：Electron + Vite + React（`apps/studio`）
-- **扩展（P1）**：WXT（`apps/extension`）
+织流是一个本地优先的网页流程自动化与页面智能分析平台。它不是只做“网页点击录制”，而是把页面操作逐步沉淀为可执行、可维护、可诊断、可复验的 Flow 资产。
 
-## 仓库结构
+## Studio Preview / 界面预览
 
-```text
-flowweave/
-├── apps/
-│   ├── extension/        # 浏览器扩展（WXT，P1）
-│   ├── studio/           # 桌面工作台（Electron，P1）
-│   └── web/              # Web 控制台（P2 加强）
-├── packages/
-│   ├── shared/           # 错误码、常量
-│   ├── flow-dsl/         # Flow Schema（Zod）
-│   ├── recorder/         # 录制引擎（P1）
-│   ├── runtime/          # 执行引擎（P1）
-│   ├── page-intelligence/
-│   ├── network-intelligence/
-│   ├── project-knowledge/  # SQLite（P2）
-│   ├── ai-orchestrator/    # AI SDK（P4）
-│   └── ui/
-├── docs/
-│   ├── architecture/overview.md
-│   ├── adr/
-│   └── domain/flow-dsl.md
-├── AGENTS.md             # 项目 Agent 规范
-├── CONTRIBUTING.md
-└── .codex/
+![FlowWeave Studio overview](./docs/assets/readme/studio-overview.png)
+
+## Highlights / 核心能力
+
+- Browser extension recording and local knowledge sync
+- Playwright-based runtime with diagnostics, recovery, screenshots, and replay artifacts
+- Electron Studio for replay, execution history, flow versions, and debugging details
+- Web console plus local API for project, flow, and execution browsing
+- SQLite-backed project knowledge stored under `~/.flowweave/projects/`
+- Current recorded replay baseline: `25 = 23 fixture + 2 runtime-generated`
+
+## Current Status / 当前状态
+
+- Mainline phase: `P2` hardening and documentation consolidation
+- Default local development baseline: Node `24` from [`.nvmrc`](./.nvmrc)
+- Compatibility baseline retained: Node `20`
+- Studio desktop build and local launch are part of the current acceptance gate
+- `P3` deep intelligence expansion and `P4` AI productization remain frozen
+
+See [PROJECT_ROUTE_LOCK.md](./PROJECT_ROUTE_LOCK.md) for the active route lock and acceptance gates.
+
+## Architecture Snapshot / 架构快照
+
+```mermaid
+flowchart LR
+  EXT["Extension<br/>WXT recorder"] --> REC["@flowweave/recorder"]
+  REC --> DSL["@flowweave/flow-dsl"]
+  DSL --> RUN["@flowweave/runtime"]
+  RUN --> PW["Playwright"]
+  RUN --> PK["@flowweave/project-knowledge"]
+  PK --> DB["SQLite / ~/.flowweave/projects"]
+  STU["Studio<br/>Electron + React"] --> RUN
+  STU --> PK
+  WEB["Web Console<br/>Vite + local API"] --> PK
 ```
 
-## 文档入口
-
-| 文档 | 说明 |
-|------|------|
-| [PROJECT_ROUTE_LOCK.md](PROJECT_ROUTE_LOCK.md) | 当前路线锁、阶段门禁与冻结边界 |
-| **[快速启动](docs/guides/quickstart.md)** | **本地跑通（推荐首读）** |
-| [v1.0.0 发行说明](docs/releases/v1.0.0.md) | 第一版能力范围 |
-| [v1 手测清单](docs/guides/manual-qa.md) | 验收录制→回放闭环 |
-| [先跑通开发计划](docs/superpowers/plans/2026-05-26-run-first-roadmap.md) | 当前里程碑（AI 冻结） |
-| [架构总览](docs/architecture/overview.md) | 逻辑/物理架构、阶段规划 |
-| [Flow DSL](docs/domain/flow-dsl.md) | 流程语言规范 |
-| [ADR](docs/adr/README.md) | 架构决策记录 |
-| [AGENTS.md](AGENTS.md) | AI / 开发者协作规范 |
-| [产品设计](docs/superpowers/specs/2026-05-25-web-automation-platform-design.md) | 产品定义 |
-
-## 当前状态（2026-06-09）
-
-- 主线维持 “先跑通、再稳定、后智能”，当前物理路线锁见 [PROJECT_ROUTE_LOCK.md](PROJECT_ROUTE_LOCK.md)。
-- 仓库默认开发基线已切到 `.nvmrc` 的 Node 24，同时继续保留 Node 20 兼容。
-- recorded replay 基线已统一为 `25 = 23 fixture + 2 runtime-generated`，其中新增 `placeholder-disambiguation` 与 `scroll-runtime-contract`。
-- Studio 已补齐左侧滚动 / 右侧布局 contract，并增强歧义候选诊断细节展示。
-- Electron 桌面端已补 bundle integrity 自修复与显式失败语义，可在当前电脑稳定构建与启动。
-- P3 深度 page / network intelligence 与 P4 AI 继续冻结，不在当前主线扩展。
-
-## 本地开发
+## Quick Start / 快速开始
 
 ```bash
 corepack enable
 pnpm install
-pnpm exec playwright install chromium   # 首次
-pnpm typecheck && pnpm lint && pnpm test && pnpm build
-pnpm e2e:login
+pnpm doctor
+pnpm smoke
 ```
 
-**三端开发**：
+If Playwright Chromium is missing on a fresh machine:
 
 ```bash
-pnpm dev:web         # Web + API（扩展同步依赖）
-pnpm dev:studio      # Studio 桌面端
-pnpm dev:extension   # 浏览器扩展（WXT 热更新）
+pnpm --filter @flowweave/runtime exec playwright install chromium
 ```
 
-详见 [快速启动](docs/guides/quickstart.md)、[P1 端到端](docs/guides/p1-e2e.md)。
+Start local services:
 
-要求 Node.js ≥ 20；仓库默认开发基线已切到 `.nvmrc` 的 Node 24。
+```bash
+pnpm dev:web
+pnpm dev:studio
+pnpm dev:extension
+```
 
-如需在 Node 20 / 24 之间切换，请在切换主版本后执行一次 `pnpm install --force`，让 `better-sqlite3` 等原生模块按当前 Node ABI 重新落盘。
+## Repository Map / 仓库结构
 
-GitHub Actions 当前保持 `Node 20 / 24` 双基线矩阵；本地开发、排障和交付前自验默认以 `.nvmrc` 的 Node 24 为准。
+```text
+flowweave/
+├── apps/
+│   ├── extension/   # WXT browser extension recorder
+│   ├── studio/      # Electron desktop studio
+│   └── web/         # Web console + local API
+├── packages/
+│   ├── flow-dsl/
+│   ├── recorder/
+│   ├── runtime/
+│   ├── project-knowledge/
+│   ├── page-intelligence/
+│   ├── network-intelligence/
+│   ├── ai-orchestrator/
+│   ├── shared/
+│   └── ui/
+├── docs/
+├── PROJECT_ROUTE_LOCK.md
+├── AGENTS.md
+└── CONTRIBUTING.md
+```
 
-## 交付阶段
+## Documentation / 文档入口
 
-| 阶段 | 目标 |
-|------|------|
-| **P0** | 工程基座、文档、包骨架 ✅ |
-| **P1** | 扩展录制 + Studio 回放 + `pnpm e2e:login` ✅ |
-| **P2** | 知识库 + 执行历史 + 版本 ✅ 主体完成 |
-| **v1.0** | **先跑通版** ✅（见 [发行说明](docs/releases/v1.0.0.md)） |
-| **P3 深度 / P4 AI** | ⏸ 冻结，跑通稳定后再做 |
+- [README.zh-CN.md](./README.zh-CN.md): full Chinese overview
+- [README.en.md](./README.en.md): full English overview
+- [docs/guides/quickstart.md](./docs/guides/quickstart.md): run the mainline locally
+- [docs/architecture/overview.md](./docs/architecture/overview.md): architecture and package dependencies
+- [docs/domain/flow-dsl.md](./docs/domain/flow-dsl.md): Flow DSL contract
+- [docs/releases/v1.0.0.md](./docs/releases/v1.0.0.md): v1 scope
+- [docs/guides/manual-qa.md](./docs/guides/manual-qa.md): manual acceptance checklist
+
+## Read in Your Language / 按语言阅读
+
+- Chinese: [README.zh-CN.md](./README.zh-CN.md)
+- English: [README.en.md](./README.en.md)
