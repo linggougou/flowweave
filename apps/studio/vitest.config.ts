@@ -11,6 +11,7 @@ export default defineConfig({
       "electron/**/*.test.tsx",
       "electron/**/*.spec.ts",
       "electron/**/*.spec.tsx",
+      "scripts/**/*.test.mjs",
     ],
     passWithNoTests: true,
   },

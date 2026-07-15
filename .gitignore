@@ -11,6 +11,8 @@ coverage/
 .wxt/
 out/
 .cache/
+.idea/
+output/
 *.log
 .DS_Store
 .env

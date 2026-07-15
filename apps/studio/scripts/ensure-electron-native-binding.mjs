@@ -1,10 +1,20 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { ensureElectronInstallation } from "./electron-installation.mjs";
 
 function report(message) {
   console.log(`[ensure-electron-native-binding] ${message}`);
@@ -18,11 +28,7 @@ function formatExecError(error) {
     .join("\n");
 }
 
-function verifyElectronBinding({
-  electronCliPath,
-  nativeBindingPath,
-  studioRoot,
-}) {
+function verifyElectronBinding({ electronCliPath, nativeBindingPath, studioRoot }) {
   try {
     execFileSync(
       process.execPath,
@@ -61,14 +67,15 @@ const studioRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const requireFromStudio = createRequire(join(studioRoot, "package.json"));
 
 const electronPackageJsonPath = requireFromStudio.resolve("electron/package.json");
-const betterSqlitePackageJsonPath =
-  requireFromStudio.resolve("better-sqlite3/package.json");
+const betterSqlitePackageJsonPath = requireFromStudio.resolve("better-sqlite3/package.json");
 const electronPackage = JSON.parse(readFileSync(electronPackageJsonPath, "utf8"));
-const betterSqlitePackage = JSON.parse(
-  readFileSync(betterSqlitePackageJsonPath, "utf8"),
-);
+const betterSqlitePackage = JSON.parse(readFileSync(betterSqlitePackageJsonPath, "utf8"));
 
 const electronCliPath = join(dirname(electronPackageJsonPath), "cli.js");
+ensureElectronInstallation({
+  electronPackageDir: dirname(electronPackageJsonPath),
+  onInstall: () => report("检测到 Electron 可执行文件缺失，开始运行官方安装脚本恢复"),
+});
 const targetDir = join(studioRoot, "dist-electron", "native");
 const targetPath = join(targetDir, "better_sqlite3.node");
 const pnpmCmd = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
@@ -109,9 +116,7 @@ try {
     "utf8",
   );
 
-  report(
-    `开始生成 Electron ${electronPackage.version} 专用 better-sqlite3 native binding`,
-  );
+  report(`开始生成 Electron ${electronPackage.version} 专用 better-sqlite3 native binding`);
 
   execFileSync(pnpmCmd, ["install", "--force"], {
     cwd: packageRoot,
@@ -126,8 +131,7 @@ try {
   });
 
   const requireFromTemp = createRequire(join(packageRoot, "package.json"));
-  const tempBetterSqlitePackageJson =
-    requireFromTemp.resolve("better-sqlite3/package.json");
+  const tempBetterSqlitePackageJson = requireFromTemp.resolve("better-sqlite3/package.json");
   const builtBinaryPath = join(
     dirname(tempBetterSqlitePackageJson),
     "build",
