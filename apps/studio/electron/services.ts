@@ -2,7 +2,8 @@ import "./env-setup.js";
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
+import { app } from "electron";
 
 import type { FlowDocument } from "@flowweave/flow-dsl";
 import type { PageSnapshotSummary } from "@flowweave/page-intelligence";
@@ -28,9 +29,8 @@ import type {
   StudioProject,
   StudioProjectEnvironment,
 } from "../src/shared/studio-api-types.js";
-import {
-  buildExecutionFragilityIssues,
-} from "../src/shared/execution-fragility.js";
+import { resolveStudioResourcePaths } from "./resource-paths.js";
+import { buildExecutionFragilityIssues } from "../src/shared/execution-fragility.js";
 import {
   mapStoredExecutionToStudioExecution,
   shouldUseCachedExecution,
@@ -51,27 +51,27 @@ import {
   apiSaveExecution,
   apiSaveFlow,
   apiSavePageSnapshot,
+  configureLocalKnowledgeRepository,
 } from "./knowledge-client.js";
 
 const executions = new Map<string, StudioExecution>();
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-const electronNativeBindingPath = join(
-  repoRoot,
-  "apps/studio/dist-electron/native/better_sqlite3.node",
-);
-const projectKnowledgeRepository = new ProjectKnowledgeRepository({
-  nativeBinding: electronNativeBindingPath,
+const studioResourcePaths = resolveStudioResourcePaths({
+  isPackaged: app.isPackaged,
+  moduleUrl: import.meta.url,
+  resourcesPath: process.resourcesPath,
 });
-const loginFixtureUrl = pathToFileURL(
-  join(repoRoot, "examples/fixtures/login.html"),
-).href;
+const projectKnowledgeRepository = new ProjectKnowledgeRepository({
+  nativeBinding: studioResourcePaths.electronNativeBindingPath,
+});
+if (app.isPackaged) {
+  configureLocalKnowledgeRepository(projectKnowledgeRepository);
+}
+const loginFixtureUrl = pathToFileURL(studioResourcePaths.loginFixturePath).href;
 
 const SEED_PROJECT_NAME = "登录演示";
 const SEED_FLOW_ID = "flow_login_fixture";
 
-function toStudioProjectEnvironment(
-  environment: ProjectEnvironment,
-): StudioProjectEnvironment {
+function toStudioProjectEnvironment(environment: ProjectEnvironment): StudioProjectEnvironment {
   return {
     name: environment.name,
     baseUrl: environment.baseUrl,
@@ -151,11 +151,9 @@ function resolveRunEnvironment(
   const hasStorageStatePathOverride = hasExplicitOption(options, "storageStatePath");
 
   const name = hasEnvironmentNameOverride
-    ? normalizeOptionalString(options.environmentName) ?? storedName
+    ? (normalizeOptionalString(options.environmentName) ?? storedName)
     : storedName;
-  const baseUrl = hasBaseUrlOverride
-    ? normalizeOptionalString(options.baseUrl)
-    : storedBaseUrl;
+  const baseUrl = hasBaseUrlOverride ? normalizeOptionalString(options.baseUrl) : storedBaseUrl;
   const storageStatePath = hasStorageStatePathOverride
     ? normalizeOptionalString(options.storageStatePath)
     : storedStorageStatePath;
@@ -166,7 +164,7 @@ function resolveRunEnvironment(
     projectKnowledgeRepository.saveEnvironment(
       projectId,
       name,
-      hasBaseUrlOverride ? options.baseUrl?.trim() ?? "" : storedBaseUrl ?? "",
+      hasBaseUrlOverride ? (options.baseUrl?.trim() ?? "") : (storedBaseUrl ?? ""),
       true,
       hasStorageStatePathOverride ? storageStatePath : storedStorageStatePath,
     );
@@ -316,17 +314,12 @@ function normalizeStrategyAttempts(value: unknown): StudioDiagnosticStrategyAtte
 }
 
 function normalizeTargetHints(value: unknown): StudioDiagnosticTargetHints | undefined {
-  return value && typeof value === "object"
-    ? (value as StudioDiagnosticTargetHints)
-    : undefined;
+  return value && typeof value === "object" ? (value as StudioDiagnosticTargetHints) : undefined;
 }
 
 function normalizeStepDiagnostic(
   diagnostic: unknown,
-  step: Pick<
-    ExecutionStepLog,
-    "stepId" | "stepIndex" | "stepType" | "message" | "diagnosticPath"
-  >,
+  step: Pick<ExecutionStepLog, "stepId" | "stepIndex" | "stepType" | "message" | "diagnosticPath">,
 ): StudioStepDiagnostic | undefined {
   if (!diagnostic || typeof diagnostic !== "object") {
     return undefined;
@@ -404,15 +397,11 @@ function readStepArtifacts(
   return {
     diagnostic: normalizeStepDiagnostic(readJsonArtifact(step.diagnosticPath), step),
     pageSnapshotPath,
-    pageSnapshot:
-      pageSnapshot?.summary ?? readJsonArtifact<PageSnapshotSummary>(pageSnapshotPath),
+    pageSnapshot: pageSnapshot?.summary ?? readJsonArtifact<PageSnapshotSummary>(pageSnapshotPath),
   };
 }
 
-function mapRuntimeSteps(
-  result: RuntimeExecutionResult,
-  flow?: FlowDocument,
-): ExecutionStepLog[] {
+function mapRuntimeSteps(result: RuntimeExecutionResult, flow?: FlowDocument): ExecutionStepLog[] {
   const pageSnapshots = new Map(
     (result.pageSnapshots ?? []).map((snapshot) => [
       snapshot.stepIndex,

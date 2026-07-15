@@ -13,6 +13,7 @@ out/
 .cache/
 .idea/
 output/
+release/
 *.log
 .DS_Store
 .env

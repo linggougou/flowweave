@@ -23,6 +23,7 @@ const mockApiRestoreFlowVersion = vi.fn();
 const mockApiSaveExecution = vi.fn();
 const mockApiSaveFlow = vi.fn();
 const mockApiSavePageSnapshot = vi.fn();
+const mockConfigureLocalKnowledgeRepository = vi.fn();
 const mockProjectKnowledgeRepositoryCtor = vi.fn();
 const mockRepoGetDefaultEnvironment = vi.fn();
 const mockRepoSaveEnvironment = vi.fn();
@@ -34,6 +35,10 @@ type ServicesModule = {
 
 vi.mock("./env-setup.js", () => ({
   isChromiumInstalled: () => true,
+}));
+
+vi.mock("electron", () => ({
+  app: { isPackaged: false },
 }));
 
 vi.mock("@flowweave/runtime", () => ({
@@ -75,6 +80,7 @@ vi.mock("./knowledge-client.js", () => ({
   apiSaveExecution: mockApiSaveExecution,
   apiSaveFlow: mockApiSaveFlow,
   apiSavePageSnapshot: mockApiSavePageSnapshot,
+  configureLocalKnowledgeRepository: mockConfigureLocalKnowledgeRepository,
 }));
 
 function buildFlow(overrides?: Partial<FlowDocument>): FlowDocument {
@@ -140,6 +146,7 @@ describe("getExecution 缓存命中策略", () => {
     mockApiSaveExecution.mockReset();
     mockApiSaveFlow.mockReset();
     mockApiSavePageSnapshot.mockReset();
+    mockConfigureLocalKnowledgeRepository.mockReset();
     mockProjectKnowledgeRepositoryCtor.mockReset();
     mockExecuteFlow.mockReset();
     mockRepoGetDefaultEnvironment.mockReset();
@@ -226,15 +233,17 @@ describe("getExecution 缓存命中策略", () => {
   });
 
   it("显式清空 baseUrl 与 storageStatePath 时，不再回退到旧默认环境", async () => {
-    mockApiGetFlow.mockResolvedValue(buildFlow({
-      steps: [
-        {
-          id: "s1",
-          type: "navigate",
-          url: "https://example.com/orders",
-        },
-      ],
-    }));
+    mockApiGetFlow.mockResolvedValue(
+      buildFlow({
+        steps: [
+          {
+            id: "s1",
+            type: "navigate",
+            url: "https://example.com/orders",
+          },
+        ],
+      }),
+    );
     mockApiAllocateRunDirectory.mockResolvedValue("/tmp/flowweave/run-exec");
     mockRepoGetDefaultEnvironment.mockReturnValue({
       id: "env_default",
@@ -296,15 +305,17 @@ describe("getExecution 缓存命中策略", () => {
     const storageStateDir = mkdtempSync(join(tmpdir(), "flowweave-studio-run-context-"));
     const storageStatePath = join(storageStateDir, "state.json");
     writeFileSync(storageStatePath, JSON.stringify({ cookies: [], origins: [] }), "utf-8");
-    mockApiGetFlow.mockResolvedValue(buildFlow({
-      steps: [
-        {
-          id: "s1",
-          type: "navigate",
-          url: "https://example.com/orders",
-        },
-      ],
-    }));
+    mockApiGetFlow.mockResolvedValue(
+      buildFlow({
+        steps: [
+          {
+            id: "s1",
+            type: "navigate",
+            url: "https://example.com/orders",
+          },
+        ],
+      }),
+    );
     mockApiAllocateRunDirectory.mockResolvedValue("/tmp/flowweave/run-exec");
     mockExecuteFlow.mockResolvedValue({
       executionId: "exec_run_context",
