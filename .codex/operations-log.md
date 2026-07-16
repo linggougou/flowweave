@@ -6889,3 +6889,5 @@
 - 验证结果：local-api `4/4`、Web API `3/3`、Studio `98/98`、Extension `22/22`；Node 24 smoke 通过；recorded replay `25/25`。
 - 成品验证：目录版 `.app` 含 `@flowweave/local-api`；只启动 Studio 时 health 成功、扩展 Origin 为 200、外部网页 Origin 为 403；退出后端口释放。
 - 过程修复：首次 smoke 发现 package 生命周期脚本与 Turbo 并发清理 dist 的竞态，移除门禁任务内重复构建，仅保留 dev/打包显式准备后复验通过。
+- 工具替代：本机缺少 `gh` CLI，原用途为查询 GitHub Actions；改用 GitHub REST API 查询 run 与 jobs，结果一致且未阻塞验证。
+- 远端会签：GitHub Actions run `29499505852`，`verify (node 20)` 与 `verify (node 24)` 均成功。

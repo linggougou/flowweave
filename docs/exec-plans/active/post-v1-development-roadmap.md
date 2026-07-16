@@ -60,7 +60,7 @@
 3. 兼容 FlowWeave 服务已占用端口时复用，非兼容占用给出明确错误。
 4. Studio 空项目与扩展离线恢复文案不再暴露开发命令、端口或源码目录。
 
-完成证据：共享 API `4/4`、Web API `3/3`、Studio `98/98`、Extension `22/22`；Node 24 smoke、recorded replay `25/25`、目录版 `.app` 启停与端口释放均通过。
+完成证据：共享 API `4/4`、Web API `3/3`、Studio `98/98`、Extension `22/22`；Node 24 smoke、recorded replay `25/25`、目录版 `.app` 启停与端口释放均通过；GitHub Actions run `29499505852` 的 Node 20/24 双矩阵成功。
 
 退出门禁：只启动 Studio 后扩展即可列出项目并同步 Flow；空项目页面不再展示 pnpm、端口或源码目录。
 

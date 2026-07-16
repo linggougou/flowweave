@@ -5114,3 +5114,4 @@
 - `https://malicious.example` Origin 请求返回 403，且无跨域允许响应头。
 - 最终目录包：`apps/studio/release/mac-arm64/织流 Studio.app`。
 - 结论：UX Foundation 2 退出门禁通过；Foundation 3-5 继续待开发。
+- 远端会签：GitHub Actions run `29499505852` 的 Node 20、Node 24 job 均为 `success`。
