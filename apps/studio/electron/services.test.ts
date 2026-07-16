@@ -342,6 +342,7 @@ describe("getExecution 缓存命中策略", () => {
       storageStatePath,
       variables: {
         username: "alice",
+        secret_password: "do-not-store-this",
         retryCount: 2,
         rememberMe: true,
       },
@@ -355,6 +356,7 @@ describe("getExecution 缓存命中策略", () => {
         environmentName: "预发已登录",
         variables: {
           username: "alice",
+          secret_password: "do-not-store-this",
           retryCount: 2,
           rememberMe: true,
         },
@@ -369,6 +371,7 @@ describe("getExecution 缓存命中策略", () => {
           storageStatePath,
           variables: {
             username: "alice",
+            secret_password: "[已隐藏]",
             retryCount: 2,
             rememberMe: true,
           },
@@ -388,6 +391,7 @@ describe("getExecution 缓存命中策略", () => {
           storageStatePath: "/tmp/flowweave/state.json",
           variables: {
             username: "alice",
+            secret_password: "[已隐藏]",
             retryCount: 2,
             rememberMe: true,
           },

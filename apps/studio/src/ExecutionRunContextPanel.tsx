@@ -1,21 +1,20 @@
 import type { ReactNode } from "react";
 
-import type {
-  RunFlowVariableValue,
-  StudioExecutionRunContext,
-} from "./shared/studio-api-types.js";
+import type { RunFlowVariableValue, StudioExecutionRunContext } from "./shared/studio-api-types.js";
+import { isSensitiveVariableName, REDACTED_SENSITIVE_VALUE } from "./shared/sensitive-variables.js";
 
 type ExecutionRunContextPanelProps = {
   runContext?: StudioExecutionRunContext;
 };
 
-function formatVariableValue(value: RunFlowVariableValue): string {
+function formatVariableValue(name: string, value: RunFlowVariableValue): string {
+  if (isSensitiveVariableName(name)) {
+    return REDACTED_SENSITIVE_VALUE;
+  }
   return typeof value === "boolean" ? (value ? "true" : "false") : String(value);
 }
 
-export function ExecutionRunContextPanel({
-  runContext,
-}: ExecutionRunContextPanelProps): ReactNode {
+export function ExecutionRunContextPanel({ runContext }: ExecutionRunContextPanelProps): ReactNode {
   if (!runContext) {
     return null;
   }
@@ -25,9 +24,7 @@ export function ExecutionRunContextPanel({
   return (
     <section className="flow-preview">
       <h3 style={{ marginBottom: 4 }}>本次运行上下文</h3>
-      <p className="flow-content-meta">
-        执行时实际注入到 Runtime 的环境、登录态与变量快照
-      </p>
+      <p className="flow-content-meta">执行时实际注入到 Runtime 的环境、登录态与变量快照</p>
 
       <table className="fw-step-log-table" style={{ marginTop: 12 }}>
         <tbody>
@@ -59,7 +56,7 @@ export function ExecutionRunContextPanel({
             {variableEntries.map(([name, value]) => (
               <tr key={name}>
                 <td>{name}</td>
-                <td>{formatVariableValue(value)}</td>
+                <td>{formatVariableValue(name, value)}</td>
               </tr>
             ))}
           </tbody>

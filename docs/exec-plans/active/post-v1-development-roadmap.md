@@ -29,7 +29,7 @@
 
 ### UX Foundation 1：敏感输入与同步连续性
 
-状态：进行中。
+状态：已完成（2026-07-16）。
 
 目标：先关闭首次旅程中风险最高、且能独立验收的安全与信任缺口。
 
@@ -42,6 +42,8 @@
 5. 补 recorder、extension、Studio 状态合同测试。
 
 退出门禁：密码录制产物无明文；同步后无需重启 Studio 即可看到新 Flow；Node 24 定向测试、lint、typecheck 与 Node 20/24 CI 通过。
+
+本地证据：recorder `54/54`、extension `21/21`、Studio `93/93`；Node 24 smoke 与 recorded replay `25/25`；Electron 实机验证自动恢复、刷新入口和旧 Flow 密码遮罩。远端 Node 20/24 CI 由分支推送后会签。
 
 ### UX Foundation 2：产品内首次启动
 

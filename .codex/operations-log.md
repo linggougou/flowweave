@@ -6850,3 +6850,24 @@
 - 分支：`codex/ux-foundation-first-journey`，基于已包含评审留痕的 main `145fafc`。
 - 路线边界：P3/P4 继续冻结；不修改核心技术栈；跨端内置 API 留到下一轨先做共享 transport 设计。
 - 工作区保护：首次用户旅程评审 3 个 `.codex` 文件已原样提交为 `145fafc` 并同步 main，未覆盖其内容。
+
+## 2026-07-16 UX Foundation 1 本地验收完成
+
+- TDD 红灯：recorder 缺少密码占位符；扩展消息仍含明文；Studio 旧 Flow 回显密码；刷新按钮和 focus 合同不存在。
+- 安全实现：
+  - content 发送消息前将 password 值替换为稳定 `{{secret_*}}` 占位符。
+  - recorder 自动从占位符声明必填变量，Flow/session 不保存 DOM 密码明文。
+  - Studio 敏感变量输入使用 password control；执行时真实值只传给 runtime。
+  - 执行落库前敏感变量统一替换为 `[已隐藏]`，最近输入恢复完全省略敏感变量。
+  - 旧 Flow 即使只有 `#password`/密码名称等线索，也在默认步骤摘要中遮罩。
+- 连续性实现：
+  - 项目标题提供可见“刷新”入口。
+  - 窗口重新聚焦时刷新 workspace、Flow 和执行历史。
+  - 发现新 Flow 时自动选中；首次 API 连接失败后也能通过 focus/刷新恢复。
+- Node 24 定向验证：recorder `54/54`、extension `21/21`、Studio `93/93`，相关 typecheck 通过。
+- Node 24 主门禁：`CI=1 pnpm smoke` 通过；`pnpm e2e:recorded-pages` 为 `25/25`；全仓 lint `12/12`。
+- 构建：Studio 与 Chrome MV3 Extension 生产构建通过。
+- Electron 实机：先启动 Studio、后启动 API，窗口聚焦后项目与 Flow 自动恢复；刷新入口可见；旧密码步骤显示“填写敏感信息（已隐藏）”。
+- 工具替代：Computer Use 首次 ScreenCaptureKit 返回 `-3811`，重试后成功读取 accessibility tree 并完成验证。
+- 清理：开发 Studio/Web 已停止，`3847`、`5173`、`5174` 均无监听。
+- 阶段判断：UX Foundation 1 本地门禁通过；UX Foundation 2-5 继续待开发，整体首次体验仍未会签通过。

@@ -40,6 +40,11 @@ function buildFlow(): FlowDocument {
         type: "string",
         required: true,
       },
+      {
+        name: "secret_password",
+        type: "string",
+        required: true,
+      },
     ],
     steps: [
       {
@@ -188,6 +193,7 @@ describe("Studio layout contract", () => {
     expect(projectList.end).toBeLessThanOrEqual(projectSection.end);
     expect(projectList.end).toBeLessThanOrEqual(sidebarScroll.end);
     expect(sidebarHtml).toContain('class="project-list"');
+    expect(sidebarHtml).toContain('aria-label="刷新当前项目"');
     expect(projectListHtml.match(/class="project-item(?: active)?"/g)).toHaveLength(40);
     expect(sidebarHtml.match(/class="project-item(?: active)?"/g)).toHaveLength(40);
   });
@@ -209,6 +215,7 @@ describe("Studio layout contract", () => {
     expect(mainHtml.match(/class="flow-content-panel"/g)).toHaveLength(2);
     expect(mainHtml).toContain("运行环境");
     expect(mainHtml).toContain("布局合同回归");
+    expect(mainHtml).toContain('type="password"');
     expect(STYLESHEET).toMatch(/\.main\s*>\s*\*\s*{[^}]*flex-shrink:\s*0;[^}]*}/s);
     expect(STYLESHEET).toMatch(
       /\.flow-content-panel\s*{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*flex:\s*0 0 auto;[^}]*min-height:\s*auto;[^}]*}/s,

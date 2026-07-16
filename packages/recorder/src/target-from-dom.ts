@@ -64,6 +64,36 @@ function isInputElement(value: Element): value is HTMLInputElement {
   return typeof HTMLInputElement !== "undefined" && value instanceof HTMLInputElement;
 }
 
+function normalizeVariableToken(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 48);
+}
+
+function buildSensitiveVariableName(element: HTMLInputElement): string {
+  const autocomplete = /password/i.test(element.autocomplete) ? element.autocomplete : "";
+  const sources = [
+    autocomplete,
+    element.name,
+    element.id,
+    element.getAttribute("aria-label") ?? "",
+    element.placeholder,
+  ];
+  const token = sources.map(normalizeVariableToken).find(Boolean) ?? "password";
+  return token.startsWith("secret_") ? token : `secret_${token}`;
+}
+
+/** 密码只记录运行变量，不让 DOM 明文进入扩展消息、会话或 Flow。 */
+export function buildRecordedFillValue(element: Element, value: string): string {
+  if (!isInputElement(element) || (element.type || "text").toLowerCase() !== "password") {
+    return value;
+  }
+  return `{{${buildSensitiveVariableName(element)}}}`;
+}
+
 function isTextAreaElement(value: Element): value is HTMLTextAreaElement {
   return typeof HTMLTextAreaElement !== "undefined" && value instanceof HTMLTextAreaElement;
 }
@@ -392,7 +422,12 @@ function inferScopeKind(element: Element): ScopeKind | undefined {
   if (role === "tabpanel") {
     return "tabpanel";
   }
-  if (tagName === "section" || tagName === "article" || tagName === "fieldset" || role === "region") {
+  if (
+    tagName === "section" ||
+    tagName === "article" ||
+    tagName === "fieldset" ||
+    role === "region"
+  ) {
     return "section";
   }
   if (element.classList.contains("el-card") || element.classList.contains("card")) {
@@ -415,7 +450,12 @@ function findScopeContainer(element: Element): { container: Element; kind: Scope
 
 function isScopeNoiseElement(element: Element): boolean {
   const tagName = element.tagName.toLowerCase();
-  if (tagName === "button" || tagName === "input" || tagName === "select" || tagName === "textarea") {
+  if (
+    tagName === "button" ||
+    tagName === "input" ||
+    tagName === "select" ||
+    tagName === "textarea"
+  ) {
     return true;
   }
   const role = element.getAttribute("role");
@@ -463,11 +503,17 @@ function collectScopeTextParts(container: Element, excluded: Element): string[] 
 
   for (const child of Array.from(container.children)) {
     const text = sliceText(collectScopeText(child, excluded), MAX_SCOPE_TEXT_LENGTH);
-    if (!text || parts.some((part) => part === text || part.includes(text) || text.includes(part))) {
+    if (
+      !text ||
+      parts.some((part) => part === text || part.includes(text) || text.includes(part))
+    ) {
       continue;
     }
     parts.push(text);
-    if (parts.length >= MAX_SCOPE_TEXT_PARTS || trimText(parts.join(" ")).length >= MAX_SCOPE_TEXT_LENGTH) {
+    if (
+      parts.length >= MAX_SCOPE_TEXT_PARTS ||
+      trimText(parts.join(" ")).length >= MAX_SCOPE_TEXT_LENGTH
+    ) {
       break;
     }
   }
@@ -493,9 +539,14 @@ function readScopeHint(
   }
 
   let scopeText =
-    scope.kind === "row" || scope.kind === "listitem" ? undefined : readScopeHeading(scope.container, element);
+    scope.kind === "row" || scope.kind === "listitem"
+      ? undefined
+      : readScopeHeading(scope.container, element);
   if (!scopeText) {
-    scopeText = sliceText(collectScopeTextParts(scope.container, element).join(" "), MAX_SCOPE_TEXT_LENGTH);
+    scopeText = sliceText(
+      collectScopeTextParts(scope.container, element).join(" "),
+      MAX_SCOPE_TEXT_LENGTH,
+    );
   }
   if (!scopeText) {
     return undefined;
@@ -560,7 +611,8 @@ export function buildInteractionPayload(
   const placeholder = trimText(element.getAttribute("placeholder") ?? "") || undefined;
   const nameAttr = trimText(element.getAttribute("name") ?? "") || undefined;
   const inputType =
-    options.inputType ?? (isInputElement(element) ? (element.type || "text").toLowerCase() : undefined);
+    options.inputType ??
+    (isInputElement(element) ? (element.type || "text").toLowerCase() : undefined);
   const textSample = readTextSample(element, labelText);
   const scopeHint = readScopeHint(element, labelText, textSample);
 

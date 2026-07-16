@@ -26,3 +26,11 @@
 - Node 24 运行相关包测试、Studio typecheck/lint。
 - 全量 `pnpm smoke` 与 recorded replay 保持稳定。
 - 推送后等待 Node 20/24 CI 双绿。
+
+## UX Foundation 1 完成状态
+
+- password DOM 值在 content 消息发送前转换为 `secret_*` 变量占位符。
+- runtime 仍接收当次真实输入，但执行历史只保存 `[已隐藏]`，最近输入恢复省略敏感变量。
+- Studio 对新旧密码 Flow 均默认遮罩，敏感运行变量使用 password input。
+- Studio 提供项目级刷新入口，窗口聚焦时刷新 workspace；即使首次 API 连接失败，后续也可恢复项目和 Flow。
+- UX Foundation 2-5 尚未完成，整体首次体验不标记为通过。

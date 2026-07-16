@@ -10,9 +10,7 @@ function formatTargetStrategies(target: Target): string | undefined {
         break;
       case "role":
         parts.push(
-          strategy.name
-            ? `role=${strategy.role} name="${strategy.name}"`
-            : `role=${strategy.role}`,
+          strategy.name ? `role=${strategy.role} name="${strategy.name}"` : `role=${strategy.role}`,
         );
         break;
       case "css":
@@ -51,11 +49,39 @@ function formatTarget(step: NormalizedStep): string | undefined {
   }
 }
 
+const SENSITIVE_TARGET_PATTERN = /(?:password|passwd|passcode|(?:^|[_-])pwd(?:$|[_-])|密码|口令)/i;
+
+function isSensitiveFillTarget(target: Target): boolean {
+  const hints = target.hints;
+  const hintValues = [hints?.inputType, hints?.nameAttr, hints?.placeholder, hints?.labelText];
+  if (hintValues.some((value) => value && SENSITIVE_TARGET_PATTERN.test(value))) {
+    return true;
+  }
+
+  return target.strategies.some((strategy) => {
+    switch (strategy.kind) {
+      case "css":
+        return SENSITIVE_TARGET_PATTERN.test(strategy.selector);
+      case "xpath":
+        return SENSITIVE_TARGET_PATTERN.test(strategy.expression);
+      case "testId":
+        return SENSITIVE_TARGET_PATTERN.test(strategy.testId);
+      case "role":
+        return Boolean(strategy.name && SENSITIVE_TARGET_PATTERN.test(strategy.name));
+      case "text":
+        return SENSITIVE_TARGET_PATTERN.test(strategy.text);
+    }
+  });
+}
+
 function formatSummary(step: NormalizedStep): string {
   switch (step.type) {
     case "navigate":
       return step.url;
     case "fill":
+      if (isSensitiveFillTarget(step.target)) {
+        return "填写敏感信息（已隐藏）";
+      }
       return `填写「${step.value}」`;
     case "click": {
       const role = step.target.strategies.find((s) => s.kind === "role");

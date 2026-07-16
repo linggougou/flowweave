@@ -13,6 +13,7 @@ import { ExecutionRunContextPanel } from "./ExecutionRunContextPanel.js";
 import { ExecutionCompatibilityNotice } from "./ExecutionCompatibilityNotice.js";
 import { FragilityNotice } from "./FragilityNotice.js";
 import { flowStepsToRows } from "./flow-step-format.js";
+import { registerWindowFocusRefresh, resolveRefreshedFlowSelection } from "./refresh-state.js";
 import { buildExecutionCompatibilityWarnings } from "./shared/execution-fragility.js";
 import { buildFailureInsight } from "./shared/failure-insights.js";
 import {
@@ -24,6 +25,7 @@ import {
   shouldRestoreRecentRunInput,
   type VariableInputs,
 } from "./shared/run-input-state.js";
+import { isSensitiveVariableName } from "./shared/sensitive-variables.js";
 import type {
   ExecutionStepLog,
   ExecutionSummary,
@@ -138,12 +140,12 @@ export function App() {
   const [renamingFlowId, setRenamingFlowId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [renaming, setRenaming] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshNotice, setRefreshNotice] = useState<string | null>(null);
   const [selectedEnvironmentName, setSelectedEnvironmentName] = useState(
     layoutContractRenderState?.selectedEnvironmentName ?? "",
   );
-  const [baseUrlDraft, setBaseUrlDraft] = useState(
-    layoutContractRenderState?.baseUrlDraft ?? "",
-  );
+  const [baseUrlDraft, setBaseUrlDraft] = useState(layoutContractRenderState?.baseUrlDraft ?? "");
   const [storageStatePathDraft, setStorageStatePathDraft] = useState(
     layoutContractRenderState?.storageStatePathDraft ?? "",
   );
@@ -155,8 +157,7 @@ export function App() {
   );
   const previousDraftFlowIdRef = useRef<string | null>(null);
 
-  const selectedProject =
-    projects.find((project) => project.id === selectedProjectId) ?? null;
+  const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? null;
   const selectedProjectName = selectedProject?.name;
   const availableEnvironments = selectedProject?.environments ?? [];
 
@@ -175,22 +176,24 @@ export function App() {
     setExecutionHistory(history);
   }, []);
 
-  const refreshFlows = useCallback(async (projectId: string) => {
-    const api = getStudioApi();
-    const list = await api.listFlows(projectId);
-    setFlows(list);
-    if (list.length === 0) {
-      setSelectedFlowId(null);
-      setCurrentFlow(null);
-      setVersions([]);
-      return;
-    }
-    const fallback = list[0]?.id ?? null;
-    const flowId = selectedFlowId && list.some((it) => it.id === selectedFlowId)
-      ? selectedFlowId
-      : fallback;
-    setSelectedFlowId(flowId);
-  }, [selectedFlowId]);
+  const refreshFlows = useCallback(
+    async (projectId: string) => {
+      const api = getStudioApi();
+      const list = await api.listFlows(projectId);
+      setFlows(list);
+      if (list.length === 0) {
+        setSelectedFlowId(null);
+        setCurrentFlow(null);
+        setVersions([]);
+        return;
+      }
+      const fallback = list[0]?.id ?? null;
+      const flowId =
+        selectedFlowId && list.some((it) => it.id === selectedFlowId) ? selectedFlowId : fallback;
+      setSelectedFlowId(flowId);
+    },
+    [selectedFlowId],
+  );
 
   const refreshVersions = useCallback(async (projectId: string, flowId: string) => {
     const api = getStudioApi();
@@ -200,35 +203,96 @@ export function App() {
     setPreviewVersion(null);
   }, []);
 
-  const loadFlowDocument = useCallback(
-    async (projectId: string, flowId: string) => {
-      setFlowLoading(true);
-      setError(null);
-      try {
-        const api = getStudioApi();
-        const doc = await api.getFlow(projectId, flowId);
-        setCurrentFlow(doc);
-      } catch (err: unknown) {
-        const message = formatStudioError(err);
-        if (isFlowNotFoundMessage(message)) {
-          setCurrentFlow(null);
-          setSelectedFlowId(null);
-          return;
-        }
+  const refreshWorkspace = useCallback(async () => {
+    if (refreshing) {
+      return;
+    }
+
+    setRefreshing(true);
+    setRefreshNotice(null);
+    try {
+      const api = getStudioApi();
+      const projectList = await api.listProjects();
+      const targetProjectId =
+        selectedProjectId && projectList.some((project) => project.id === selectedProjectId)
+          ? selectedProjectId
+          : (projectList[0]?.id ?? null);
+      setProjects(projectList);
+      setSelectedProjectId(targetProjectId);
+
+      if (!targetProjectId) {
+        setFlows([]);
+        setExecutionHistory([]);
+        setSelectedFlowId(null);
         setCurrentFlow(null);
-        setError(message);
-      } finally {
-        setFlowLoading(false);
+        setVersions([]);
+        setRefreshNotice("项目列表已刷新");
+        setError(null);
+        return;
       }
-    },
-    [],
-  );
+
+      const [nextFlows, history] = await Promise.all([
+        api.listFlows(targetProjectId),
+        api.listExecutions(targetProjectId),
+      ]);
+      const previousFlows = targetProjectId === selectedProjectId ? flows : [];
+      const nextSelectedFlowId = resolveRefreshedFlowSelection(
+        previousFlows,
+        nextFlows,
+        targetProjectId === selectedProjectId ? selectedFlowId : null,
+        true,
+      );
+      const previousIds = new Set(previousFlows.map((flow) => flow.id));
+      const discovered = nextFlows.find((flow) => !previousIds.has(flow.id));
+
+      setFlows(nextFlows);
+      setExecutionHistory(history);
+      setSelectedFlowId(nextSelectedFlowId);
+      if (nextFlows.length === 0) {
+        setCurrentFlow(null);
+        setVersions([]);
+      }
+      setRefreshNotice(discovered ? `已发现新任务「${discovered.name}」` : "已刷新当前项目");
+      setError(null);
+    } catch (err: unknown) {
+      setError(formatStudioError(err));
+    } finally {
+      setRefreshing(false);
+    }
+  }, [flows, refreshing, selectedFlowId, selectedProjectId]);
+
+  const loadFlowDocument = useCallback(async (projectId: string, flowId: string) => {
+    setFlowLoading(true);
+    setError(null);
+    try {
+      const api = getStudioApi();
+      const doc = await api.getFlow(projectId, flowId);
+      setCurrentFlow(doc);
+    } catch (err: unknown) {
+      const message = formatStudioError(err);
+      if (isFlowNotFoundMessage(message)) {
+        setCurrentFlow(null);
+        setSelectedFlowId(null);
+        return;
+      }
+      setCurrentFlow(null);
+      setError(message);
+    } finally {
+      setFlowLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     void refreshProjects().catch((err: unknown) => {
       setError(formatStudioError(err));
     });
   }, [refreshProjects]);
+
+  useEffect(() => {
+    return registerWindowFocusRefresh(window, () => {
+      void refreshWorkspace();
+    });
+  }, [refreshWorkspace]);
 
   useEffect(() => {
     if (!selectedProjectId) {
@@ -480,9 +544,7 @@ export function App() {
       variables: variableInputs,
     });
     if (preflightIssues.length > 0) {
-      setError(
-        `运行前检查未通过：${preflightIssues.map((issue) => issue.message).join("；")}`,
-      );
+      setError(`运行前检查未通过：${preflightIssues.map((issue) => issue.message).join("；")}`);
       return;
     }
 
@@ -522,7 +584,7 @@ export function App() {
       ? analyzeFlowFragility(currentFlow, {
           baseUrl: baseUrlDraft.trim(),
           variables: buildFragilityVariableContext(currentFlow, variableInputs),
-      })
+        })
       : [];
   const runPreflightIssues = collectRunPreflightIssues(currentFlow, {
     baseUrl: baseUrlDraft,
@@ -620,18 +682,30 @@ export function App() {
           <section className="sidebar-section sidebar-section-projects">
             <div className="sidebar-section-head">
               <h2>项目</h2>
-              <button
-                type="button"
-                className="sidebar-icon-btn"
-                title="新建项目"
-                aria-label="新建项目"
-                onClick={() => {
-                  setShowNewProjectForm((v) => !v);
-                  setError(null);
-                }}
-              >
-                +
-              </button>
+              <div className="sidebar-section-actions">
+                <button
+                  type="button"
+                  className="sidebar-text-btn"
+                  aria-label="刷新当前项目"
+                  title="刷新项目和任务"
+                  disabled={refreshing}
+                  onClick={() => void refreshWorkspace()}
+                >
+                  {refreshing ? "刷新中…" : "刷新"}
+                </button>
+                <button
+                  type="button"
+                  className="sidebar-icon-btn"
+                  title="新建项目"
+                  aria-label="新建项目"
+                  onClick={() => {
+                    setShowNewProjectForm((v) => !v);
+                    setError(null);
+                  }}
+                >
+                  +
+                </button>
+              </div>
             </div>
             {showNewProjectForm ? (
               <form className="new-project-form" onSubmit={(e) => void handleCreateProject(e)}>
@@ -668,9 +742,7 @@ export function App() {
                   <button
                     type="button"
                     className={
-                      project.id === selectedProjectId
-                        ? "project-item active"
-                        : "project-item"
+                      project.id === selectedProjectId ? "project-item active" : "project-item"
                     }
                     onClick={() => handleSelectProject(project.id)}
                   >
@@ -691,6 +763,11 @@ export function App() {
           {selectedProjectId ? (
             <section className="sidebar-section sidebar-section-primary">
               <h2>Flow 列表</h2>
+              {refreshNotice ? (
+                <p className="sidebar-refresh-notice" role="status">
+                  {refreshNotice}
+                </p>
+              ) : null}
               {flows.length === 0 ? (
                 <p className="execution-history-empty sidebar-flow-hint">
                   本项目尚无 Flow。请用浏览器扩展录制操作，并在扩展侧栏选择<strong>同名项目</strong>
@@ -899,12 +976,14 @@ export function App() {
             {selectedFlowId
               ? `Flow：${selectedFlowName}${currentFlow ? ` · ${currentFlow.steps.length} 步` : ""}`
               : "未选择 Flow"}
-            {execution
-              ? ` · 执行 ${execution.executionId.slice(0, 8)}… ${execution.status}`
-              : ""}
+            {execution ? ` · 执行 ${execution.executionId.slice(0, 8)}… ${execution.status}` : ""}
           </span>
         </div>
-        {error ? <p className="error" role="alert">{error}</p> : null}
+        {error ? (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        ) : null}
         {selectedProjectId ? (
           <section className="flow-content-panel">
             <header className="flow-content-header">
@@ -984,7 +1063,16 @@ export function App() {
                         </select>
                       ) : (
                         <input
-                          type={variable.type === "number" ? "number" : "text"}
+                          type={
+                            isSensitiveVariableName(variable.name)
+                              ? "password"
+                              : variable.type === "number"
+                                ? "number"
+                                : "text"
+                          }
+                          autoComplete={
+                            isSensitiveVariableName(variable.name) ? "current-password" : undefined
+                          }
                           value={variableInputs[variable.name] ?? ""}
                           placeholder={
                             variable.defaultValue === undefined
@@ -1021,8 +1109,7 @@ export function App() {
                 </ul>
               ) : (
                 <p className="execution-history-meta">
-                  本地 preflight 已通过；点击「运行流程」后还会继续检查 Storage State
-                  文件是否存在。
+                  本地 preflight 已通过；点击「运行流程」后还会继续检查 Storage State 文件是否存在。
                 </p>
               )}
             </section>
@@ -1048,7 +1135,8 @@ export function App() {
                 </header>
                 {currentFlow.steps.length === 0 ? (
                   <p className="flow-steps-empty-hint">
-                    该 Flow 已同步但<strong>没有录制步骤</strong>。请在扩展中重新录制页面操作后再同步。
+                    该 Flow 已同步但<strong>没有录制步骤</strong>
+                    。请在扩展中重新录制页面操作后再同步。
                   </p>
                 ) : null}
                 <FragilityNotice warnings={flowFragilityIssues} />

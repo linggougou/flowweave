@@ -37,6 +37,10 @@ import {
 } from "../src/shared/execution-history.js";
 import { toVariableInputString } from "../src/shared/run-input-state.js";
 import {
+  omitSensitiveVariables,
+  redactSensitiveVariables,
+} from "../src/shared/sensitive-variables.js";
+import {
   apiAllocateRunDirectory,
   apiCreateProject,
   apiGetExecution,
@@ -466,7 +470,7 @@ function toRunContext(
     environmentName: environment.name,
     baseUrl: environment.baseUrl,
     storageStatePath: environment.storageStatePath,
-    variables,
+    variables: redactSensitiveVariables(variables),
   };
 }
 
@@ -486,8 +490,9 @@ function toStudioFlowRunInputVariables(
   if (!variables) {
     return undefined;
   }
+  const restorable = omitSensitiveVariables(variables);
   return Object.fromEntries(
-    Object.entries(variables).map(([name, value]) => [name, toVariableInputString(value)]),
+    Object.entries(restorable ?? {}).map(([name, value]) => [name, toVariableInputString(value)]),
   );
 }
 

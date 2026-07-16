@@ -13,6 +13,7 @@ describe("ExecutionRunContextPanel", () => {
           storageStatePath: "/tmp/flowweave/state.json",
           variables: {
             username: "alice",
+            secret_password: "do-not-render-this",
             retryCount: 2,
             rememberMe: true,
           },
@@ -28,5 +29,8 @@ describe("ExecutionRunContextPanel", () => {
     expect(html).toContain("2");
     expect(html).toContain("rememberMe");
     expect(html).toContain("true");
+    expect(html).toContain("secret_password");
+    expect(html).toContain("已隐藏");
+    expect(html).not.toContain("do-not-render-this");
   });
 });

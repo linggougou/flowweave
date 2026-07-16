@@ -6,6 +6,7 @@ export {
 } from "./normalize.js";
 export {
   buildInteractionPayload,
+  buildRecordedFillValue,
   isVisibleElement,
   resolveClickTarget,
   shouldRecordClick,

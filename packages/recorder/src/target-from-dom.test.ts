@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildInteractionPayload, resolveClickTarget, shouldRecordFill } from "./target-from-dom.js";
+import {
+  buildInteractionPayload,
+  buildRecordedFillValue,
+  resolveClickTarget,
+  shouldRecordFill,
+} from "./target-from-dom.js";
 
 function createElement(html: string): Element {
   const template = document.createElement("template");
@@ -21,6 +26,31 @@ function mountElement(html: string): Element {
 }
 
 describe("buildInteractionPayload", () => {
+  it("密码输入只生成稳定变量占位符，不返回 DOM 明文", () => {
+    const input = createElement(
+      '<input id="account-password" type="password" name="currentPassword" autocomplete="current-password" />',
+    );
+
+    const recorded = buildRecordedFillValue(input, "do-not-store-this");
+
+    expect(recorded).toBe("{{secret_current_password}}");
+    expect(recorded).not.toContain("do-not-store-this");
+  });
+
+  it("普通输入继续保留录制值", () => {
+    const input = createElement('<input id="display-name" type="text" />');
+
+    expect(buildRecordedFillValue(input, "织流用户")).toBe("织流用户");
+  });
+
+  it("忽略 autocomplete=off，使用字段名称生成敏感变量", () => {
+    const input = createElement(
+      '<input type="password" name="adminPassword" autocomplete="off" />',
+    );
+
+    expect(buildRecordedFillValue(input, "plain-secret")).toBe("{{secret_admin_password}}");
+  });
+
   it("为按钮生成 role + css + text 多策略", () => {
     const button = createElement('<button type="button"><span>登 录</span></button>');
     const payload = buildInteractionPayload(button, "click");

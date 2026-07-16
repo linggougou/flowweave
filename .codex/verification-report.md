@@ -4896,6 +4896,39 @@
 - main 集成门禁：通过。
 - 下一阶段：按 `docs/exec-plans/active/post-v1-development-roadmap.md` 进入 Wave A；P3/P4 保持冻结。
 
+## 2026-07-16 UX Foundation 1 验收
+
+### 安全合同
+
+- password 输入在扩展消息发送前变量化，录制 event/session/Flow 不含 DOM 明文。
+- 敏感运行变量仅用于当次 runtime；执行历史保存 `[已隐藏]`，最近输入不恢复敏感值。
+- Studio 对新 Flow 的 password hint 和旧 Flow 的密码选择器/名称均默认遮罩。
+- 结果：通过。
+
+### 同步连续性合同
+
+- Studio 项目区存在明确刷新入口。
+- 窗口 focus 自动刷新 workspace；保持当前任务，发现新任务时优先选中新内容。
+- 实机覆盖 Studio 先启动、API 后启动的恢复路径，项目和 Flow 无需重启即可出现。
+- 结果：通过。
+
+### 验证结果
+
+- Node 24 recorder：`54/54`。
+- Node 24 extension：`21/21`。
+- Node 24 Studio：`93/93`。
+- 全仓 lint：`12/12`。
+- `CI=1 pnpm smoke`：通过。
+- recorded replay：`25/25`。
+- Studio、Extension 生产构建：通过。
+- 敏感信息扫描、`git diff --check`：通过。
+
+### 结论
+
+- UX Foundation 1 本地验收：通过。
+- 首次用户整体产品化验收：仍未通过；Foundation 2-5 尚未实施。
+- P3/P4：保持冻结。
+
 ## 2026-07-16 首次用户旅程体验审查
 
 ### 审查范围与证据

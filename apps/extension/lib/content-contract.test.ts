@@ -22,6 +22,9 @@ type ContentModule = {
 
 const recorderMocks = vi.hoisted(() => ({
   buildInteractionPayload: vi.fn(),
+  buildRecordedFillValue: vi.fn((element: { type?: string }, value: string) =>
+    element.type === "password" ? "{{secret_password}}" : value,
+  ),
   resolveClickTarget: vi.fn(),
   shouldRecordClick: vi.fn(),
   shouldRecordFill: vi.fn(),
@@ -30,6 +33,7 @@ const recorderMocks = vi.hoisted(() => ({
 async function loadContentModule(): Promise<ContentModule> {
   vi.resetModules();
   recorderMocks.buildInteractionPayload.mockReset();
+  recorderMocks.buildRecordedFillValue.mockClear();
   recorderMocks.resolveClickTarget.mockReset();
   recorderMocks.shouldRecordClick.mockReset();
   recorderMocks.shouldRecordFill.mockReset();
@@ -63,6 +67,10 @@ class FakeHTMLElement extends FakeElement {
 
   getAttribute(name: string): string | null {
     return this.#attributes.get(name) ?? null;
+  }
+
+  getAttributeNames(): string[] {
+    return [...this.#attributes.keys()];
   }
 }
 
@@ -147,11 +155,13 @@ async function setupContentHarness() {
   recorderMocks.shouldRecordClick.mockReturnValue(true);
   recorderMocks.buildInteractionPayload.mockImplementation((element, kind, options) => {
     const htmlElement = element as FakeHTMLElement;
-    const selector = htmlElement.id ? `#${htmlElement.id}` : `#${htmlElement.tagName.toLowerCase()}`;
+    const selector = htmlElement.id
+      ? `#${htmlElement.id}`
+      : `#${htmlElement.tagName.toLowerCase()}`;
     const role =
       htmlElement instanceof FakeHTMLSelectElement
         ? "combobox"
-        : htmlElement.getAttribute("role") ?? "textbox";
+        : (htmlElement.getAttribute("role") ?? "textbox");
 
     if (kind === "fill") {
       return {
@@ -236,6 +246,35 @@ describe("content upload placeholder contract", () => {
     expect(readValue(editor as unknown as Element)).toBe("需要补充库存说明");
   });
 
+  it("密码输入事件发送前移除明文并改为敏感变量占位符", async () => {
+    vi.useFakeTimers();
+    const { handlers, sendMessage } = await setupContentHarness();
+    const input = new FakeHTMLInputElement();
+    input.id = "password";
+    input.type = "password";
+    input.value = "do-not-store-this";
+
+    recorderMocks.shouldRecordFill.mockImplementation(
+      (element) => element === (input as unknown as Element),
+    );
+
+    handlers.get("input")?.[0]?.({ target: input });
+    vi.advanceTimersByTime(450);
+
+    const events = readRecordedEvents(sendMessage);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      type: "fill",
+      payload: {
+        selector: "#password",
+        value: "{{secret_password}}",
+      },
+    });
+    expect(JSON.stringify(events)).not.toContain("do-not-store-this");
+    expect(recorderMocks.buildRecordedFillValue).toHaveBeenCalledTimes(1);
+    expect(recorderMocks.buildRecordedFillValue.mock.calls[0]?.[1]).toBe("do-not-store-this");
+  });
+
   it("识别会先 flush 待提交 fill 的提交型按键", async () => {
     const contentModule = await loadContentModule();
 
@@ -257,7 +296,9 @@ describe("content upload placeholder contract", () => {
     input.value = "flowweave";
     input.id = "keyword";
 
-    recorderMocks.shouldRecordFill.mockImplementation((element) => element === (input as unknown as Element));
+    recorderMocks.shouldRecordFill.mockImplementation(
+      (element) => element === (input as unknown as Element),
+    );
 
     handlers.get("input")?.[0]?.({ target: input });
     handlers.get("keydown")?.[0]?.({
@@ -301,7 +342,9 @@ describe("content upload placeholder contract", () => {
     input.value = "flow";
     input.setAttribute("aria-autocomplete", "list");
 
-    recorderMocks.shouldRecordFill.mockImplementation((element) => element === (input as unknown as Element));
+    recorderMocks.shouldRecordFill.mockImplementation(
+      (element) => element === (input as unknown as Element),
+    );
 
     handlers.get("input")?.[0]?.({ target: input });
     handlers.get("keydown")?.[0]?.({
@@ -344,7 +387,9 @@ describe("content upload placeholder contract", () => {
     input.value = "plain text";
     input.setAttribute("aria-autocomplete", "none");
 
-    recorderMocks.shouldRecordFill.mockImplementation((element) => element === (input as unknown as Element));
+    recorderMocks.shouldRecordFill.mockImplementation(
+      (element) => element === (input as unknown as Element),
+    );
 
     handlers.get("input")?.[0]?.({ target: input });
     handlers.get("keydown")?.[0]?.({
@@ -381,7 +426,9 @@ describe("content upload placeholder contract", () => {
     input.value = "plain text";
     input.setAttribute("aria-controls", "keyword-suggestions");
 
-    recorderMocks.shouldRecordFill.mockImplementation((element) => element === (input as unknown as Element));
+    recorderMocks.shouldRecordFill.mockImplementation(
+      (element) => element === (input as unknown as Element),
+    );
 
     handlers.get("input")?.[0]?.({ target: input });
     handlers.get("keydown")?.[0]?.({
@@ -466,7 +513,9 @@ describe("content upload placeholder contract", () => {
     input.id = "plain";
     input.value = "plain text";
 
-    recorderMocks.shouldRecordFill.mockImplementation((element) => element === (input as unknown as Element));
+    recorderMocks.shouldRecordFill.mockImplementation(
+      (element) => element === (input as unknown as Element),
+    );
 
     handlers.get("input")?.[0]?.({ target: input });
     handlers.get("keydown")?.[0]?.({
@@ -582,7 +631,9 @@ describe("content upload placeholder contract", () => {
     container.id = "activity-list";
     container.scrollTop = 360;
 
-    recorderMocks.shouldRecordFill.mockImplementation((element) => element === (input as unknown as Element));
+    recorderMocks.shouldRecordFill.mockImplementation(
+      (element) => element === (input as unknown as Element),
+    );
 
     handlers.get("input")?.[0]?.({ target: input });
     handlers.get("scroll")?.[0]?.({ target: container });

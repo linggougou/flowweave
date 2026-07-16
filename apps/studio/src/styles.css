@@ -123,6 +123,12 @@ html {
   margin-bottom: 0.5rem;
 }
 
+.sidebar-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
 .sidebar-section h2,
 .sidebar-section-head h2 {
   margin: 0;
@@ -164,6 +170,17 @@ html {
 
 .sidebar-text-btn:hover {
   color: #e7ecf3;
+}
+
+.sidebar-text-btn:disabled {
+  color: #667386;
+  cursor: default;
+}
+
+.sidebar-refresh-notice {
+  margin: 0 0 0.5rem;
+  color: #7fc8a9;
+  font-size: 0.75rem;
 }
 
 .new-project-form {

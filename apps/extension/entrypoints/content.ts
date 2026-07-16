@@ -1,6 +1,7 @@
 import type { RecordedEvent } from "@flowweave/shared";
 import {
   buildInteractionPayload,
+  buildRecordedFillValue,
   resolveClickTarget,
   shouldRecordClick,
   shouldRecordFill,
@@ -61,11 +62,16 @@ function readSelectValues(element: HTMLSelectElement): string[] {
 }
 
 function readUploadFiles(element: HTMLInputElement): string[] {
-  return Array.from(element.files ?? []).map((file) => file.name).filter((name) => name.length > 0);
+  return Array.from(element.files ?? [])
+    .map((file) => file.name)
+    .filter((name) => name.length > 0);
 }
 
 function normalizeUploadTokenPart(value: string): string {
-  const normalized = value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const normalized = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
   return normalized.length > 0 ? normalized : "file";
 }
 
@@ -82,20 +88,21 @@ export function buildUploadReplayInputs(
   source: UploadReplayInputSource,
   fileNames: string[],
 ): string[] {
-  const tokenSeed = Array.from(
-    new Set(
-      [
-        source.testId,
-        source.nameAttr,
-        source.id,
-        source.selector,
-        source.labelText,
-        source.ariaLabel,
-      ]
-        .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-        .map(normalizeUploadTokenPart),
-    ),
-  ).join("_") || "upload";
+  const tokenSeed =
+    Array.from(
+      new Set(
+        [
+          source.testId,
+          source.nameAttr,
+          source.id,
+          source.selector,
+          source.labelText,
+          source.ariaLabel,
+        ]
+          .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+          .map(normalizeUploadTokenPart),
+      ),
+    ).join("_") || "upload";
 
   return fileNames.map((_name, index) => `{{upload_${tokenSeed}_${index + 1}}}`);
 }
@@ -134,11 +141,7 @@ function isKeyboardNavigationTarget(target: EventTarget | null): boolean {
 
     const role = current.getAttribute("role")?.toLowerCase();
     const autocomplete = current.getAttribute("aria-autocomplete")?.trim().toLowerCase();
-    if (
-      role === "combobox" ||
-      autocomplete === "list" ||
-      autocomplete === "both"
-    ) {
+    if (role === "combobox" || autocomplete === "list" || autocomplete === "both") {
       return true;
     }
 
@@ -440,11 +443,12 @@ function recordInteractionFromElement(element: Element): void {
   }
 
   const value = readFillValue(element);
+  const recordedValue = buildRecordedFillValue(element, value);
   const payload = buildInteractionPayload(element, "fill", {
-    value,
+    value: recordedValue,
     inputType: element instanceof HTMLInputElement ? element.type : undefined,
   });
-  const signature = `${payload.selector ?? ""}:${value}:${payload.role ?? ""}`;
+  const signature = `${payload.selector ?? ""}:${recordedValue}:${payload.role ?? ""}`;
   if (signature === lastFillSignature) {
     return;
   }
@@ -491,14 +495,14 @@ export default defineContentScript({
 
     browser.runtime.onMessage.addListener(
       (message: unknown, _sender: unknown, sendResponse: (response?: unknown) => void) => {
-      if (message && typeof message === "object" && "type" in message) {
-        if ((message as { type: string }).type === MSG_PING_CONTENT) {
-          sendResponse({ ok: true, url: window.location.href });
-          return true;
+        if (message && typeof message === "object" && "type" in message) {
+          if ((message as { type: string }).type === MSG_PING_CONTENT) {
+            sendResponse({ ok: true, url: window.location.href });
+            return true;
+          }
         }
-      }
-      return undefined;
-    },
+        return undefined;
+      },
     );
 
     document.addEventListener(

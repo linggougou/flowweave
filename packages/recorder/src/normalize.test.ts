@@ -16,7 +16,9 @@ const baseMeta: BuildFlowFromEventsMeta = {
   name: "录制流程",
 };
 
-function event(partial: Omit<RecordedEvent, "payload"> & { payload?: Record<string, unknown> }): RecordedEvent {
+function event(
+  partial: Omit<RecordedEvent, "payload"> & { payload?: Record<string, unknown> },
+): RecordedEvent {
   return {
     id: partial.id,
     type: partial.type,
@@ -550,6 +552,34 @@ describe("normalizeRecordedEvent", () => {
   });
 });
 
+describe("敏感输入 Flow 合同", () => {
+  it("密码占位符生成必填变量，Flow 中不包含原始密码", () => {
+    const flow = buildFlowFromEvents(
+      [
+        event({
+          id: "evt_password",
+          type: "fill",
+          timestamp: 1000,
+          url: "https://example.com/login",
+          payload: {
+            selector: "#password",
+            inputType: "password",
+            value: "{{secret_current_password}}",
+          },
+        }),
+      ],
+      baseMeta,
+    );
+
+    expect(flow.variables).toContainEqual({
+      name: "secret_current_password",
+      type: "string",
+      required: true,
+    });
+    expect(JSON.stringify(flow)).not.toContain("do-not-store-this");
+  });
+});
+
 describe("buildFlowFromEvents", () => {
   it("从事件序列构建可校验的 FlowDocument", () => {
     const events: RecordedEvent[] = [
@@ -908,7 +938,13 @@ describe("buildFlowFromEvents", () => {
       baseMeta,
     );
 
-    expect(flow.steps.map((step) => step.type)).toEqual(["navigate", "fill", "press", "wait", "click"]);
+    expect(flow.steps.map((step) => step.type)).toEqual([
+      "navigate",
+      "fill",
+      "press",
+      "wait",
+      "click",
+    ]);
     expect(flow.steps[3]).toEqual({
       id: "wait-auto-p1-c1",
       type: "wait",
@@ -1088,7 +1124,13 @@ describe("buildFlowFromEvents", () => {
       baseMeta,
     );
 
-    expect(flow.steps.map((step) => step.type)).toEqual(["navigate", "click", "wait", "scroll", "fill"]);
+    expect(flow.steps.map((step) => step.type)).toEqual([
+      "navigate",
+      "click",
+      "wait",
+      "scroll",
+      "fill",
+    ]);
     expect(flow.steps[2]).toEqual({
       id: "wait-auto-c1-f1",
       type: "wait",
