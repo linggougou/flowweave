@@ -4886,3 +4886,12 @@
 - `verify (node 20)`：成功。
 - `verify (node 24)`：成功。
 - 发布分支最终门禁：通过。
+
+## 2026-07-16 v1 main 集成会签
+
+- 集成方式：`0067363..538da09` fast-forward，无合并提交或历史重写。
+- GitHub Actions run：`29484512985`。
+- `verify (node 20)`：成功。
+- `verify (node 24)`：成功。
+- main 集成门禁：通过。
+- 下一阶段：按 `docs/exec-plans/active/post-v1-development-roadmap.md` 进入 Wave A；P3/P4 保持冻结。

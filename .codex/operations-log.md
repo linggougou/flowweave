@@ -6769,3 +6769,13 @@
 - 推荐顺序：v1 main 集成 -> Flow 可移植性 -> 录制暂停/继续 -> 本地资产管理 -> vNext 协议设计门禁。
 - 路线边界：P3/P4 保持冻结；vNext 改变产品模型与 runtime 协议，必须更新路线锁并经用户确认后才能编码。
 - 工具异常：GitHub REST API 本轮多次出现 `LibreSSL SSL_ERROR_SYSCALL` / SSL timeout；原用途为读取最新 docs-only CI，替代为最近已确认双绿 run `29423730838`、本地分支祖先关系与工作区状态。该异常不影响代码状态判断。
+
+## 2026-07-16 R0 v1 main 集成完成
+
+- 合并方式：确认 `origin/main` 为发布分支祖先后，执行 `git push origin HEAD:main`，`main` 从 `0067363` fast-forward 到 `538da09`；无 merge commit、无 rebase、无历史重写。
+- 分支合入内容：独立 macOS 打包能力、多语言发布文档、验收证据与 post-v1 开发计划。
+- main GitHub Actions run：`29484512985`。
+- `verify (node 20)`：成功。
+- `verify (node 24)`：成功。
+- R0 结论：通过；下一开发轨道为 Wave A Flow 可移植性闭环。
+- 发布边界：Developer ID、Apple 公证和正式 `.icns` 图标仍未完成，DMG 继续定义为本地/内部预览包。

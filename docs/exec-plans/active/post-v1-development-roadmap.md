@@ -12,6 +12,8 @@
 
 ### R0：v1 主线集成与发布收口
 
+状态：已完成（2026-07-16）。
+
 目标：把已验收的 macOS 打包分支安全并入 `main`，建立明确的内部预览与公开发布边界。
 
 交付物：
@@ -22,6 +24,8 @@
 4. Developer ID、公证、正式 `.icns` 图标保持显式外部阻塞，不包装为已完成。
 
 退出门禁：main CI 双绿，工作区洁净，`.codex/verification-report.md` 有 main 会签证据。
+
+完成证据：`main` 已从 `0067363` fast-forward 到 `538da09`；GitHub Actions run `29484512985` 的 Node 20、Node 24 均成功。
 
 ### Wave A：Flow 可移植性闭环
 
