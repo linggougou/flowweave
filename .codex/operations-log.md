@@ -6871,3 +6871,4 @@
 - 工具替代：Computer Use 首次 ScreenCaptureKit 返回 `-3811`，重试后成功读取 accessibility tree 并完成验证。
 - 清理：开发 Studio/Web 已停止，`3847`、`5173`、`5174` 均无监听。
 - 阶段判断：UX Foundation 1 本地门禁通过；UX Foundation 2-5 继续待开发，整体首次体验仍未会签通过。
+- 远端会签：GitHub Actions run `29497693297`，`verify (node 20)` 与 `verify (node 24)` 均成功。
