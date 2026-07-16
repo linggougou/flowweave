@@ -67,6 +67,10 @@ const studioResourcePaths = resolveStudioResourcePaths({
 const projectKnowledgeRepository = new ProjectKnowledgeRepository({
   nativeBinding: studioResourcePaths.electronNativeBindingPath,
 });
+
+export function getProjectKnowledgeRepository(): ProjectKnowledgeRepository {
+  return projectKnowledgeRepository;
+}
 if (app.isPackaged) {
   configureLocalKnowledgeRepository(projectKnowledgeRepository);
 }

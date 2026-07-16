@@ -110,7 +110,9 @@ pnpm --filter @flowweave/runtime exec playwright install chromium
 
 ### 扩展「未连接本地 API」
 
-确认已运行 `pnpm dev:web`，且 `curl http://127.0.0.1:3847/api/health` 返回 `{"ok":true}`。
+使用已构建的桌面应用时，先打开织流 Studio，再在扩展中点击“重新连接”，无需另外启动服务。
+
+仅在源码开发且没有启动 Studio 时，才需要运行 `pnpm dev:web`；可用 `curl http://127.0.0.1:3847/api/health` 检查开发服务。
 
 ### 切换 Node 20 / 24 后 `better-sqlite3` 加载或编译失败
 

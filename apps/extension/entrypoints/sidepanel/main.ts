@@ -64,7 +64,7 @@ function renderProjects(): void {
   if (projects.length === 0) {
     const option = document.createElement("option");
     option.value = "";
-    option.textContent = apiOnline ? "暂无项目，可点击下方创建" : "API 未连接";
+    option.textContent = apiOnline ? "暂无项目，可点击下方创建" : "尚未连接 Studio";
     projectSelect.append(option);
     return;
   }
@@ -143,17 +143,19 @@ async function loadProjects(): Promise<void> {
   if (!apiOnline) {
     projects = [];
     renderProjects();
-    setStatus("未连接本地 API，请先运行 pnpm dev:web");
+    if (refreshProjectsBtn) refreshProjectsBtn.textContent = "重新连接";
+    setStatus("未连接织流 Studio，请先打开应用，然后点击“重新连接”");
     return;
   }
 
   projects = await listKnowledgeProjects(base);
+  if (refreshProjectsBtn) refreshProjectsBtn.textContent = "刷新项目列表";
   if (projects.length === 0) {
     const created = await createKnowledgeProject(base, "扩展录制项目");
     projects = [created];
     setStatus("已自动创建默认项目");
   } else {
-    setStatus("已连接本地知识库");
+    setStatus("已连接织流 Studio");
   }
   renderProjects();
   if (selectedProjectId) {
@@ -228,7 +230,7 @@ syncBtn?.addEventListener("click", () => {
       setStatus("请先选择目标项目");
       return;
     }
-    setStatus("正在同步到知识库…");
+    setStatus("正在保存到 Studio…");
     const message: SyncKnowledgeMessage = {
       type: MSG_SYNC_KNOWLEDGE,
       projectId: selectedProjectId,

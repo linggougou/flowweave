@@ -1,6 +1,6 @@
 # FlowWeave 架构总览
 
-> 版本：0.1.1 · 更新：2026-06-09
+> 版本：0.2.0 · 更新：2026-07-16
 
 ## 1. 产品与技术目标
 
@@ -41,6 +41,7 @@ flowchart TB
     PI[@flowweave/page-intelligence]
     NET[@flowweave/network-intelligence]
     PK[@flowweave/project-knowledge]
+    API[@flowweave/local-api]
     AI[@flowweave/ai-orchestrator]
     UI[@flowweave/ui]
   end
@@ -55,8 +56,10 @@ flowchart TB
   EXT --> REC
   STU --> RUN
   STU --> PK
+  STU --> API
   STU --> UI
   WEB --> PK
+  WEB --> API
   WEB --> UI
   REC --> DSL
   REC --> SH
@@ -72,6 +75,8 @@ flowchart TB
   RUN --> PW
   PK --> DB
   PK --> FS
+  API --> PK
+  API --> DSL
   AI --> LLM
 ```
 
@@ -85,6 +90,7 @@ flowchart TB
 | `runtime` 不依赖 `ai-orchestrator` | AI 通过编排层调用 runtime |
 | `ai-orchestrator` 不直接操作浏览器 | 执行一律经 `runtime` |
 | 禁止循环依赖 | CI 通过 dependency-cruiser 或 turbo 图校验 |
+| 本地 API 共享 | Studio 与 Web 只依赖 `local-api`，禁止应用间互相引用 |
 
 ## 4. 物理目录
 
@@ -102,6 +108,7 @@ flowweave/
 │   ├── page-intelligence/
 │   ├── network-intelligence/
 │   ├── project-knowledge/
+│   ├── local-api/
 │   ├── ai-orchestrator/
 │   └── ui/
 ├── docs/
@@ -159,6 +166,7 @@ sequenceDiagram
 | P0 | 工程基座、规范、CI | shared、工具链 | ✅ 已完成 |
 | P1 | 录制 + 回放闭环 | recorder、flow-dsl、runtime、extension、studio | ✅ 已完成 |
 | P2 | 知识库 + 调试回放 + 真实页面稳定性 | project-knowledge、runtime、studio | ✅ 当前稳定主线 |
+| P2.5 | 首次用户体验产品化 | local-api、extension、studio | 🚧 进行中 |
 | P3 | 页面 / 接口理解 | page-intelligence、network-intelligence | ⏸ 冻结扩展 |
 | P4 | AI 编排与体检 | ai-orchestrator | ⏸ 冻结 |
 

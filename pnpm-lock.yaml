@@ -76,6 +76,9 @@ importers:
       '@flowweave/flow-dsl':
         specifier: workspace:*
         version: link:../../packages/flow-dsl
+      '@flowweave/local-api':
+        specifier: workspace:*
+        version: link:../../packages/local-api
       '@flowweave/page-intelligence':
         specifier: workspace:*
         version: link:../../packages/page-intelligence
@@ -152,6 +155,9 @@ importers:
       '@flowweave/flow-dsl':
         specifier: workspace:*
         version: link:../../packages/flow-dsl
+      '@flowweave/local-api':
+        specifier: workspace:*
+        version: link:../../packages/local-api
       '@flowweave/project-knowledge':
         specifier: workspace:*
         version: link:../../packages/project-knowledge
@@ -227,6 +233,31 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.19.19)(happy-dom@20.9.0)
+
+  packages/local-api:
+    dependencies:
+      '@flowweave/flow-dsl':
+        specifier: workspace:*
+        version: link:../flow-dsl
+      '@flowweave/project-knowledge':
+        specifier: workspace:*
+        version: link:../project-knowledge
+      '@flowweave/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.19
       tsup:
         specifier: ^8.3.5
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.3)(typescript@5.9.3)

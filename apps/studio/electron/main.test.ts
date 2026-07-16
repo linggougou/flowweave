@@ -3,7 +3,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { IPC_CHANNELS } from "./ipc-channels.js";
 
 const handlers = new Map<string, (...args: unknown[]) => unknown>();
+const appEventHandlers = new Map<string, () => void>();
 const mockRunFlow = vi.fn();
+const mockCloseLocalApi = vi.fn(() => Promise.resolve());
+const mockStartLocalApi = vi.fn(() =>
+  Promise.resolve({
+    status: "owned" as const,
+    baseUrl: "http://127.0.0.1:3847",
+    close: mockCloseLocalApi,
+  }),
+);
+const mockRepository = {};
 
 const mockApp = {
   whenReady: vi.fn(() => Promise.resolve()),
@@ -68,6 +78,7 @@ vi.mock("./services.js", () => ({
   getFlow: vi.fn(),
   getFlowRunInput: vi.fn(),
   getFlowVersion: vi.fn(),
+  getProjectKnowledgeRepository: vi.fn(() => mockRepository),
   listExecutions: vi.fn(),
   listFlows: vi.fn(),
   listFlowVersions: vi.fn(),
@@ -76,23 +87,43 @@ vi.mock("./services.js", () => ({
   runFlow: mockRunFlow,
 }));
 
+vi.mock("./local-api-service.js", () => ({
+  startLocalKnowledgeApiService: mockStartLocalApi,
+}));
+
 describe("electron main runFlow IPC", () => {
   beforeEach(async () => {
     handlers.clear();
+    appEventHandlers.clear();
     mockRunFlow.mockReset();
     mockShellOpenPath.mockReset();
     mockLoadURL.mockReset();
     mockLoadFile.mockReset();
     mockOpenDevTools.mockReset();
     mockWindowOn.mockReset();
+    mockCloseLocalApi.mockClear();
+    mockStartLocalApi.mockClear();
     windowInstances.length = 0;
     mockApp.on.mockReset();
+    mockApp.on.mockImplementation((event: string, handler: () => void) => {
+      appEventHandlers.set(event, handler);
+    });
     mockApp.whenReady.mockClear();
     mockApp.getAppPath.mockClear();
     vi.resetModules();
 
     await import("./main.js");
     await Promise.resolve();
+    await Promise.resolve();
+  });
+
+  it("ready 时启动本地同步服务并在退出前关闭", async () => {
+    expect(mockStartLocalApi).toHaveBeenCalledWith({ repo: mockRepository });
+
+    appEventHandlers.get("before-quit")?.();
+    await Promise.resolve();
+
+    expect(mockCloseLocalApi).toHaveBeenCalledOnce();
   });
 
   it("完整透传 Studio 收集的运行上下文选项", async () => {

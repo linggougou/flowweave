@@ -5098,3 +5098,19 @@
 - 本次实际运行：首个默认 Flow 在约 30 秒后失败，运行中只显示“运行中…”，结果页产生可行动摘要与大量专业诊断。
 - 扩展：构建通过并核对侧栏可见 UI/交互合同；Chrome 安全策略阻止读取 `chrome://extensions`，本轮未安装或替换用户扩展，因此扩展真实侧栏视觉与录制运行仍是残余风险。
 - 清理验证：Web/API 与 Studio 已停止，`5173`、`5174`、`3847` 均无监听；`git diff --check` 通过。
+## 2026-07-16 UX Foundation 2 验收完成
+
+- [x] 共享 API health、项目创建/列表、Flow 同步合同通过（`4/4`，含来源拦截）。
+- [x] Web 现有 API 行为回归通过（`3/3`）。
+- [x] Studio 自持有服务启动/关闭与兼容端口复用合同通过（生命周期定向 `5/5`，Studio 全量 `98/98`）。
+- [x] 空项目与扩展连接提示不再暴露 pnpm、3847 或源码目录（文案合同 `2/2`）。
+- [x] 只启动 Studio 的 Electron 实机 API 生命周期通过（health 200、项目列表 200、退出释放端口）。
+- [x] Node 24 smoke、recorded replay 与生产构建通过（`25/25`；Studio/Web/Extension 构建通过）。
+
+### 安全与成品证据
+
+- `app.asar` 包含 `node_modules/@flowweave/local-api/dist/index.js` 与 `dist-electron/main.mjs`。
+- Chrome Extension Origin 请求 `/api/projects` 返回 200。
+- `https://malicious.example` Origin 请求返回 403，且无跨域允许响应头。
+- 最终目录包：`apps/studio/release/mac-arm64/织流 Studio.app`。
+- 结论：UX Foundation 2 退出门禁通过；Foundation 3-5 继续待开发。

@@ -34,3 +34,20 @@
 - Studio 对新旧密码 Flow 均默认遮罩，敏感运行变量使用 password input。
 - Studio 提供项目级刷新入口，窗口聚焦时刷新 workspace；即使首次 API 连接失败，后续也可恢复项目和 Flow。
 - UX Foundation 2-5 尚未完成，整体首次体验不标记为通过。
+
+## UX Foundation 2 启动状态
+
+- 当前目标：只启动 Studio，扩展即可列出项目并同步录制 Flow。
+- 共享边界：新增 `@flowweave/local-api`，Web 与 Studio 共同复用，禁止应用互依赖。
+- 生命周期：Studio ready 后监听本机回环地址；兼容服务已占用端口时复用；退出时关闭自持有服务。
+- 产品文案：空项目与扩展离线状态不再要求用户运行 pnpm、理解端口或源码目录。
+- 设计真源：`docs/superpowers/specs/2026-07-16-local-sync-service-design.md`。
+
+## UX Foundation 2 完成状态
+
+- `@flowweave/local-api` 已成为 Web 与 Studio 共享的本地 API 真源。
+- Studio ready 后自动托管服务，兼容服务占用时复用，非兼容占用时明确报错。
+- Studio 空项目与扩展离线恢复文案已移除开发命令、端口和源码目录。
+- API 仅允许 Chrome 扩展、本机 Web 与本地工具来源，外部网页来源返回 403。
+- Node 24 smoke、recorded replay `25/25`、目录版 `.app` 实机 API 生命周期通过。
+- UX Foundation 3-5 尚未完成，整体首次体验仍不标记为最终通过。

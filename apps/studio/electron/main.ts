@@ -4,11 +4,16 @@ import path from "node:path";
 import type { RunFlowOptions } from "../src/shared/studio-api-types.js";
 import { IPC_CHANNELS } from "./ipc-channels.js";
 import {
+  startLocalKnowledgeApiService,
+  type LocalKnowledgeApiService,
+} from "./local-api-service.js";
+import {
   createProject,
   getExecution,
   getFlow,
   getFlowRunInput,
   getFlowVersion,
+  getProjectKnowledgeRepository,
   listExecutions,
   listFlows,
   listFlowVersions,
@@ -19,6 +24,7 @@ import {
 } from "./services.js";
 
 let mainWindow: BrowserWindow | null = null;
+let localKnowledgeApiService: LocalKnowledgeApiService | null = null;
 
 function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.listProjects, () => listProjects());
@@ -196,14 +202,29 @@ async function createWindow(): Promise<void> {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   registerIpcHandlers();
-  void createWindow();
+  try {
+    localKnowledgeApiService = await startLocalKnowledgeApiService({
+      repo: getProjectKnowledgeRepository(),
+    });
+  } catch (error: unknown) {
+    console.error("织流本地同步服务启动失败：", error);
+  }
+  await createWindow();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       void createWindow();
     }
+  });
+});
+
+app.on("before-quit", () => {
+  const service = localKnowledgeApiService;
+  localKnowledgeApiService = null;
+  void service?.close().catch((error: unknown) => {
+    console.error("织流本地同步服务关闭失败：", error);
   });
 });
 

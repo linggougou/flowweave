@@ -47,9 +47,20 @@
 
 ### UX Foundation 2：产品内首次启动
 
+状态：已完成（2026-07-16）。
+
 目标：打包 Studio 自动提供扩展所需的本地同步服务，并提供不依赖终端的扩展安装/连接引导。
 
 实施前先冻结共享本地 API 边界，禁止 `apps/*` 直接互相依赖；优先抽取可被 Web 与 Studio 复用的本地 transport。
+
+已实现：
+
+1. 新增 `@flowweave/local-api`，Web 与 Studio 复用同一 API 路由。
+2. Studio ready 后自动监听本机回环地址，退出时关闭自持有服务。
+3. 兼容 FlowWeave 服务已占用端口时复用，非兼容占用给出明确错误。
+4. Studio 空项目与扩展离线恢复文案不再暴露开发命令、端口或源码目录。
+
+完成证据：共享 API `4/4`、Web API `3/3`、Studio `98/98`、Extension `22/22`；Node 24 smoke、recorded replay `25/25`、目录版 `.app` 启停与端口释放均通过。
 
 退出门禁：只启动 Studio 后扩展即可列出项目并同步 Flow；空项目页面不再展示 pnpm、端口或源码目录。
 

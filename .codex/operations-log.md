@@ -6872,3 +6872,20 @@
 - 清理：开发 Studio/Web 已停止，`3847`、`5173`、`5174` 均无监听。
 - 阶段判断：UX Foundation 1 本地门禁通过；UX Foundation 2-5 继续待开发，整体首次体验仍未会签通过。
 - 远端会签：GitHub Actions run `29497693297`，`verify (node 20)` 与 `verify (node 24)` 均成功。
+## 2026-07-16 UX Foundation 2：产品内首次启动
+
+- 用户指令：继续首次用户旅程产品化修复。
+- 路线归属：P2.5 / UX Foundation 2，服务阶段出口“非技术用户无需理解 pnpm、端口和源码目录即可进入首次录制”。
+- 工作区基线：`codex/ux-foundation-first-journey`，起点 `a2545f5`，启动时工作区洁净。
+- 设计决策：抽取 `@flowweave/local-api`；Web 保留静态资源职责，Studio 托管共享 API；不引入 apps 互依赖。
+- 预定验证：Node 24 定向测试、typecheck、lint、build、smoke、recorded replay、Electron 端口生命周期和打包产物检查。
+- TDD 红灯：共享包入口不存在；Studio 缺少本地 API 生命周期服务。
+- 实施结果：
+  - 新增 `@flowweave/local-api`，迁移 Web `/api/*` 路由并保留静态服务职责。
+  - Studio ready 后自动监听 `127.0.0.1:3847`，before-quit 关闭自持有服务。
+  - 兼容服务占用时复用；非兼容占用时返回明确错误。
+  - 空项目和扩展连接文案改为产品语言，增加禁止开发术语回退的合同测试。
+  - 自动托管后收紧来源边界，拒绝非本机网页读取本地知识库。
+- 验证结果：local-api `4/4`、Web API `3/3`、Studio `98/98`、Extension `22/22`；Node 24 smoke 通过；recorded replay `25/25`。
+- 成品验证：目录版 `.app` 含 `@flowweave/local-api`；只启动 Studio 时 health 成功、扩展 Origin 为 200、外部网页 Origin 为 403；退出后端口释放。
+- 过程修复：首次 smoke 发现 package 生命周期脚本与 Turbo 并发清理 dist 的竞态，移除门禁任务内重复构建，仅保留 dev/打包显式准备后复验通过。

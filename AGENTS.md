@@ -28,6 +28,8 @@ shared ← flow-dsl ← runtime → page-intelligence
          project-knowledge ← network-intelligence
               ↑
          ai-orchestrator（不直接操作浏览器，经 runtime）
+
+flow-dsl + project-knowledge + shared ← local-api ← studio / web
 ```
 
 ## 技术栈（已采纳，勿随意替换）
@@ -39,6 +41,7 @@ shared ← flow-dsl ← runtime → page-intelligence
 | 执行内核 | Playwright（`@flowweave/runtime`） |
 | 流程 Schema | Zod（`@flowweave/flow-dsl`） |
 | 本地存储 | SQLite + Drizzle（`project-knowledge`） |
+| 本地同步 | Node HTTP（`local-api`，Studio / Web 复用） |
 | 桌面端 | Electron + Vite + React（`apps/studio`） |
 | 扩展 | WXT（`apps/extension`） |
 | Web | Vite + React（`apps/web`，Phase 2 加强） |

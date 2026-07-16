@@ -81,7 +81,7 @@
 - 架构入口：[`docs/architecture/overview.md`](./docs/architecture/overview.md)
 - 技术栈：TypeScript strict、pnpm workspace、Turborepo、Playwright、Electron + Vite + React、SQLite + Drizzle、WXT
 - 数据模型：[`docs/domain/flow-dsl.md`](./docs/domain/flow-dsl.md)、`packages/project-knowledge`
-- API 契约：`apps/web` 本地 API、`packages/runtime` / `packages/recorder` 对外契约
+- API 契约：`packages/local-api` 本地 API、`packages/runtime` / `packages/recorder` 对外契约
 - CodeGraph 自动初始化：允许
 
 ## 6. 验收门禁
@@ -116,7 +116,7 @@
 - Backlog：`docs/superpowers/plans/2026-05-26-run-first-roadmap.md` 中的 M5 与未来智能阶段事项
 - Change Request：新增需求先进入路线计划或专门变更文档，再决定是否实施
 - 当前阶段缺口：
-  - Studio 内置本地同步服务与扩展分发引导
+  - 扩展分发与启用引导（Studio 内置本地同步服务已完成）
   - 敏感输入识别、遮罩与变量化
   - 扩展录制开始/暂停/完成状态机
   - Studio 同步刷新、业务/专业信息分层

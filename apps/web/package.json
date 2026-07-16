@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "pnpm --filter @flowweave/local-api build",
     "build:client": "vite build",
     "build:server": "tsup server/index.ts --format esm --dts --clean --external better-sqlite3 --out-dir dist-server",
     "build": "pnpm build:client && pnpm build:server",
@@ -15,6 +16,7 @@
   },
   "dependencies": {
     "@flowweave/flow-dsl": "workspace:*",
+    "@flowweave/local-api": "workspace:*",
     "@flowweave/project-knowledge": "workspace:*",
     "@flowweave/shared": "workspace:*",
     "@flowweave/ui": "workspace:*",
