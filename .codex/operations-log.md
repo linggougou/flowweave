@@ -6749,3 +6749,12 @@
 - 工具替代：Context7 不可用，原用途为核对 electron-builder 配置；使用 electron-builder 官方文档、官方仓库和 npm 元数据完成研究与验证。
 - 最终判断：v1 macOS 本地预览包最小闭环通过，执行计划归档；P3/P4 继续冻结。
 - 发布分支远端会签：GitHub Actions run `29423379300` 完成，`verify (node 20)` 与 `verify (node 24)` 均成功。
+
+## 2026-07-16 v1 macOS 打包分支 main 合并评估
+
+- 用户请求：判断 `codex/v1-release-packaging` 当前是否适合合并到 `main`，本轮不直接执行合并。
+- 分支关系：`origin/main...HEAD` 为 `0 / 3`，`origin/main` 是当前 HEAD 的祖先，可纯 fast-forward，无冲突或历史重写需求。
+- 工作区：洁净，当前分支与 `origin/codex/v1-release-packaging` 同步。
+- 最新远端门禁：GitHub Actions run `29423730838` 对提交 `65416a9` 验证完成，Node 20、Node 24 均成功。
+- 评估结论：代码适合合并到 `main`；合并后建议等待 main 同一双版本 CI 复验。
+- 边界说明：此结论不代表 DMG 已满足公开分发条件；Developer ID、Apple 公证和正式 `.icns` 图标仍是发布阻塞。
