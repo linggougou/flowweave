@@ -6758,3 +6758,14 @@
 - 最新远端门禁：GitHub Actions run `29423730838` 对提交 `65416a9` 验证完成，Node 20、Node 24 均成功。
 - 评估结论：代码适合合并到 `main`；合并后建议等待 main 同一双版本 CI 复验。
 - 边界说明：此结论不代表 DMG 已满足公开分发条件；Developer ID、Apple 公证和正式 `.icns` 图标仍是发布阻塞。
+
+## 2026-07-16 当前进度与 post-v1 计划梳理
+
+- 用户请求：汇总当前进度并制定接下来的开发计划。
+- 当前事实：P0-P2、M1-M4 已完成；M5 仅具备清空录制、Flow JSON 导出和 Studio Flow 重命名等最小能力；无活跃 worktree。
+- 功能核对：暂停/继续录制、脱敏导入闭环、执行记录删除、Web 重命名 UI 尚未完成。
+- vNext 状态：《后台管理类网站交互式任务模板设计》已完成产品定义，但输入节点 schema、Studio 编辑模型、runtime 暂停继续协议尚未冻结，实施进度为 0。
+- 新增活跃计划：`docs/exec-plans/active/post-v1-development-roadmap.md`。
+- 推荐顺序：v1 main 集成 -> Flow 可移植性 -> 录制暂停/继续 -> 本地资产管理 -> vNext 协议设计门禁。
+- 路线边界：P3/P4 保持冻结；vNext 改变产品模型与 runtime 协议，必须更新路线锁并经用户确认后才能编码。
+- 工具异常：GitHub REST API 本轮多次出现 `LibreSSL SSL_ERROR_SYSCALL` / SSL timeout；原用途为读取最新 docs-only CI，替代为最近已确认双绿 run `29423730838`、本地分支祖先关系与工作区状态。该异常不影响代码状态判断。
