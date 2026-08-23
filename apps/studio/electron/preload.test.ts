@@ -55,9 +55,12 @@ describe("preload 执行控制桥", () => {
 
   it("导入导出桥只接受业务 ID，不向 renderer 暴露任意读写路径", async () => {
     const api = exposeInMainWorldMock.mock.calls[0]?.[1] as {
+      nativeFilePortability: boolean;
       importFlowFile: (projectId: string) => Promise<unknown>;
       exportFlowFile: (projectId: string, flowId: string) => Promise<unknown>;
     };
+
+    expect(api.nativeFilePortability).toBe(true);
 
     await api.importFlowFile("project_preload");
     await api.exportFlowFile("project_preload", "flow_preload");

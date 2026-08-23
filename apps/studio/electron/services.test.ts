@@ -31,6 +31,7 @@ const mockRepoGetLatestExecutionForFlow = vi.fn();
 
 type ServicesModule = {
   getFlowRunInput?: (projectId: string, flowId: string) => Promise<unknown>;
+  getFlowForExport?: (projectId: string, flowId: string) => Promise<FlowDocument>;
 };
 
 vi.mock("./env-setup.js", () => ({
@@ -164,6 +165,20 @@ describe("getExecution 缓存命中策略", () => {
         ),
       }),
     );
+  });
+
+  it("导出读取会先确认全局项目存在，ghost_project 不触碰项目数据库", async () => {
+    mockApiListProjects.mockResolvedValue([
+      { id: "project_real", name: "真实项目", createdAt: "2026-08-23T08:00:00.000Z" },
+    ]);
+    const { getFlowForExport } = await loadServicesModule();
+
+    await expect(getFlowForExport?.("ghost_project", "flow_safe")).rejects.toThrow(
+      "目标项目不存在",
+    );
+
+    expect(mockApiListProjects).toHaveBeenCalledOnce();
+    expect(mockApiGetFlow).not.toHaveBeenCalled();
   });
 
   it("缓存里缺少 flowSnapshot 时，会继续回源知识库", async () => {

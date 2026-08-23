@@ -1,4 +1,5 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { mkdir, open, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -134,6 +135,65 @@ describe("Studio Flow 文件导入", () => {
         importFlow,
       }),
     ).rejects.toThrow("必须是 .json 文件");
+    expect(importFlow).not.toHaveBeenCalled();
+  });
+
+  it("拒绝指向 JSON 的真实 symlink，且不会调用导入服务", async () => {
+    const targetPath = await prepareFile("target.json", JSON.stringify(buildFlow()));
+    const symlinkPath = path.join(TEST_DIR, "linked.json");
+    await symlink(targetPath, symlinkPath);
+    const importFlow = vi.fn();
+
+    await expect(
+      importFlowFromFile("project_target", {
+        showOpenDialog: vi
+          .fn()
+          .mockResolvedValue({ canceled: false, filePaths: [symlinkPath] }),
+        importFlow,
+      }),
+    ).rejects.toThrow();
+
+    expect(importFlow).not.toHaveBeenCalled();
+  });
+
+  it("拒绝伪装成 .json 的目录", async () => {
+    const directoryPath = path.join(TEST_DIR, "directory.json");
+    await mkdir(directoryPath, { recursive: true });
+    const importFlow = vi.fn();
+
+    await expect(
+      importFlowFromFile("project_target", {
+        showOpenDialog: vi
+          .fn()
+          .mockResolvedValue({ canceled: false, filePaths: [directoryPath] }),
+        importFlow,
+      }),
+    ).rejects.toThrow();
+    expect(importFlow).not.toHaveBeenCalled();
+  });
+
+  it.runIf(process.platform !== "win32")("拒绝伪装成 .json 的 FIFO", async () => {
+    await mkdir(TEST_DIR, { recursive: true });
+    const fifoPath = path.join(TEST_DIR, "stream.json");
+    execFileSync("mkfifo", [fifoPath]);
+    const writer = open(fifoPath, "w")
+      .then(async (handle) => {
+        try {
+          await handle.writeFile(JSON.stringify(buildFlow()));
+        } finally {
+          await handle.close();
+        }
+      })
+      .catch(() => undefined);
+    const importFlow = vi.fn();
+
+    await expect(
+      importFlowFromFile("project_target", {
+        showOpenDialog: vi.fn().mockResolvedValue({ canceled: false, filePaths: [fifoPath] }),
+        importFlow,
+      }),
+    ).rejects.toThrow();
+    await writer;
     expect(importFlow).not.toHaveBeenCalled();
   });
 

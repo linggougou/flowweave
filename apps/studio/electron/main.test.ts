@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { IPC_CHANNELS } from "./ipc-channels.js";
@@ -8,6 +10,7 @@ const mockRunFlow = vi.fn();
 const mockImportFlowFromFile = vi.fn();
 const mockExportFlowToFile = vi.fn();
 const mockImportFlowDocument = vi.fn();
+const mockGetFlowForExport = vi.fn();
 const mockCloseLocalApi = vi.fn(() => Promise.resolve());
 const mockStartLocalApi = vi.fn(() =>
   Promise.resolve({
@@ -94,6 +97,7 @@ vi.mock("./services.js", () => ({
   createProject: vi.fn(),
   getExecution: vi.fn(),
   getFlow: vi.fn(),
+  getFlowForExport: mockGetFlowForExport,
   getFlowRunInput: vi.fn(),
   getFlowVersion: vi.fn(),
   importFlowDocument: mockImportFlowDocument,
@@ -118,7 +122,10 @@ describe("electron main runFlow IPC", () => {
     mockImportFlowFromFile.mockReset();
     mockExportFlowToFile.mockReset();
     mockImportFlowDocument.mockReset();
+    mockGetFlowForExport.mockReset();
     mockShellOpenPath.mockReset();
+    mockShowOpenDialog.mockReset();
+    mockShowSaveDialog.mockReset();
     mockLoadURL.mockReset();
     mockLoadFile.mockReset();
     mockOpenDevTools.mockReset();
@@ -391,5 +398,72 @@ describe("electron main runFlow IPC", () => {
     await expect(exportHandler?.({}, "project_ipc", "")).rejects.toThrow("flowId 无效");
     expect(mockImportFlowFromFile).not.toHaveBeenCalled();
     expect(mockExportFlowToFile).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["上级路径", "../fw-g5-id-escape"],
+    ["正斜线", "project/escape"],
+    ["反斜线", "project\\escape"],
+    ["点路径", "."],
+    ["编码片段", "project%2fescape"],
+    ["控制字符", "project\u0000escape"],
+    ["原型对象", { toString: (): string => "project_ipc" }],
+  ])("%s projectId 在任何 repo、文件或 dialog 副作用前拒绝", async (_label, projectId) => {
+    const importHandler = handlers.get(IPC_CHANNELS.importFlowFile);
+    const exportHandler = handlers.get(IPC_CHANNELS.exportFlowFile);
+    const escapedPath = path.resolve(process.cwd(), "..", "fw-g5-id-escape");
+
+    await expect(importHandler?.({}, projectId)).rejects.toThrow("projectId 无效");
+    await expect(exportHandler?.({}, projectId, "flow_ipc")).rejects.toThrow(
+      "projectId 无效",
+    );
+
+    expect(mockImportFlowFromFile).not.toHaveBeenCalled();
+    expect(mockExportFlowToFile).not.toHaveBeenCalled();
+    expect(mockGetFlowForExport).not.toHaveBeenCalled();
+    expect(mockShowOpenDialog).not.toHaveBeenCalled();
+    expect(mockShowSaveDialog).not.toHaveBeenCalled();
+    expect(existsSync(escapedPath)).toBe(false);
+  });
+
+  it("安全但不存在的项目由导出专用读取在 dialog 前拒绝", async () => {
+    mockExportFlowToFile.mockImplementation(async (_projectId, _flowId, dependencies) => {
+      await dependencies.getFlow("ghost_project", "flow_ipc");
+      return { status: "cancelled" };
+    });
+    mockGetFlowForExport.mockRejectedValue(new Error("目标项目不存在"));
+    const exportHandler = handlers.get(IPC_CHANNELS.exportFlowFile);
+
+    await expect(exportHandler?.({}, "ghost_project", "flow_ipc")).rejects.toThrow(
+      "目标项目不存在",
+    );
+
+    expect(mockGetFlowForExport).toHaveBeenCalledWith("ghost_project", "flow_ipc");
+    expect(mockShowSaveDialog).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["import", "无法读取 /Users/alice/private/token.json: top-secret"],
+    ["export", "SQLITE_CANTOPEN /private/projects/secret.sqlite"],
+  ])("%s 原始错误不会向 renderer 泄露路径或敏感消息", async (operation, rawMessage) => {
+    const handler = handlers.get(
+      operation === "import" ? IPC_CHANNELS.importFlowFile : IPC_CHANNELS.exportFlowFile,
+    );
+    const failingService = operation === "import" ? mockImportFlowFromFile : mockExportFlowToFile;
+    failingService.mockRejectedValue(new Error(rawMessage));
+
+    const outcome = Promise.resolve(
+      operation === "import"
+        ? handler?.({}, "project_ipc")
+        : handler?.({}, "project_ipc", "flow_ipc"),
+    ).catch((error: unknown) => error);
+    const error = await outcome;
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain(operation === "import" ? "导入" : "导出");
+    expect((error as Error).message).not.toContain("/Users");
+    expect((error as Error).message).not.toContain("/private");
+    expect((error as Error).message).not.toContain("top-secret");
+    expect((error as Error).stack).toBeUndefined();
   });
 });

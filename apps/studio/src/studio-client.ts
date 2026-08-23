@@ -259,6 +259,7 @@ function isHttpFallbackMethod(prop: string): prop is HttpFallbackMethod {
 
 function createBrowserStudioApi(): StudioApi {
   return {
+    nativeFilePortability: false,
     ...knowledgeHttpClient,
     getFlowRunInput: knowledgeHttpClient.getFlowRunInput,
     runFlow: async (): Promise<RunFlowResult> => {

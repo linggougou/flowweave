@@ -68,6 +68,17 @@ function readShowBrowserPreference(): boolean {
 import { FlowEmptyGuide } from "./FlowEmptyGuide.js";
 import { getStudioApi } from "./studio-client.js";
 
+function readNativeFilePortability(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  try {
+    return getStudioApi().nativeFilePortability === true;
+  } catch {
+    return false;
+  }
+}
+
 function formatStudioError(err: unknown): string {
   if (!(err instanceof Error)) {
     return "操作失败";
@@ -140,6 +151,7 @@ function readLayoutContractRenderState(): LayoutContractRenderState | undefined 
 
 export function App() {
   const layoutContractRenderState = readLayoutContractRenderState();
+  const nativeFilePortability = readNativeFilePortability();
   const [tab, setTab] = useState<MainTab>("flow");
   const [projects, setProjects] = useState<StudioProject[]>(
     layoutContractRenderState?.projects ?? [],
@@ -199,6 +211,7 @@ export function App() {
   const selectedFlowIdRef = useRef(selectedFlowId);
   const flowLoadRequestIdRef = useRef(0);
   const portabilityRequestIdRef = useRef(0);
+  const flowSelectionRevisionRef = useRef(0);
   selectedProjectIdRef.current = selectedProjectId;
   selectedFlowIdRef.current = selectedFlowId;
 
@@ -524,10 +537,10 @@ export function App() {
     if (renamingFlowId) {
       return;
     }
-    portabilityRequestIdRef.current += 1;
+    flowSelectionRevisionRef.current += 1;
     flowLoadRequestIdRef.current += 1;
     selectedFlowIdRef.current = flowId;
-    setPortabilityBusy(null);
+    setPortabilityNotice(null);
     setSelectedFlowId(flowId);
     setTab("flow");
   };
@@ -576,6 +589,8 @@ export function App() {
   };
 
   const handleSelectExecution = (executionId: string, flowId: string) => {
+    flowSelectionRevisionRef.current += 1;
+    selectedFlowIdRef.current = flowId;
     setSelectedFlowId(flowId);
     setTab("executions");
     void loadExecution(executionId);
@@ -583,6 +598,7 @@ export function App() {
 
   const handleSelectProject = (projectId: string) => {
     portabilityRequestIdRef.current += 1;
+    flowSelectionRevisionRef.current += 1;
     flowLoadRequestIdRef.current += 1;
     selectedProjectIdRef.current = projectId;
     selectedFlowIdRef.current = null;
@@ -609,6 +625,7 @@ export function App() {
     }
     const projectId = selectedProjectId;
     const requestId = ++portabilityRequestIdRef.current;
+    const selectionRevision = flowSelectionRevisionRef.current;
     setPortabilityBusy("import");
     setError(null);
     setPortabilityNotice(null);
@@ -624,6 +641,14 @@ export function App() {
       ) {
         return;
       }
+      setFlows((previous) => [
+        {
+          id: result.flow.id,
+          name: result.flow.name,
+          createdAt: result.flow.meta.createdAt,
+        },
+        ...previous.filter((flow) => flow.id !== result.flow.id),
+      ]);
       const nextFlows = await api.listFlows(projectId);
       if (
         requestId !== portabilityRequestIdRef.current ||
@@ -631,9 +656,12 @@ export function App() {
       ) {
         return;
       }
+      setFlows(nextFlows);
+      if (flowSelectionRevisionRef.current !== selectionRevision) {
+        return;
+      }
       flowLoadRequestIdRef.current += 1;
       selectedFlowIdRef.current = result.flow.id;
-      setFlows(nextFlows);
       setSelectedFlowId(result.flow.id);
       setCurrentFlow(result.flow);
       setVersions([]);
@@ -1021,14 +1049,16 @@ export function App() {
             <section className="sidebar-section sidebar-section-primary">
               <div className="sidebar-section-head">
                 <h2>自动化任务</h2>
-                <button
-                  type="button"
-                  className="sidebar-text-btn"
-                  disabled={portabilityBusy !== null}
-                  onClick={() => void handleImportFlowFile()}
-                >
-                  {portabilityBusy === "import" ? "导入中…" : "导入 JSON"}
-                </button>
+                {nativeFilePortability ? (
+                  <button
+                    type="button"
+                    className="sidebar-text-btn"
+                    disabled={portabilityBusy !== null}
+                    onClick={() => void handleImportFlowFile()}
+                  >
+                    {portabilityBusy === "import" ? "导入中…" : "导入 JSON"}
+                  </button>
+                ) : null}
               </div>
               {refreshNotice ? (
                 <p className="sidebar-refresh-notice" role="status">
@@ -1205,14 +1235,16 @@ export function App() {
                 <h2 id="run-workspace-title">{currentFlow.name}</h2>
               </div>
               <div className="run-workspace-actions">
-                <button
-                  type="button"
-                  className="run-secondary-btn"
-                  disabled={portabilityBusy !== null}
-                  onClick={() => void handleExportFlowFile()}
-                >
-                  {portabilityBusy === "export" ? "导出中…" : "导出 JSON"}
-                </button>
+                {nativeFilePortability ? (
+                  <button
+                    type="button"
+                    className="run-secondary-btn"
+                    disabled={portabilityBusy !== null}
+                    onClick={() => void handleExportFlowFile()}
+                  >
+                    {portabilityBusy === "export" ? "导出中…" : "导出 JSON"}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="run-primary-btn"

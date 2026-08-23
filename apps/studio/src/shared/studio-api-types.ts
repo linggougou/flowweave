@@ -424,6 +424,7 @@ export type StudioFlowVersion = {
 };
 
 export type StudioApi = {
+  readonly nativeFilePortability: boolean;
   listProjects: () => Promise<StudioProject[]>;
   createProject: (name: string) => Promise<StudioProject>;
   listFlows: (projectId: string) => Promise<StudioFlowRef[]>;

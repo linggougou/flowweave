@@ -1,3 +1,4 @@
+import { constants } from "node:fs";
 import { open, writeFile } from "node:fs/promises";
 import { extname } from "node:path";
 
@@ -45,10 +46,18 @@ type ExportFlowFileDependencies = {
 };
 
 async function readFileWithinLimit(filePath: string): Promise<Buffer> {
-  const handle = await open(filePath, "r");
+  const noFollowFlag = constants.O_NOFOLLOW ?? 0;
+  const handle = await open(
+    filePath,
+    constants.O_RDONLY | constants.O_NONBLOCK | noFollowFlag,
+  );
   const chunks: Buffer[] = [];
   let totalBytes = 0;
   try {
+    const stats = await handle.stat();
+    if (!stats.isFile()) {
+      throw new Error("导入文件必须是普通 JSON 文件");
+    }
     while (totalBytes <= FLOW_IMPORT_FILE_LIMIT_BYTES) {
       const remainingProbeBytes = FLOW_IMPORT_FILE_LIMIT_BYTES + 1 - totalBytes;
       const buffer = Buffer.allocUnsafe(Math.min(READ_CHUNK_BYTES, remainingProbeBytes));

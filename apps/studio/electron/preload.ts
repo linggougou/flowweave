@@ -7,6 +7,7 @@ import type {
 } from "../src/shared/studio-api-types.js";
 
 const studioApi: StudioApi = {
+  nativeFilePortability: true,
   listProjects: () => ipcRenderer.invoke(IPC_CHANNELS.listProjects),
   createProject: (name: string) => ipcRenderer.invoke(IPC_CHANNELS.createProject, name),
   listFlows: (projectId: string) => ipcRenderer.invoke(IPC_CHANNELS.listFlows, projectId),

@@ -20,6 +20,7 @@ import {
   createProject,
   getExecution,
   getFlow,
+  getFlowForExport,
   getFlowRunInput,
   getFlowVersion,
   getProjectKnowledgeRepository,
@@ -70,6 +71,44 @@ function assertNonEmptyId(value: unknown, name: string): asserts value is string
   if (typeof value !== "string" || value.trim().length === 0 || value.length > 512) {
     throw new Error(`${name} 无效`);
   }
+}
+
+function assertResourceId(value: unknown, name: string): asserts value is string {
+  if (
+    typeof value !== "string" ||
+    value.length === 0 ||
+    value.length > 512 ||
+    !/^[A-Za-z0-9_-]+$/.test(value)
+  ) {
+    throw new Error(`${name} 无效`);
+  }
+}
+
+const SAFE_PORTABILITY_ERROR_MESSAGES = new Set([
+  "Flow JSON 文件不能超过 1 MiB",
+  "Flow JSON 不是合法 JSON",
+  "Flow JSON 必须是 schemaVersion 1 的裸 FlowDocument",
+  "Flow JSON 必须是裸 FlowDocument，不能使用包装对象",
+  "Flow JSON 仅支持 schemaVersion 1",
+  "Flow JSON 必须是有效的 schemaVersion 1 裸 FlowDocument",
+  "导入文件必须是 .json 文件",
+  "导入文件必须是普通 JSON 文件",
+  "每次只能导入一个 Flow JSON 文件",
+  "目标项目不存在",
+  "Flow 不存在",
+]);
+
+function buildRendererSafePortabilityError(
+  error: unknown,
+  operation: "导入" | "导出",
+): Error {
+  const rawMessage = error instanceof Error ? error.message : "";
+  const message = SAFE_PORTABILITY_ERROR_MESSAGES.has(rawMessage)
+    ? rawMessage
+    : `${operation} Flow JSON 失败，请检查所选文件和目标项目后重试。`;
+  const safeError = new Error(message);
+  safeError.stack = undefined;
+  return safeError;
 }
 
 function normalizeOptionalString(value: unknown, name: string): string | undefined {
@@ -216,22 +255,30 @@ function registerIpcHandlers(): void {
   });
 
   ipcMain.handle(IPC_CHANNELS.importFlowFile, async (_event, projectId: string) => {
-    assertNonEmptyId(projectId, "projectId");
-    return importFlowFromFile(projectId, {
-      showOpenDialog: (options) => dialog.showOpenDialog(options),
-      importFlow: importFlowDocument,
-    });
+    assertResourceId(projectId, "projectId");
+    try {
+      return await importFlowFromFile(projectId, {
+        showOpenDialog: (options) => dialog.showOpenDialog(options),
+        importFlow: importFlowDocument,
+      });
+    } catch (error: unknown) {
+      throw buildRendererSafePortabilityError(error, "导入");
+    }
   });
 
   ipcMain.handle(
     IPC_CHANNELS.exportFlowFile,
     async (_event, projectId: string, flowId: string) => {
-      assertNonEmptyId(projectId, "projectId");
-      assertNonEmptyId(flowId, "flowId");
-      return exportFlowToFile(projectId, flowId, {
-        showSaveDialog: (options) => dialog.showSaveDialog(options),
-        getFlow,
-      });
+      assertResourceId(projectId, "projectId");
+      assertResourceId(flowId, "flowId");
+      try {
+        return await exportFlowToFile(projectId, flowId, {
+          showSaveDialog: (options) => dialog.showSaveDialog(options),
+          getFlow: getFlowForExport,
+        });
+      } catch (error: unknown) {
+        throw buildRendererSafePortabilityError(error, "导出");
+      }
     },
   );
 

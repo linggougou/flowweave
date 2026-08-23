@@ -106,6 +106,7 @@ function createApi(
       createdAt: flow.meta.createdAt,
     }));
   return {
+    nativeFilePortability: true,
     listProjects: vi.fn().mockResolvedValue(projects),
     createProject: vi.fn(),
     listFlows: vi.fn(async (projectId) => flowRefs(projectId)),
@@ -216,6 +217,44 @@ describe("App Flow 导入导出", () => {
     expect(findButton(container, "导入 JSON").disabled).toBe(false);
   });
 
+  it("同项目切换任务后仍刷新导入副本，但不抢回当前任务", async () => {
+    const project = buildProject("project_a", "项目 A");
+    const flowA1 = buildFlow("flow_a1", project.id, "A1 任务");
+    const flowA2 = buildFlow("flow_a2", project.id, "A2 任务");
+    const imported = buildFlow("flow_imported", project.id, "A1 任务（导入）");
+    const pendingImport = deferred<Awaited<ReturnType<StudioApi["importFlowFile"]>>>();
+    const projectFlows = [flowA1, flowA2];
+    const api = createApi([project], { [project.id]: projectFlows }, {
+      importFlowFile: vi.fn(() => pendingImport.promise),
+    });
+    const container = await renderApp(project, flowA1, api);
+
+    act(() => findButton(container, "导入 JSON").click());
+    const flowA2Button = Array.from(container.querySelectorAll(".flow-list-item")).find(
+      (button) => button.querySelector(".flow-list-name")?.textContent === "A2 任务",
+    ) as HTMLButtonElement | undefined;
+    expect(flowA2Button).toBeDefined();
+    act(() => flowA2Button?.click());
+    const importingButton = findButton(container, "导入中…");
+    expect(importingButton.disabled).toBe(true);
+    act(() => importingButton.click());
+    expect(api.importFlowFile).toHaveBeenCalledTimes(1);
+
+    projectFlows.push(imported);
+    await act(async () => {
+      pendingImport.resolve({ status: "imported", flow: imported, warnings: [] });
+      await pendingImport.promise;
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(api.importFlowFile).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("A1 任务（导入）");
+    expect(container.querySelector(".flow-list-item.active")?.textContent).toContain("A2 任务");
+    expect(container.querySelector("#run-workspace-title")?.textContent).toBe("A2 任务");
+    expect(container.textContent).not.toContain("已导入「A1 任务（导入）」");
+  });
+
   it("导出取消保持安静，只有实际写入后才提示真实 warning 数", async () => {
     const project = buildProject("project_a", "项目 A");
     const flow = buildFlow("flow_a", project.id, "订单回归");
@@ -267,5 +306,25 @@ describe("App Flow 导入导出", () => {
 
     expect(container.querySelector("[role='alert']")?.textContent).toContain("无法写入所选文件");
     expect(container.textContent).not.toContain("已导出");
+  });
+
+  it("Browser fallback 没有原生文件能力时不展示导入导出入口", async () => {
+    const project = buildProject("project_browser", "浏览器项目");
+    const flow = buildFlow("flow_browser", project.id, "浏览器任务");
+    const api = createApi([project], { [project.id]: [flow] }, {
+      nativeFilePortability: false,
+    });
+    const container = await renderApp(project, flow, api);
+
+    expect(
+      Array.from(container.querySelectorAll("button")).some(
+        (button) => button.textContent?.trim() === "导入 JSON",
+      ),
+    ).toBe(false);
+    expect(
+      Array.from(container.querySelectorAll("button")).some(
+        (button) => button.textContent?.trim() === "导出 JSON",
+      ),
+    ).toBe(false);
   });
 });

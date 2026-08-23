@@ -150,6 +150,7 @@ function createApiHarness(flow: FlowDocument, overrides: Partial<StudioApi> = {}
   let progressListener: ((event: StudioExecutionProgressEvent) => void) | undefined;
   const unsubscribe = vi.fn();
   const api: StudioApi = {
+    nativeFilePortability: true,
     listProjects: vi.fn().mockResolvedValue([buildProject()]),
     createProject: vi.fn(),
     listFlows: vi.fn().mockResolvedValue([
