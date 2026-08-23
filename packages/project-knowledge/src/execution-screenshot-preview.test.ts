@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   openSync,
+  readFileSync,
   renameSync,
   rmSync,
   symlinkSync,
@@ -299,5 +300,44 @@ describe("执行截图受控读取", () => {
       expect(error).toBeInstanceOf(FlowWeaveError);
       expect((error as Error).message).not.toContain(dataDir);
     }
+  });
+
+  it("读取期间运行目录身份漂移时 fail closed 且不触碰替换目录或兄弟文件", () => {
+    const { project, executionId, runDirectory } = prepare();
+    const target = join(runDirectory, "step-0.png");
+    const runsDirectory = dirname(runDirectory);
+    const originalRunDirectory = `${runDirectory}.original`;
+    const originalSentinel = join(runDirectory, "original-sentinel.txt");
+    const replacementSentinel = join(runDirectory, "replacement-sentinel.txt");
+    const siblingSentinel = join(runsDirectory, "sibling-sentinel.txt");
+    writeFileSync(target, png());
+    writeFileSync(originalSentinel, "原目录哨兵");
+    writeFileSync(siblingSentinel, "兄弟哨兵");
+
+    class ReplacingRunDirectoryRepository extends ProjectKnowledgeRepository {
+      protected override beforeExecutionScreenshotFileRevalidation(): void {
+        renameSync(runDirectory, originalRunDirectory);
+        mkdirSync(runDirectory);
+        // 保留同一个截图 inode，确保最终由 runDirectory 身份重验拦截。
+        renameSync(join(originalRunDirectory, "step-0.png"), target);
+        writeFileSync(replacementSentinel, "替换目录哨兵");
+      }
+    }
+    const repo = new ReplacingRunDirectoryRepository({ dataDir });
+
+    try {
+      repo.getExecutionScreenshotPreview(project.id, executionId, 0);
+      throw new Error("应当拒绝读取期间运行目录替换");
+    } catch (error: unknown) {
+      expect(error).toBeInstanceOf(FlowWeaveError);
+      expect((error as Error).message).not.toContain(dataDir);
+      expect((error as Error).message).not.toContain(runDirectory);
+    }
+    expect(readFileSync(join(originalRunDirectory, "original-sentinel.txt"), "utf8")).toBe(
+      "原目录哨兵",
+    );
+    expect(readFileSync(replacementSentinel, "utf8")).toBe("替换目录哨兵");
+    expect(readFileSync(siblingSentinel, "utf8")).toBe("兄弟哨兵");
+    expect(readFileSync(target)).toEqual(png());
   });
 });
