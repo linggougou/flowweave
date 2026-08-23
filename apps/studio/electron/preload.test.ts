@@ -91,4 +91,24 @@ describe("preload 执行控制桥", () => {
     expect(Object.keys(api)).not.toContain("readFile");
     expect(Object.keys(api)).not.toContain("writeFile");
   });
+
+  it("截图预览桥只允许通过固定业务 ID + stepIndex 取回 PNG bytes", async () => {
+    const api = exposeInMainWorldMock.mock.calls[0]?.[1] as {
+      getExecutionScreenshotPreview: (
+        projectId: string,
+        executionId: string,
+        stepIndex: number,
+      ) => Promise<unknown>;
+    };
+
+    await api.getExecutionScreenshotPreview("project_preload", "exec_preload", 2);
+
+    expect(invokeMock).toHaveBeenCalledWith(
+      IPC_CHANNELS.getExecutionScreenshotPreview,
+      "project_preload",
+      "exec_preload",
+      2,
+    );
+    expect(Object.keys(api)).not.toContain("openPath");
+  });
 });

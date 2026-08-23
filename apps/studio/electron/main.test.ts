@@ -37,7 +37,9 @@ const mockLoadURL = vi.fn();
 const mockLoadFile = vi.fn();
 const mockOpenDevTools = vi.fn();
 const mockWindowOn = vi.fn();
+const mockSetWindowOpenHandler = vi.fn();
 const mockSenderSend = vi.fn();
+const browserWindowOptions: Array<Record<string, unknown>> = [];
 const windowInstances: Array<{
   isDestroyed: ReturnType<typeof vi.fn>;
   focus: ReturnType<typeof vi.fn>;
@@ -52,12 +54,14 @@ vi.mock("electron", () => ({
 
     webContents = {
       openDevTools: mockOpenDevTools,
+      setWindowOpenHandler: mockSetWindowOpenHandler,
     };
 
     private readonly destroyed = vi.fn(() => false);
     private readonly focusWindow = vi.fn();
 
-    constructor() {
+    constructor(options: Record<string, unknown>) {
+      browserWindowOptions.push(options);
       windowInstances.push({
         isDestroyed: this.destroyed,
         focus: this.focusWindow,
@@ -137,9 +141,11 @@ describe("electron main runFlow IPC", () => {
     mockLoadFile.mockReset();
     mockOpenDevTools.mockReset();
     mockWindowOn.mockReset();
+    mockSetWindowOpenHandler.mockReset();
     mockSenderSend.mockReset();
     mockCloseLocalApi.mockClear();
     mockStartLocalApi.mockClear();
+    browserWindowOptions.length = 0;
     windowInstances.length = 0;
     mockApp.on.mockReset();
     mockApp.on.mockImplementation((event: string, handler: (...args: unknown[]) => void) => {
@@ -524,5 +530,40 @@ describe("electron main runFlow IPC", () => {
     expect((error as Error).message).not.toContain("/private");
     expect((error as Error).message).not.toContain("top-secret");
     expect((error as Error).stack).toBeUndefined();
+  });
+
+  it("截图预览 IPC 只接受业务 ID 与 stepIndex，不向主进程透传 renderer 路径", async () => {
+    const handler = handlers.get(IPC_CHANNELS.getExecutionScreenshotPreview);
+
+    await expect(
+      handler?.(
+        {
+          sender: windowInstances[0],
+          senderFrame: { url: "http://127.0.0.1:5173/", parent: null },
+        },
+        "project_ipc",
+        "exec_ipc",
+        1,
+        "/Users/alice/private/step-1.png",
+      ),
+    ).resolves.toBeDefined();
+
+    expect(mockShellOpenPath).not.toHaveBeenCalled();
+  });
+
+  it("主窗口启用 sandbox 并拒绝新窗口", () => {
+    const options = browserWindowOptions[0];
+
+    expect(options).toBeDefined();
+    expect(options?.webPreferences).toMatchObject({
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    });
+    expect(mockSetWindowOpenHandler).toHaveBeenCalledWith(expect.any(Function));
+    const decision = mockSetWindowOpenHandler.mock.calls[0]?.[0]?.({
+      url: "https://example.com",
+    });
+    expect(decision).toEqual({ action: "deny" });
   });
 });
