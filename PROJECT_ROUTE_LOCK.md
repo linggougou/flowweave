@@ -51,7 +51,7 @@
   - 若进入破坏性删除、vNext 产品模型、P3 或 P4，必须再次更新路线并获得明确确认
 - 变更批准：用户于 2026-07-16 明确批准按首次用户体验评审调整 post-v1 路线。
 - 阶段切换批准：用户于 2026-08-23 在收到“P2.5 已完成、下一阶段需更新路线锁”的交付说明后明确回复“继续”；本授权解释为进入 post-v1 backlog 的 P2.6，不解释为解冻 P3/P4 或 vNext 产品模型。
-- 当前状态：P2.5 于 2026-08-23 完成并通过本地与远端 main Node 20/24 双门禁；P2.6 计划已启动；P3/P4 与 vNext 输入节点继续冻结。
+- 当前状态：P2.6 功能、独立复审和本地 Node 20/24 门禁已通过，正在等待集成分支与 main 远端双矩阵会签；P3/P4 与 vNext 输入节点继续冻结。
 
 ## 2.1 里程碑路线图
 
@@ -61,7 +61,7 @@
 | P1 核心闭环         | 扩展录制 → Studio 回放           | recorder、runtime、extension、studio                       | 可录制、可同步、可执行                 | `pnpm e2e:login`、手测闭环                                                              | ✅ 完成   |
 | P2 可演示纵向切片   | 知识库、执行历史、真实页面稳定性 | project-knowledge、执行日志、诊断 UI、recorded replay 基线 | 可诊断、可复验、主线稳定               | Node 24 `pnpm smoke`、`pnpm e2e:recorded-pages`、相关 Studio 验证；CI 保持 Node 20 / 24 | ✅ 完成   |
 | P2.5 首次体验产品化 | 非技术用户安全完成首次任务       | 内置连接、敏感输入保护、跨端刷新、录制状态、安全运行       | 首次旅程不依赖开发命令且关键风险有守卫 | 分轨测试 + 首次用户手测 + Node 20/24 CI                                                 | ✅ 完成   |
-| P2.6 本地资产可移植 | 安全迁移与维护自动化任务         | 统一导出合同、导入新副本、Studio 文件交互、Web 重命名      | 导出导入运行往返可证且无静默覆盖       | 分轨测试 + 文件往返 E2E + recorded replay + Node 20/24 CI                               | 🚧 进行中 |
+| P2.6 本地资产可移植 | 安全迁移与维护自动化任务         | 统一导出合同、导入新副本、Studio 文件交互、Web 重命名      | 导出导入运行往返可证且无静默覆盖       | 分轨测试 + 文件往返 E2E + recorded replay + Node 20/24 CI                               | 🟡 本地通过，待远端会签 |
 | P3 完整框架扩展     | 深度页面 / 接口理解              | page-intelligence、network-intelligence 深化能力           | 明确场景与回归面后再开放               | 待路线解冻                                                                              | ⏸ 冻结    |
 | P4 产品落地         | AI 编排与智能增强                | ai-orchestrator、AI 产品入口                               | 不影响现有稳定主线                     | 待路线解冻                                                                              | ⏸ 冻结    |
 
@@ -98,6 +98,8 @@
   - Node 24：`pnpm lint`
   - Node 24：`pnpm smoke`
   - Node 24：`pnpm e2e:recorded-pages`
+  - Node 24 / 20：`pnpm e2e:portability`
+  - 官方 npm registry：`pnpm audit --prod --audit-level high`
   - CI：Node 20 / 24 双矩阵
 - 构建命令：
   - `pnpm build`
@@ -124,8 +126,7 @@
 - Backlog：`docs/exec-plans/active/post-v1-development-roadmap.md` 中的 P2.6 后续资产维护与未来智能阶段事项
 - Change Request：新增需求先进入路线计划或专门变更文档，再决定是否实施
 - 当前阶段缺口：
-  - Flow 导出尚未复用统一安全合同，Studio 尚无导入/导出入口
-  - Web 已有重命名后端但缺少前端交互
+  - 本地功能与验证缺口已关闭；仅等待集成分支与 main 的 Node 20/24 远端会签
 - 后续阶段需求：
   - P2.7 路径安全、执行记录删除与 Flow 版本只读 diff
   - vNext 任务模板输入节点、编辑模型与暂停/继续协议

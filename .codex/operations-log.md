@@ -7061,3 +7061,25 @@
 - UI：原生文件 capability 仅 Electron 为 true，Browser fallback 不展示可点击入口；同项目切换任务时已持久化导入仍刷新侧栏，但不抢回当前选择，项目切换则丢弃旧响应。
 - 独立审查两轮返工关闭 5 个 P1：路径越界、符号链接、同项目异步列表陈旧、Browser 能力误报，以及 ghost import 在项目门禁前弹窗/读文件。
 - 最终复审：PASS，无 P0/P1；主代理复验 Studio `167/167`、typecheck、lint、build、diff-check 全绿。系统原生 dialog 的真实人机点击保留到 G6 集成烟测。
+
+### 2026-08-23 G6 可移植往返与真实界面验收
+
+- 新增根命令 `pnpm e2e:portability`：在真实临时知识库中创建来源/目标项目，将含密码、URL 凭据和真实上传绝对路径的来源 Flow 安全导出，导入目标项目为新副本，补齐变量并由真实 runtime 执行。
+- 往返结果：结构化 warnings `3` 项；导入后 `flowId`、`projectId` 和时间更新且来源不变；导出 JSON 不含密码与原始上传路径；真实登录页和上传 fixture 合计 `10/10` 步骤成功，执行记录可落库并回读。
+- 独立 G6 Reviewer：PASS，无 P0/P1；确认测试不以预先模板化路径绕过可移植处理，随后补真实绝对路径回归并复审通过。
+- Web 应用内浏览器实测：把任务重命名为 `录制流程-P2.6验收` 后侧栏和标题同步，刷新后持久化；`375×812` 下 body/document 宽度均为 `375`、无横向溢出、重命名入口可见；完成后恢复原名称并复验临时名称计数为 `0`。
+- Studio dev 实机：Electron、Vite renderer 和自持有 local API 成功启动，端口 `5173/3847` 可用；Electron Framework 严格签名与 better-sqlite3 native binding 正常。
+- 桌面交互限制：按 `computer-use` skill 调用桌面能力时准确返回 “The Mac is locked”；未绕过系统锁屏。原生 dialog 的真实人机点击以 Studio `167/167`（含取消、非法/超限、symlink/FIFO/目录、ghost project、异步选择）测试、真实临时文件服务、Electron 启动和构建完整性作为替代证据。
+- 清理：Web/Studio dev 服务均已停止；`3847`、`5173`、`5174` 无监听；浏览器验收页已关闭。
+
+### 2026-08-23 P2.6 本地全量与双版本会签
+
+- Node 24.14.0：`CI=1 pnpm smoke` 通过，包含全仓 typecheck/test/build 与登录 E2E `4/4`；`pnpm e2e:recorded-pages` 为 `25/25`，总耗时 `49381ms`。
+- Node 24.14.0：`pnpm e2e:portability` 通过，warnings=`3`、steps=`10`；官方 npm registry `pnpm audit --prod --audit-level high` 报告 `No known vulnerabilities found`。
+- Node 20.19.6：强制按 lockfile 重建依赖；`pnpm turbo typecheck --force`、`pnpm turbo test --force`、`pnpm turbo build --force` 均为 `21/21`、`21/21`、`13/13` 且 `0 cached`；runtime `47/47`。
+- Node 20.19.6：真实 `pnpm e2e:login` 为 `4/4` success；`pnpm e2e:portability` 为 warnings=`3`、steps=`10`。
+- 环境插曲：首次 Node 20 build 因指定的独立 TMPDIR 尚未创建而在 pnpm 初始化阶段以 `ENOENT` 退出，未进入项目构建；创建该目录后无缓存重跑全绿。
+- 依赖恢复：最终在 Node 24.14.0 下执行 `pnpm install --frozen-lockfile --force`，Electron bundle 修复并 ad-hoc 重签名后严格校验通过；`node scripts/doctor.mjs --smoke` 与 portability 往返再次通过。
+- 临时空间：系统 `/var` 空间不足期间使用 `/Volumes/2T` 下任务专用 TMPDIR；仅回收本任务创建目录，不触碰用户文件。
+- 资源回收：确认仅剩主工作区、无 `3847/5173/5174` 监听；7 个 `flowweave-tmp-p26-*` 任务专用目录已移入 `/Users/ling/.Trash/flowweave-p26-final-20260823/`，可从废纸篓恢复。
+- 当前结论：P2.6 本地功能、稳定性与安全门禁通过，等待集成分支和 main Node 20/24 CI 远端会签。
