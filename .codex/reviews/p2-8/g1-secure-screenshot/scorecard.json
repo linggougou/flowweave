@@ -1,0 +1,185 @@
+{
+  "review_id": "p2-8-g1-secure-screenshot-20260824",
+  "task_id": "P2.8-G1",
+  "lane": "g1-secure-screenshot",
+  "review_level": "L3",
+  "rubric_id": "p2-8-controlled-png-read-v1",
+  "artifact_refs": [
+    "baseline:93380de",
+    "original-commit:5ae8a22",
+    "reviewed-commit:1069c393e1eab98a4d776219eef4e3f6e186d369",
+    "file:packages/project-knowledge/src/repository.ts",
+    "file:packages/project-knowledge/src/types.ts",
+    "file:packages/project-knowledge/src/execution-screenshot-preview.test.ts",
+    "file:packages/project-knowledge/src/execution-deletion.test.ts",
+    "cmd:pnpm exec vitest run src/execution-screenshot-preview.test.ts src/execution-deletion.test.ts --reporter=verbose",
+    "cmd:git diff --check 93380de..1069c39"
+  ],
+  "hard_gates": [
+    {
+      "id": "business-ownership-before-read",
+      "status": "pass",
+      "evidence": [
+        "repository.ts:999-1052 先校验 projectId/executionId/stepIndex，再以 projectId+executionId 精确确认 execution 归属并确认 stepIndex 对应步骤存在",
+        "execution-screenshot-preview.test.ts:86-124 覆盖非法 ID/index、跨项目、缺失 execution 与缺失 step"
+      ]
+    },
+    {
+      "id": "derived-path-never-database-path",
+      "status": "pass",
+      "evidence": [
+        "repository.ts:1067-1069 仅由受控 dataDir、projectId、executionId 与 stepIndex 推导 step-<N>.png",
+        "execution-screenshot-preview.test.ts:126-151 证明伪造的数据库外部 screenshotPath 被忽略，响应不含 path"
+      ]
+    },
+    {
+      "id": "filesystem-type-and-containment",
+      "status": "pass",
+      "evidence": [
+        "repository.ts:185-213,1073-1137 拒绝非普通文件、symlink、nlink!=1，并重验 data/project/runs/run/file 身份",
+        "execution-screenshot-preview.test.ts:153-247 覆盖缺失、data/project/runs/run/file symlink、硬链接、目录与 FIFO"
+      ]
+    },
+    {
+      "id": "bounded-png-only",
+      "status": "pass",
+      "evidence": [
+        "repository.ts:64-68,185-236 在 Buffer 分配前执行 8 MiB 上限，并校验完整 PNG signature、IHDR、8192 单边与 40000000 像素上限",
+        "execution-screenshot-preview.test.ts:249-281 覆盖空/伪/截断 PNG、错误首块、零宽、维度/像素超限与 >8 MiB"
+      ]
+    },
+    {
+      "id": "toctou-fault-injection-complete",
+      "status": "fail",
+      "evidence": [
+        "repository.ts:1093-1137 对 fd、最终路径和全部父目录执行读取后身份重验，源码守卫存在",
+        "execution-screenshot-preview.test.ts:283-302 只注入目标文件路径替换",
+        "docs/exec-plans/active/p2-8-execution-screenshot-preview.md:68 明确要求同时注入运行目录替换与文件替换；候选 30 项缺少前者的可重复证据"
+      ]
+    },
+    {
+      "id": "renderer-safe-result-and-errors",
+      "status": "pass",
+      "evidence": [
+        "types.ts 的结果联合仅含 status/mediaType/bytes/width/height，不含路径或文件名",
+        "repository.ts 的读取错误均映射为稳定 FlowWeaveError 消息，未拼接本机路径",
+        "execution-screenshot-preview.test.ts:283-301 验证 TOCTOU 错误不含 dataDir"
+      ]
+    },
+    {
+      "id": "deletion-regression",
+      "status": "pass",
+      "evidence": [
+        "2026-08-24 定向复验 execution-deletion.test.ts 36/36 通过",
+        "主代理既有证据：project-knowledge 全包 84/84、typecheck、lint、build 全绿"
+      ]
+    },
+    {
+      "id": "route-and-scope",
+      "status": "pass",
+      "evidence": [
+        "1069c39 仅修改 packages/project-knowledge 的 resolver、类型、导出与测试",
+        "未新增 Local API/Web 文件读取、未改 runtime 产物格式，P3/P4/vNext 未解冻"
+      ]
+    }
+  ],
+  "dimensions": [
+    {
+      "name": "correctness",
+      "score": 25,
+      "max_score": 25,
+      "reason": "所有权、步骤存在性、固定路径推导、缺失语义和返回合同均与冻结设计一致。",
+      "evidence_refs": [
+        "packages/project-knowledge/src/repository.ts:994-1160",
+        "packages/project-knowledge/src/execution-screenshot-preview.test.ts:86-162"
+      ]
+    },
+    {
+      "name": "security",
+      "score": 25,
+      "max_score": 25,
+      "reason": "不信任数据库路径，拒绝 symlink/hardlink/特殊文件，采用 no-follow fd 和多层身份复核，未发现可利用的 arbitrary/cross-project read。",
+      "evidence_refs": [
+        "packages/project-knowledge/src/repository.ts:158-236,994-1160",
+        "packages/project-knowledge/src/execution-screenshot-preview.test.ts:111-281"
+      ]
+    },
+    {
+      "name": "regression_safety",
+      "score": 20,
+      "max_score": 20,
+      "reason": "截图与删除关键定向共 66/66 通过；主代理的全包 84/84 与编译门禁证据可复用。",
+      "evidence_refs": [
+        "cmd:pnpm exec vitest run src/execution-screenshot-preview.test.ts src/execution-deletion.test.ts --reporter=verbose",
+        "verifier:project-knowledge 84/84 + typecheck/lint/build"
+      ]
+    },
+    {
+      "name": "route_discipline",
+      "score": 10,
+      "max_score": 10,
+      "reason": "提交面严格限定在 G1 project-knowledge，不扩展 HTTP/Web、P3/P4 或 vNext。",
+      "evidence_refs": [
+        "git show --stat 1069c39",
+        "docs/exec-plans/active/p2-8-execution-screenshot-preview.md:64-69"
+      ]
+    },
+    {
+      "name": "evidence_quality",
+      "score": 14,
+      "max_score": 20,
+      "reason": "30 项截图测试覆盖大多数安全分支，但冻结的运行目录替换故障注入缺失，L3 不能以源码推断替代可重复证据。",
+      "evidence_refs": [
+        "packages/project-knowledge/src/execution-screenshot-preview.test.ts:53-303",
+        "docs/exec-plans/active/p2-8-execution-screenshot-preview.md:68"
+      ]
+    }
+  ],
+  "penalties": [
+    {
+      "id": "missing-run-directory-toctou-injection",
+      "severity": "P1",
+      "deduction": 6,
+      "reason": "G1 冻结 TDD 清单要求运行目录替换和文件替换两类 TOCTOU；当前仅覆盖文件替换。",
+      "evidence_refs": [
+        "docs/exec-plans/active/p2-8-execution-screenshot-preview.md:68",
+        "packages/project-knowledge/src/execution-screenshot-preview.test.ts:283-302"
+      ]
+    }
+  ],
+  "totals": {
+    "raw_score": 94,
+    "penalty_total": 6,
+    "final_score": 88
+  },
+  "verdict": "REVISE",
+  "required_fixes": [
+    "在 execution-screenshot-preview.test.ts 增加运行目录身份漂移故障注入：在 beforeExecutionScreenshotFileRevalidation() 中替换 runDirectory，断言 getExecutionScreenshotPreview fail closed、错误不泄露路径、替换目录与兄弟 sentinel 不被读取或修改；复跑截图 31 项、删除 36 项和 project-knowledge 全包。"
+  ],
+  "nice_to_have": [
+    "可补充恰好 8 MiB 边界与非字符串运行时输入用例，但现有实现和共享 ID 守卫已足以支撑这些分支，不作为本轮阻塞。"
+  ],
+  "reviewers": [
+    {
+      "role": "verifier",
+      "conclusion": "REVISE",
+      "summary": "业务归属、固定路径、PNG/大小、文件替换和删除回归均通过；运行目录替换硬门证据缺失。"
+    },
+    {
+      "role": "strict_judge",
+      "conclusion": "REVISE",
+      "summary": "实现未发现可利用安全缺陷，但 L3 冻结故障注入未完整兑现，需补最小测试后复审。"
+    },
+    {
+      "role": "anti_slop_judge",
+      "conclusion": "PASS",
+      "summary": "实现与 30 项测试均为真实安全逻辑，不存在空壳、模板凑数或范围漂移。"
+    },
+    {
+      "role": "chief_reviewer",
+      "conclusion": "REVISE",
+      "summary": "退回 G1 仅补运行目录 TOCTOU 故障注入；无需重写 resolver 或扩大阶段范围。"
+    }
+  ],
+  "reviewed_at": "2026-08-24T03:00:00+08:00"
+}
