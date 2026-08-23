@@ -1,5 +1,6 @@
 import {
   parseFlowDocument,
+  type FlowDocument,
   type FlowPortabilityWarning,
   type FlowPortabilityWarningCode,
 } from "@flowweave/flow-dsl";
@@ -69,22 +70,21 @@ function snapshotPortabilityWarning(input: unknown): FlowPortabilityWarning | nu
     : { code: code as FlowPortabilityWarningCode, path, message, variableName };
 }
 
-function isBareFlowDocumentJson(json: string): boolean {
+function parseBareFlowDocumentJson(json: string): FlowDocument | null {
   let input: unknown;
   try {
     input = JSON.parse(json);
   } catch {
-    return false;
+    return null;
   }
 
-  if (!isRecord(input)) return false;
-  if (Object.keys(input).some((key) => !bareFlowDocumentKeys.has(key))) return false;
+  if (!isRecord(input)) return null;
+  if (Object.keys(input).some((key) => !bareFlowDocumentKeys.has(key))) return null;
 
   try {
-    parseFlowDocument(input);
-    return true;
+    return parseFlowDocument(input);
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -113,10 +113,11 @@ function validateExportFlowSuccess(input: Record<string, unknown>): ValidatedExp
   }
   if (warningCount !== warnings.length) return null;
   if (businessTextReviewRequired !== true) return null;
-  if (!isBareFlowDocumentJson(json)) return null;
+  const document = parseBareFlowDocumentJson(json);
+  if (document === null) return null;
 
   return {
-    json,
+    json: JSON.stringify(document, null, 2),
     filename,
     warnings,
     summary: { warningCount, businessTextReviewRequired },

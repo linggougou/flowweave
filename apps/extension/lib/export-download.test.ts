@@ -1,4 +1,8 @@
-import type { FlowDocument, FlowPortabilityWarning } from "@flowweave/flow-dsl";
+import {
+  parseFlowDocument,
+  type FlowDocument,
+  type FlowPortabilityWarning,
+} from "@flowweave/flow-dsl";
 import { describe, expect, it, vi } from "vitest";
 
 import { processExportFlowDownload } from "./export-download.js";
@@ -48,7 +52,70 @@ describe("扩展导出响应运行时校验", () => {
       ok: true,
       status: "未发现当前规则可识别的敏感项，请继续检查业务文本；已触发 JSON 下载",
     });
-    expect(download).toHaveBeenCalledWith("flow-session-.json", JSON.stringify(document));
+    expect(download).toHaveBeenCalledWith(
+      "flow-session-.json",
+      JSON.stringify(document, null, 2),
+    );
+  });
+
+  it("从公共解析结果重序列化下载，移除嵌套未知字段并保留合法字段", () => {
+    const rawDocument = {
+      ...document,
+      steps: [
+        {
+          id: "navigate",
+          type: "navigate",
+          url: "https://example.com/known",
+          secret: "TOP-SECRET-STEP",
+        },
+        {
+          id: "click",
+          type: "click",
+          target: {
+            strategies: [{ kind: "css", selector: "button.submit" }],
+            hints: {
+              tagName: "button",
+              labelText: "提交",
+              secret: "TOP-SECRET-HINT",
+            },
+            secret: "TOP-SECRET-TARGET",
+          },
+        },
+      ],
+      meta: {
+        ...document.meta,
+        warnings: "TOP-SECRET-META",
+      },
+    };
+    const originalJson = JSON.stringify(rawDocument);
+    const response = createSuccessResponse({ json: originalJson }) as Record<string, unknown>;
+    const download = vi.fn();
+
+    const result = processExportFlowDownload(response, download);
+
+    expect(result.ok).toBe(true);
+    expect(download).toHaveBeenCalledWith(
+      "flow-session-.json",
+      JSON.stringify(parseFlowDocument(rawDocument), null, 2),
+    );
+    const downloadedJson = download.mock.calls[0]?.[1] as string;
+    const downloaded = JSON.parse(downloadedJson) as Record<string, unknown>;
+    expect(Object.keys(downloaded)).toEqual([
+      "schemaVersion",
+      "id",
+      "projectId",
+      "name",
+      "variables",
+      "steps",
+      "meta",
+    ]);
+    expect(downloadedJson).not.toContain("TOP-SECRET");
+    expect(downloadedJson).toContain("https://example.com/known");
+    expect(downloadedJson).toContain('"tagName": "button"');
+    expect(downloadedJson).toContain('"labelText": "提交"');
+    expect(response.json).toBe(originalJson);
+    expect(rawDocument.steps[0]).toHaveProperty("secret", "TOP-SECRET-STEP");
+    expect(rawDocument.meta).toHaveProperty("warnings", "TOP-SECRET-META");
   });
 
   it.each([
@@ -191,7 +258,10 @@ describe("扩展导出响应运行时校验", () => {
 
     expect(result.ok).toBe(true);
     expect(readCount).toBe(1);
-    expect(download).toHaveBeenCalledWith("flow-session-.json", JSON.stringify(document));
+    expect(download).toHaveBeenCalledWith(
+      "flow-session-.json",
+      JSON.stringify(document, null, 2),
+    );
     expect(JSON.stringify(download.mock.calls)).not.toContain("TOP-SECRET");
     expect(JSON.stringify(download.mock.calls)).not.toContain("../../attacker.json");
   });
