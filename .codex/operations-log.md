@@ -7030,3 +7030,13 @@
 - 安全合同：仅处理 schemaVersion 1 可识别字段与受控敏感 key；不扫描任意业务文本，也不扩展到 schema 外 Cookie/Header/HAR/Storage。
 - 复审：最终 PASS，无 P0/P1；敏感参数会变量化并输出结构化 warning，普通业务文本与 `/orders/status=ready` 不误伤，二次处理幂等。
 - 主代理复验：flow-dsl `18/18`，typecheck、lint、build 通过；系统临时空间不足时使用项目卷内独立 TMPDIR，验证后移入废纸篓，未删除用户文件。
+
+### 2026-08-23 Track G2 Flow 安全导入 API 验收与回收
+
+- Agent：`/root/p26_portability_core`；独立 Reviewer：`/root/audit_release_scope`；worktree：`flowweave-worktrees/p26-import-api`。
+- 交付：`902bc9d feat(import): 支持 Flow 安全导入新副本`；集成提交为 `80fbbc2`。
+- TDD：knowledge 先因 `importFlow` 缺失红灯，local-api 先因 endpoint 404 红灯；另补非法 `null` 顶层的 400 状态红测。
+- Repository：先验证真实目标项目，再复用公共 portability 合同；在 SQLite immediate 单事务内生成新 UUID、目标 projectId、新时间与稳定递增导入名称，失败回滚且不覆盖来源 Flow。
+- HTTP：新增独立 `POST /api/projects/:projectId/flow-imports`，保留原 sync/upsert 语义；原始 body 恰好 1 MiB 可用、超 1 字节为结构化 413。
+- 独立安全复验：`../escape` 被 `PROJECT_NOT_FOUND` 拒绝且未创建越界数据库；raw chunked 超限后同一 keep-alive health 仍为 200，413 仅返回一次、零写入、无双响应。
+- 主代理复验：project-knowledge `18/18`、local-api `8/8`，两包 typecheck/lint/build 通过；首次并行验证因 local-api 读取旧 knowledge `dist` 出现预期依赖竞态，按 Turborepo 依赖顺序完成 knowledge build 后串行复验全绿，未掩盖失败。
