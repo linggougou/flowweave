@@ -19,6 +19,7 @@ import {
 import {
   assertProjectExistsForFileOperation,
   createProject,
+  deleteExecution,
   getExecution,
   getFlow,
   getFlowForExport,
@@ -99,10 +100,7 @@ const SAFE_PORTABILITY_ERROR_MESSAGES = new Set([
   "Flow 不存在",
 ]);
 
-function buildRendererSafePortabilityError(
-  error: unknown,
-  operation: "导入" | "导出",
-): Error {
+function buildRendererSafePortabilityError(error: unknown, operation: "导入" | "导出"): Error {
   const rawMessage = error instanceof Error ? error.message : "";
   const message = SAFE_PORTABILITY_ERROR_MESSAGES.has(rawMessage)
     ? rawMessage
@@ -213,6 +211,21 @@ function buildRendererSafeRunError(
   return safeError;
 }
 
+function buildRendererSafeDeletionError(error: unknown): Error {
+  const rawMessage = error instanceof Error ? error.message : "";
+  const isSafeMessage =
+    rawMessage === "目标项目不存在" ||
+    rawMessage.startsWith("运行产物") ||
+    rawMessage.startsWith("单次运行目录") ||
+    rawMessage.startsWith("隔离运行产物失败") ||
+    rawMessage.startsWith("删除执行记录失败");
+  const safeError = new Error(
+    isSafeMessage ? rawMessage : "删除运行记录失败，未变更其他记录；请检查本地产物后重试。",
+  );
+  safeError.stack = undefined;
+  return safeError;
+}
+
 function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.listProjects, () => listProjects());
 
@@ -268,21 +281,18 @@ function registerIpcHandlers(): void {
     }
   });
 
-  ipcMain.handle(
-    IPC_CHANNELS.exportFlowFile,
-    async (_event, projectId: string, flowId: string) => {
-      assertResourceId(projectId, "projectId");
-      assertResourceId(flowId, "flowId");
-      try {
-        return await exportFlowToFile(projectId, flowId, {
-          showSaveDialog: (options) => dialog.showSaveDialog(options),
-          getFlow: getFlowForExport,
-        });
-      } catch (error: unknown) {
-        throw buildRendererSafePortabilityError(error, "导出");
-      }
-    },
-  );
+  ipcMain.handle(IPC_CHANNELS.exportFlowFile, async (_event, projectId: string, flowId: string) => {
+    assertResourceId(projectId, "projectId");
+    assertResourceId(flowId, "flowId");
+    try {
+      return await exportFlowToFile(projectId, flowId, {
+        showSaveDialog: (options) => dialog.showSaveDialog(options),
+        getFlow: getFlowForExport,
+      });
+    } catch (error: unknown) {
+      throw buildRendererSafePortabilityError(error, "导出");
+    }
+  });
 
   ipcMain.handle(IPC_CHANNELS.getFlowRunInput, (_event, projectId: string, flowId: string) => {
     if (typeof projectId !== "string" || projectId.length === 0) {
@@ -364,6 +374,17 @@ function registerIpcHandlers(): void {
       throw new Error("projectId 无效");
     }
     return listExecutions(projectId);
+  });
+
+  ipcMain.handle(IPC_CHANNELS.deleteExecution, (_event, projectId: string, executionId: string) => {
+    assertResourceId(projectId, "projectId");
+    assertResourceId(executionId, "executionId");
+    if (activeExecutions.has(executionId)) {
+      throw new Error("运行中的记录不能删除，请先取消或等待运行结束");
+    }
+    return deleteExecution(projectId, executionId).catch((error: unknown) => {
+      throw buildRendererSafeDeletionError(error);
+    });
   });
 
   ipcMain.handle(IPC_CHANNELS.listFlowVersions, (_event, projectId: string, flowId: string) => {

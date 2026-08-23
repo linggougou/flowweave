@@ -1,5 +1,9 @@
 import type { FlowDocument } from "@flowweave/flow-dsl";
-import type { ExecutionResult, ExecutionWithProject, FlowVersionRecord } from "@flowweave/project-knowledge";
+import type {
+  ExecutionResult,
+  ExecutionWithProject,
+  FlowVersionRecord,
+} from "@flowweave/project-knowledge";
 
 import type {
   ExecutionStepLog,
@@ -13,12 +17,9 @@ import type {
   StudioProject,
   StudioProjectEnvironment,
 } from "./shared/studio-api-types.js";
-import {
-  mapStoredExecutionToStudioExecution,
-} from "./shared/execution-history.js";
+import { mapStoredExecutionToStudioExecution } from "./shared/execution-history.js";
 
-const KNOWLEDGE_API =
-  import.meta.env.VITE_FLOWWEAVE_KNOWLEDGE_API ?? "http://127.0.0.1:3847";
+const KNOWLEDGE_API = import.meta.env.VITE_FLOWWEAVE_KNOWLEDGE_API ?? "http://127.0.0.1:3847";
 
 const HTTP_FALLBACK_METHODS = [
   "listProjects",
@@ -90,10 +91,7 @@ function toStudioFlowRunInput(item: ExecutionResult): StudioFlowRunInput | null 
     storageStatePath: item.runContext.storageStatePath,
     variables: item.runContext.variables
       ? Object.fromEntries(
-          Object.entries(item.runContext.variables).map(([name, value]) => [
-            name,
-            String(value),
-          ]),
+          Object.entries(item.runContext.variables).map(([name, value]) => [name, String(value)]),
         )
       : undefined,
   };
@@ -126,9 +124,8 @@ function buildFallbackEnvironments(baseUrl?: string): StudioProjectEnvironment[]
 
 const knowledgeHttpClient: Pick<StudioApi, HttpFallbackMethod> = {
   listProjects: async (): Promise<StudioProject[]> => {
-    const projects = await knowledgeRequest<Array<StudioProject & { baseUrl?: string }>>(
-      "/api/projects",
-    );
+    const projects =
+      await knowledgeRequest<Array<StudioProject & { baseUrl?: string }>>("/api/projects");
     return projects.map((project) => ({
       id: project.id,
       name: project.name,
@@ -155,11 +152,7 @@ const knowledgeHttpClient: Pick<StudioApi, HttpFallbackMethod> = {
   listFlows: (projectId: string): Promise<StudioFlowRef[]> =>
     knowledgeRequest(`/api/projects/${projectId}/flows`),
 
-  renameFlow: async (
-    projectId: string,
-    flowId: string,
-    name: string,
-  ): Promise<StudioFlowRef> => {
+  renameFlow: async (projectId: string, flowId: string, name: string): Promise<StudioFlowRef> => {
     const result = await knowledgeRequest<{ flowId: string; name: string; createdAt: string }>(
       `/api/projects/${projectId}/flows/${flowId}`,
       {
@@ -197,9 +190,7 @@ const knowledgeHttpClient: Pick<StudioApi, HttpFallbackMethod> = {
 
   getExecution: async (executionId: string): Promise<StudioExecution | null> => {
     try {
-      const stored = await knowledgeRequest<ExecutionWithProject>(
-        `/api/executions/${executionId}`,
-      );
+      const stored = await knowledgeRequest<ExecutionWithProject>(`/api/executions/${executionId}`);
       let flow: FlowDocument | undefined;
       if (!stored.flowSnapshot) {
         try {
@@ -234,10 +225,7 @@ const knowledgeHttpClient: Pick<StudioApi, HttpFallbackMethod> = {
     return list.map(toStudioFlowVersion);
   },
 
-  getFlowVersion: async (
-    projectId: string,
-    versionId: string,
-  ): Promise<FlowDocument | null> => {
+  getFlowVersion: async (projectId: string, versionId: string): Promise<FlowDocument | null> => {
     try {
       return await knowledgeRequest<FlowDocument>(
         `/api/projects/${projectId}/flow-versions/${versionId}`,
@@ -260,6 +248,7 @@ function isHttpFallbackMethod(prop: string): prop is HttpFallbackMethod {
 function createBrowserStudioApi(): StudioApi {
   return {
     nativeFilePortability: false,
+    nativeExecutionDeletion: false,
     ...knowledgeHttpClient,
     getFlowRunInput: knowledgeHttpClient.getFlowRunInput,
     runFlow: async (): Promise<RunFlowResult> => {
@@ -299,9 +288,7 @@ export function getStudioApi(): StudioApi {
   if (!electron) {
     return createBrowserStudioApi();
   }
-  const missing = HTTP_FALLBACK_METHODS.filter(
-    (method) => typeof electron[method] !== "function",
-  );
+  const missing = HTTP_FALLBACK_METHODS.filter((method) => typeof electron[method] !== "function");
   if (missing.length === 0) {
     return electron;
   }

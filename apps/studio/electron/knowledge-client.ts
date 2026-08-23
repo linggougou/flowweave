@@ -2,6 +2,7 @@ import type { FlowDocument } from "@flowweave/flow-dsl";
 import type { PageSnapshotSummary } from "@flowweave/page-intelligence";
 import type {
   ExecutionResult,
+  ExecutionDeletionResult,
   ExecutionWithProject,
   FlowImportResult,
   FlowVersionRecord,
@@ -95,10 +96,7 @@ export async function apiGetFlow(projectId: string, flowId: string): Promise<Flo
   return request(`/api/projects/${projectId}/flows/${flowId}`);
 }
 
-export async function apiImportFlow(
-  projectId: string,
-  input: unknown,
-): Promise<FlowImportResult> {
+export async function apiImportFlow(projectId: string, input: unknown): Promise<FlowImportResult> {
   if (localRepository) {
     return localRepository.importFlow(projectId, input);
   }
@@ -179,6 +177,15 @@ export async function apiListExecutions(projectId: string): Promise<ExecutionRes
     return localRepository.listExecutions(projectId);
   }
   return request(`/api/projects/${projectId}/executions`);
+}
+
+/** 破坏性能力只接受主进程持有的 repository，绝不回退到 Local API。 */
+export async function apiDeleteExecution(
+  repository: ProjectKnowledgeRepository,
+  projectId: string,
+  executionId: string,
+): Promise<ExecutionDeletionResult> {
+  return repository.deleteExecution(projectId, executionId);
 }
 
 export async function apiListFlowVersions(

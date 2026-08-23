@@ -1,11 +1,8 @@
 /** 渲染进程与 preload 共享的 Studio API 类型 */
-import type {
-  FlowDocument,
-  FlowPortabilityWarning,
-  NormalizedStep,
-} from "@flowweave/flow-dsl";
+import type { FlowDocument, FlowPortabilityWarning, NormalizedStep } from "@flowweave/flow-dsl";
 import type { FragilityIssue, PageSnapshotSummary } from "@flowweave/page-intelligence";
 import type { ExecutionProgressEvent } from "@flowweave/runtime";
+import type { ExecutionDeletionResult } from "@flowweave/project-knowledge";
 
 export type RunFlowVariableValue = string | number | boolean;
 
@@ -26,10 +23,7 @@ export type StudioFlowRunInput = {
 };
 
 export type StudioRunPreflightIssue = {
-  code:
-    | "MISSING_BASE_URL"
-    | "MISSING_REQUIRED_VARIABLE"
-    | "STORAGE_STATE_PATH_NOT_FOUND";
+  code: "MISSING_BASE_URL" | "MISSING_REQUIRED_VARIABLE" | "STORAGE_STATE_PATH_NOT_FOUND";
   field: string;
   message: string;
 };
@@ -145,8 +139,7 @@ const studioActionStateResetDescriptorMap: Record<
     cause: "select-value-reset",
     label: "下拉选项被页面重置",
     title: "核对下拉值是否被联动改回",
-    explanation:
-      "这通常说明页面在选择后又套用了默认值、联动规则或接口回填",
+    explanation: "这通常说明页面在选择后又套用了默认值、联动规则或接口回填",
     suggestedAction:
       "确认录制值仍对应当前 option value，并检查该下拉是否会在加载默认值、上游字段变化或接口回填后自动改回；必要时在联动完成后重新录制选择步骤。",
   },
@@ -154,8 +147,7 @@ const studioActionStateResetDescriptorMap: Record<
     cause: "checked-state-reset",
     label: "勾选状态被页面重置",
     title: "核对勾选状态是否被脚本撤销",
-    explanation:
-      "这通常说明页面在勾选后又触发了互斥规则、权限控制或异步回填",
+    explanation: "这通常说明页面在勾选后又触发了互斥规则、权限控制或异步回填",
     suggestedAction:
       "检查同组单选/复选互斥、权限开关、异步回填或前置字段校验是否在点击后把状态改回；必要时先完成前置步骤，再重新录制到真实勾选控件。",
   },
@@ -205,8 +197,7 @@ const studioRuntimeCauseDescriptorMap: Record<
     category: "intercepted",
     label: "目标被遮挡或点击面被拦截",
     title: "先清掉遮挡层再操作最终控件",
-    explanation:
-      "这通常说明目标上方还有遮罩、弹层、中转表面或其他浮层，点击事件没有真正落到目标上",
+    explanation: "这通常说明目标上方还有遮罩、弹层、中转表面或其他浮层，点击事件没有真正落到目标上",
     suggestedAction:
       "先等待 loading、遮罩层或弹层切换完成，再点击最终可操作控件；如果页面是二段式确认，优先重录到最终 dialog 或 drawer 里的确认按钮。",
   },
@@ -214,8 +205,7 @@ const studioRuntimeCauseDescriptorMap: Record<
     category: "not-ready",
     label: "目标还没进入可操作状态",
     title: "补一条更明确的就绪等待",
-    explanation:
-      "这通常说明目标虽然已经存在，但还不可见、不可点、仍在 loading，或者仍处于禁用态",
+    explanation: "这通常说明目标虽然已经存在，但还不可见、不可点、仍在 loading，或者仍处于禁用态",
     suggestedAction:
       "在动作前补 visible、hidden、ready 标志或 loading 消失的等待，再操作当前控件；如果按钮会延迟启用，也要先等禁用态解除。",
   },
@@ -267,9 +257,7 @@ export type StudioRuntimeErrorDiagnostic = StudioStepDiagnosticBase & {
   recoveredAttemptCount?: number;
 };
 
-export type StudioStepDiagnostic =
-  | StudioTargetResolutionDiagnostic
-  | StudioRuntimeErrorDiagnostic;
+export type StudioStepDiagnostic = StudioTargetResolutionDiagnostic | StudioRuntimeErrorDiagnostic;
 
 export function isRuntimeErrorDiagnostic(
   diagnostic: StudioStepDiagnostic | undefined,
@@ -425,32 +413,21 @@ export type StudioFlowVersion = {
 
 export type StudioApi = {
   readonly nativeFilePortability: boolean;
+  readonly nativeExecutionDeletion?: boolean;
   listProjects: () => Promise<StudioProject[]>;
   createProject: (name: string) => Promise<StudioProject>;
   listFlows: (projectId: string) => Promise<StudioFlowRef[]>;
-  renameFlow: (
-    projectId: string,
-    flowId: string,
-    name: string,
-  ) => Promise<StudioFlowRef>;
+  renameFlow: (projectId: string, flowId: string, name: string) => Promise<StudioFlowRef>;
   getFlow: (projectId: string, flowId: string) => Promise<FlowDocument>;
   importFlowFile: (projectId: string) => Promise<StudioImportFlowFileResult>;
-  exportFlowFile: (
-    projectId: string,
-    flowId: string,
-  ) => Promise<StudioExportFlowFileResult>;
+  exportFlowFile: (projectId: string, flowId: string) => Promise<StudioExportFlowFileResult>;
   getFlowRunInput: (projectId: string, flowId: string) => Promise<StudioFlowRunInput | null>;
-  runFlow: (
-    projectId: string,
-    flowId?: string,
-    options?: RunFlowOptions,
-  ) => Promise<RunFlowResult>;
+  runFlow: (projectId: string, flowId?: string, options?: RunFlowOptions) => Promise<RunFlowResult>;
   cancelExecution?: (executionId: string) => Promise<CancelExecutionResult>;
-  onExecutionProgress?: (
-    listener: (event: StudioExecutionProgressEvent) => void,
-  ) => () => void;
+  onExecutionProgress?: (listener: (event: StudioExecutionProgressEvent) => void) => () => void;
   getExecution: (executionId: string) => Promise<StudioExecution | null>;
   listExecutions: (projectId: string) => Promise<ExecutionSummary[]>;
+  deleteExecution?: (projectId: string, executionId: string) => Promise<ExecutionDeletionResult>;
   listFlowVersions: (projectId: string, flowId: string) => Promise<StudioFlowVersion[]>;
   getFlowVersion: (projectId: string, versionId: string) => Promise<FlowDocument | null>;
   restoreFlowVersion: (projectId: string, versionId: string) => Promise<FlowDocument>;

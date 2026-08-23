@@ -8,6 +8,7 @@ import type {
 
 const studioApi: StudioApi = {
   nativeFilePortability: true,
+  nativeExecutionDeletion: true,
   listProjects: () => ipcRenderer.invoke(IPC_CHANNELS.listProjects),
   createProject: (name: string) => ipcRenderer.invoke(IPC_CHANNELS.createProject, name),
   listFlows: (projectId: string) => ipcRenderer.invoke(IPC_CHANNELS.listFlows, projectId),
@@ -15,8 +16,7 @@ const studioApi: StudioApi = {
     ipcRenderer.invoke(IPC_CHANNELS.renameFlow, projectId, flowId, name),
   getFlow: (projectId: string, flowId: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.getFlow, projectId, flowId),
-  importFlowFile: (projectId: string) =>
-    ipcRenderer.invoke(IPC_CHANNELS.importFlowFile, projectId),
+  importFlowFile: (projectId: string) => ipcRenderer.invoke(IPC_CHANNELS.importFlowFile, projectId),
   exportFlowFile: (projectId: string, flowId: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.exportFlowFile, projectId, flowId),
   getFlowRunInput: (projectId: string, flowId: string) =>
@@ -36,6 +36,8 @@ const studioApi: StudioApi = {
   },
   getExecution: (executionId: string) => ipcRenderer.invoke(IPC_CHANNELS.getExecution, executionId),
   listExecutions: (projectId: string) => ipcRenderer.invoke(IPC_CHANNELS.listExecutions, projectId),
+  deleteExecution: (projectId: string, executionId: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.deleteExecution, projectId, executionId),
   listFlowVersions: (projectId: string, flowId: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.listFlowVersions, projectId, flowId),
   getFlowVersion: (projectId: string, versionId: string) =>

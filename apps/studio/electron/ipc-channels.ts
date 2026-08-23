@@ -12,6 +12,7 @@ export const IPC_CHANNELS = {
   getExecution: "studio:get-execution",
   createProject: "studio:create-project",
   listExecutions: "studio:list-executions",
+  deleteExecution: "studio:delete-execution",
   listFlowVersions: "studio:list-flow-versions",
   getFlowVersion: "studio:get-flow-version",
   restoreFlowVersion: "studio:restore-flow-version",

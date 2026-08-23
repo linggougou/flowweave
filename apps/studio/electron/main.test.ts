@@ -11,6 +11,7 @@ const mockImportFlowFromFile = vi.fn();
 const mockExportFlowToFile = vi.fn();
 const mockImportFlowDocument = vi.fn();
 const mockGetFlowForExport = vi.fn();
+const mockDeleteExecution = vi.fn();
 const mockAssertProjectExistsForFileOperation = vi.fn();
 const mockCloseLocalApi = vi.fn(() => Promise.resolve());
 const mockStartLocalApi = vi.fn(() =>
@@ -109,6 +110,7 @@ vi.mock("./services.js", () => ({
   listFlowVersions: vi.fn(),
   renameFlow: vi.fn(),
   restoreFlowVersion: vi.fn(),
+  deleteExecution: mockDeleteExecution,
   runFlow: mockRunFlow,
 }));
 
@@ -127,6 +129,7 @@ describe("electron main runFlow IPC", () => {
     mockGetFlowForExport.mockReset();
     mockAssertProjectExistsForFileOperation.mockReset();
     mockAssertProjectExistsForFileOperation.mockResolvedValue(undefined);
+    mockDeleteExecution.mockReset();
     mockShellOpenPath.mockReset();
     mockShowOpenDialog.mockReset();
     mockShowSaveDialog.mockReset();
@@ -222,12 +225,9 @@ describe("electron main runFlow IPC", () => {
     const runHandler = handlers.get(IPC_CHANNELS.runFlow);
 
     await expect(
-      runHandler?.(
-        { sender: { send: mockSenderSend } },
-        "project_ipc",
-        "flow_ipc",
-        { showBrowser: false },
-      ),
+      runHandler?.({ sender: { send: mockSenderSend } }, "project_ipc", "flow_ipc", {
+        showBrowser: false,
+      }),
     ).rejects.toThrow("应用正在退出");
 
     expect(mockRunFlow).not.toHaveBeenCalled();
@@ -361,6 +361,56 @@ describe("electron main runFlow IPC", () => {
     await expect(cancelHandler?.({}, { id: "exec" })).rejects.toThrow("executionId 无效");
   });
 
+  it("删除执行仅接受严格单段业务 ID，并拒绝活动执行", async () => {
+    mockRunFlow.mockImplementation(
+      (_projectId: string, _flowId: string, _options: { executionId: string }) =>
+        new Promise(() => undefined),
+    );
+    const runHandler = handlers.get(IPC_CHANNELS.runFlow);
+    void runHandler?.({ sender: { send: mockSenderSend } }, "project_ipc", "flow_ipc", {
+      showBrowser: false,
+    });
+    await Promise.resolve();
+    const executionId = (mockRunFlow.mock.calls[0]?.[2] as { executionId: string }).executionId;
+    const deleteHandler = handlers.get(IPC_CHANNELS.deleteExecution);
+
+    expect(() => deleteHandler?.({}, "../project", "exec_safe")).toThrow("projectId 无效");
+    expect(() => deleteHandler?.({}, "project_ipc", "../exec")).toThrow("executionId 无效");
+    expect(() => deleteHandler?.({}, "project_ipc", executionId)).toThrow("运行中的记录不能删除");
+    expect(mockDeleteExecution).not.toHaveBeenCalled();
+  });
+
+  it("删除已完成执行时只向 service 透传两个业务 ID", async () => {
+    mockDeleteExecution.mockResolvedValue({
+      projectId: "project_ipc",
+      executionId: "exec_ipc",
+      status: "deleted",
+      artifacts: "deleted",
+    });
+    const deleteHandler = handlers.get(IPC_CHANNELS.deleteExecution);
+
+    await expect(
+      deleteHandler?.({}, "project_ipc", "exec_ipc", "/renderer/not-allowed"),
+    ).resolves.toMatchObject({ status: "deleted" });
+
+    expect(mockDeleteExecution).toHaveBeenCalledWith("project_ipc", "exec_ipc");
+  });
+
+  it("删除异常返回 renderer 前移除内部路径与堆栈", async () => {
+    mockDeleteExecution.mockRejectedValue(
+      new Error("SQLITE_IOERR: /private/flowweave/project/store.sqlite\n at native.cc:1"),
+    );
+    const deleteHandler = handlers.get(IPC_CHANNELS.deleteExecution);
+    const error = await Promise.resolve(deleteHandler?.({}, "project_ipc", "exec_ipc")).catch(
+      (reason: unknown) => reason,
+    );
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain("删除运行记录失败");
+    expect((error as Error).message).not.toContain("/private/flowweave");
+    expect((error as Error).stack).toBeUndefined();
+  });
+
   it("导入导出 IPC 只接收业务 ID，额外路径参数不会进入文件服务", async () => {
     mockImportFlowFromFile.mockResolvedValue({ status: "cancelled" });
     mockExportFlowToFile.mockResolvedValue({ status: "cancelled" });
@@ -368,12 +418,7 @@ describe("electron main runFlow IPC", () => {
     const exportHandler = handlers.get(IPC_CHANNELS.exportFlowFile);
 
     await importHandler?.({}, "project_ipc", "/renderer/cannot-read.json");
-    await exportHandler?.(
-      {},
-      "project_ipc",
-      "flow_ipc",
-      "/renderer/cannot-write.json",
-    );
+    await exportHandler?.({}, "project_ipc", "flow_ipc", "/renderer/cannot-write.json");
 
     expect(mockImportFlowFromFile).toHaveBeenCalledWith(
       "project_ipc",
@@ -418,9 +463,7 @@ describe("electron main runFlow IPC", () => {
     const escapedPath = path.resolve(process.cwd(), "..", "fw-g5-id-escape");
 
     await expect(importHandler?.({}, projectId)).rejects.toThrow("projectId 无效");
-    await expect(exportHandler?.({}, projectId, "flow_ipc")).rejects.toThrow(
-      "projectId 无效",
-    );
+    await expect(exportHandler?.({}, projectId, "flow_ipc")).rejects.toThrow("projectId 无效");
 
     expect(mockImportFlowFromFile).not.toHaveBeenCalled();
     expect(mockExportFlowToFile).not.toHaveBeenCalled();

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
-import type { FlowDocument } from "@flowweave/flow-dsl";
+import { createPortableFlowDocument, type FlowDocument } from "@flowweave/flow-dsl";
 import { analyzeFlowFragility } from "@flowweave/page-intelligence";
 import {
   APP_DISPLAY_NAME,
   FlowStepsTable,
   FlowVersionList,
+  JsonDiffView,
+  createJsonDiff,
   StepLogTable,
   type StepLogRow,
 } from "@flowweave/ui";
@@ -35,11 +37,9 @@ import {
   reduceExecutionProgress,
   type ExecutionProgressState,
 } from "./shared/execution-progress.js";
-import {
-  buildRunConfirmationSummary,
-  type RunConfirmationSummary,
-} from "./shared/run-safety.js";
+import { buildRunConfirmationSummary, type RunConfirmationSummary } from "./shared/run-safety.js";
 import { RunSafetyConfirmation } from "./RunSafetyConfirmation.js";
+import { ExecutionDeletionConfirmation } from "./ExecutionDeletionConfirmation.js";
 import { ViewSwitcher } from "./ViewSwitcher.js";
 import type {
   ExecutionStepLog,
@@ -49,6 +49,11 @@ import type {
   StudioFlowVersion,
   StudioProject,
 } from "./shared/studio-api-types.js";
+import { resolveExecutionSelectionAfterDeletion } from "./shared/execution-maintenance.js";
+import {
+  isCurrentVersionRequest,
+  isMatchingExecutionDeletionResult,
+} from "./shared/maintenance-request-guards.js";
 
 const SHOW_BROWSER_STORAGE_KEY = "flowweave:studio-show-browser";
 const SIDEBAR_EXECUTIONS_MAX = 5;
@@ -74,6 +79,16 @@ function readNativeFilePortability(): boolean {
   }
   try {
     return getStudioApi().nativeFilePortability === true;
+  } catch {
+    return false;
+  }
+}
+
+function readNativeExecutionDeletion(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const api = getStudioApi();
+    return api.nativeExecutionDeletion === true && typeof api.deleteExecution === "function";
   } catch {
     return false;
   }
@@ -152,6 +167,7 @@ function readLayoutContractRenderState(): LayoutContractRenderState | undefined 
 export function App() {
   const layoutContractRenderState = readLayoutContractRenderState();
   const nativeFilePortability = readNativeFilePortability();
+  const nativeExecutionDeletion = readNativeExecutionDeletion();
   const [tab, setTab] = useState<MainTab>("flow");
   const [projects, setProjects] = useState<StudioProject[]>(
     layoutContractRenderState?.projects ?? [],
@@ -173,6 +189,11 @@ export function App() {
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [executionHistory, setExecutionHistory] = useState<ExecutionSummary[]>([]);
   const [execution, setExecution] = useState<StudioExecution | null>(null);
+  const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null);
+  const [deletionTarget, setDeletionTarget] = useState<ExecutionSummary | null>(null);
+  const [deletionBusy, setDeletionBusy] = useState(false);
+  const [deletionError, setDeletionError] = useState<string | null>(null);
+  const [deletionNotice, setDeletionNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showBrowser, setShowBrowser] = useState(readShowBrowserPreference);
   const [error, setError] = useState<string | null>(null);
@@ -212,8 +233,19 @@ export function App() {
   const flowLoadRequestIdRef = useRef(0);
   const portabilityRequestIdRef = useRef(0);
   const flowSelectionRevisionRef = useRef(0);
+  const executionHistoryRequestIdRef = useRef(0);
+  const executionDetailRequestIdRef = useRef(0);
+  const versionListRequestIdRef = useRef(0);
+  const versionDetailRequestIdRef = useRef(0);
+  const deletionRequestIdRef = useRef(0);
+  const workspaceRefreshRequestIdRef = useRef(0);
+  const selectedExecutionIdRef = useRef(selectedExecutionId);
+  const selectedVersionIdRef = useRef(selectedVersionId);
+  const deletionTriggerRef = useRef<HTMLElement | null>(null);
   selectedProjectIdRef.current = selectedProjectId;
   selectedFlowIdRef.current = selectedFlowId;
+  selectedExecutionIdRef.current = selectedExecutionId;
+  selectedVersionIdRef.current = selectedVersionId;
 
   useEffect(() => {
     const api = getStudioApi();
@@ -262,9 +294,17 @@ export function App() {
   }, [selectedProjectId]);
 
   const refreshExecutionHistory = useCallback(async (projectId: string) => {
+    const requestId = ++executionHistoryRequestIdRef.current;
     const api = getStudioApi();
     const history = await api.listExecutions(projectId);
+    if (
+      requestId !== executionHistoryRequestIdRef.current ||
+      selectedProjectIdRef.current !== projectId
+    ) {
+      return [];
+    }
     setExecutionHistory(history);
+    return history;
   }, []);
 
   const refreshFlows = useCallback(
@@ -287,10 +327,19 @@ export function App() {
   );
 
   const refreshVersions = useCallback(async (projectId: string, flowId: string) => {
+    const requestId = ++versionListRequestIdRef.current;
     const api = getStudioApi();
     const list = await api.listFlowVersions(projectId, flowId);
+    if (
+      requestId !== versionListRequestIdRef.current ||
+      selectedProjectIdRef.current !== projectId ||
+      selectedFlowIdRef.current !== flowId
+    ) {
+      return;
+    }
     setVersions(list);
     setSelectedVersionId(null);
+    selectedVersionIdRef.current = null;
     setPreviewVersion(null);
   }, []);
 
@@ -299,16 +348,24 @@ export function App() {
       return;
     }
 
+    const requestId = ++workspaceRefreshRequestIdRef.current;
+    const selectionRevision = flowSelectionRevisionRef.current;
     setRefreshing(true);
     setRefreshNotice(null);
     try {
       const api = getStudioApi();
       const projectList = await api.listProjects();
+      if (
+        requestId !== workspaceRefreshRequestIdRef.current ||
+        selectionRevision !== flowSelectionRevisionRef.current
+      )
+        return;
       const targetProjectId =
         selectedProjectId && projectList.some((project) => project.id === selectedProjectId)
           ? selectedProjectId
           : (projectList[0]?.id ?? null);
       setProjects(projectList);
+      selectedProjectIdRef.current = targetProjectId;
       setSelectedProjectId(targetProjectId);
 
       if (!targetProjectId) {
@@ -326,6 +383,12 @@ export function App() {
         api.listFlows(targetProjectId),
         api.listExecutions(targetProjectId),
       ]);
+      if (
+        requestId !== workspaceRefreshRequestIdRef.current ||
+        selectionRevision !== flowSelectionRevisionRef.current ||
+        selectedProjectIdRef.current !== targetProjectId
+      )
+        return;
       const previousFlows = targetProjectId === selectedProjectId ? flows : [];
       const nextSelectedFlowId = resolveRefreshedFlowSelection(
         previousFlows,
@@ -338,6 +401,7 @@ export function App() {
 
       setFlows(nextFlows);
       setExecutionHistory(history);
+      selectedFlowIdRef.current = nextSelectedFlowId;
       setSelectedFlowId(nextSelectedFlowId);
       if (nextFlows.length === 0) {
         setCurrentFlow(null);
@@ -346,9 +410,13 @@ export function App() {
       setRefreshNotice(discovered ? `已发现新任务「${discovered.name}」` : "已刷新当前项目");
       setError(null);
     } catch (err: unknown) {
-      setError(formatStudioError(err));
+      if (requestId === workspaceRefreshRequestIdRef.current) {
+        setError(formatStudioError(err));
+      }
     } finally {
-      setRefreshing(false);
+      if (requestId === workspaceRefreshRequestIdRef.current) {
+        setRefreshing(false);
+      }
     }
   }, [flows, refreshing, selectedFlowId, selectedProjectId]);
 
@@ -412,8 +480,11 @@ export function App() {
       return;
     }
     setError(null);
-    void refreshExecutionHistory(selectedProjectId).catch((err: unknown) => {
-      setError(formatStudioError(err));
+    const projectId = selectedProjectId;
+    void refreshExecutionHistory(projectId).catch((err: unknown) => {
+      if (selectedProjectIdRef.current === projectId) {
+        setError(formatStudioError(err));
+      }
     });
     void refreshFlows(selectedProjectId).catch((err: unknown) => {
       setError(formatStudioError(err));
@@ -431,8 +502,12 @@ export function App() {
     if (!flows.some((flow) => flow.id === selectedFlowId)) {
       return;
     }
-    void refreshVersions(selectedProjectId, selectedFlowId).catch((err: unknown) => {
-      setError(formatStudioError(err));
+    const projectId = selectedProjectId;
+    const flowId = selectedFlowId;
+    void refreshVersions(projectId, flowId).catch((err: unknown) => {
+      if (selectedProjectIdRef.current === projectId && selectedFlowIdRef.current === flowId) {
+        setError(formatStudioError(err));
+      }
     });
     void loadFlowDocument(selectedProjectId, selectedFlowId);
   }, [selectedProjectId, selectedFlowId, flows, refreshVersions, loadFlowDocument]);
@@ -527,8 +602,22 @@ export function App() {
   }, [execution?.executionId, execution]);
 
   const loadExecution = async (executionId: string) => {
+    const projectId = selectedProjectIdRef.current;
+    const flowId = selectedFlowIdRef.current;
+    const selectionRevision = flowSelectionRevisionRef.current;
+    const requestId = ++executionDetailRequestIdRef.current;
     const api = getStudioApi();
     const detail = await api.getExecution(executionId);
+    if (
+      requestId !== executionDetailRequestIdRef.current ||
+      selectedExecutionIdRef.current !== executionId ||
+      selectedProjectIdRef.current !== projectId ||
+      selectedFlowIdRef.current !== flowId ||
+      flowSelectionRevisionRef.current !== selectionRevision ||
+      (detail !== null && (detail.projectId !== projectId || detail.flowId !== flowId))
+    ) {
+      return null;
+    }
     setExecution(detail);
     return detail;
   };
@@ -539,9 +628,17 @@ export function App() {
     }
     flowSelectionRevisionRef.current += 1;
     flowLoadRequestIdRef.current += 1;
+    executionDetailRequestIdRef.current += 1;
+    versionDetailRequestIdRef.current += 1;
     selectedFlowIdRef.current = flowId;
     setPortabilityNotice(null);
     setSelectedFlowId(flowId);
+    selectedVersionIdRef.current = null;
+    setSelectedVersionId(null);
+    setPreviewVersion(null);
+    selectedExecutionIdRef.current = null;
+    setSelectedExecutionId(null);
+    setExecution(null);
     setTab("flow");
   };
 
@@ -590,27 +687,47 @@ export function App() {
 
   const handleSelectExecution = (executionId: string, flowId: string) => {
     flowSelectionRevisionRef.current += 1;
+    versionListRequestIdRef.current += 1;
+    versionDetailRequestIdRef.current += 1;
     selectedFlowIdRef.current = flowId;
+    selectedExecutionIdRef.current = executionId;
+    selectedVersionIdRef.current = null;
     setSelectedFlowId(flowId);
+    setSelectedExecutionId(executionId);
+    setSelectedVersionId(null);
+    setPreviewVersion(null);
+    setExecution(null);
     setTab("executions");
     void loadExecution(executionId);
   };
 
   const handleSelectProject = (projectId: string) => {
     portabilityRequestIdRef.current += 1;
+    workspaceRefreshRequestIdRef.current += 1;
     flowSelectionRevisionRef.current += 1;
     flowLoadRequestIdRef.current += 1;
+    executionHistoryRequestIdRef.current += 1;
+    executionDetailRequestIdRef.current += 1;
+    versionListRequestIdRef.current += 1;
+    versionDetailRequestIdRef.current += 1;
     selectedProjectIdRef.current = projectId;
     selectedFlowIdRef.current = null;
     setPortabilityBusy(null);
     setFlowLoading(false);
+    setRefreshing(false);
     setSelectedProjectId(projectId);
     setSelectedFlowId(null);
     setCurrentFlow(null);
     setVersions([]);
+    selectedVersionIdRef.current = null;
+    setSelectedVersionId(null);
     setPreviewVersion(null);
     setError(null);
     setExecution(null);
+    selectedExecutionIdRef.current = null;
+    setSelectedExecutionId(null);
+    setDeletionTarget(null);
+    setDeletionNotice(null);
     setSelectedEnvironmentName("");
     setBaseUrlDraft("");
     setStorageStatePathDraft("");
@@ -826,6 +943,8 @@ export function App() {
         ),
       );
       const detail = await api.getExecution(result.executionId);
+      selectedExecutionIdRef.current = result.executionId;
+      setSelectedExecutionId(result.executionId);
       setExecution(detail);
       setTab("executions");
       setExecutionsExpanded(true);
@@ -931,11 +1050,121 @@ export function App() {
   };
 
   const loadVersion = async (versionId: string) => {
-    if (!selectedProjectId) return;
+    if (!selectedProjectId || !selectedFlowId) return;
+    const projectId = selectedProjectId;
+    const flowId = selectedFlowId;
+    const requestId = ++versionDetailRequestIdRef.current;
     setSelectedVersionId(versionId);
+    selectedVersionIdRef.current = versionId;
+    setPreviewVersion(null);
+    setError(null);
     const api = getStudioApi();
-    const detail = await api.getFlowVersion(selectedProjectId, versionId);
-    setPreviewVersion(detail);
+    try {
+      const detail = await api.getFlowVersion(projectId, versionId);
+      if (
+        !isCurrentVersionRequest({
+          requestId,
+          latestRequestId: versionDetailRequestIdRef.current,
+          projectId,
+          selectedProjectId: selectedProjectIdRef.current,
+          flowId,
+          selectedFlowId: selectedFlowIdRef.current,
+          versionId,
+          selectedVersionId: selectedVersionIdRef.current,
+        })
+      ) {
+        return;
+      }
+      if (detail && detail.id !== flowId) {
+        throw new Error("历史版本与当前任务不匹配，已拒绝展示");
+      }
+      setPreviewVersion(detail ? createPortableFlowDocument(detail).document : null);
+    } catch (err: unknown) {
+      if (
+        requestId === versionDetailRequestIdRef.current &&
+        selectedProjectIdRef.current === projectId &&
+        selectedFlowIdRef.current === flowId
+      ) {
+        setPreviewVersion(null);
+        setError(formatStudioError(err));
+      }
+    }
+  };
+
+  const openDeletionConfirmation = (item: ExecutionSummary, trigger: HTMLElement) => {
+    if (!nativeExecutionDeletion) return;
+    deletionTriggerRef.current = trigger;
+    setDeletionError(null);
+    setDeletionTarget(item);
+  };
+
+  const closeDeletionConfirmation = () => {
+    if (deletionBusy) return;
+    setDeletionTarget(null);
+    setDeletionError(null);
+  };
+
+  const handleDeleteExecution = async () => {
+    const api = getStudioApi();
+    if (!selectedProjectId || !deletionTarget || !api.deleteExecution || deletionBusy) return;
+    const projectId = selectedProjectId;
+    const target = deletionTarget;
+    const previous = executionHistory;
+    const previousSelection = selectedExecutionIdRef.current;
+    const requestId = ++deletionRequestIdRef.current;
+    setDeletionBusy(true);
+    setDeletionError(null);
+    setDeletionNotice(null);
+    try {
+      const result = await api.deleteExecution(projectId, target.executionId);
+      if (requestId !== deletionRequestIdRef.current || selectedProjectIdRef.current !== projectId)
+        return;
+      if (!isMatchingExecutionDeletionResult(result, projectId, target.executionId)) {
+        throw new Error("删除结果与请求不匹配，已拒绝刷新界面状态");
+      }
+      const refreshed = await api.listExecutions(projectId);
+      if (requestId !== deletionRequestIdRef.current || selectedProjectIdRef.current !== projectId)
+        return;
+      executionHistoryRequestIdRef.current += 1;
+      setExecutionHistory(refreshed);
+      const nextSelection = resolveExecutionSelectionAfterDeletion(
+        previous,
+        refreshed,
+        target.executionId,
+        previousSelection,
+      );
+      setDeletionTarget(null);
+      if (result.status === "deleted" && result.artifacts === "quarantined") {
+        setDeletionNotice("运行记录已删除；部分产物已安全隔离在本地回收区，可稍后检查。");
+      } else if (result.status === "already-absent") {
+        setDeletionNotice("该运行记录已不存在，列表已刷新。");
+      } else {
+        setDeletionNotice("运行记录及其受控产物已删除。");
+      }
+      if (previousSelection === target.executionId) {
+        selectedExecutionIdRef.current = nextSelection;
+        setSelectedExecutionId(nextSelection);
+        setExecution(null);
+        if (nextSelection) {
+          const next = refreshed.find((item) => item.executionId === nextSelection);
+          if (next) {
+            flowSelectionRevisionRef.current += 1;
+            selectedFlowIdRef.current = next.flowId;
+            setSelectedFlowId(next.flowId);
+            void loadExecution(next.executionId);
+          }
+        }
+      }
+    } catch (err: unknown) {
+      if (
+        requestId === deletionRequestIdRef.current &&
+        selectedProjectIdRef.current === projectId
+      ) {
+        setDeletionError(formatStudioError(err));
+      }
+    } finally {
+      if (requestId === deletionRequestIdRef.current) setDeletionBusy(false);
+    }
   };
 
   const handleRestore = async (versionId: string) => {
@@ -955,6 +1184,11 @@ export function App() {
 
   const selectedEnvironment =
     availableEnvironments.find((item) => item.name === selectedEnvironmentName) ?? null;
+  const portableCurrentFlow = currentFlow ? createPortableFlowDocument(currentFlow).document : null;
+  const versionDiff =
+    previewVersion && portableCurrentFlow
+      ? createJsonDiff(previewVersion, portableCurrentFlow)
+      : null;
 
   return (
     <div className="app">
@@ -1169,11 +1403,11 @@ export function App() {
                   <>
                     <ul className="execution-history-list">
                       {executionHistory.map((item) => (
-                        <li key={item.executionId}>
+                        <li key={item.executionId} className="execution-history-row">
                           <button
                             type="button"
                             className={
-                              execution?.executionId === item.executionId
+                              selectedExecutionId === item.executionId
                                 ? "execution-history-item active"
                                 : "execution-history-item"
                             }
@@ -1195,6 +1429,19 @@ export function App() {
                               {formatExecutionTime(item.startedAt)}
                             </span>
                           </button>
+                          {nativeExecutionDeletion ? (
+                            <button
+                              type="button"
+                              className="execution-history-delete"
+                              aria-label={`删除 ${flows.find((flow) => flow.id === item.flowId)?.name ?? "自动化任务"} 的运行记录`}
+                              title="删除运行记录"
+                              onClick={(event) =>
+                                openDeletionConfirmation(item, event.currentTarget)
+                              }
+                            >
+                              删除
+                            </button>
+                          ) : null}
                         </li>
                       ))}
                     </ul>
@@ -1225,6 +1472,11 @@ export function App() {
         {portabilityNotice ? (
           <p className="portability-notice" role="status">
             {portabilityNotice}
+          </p>
+        ) : null}
+        {deletionNotice ? (
+          <p className="portability-notice" role="status">
+            {deletionNotice}
           </p>
         ) : null}
         {selectedProjectId && currentFlow ? (
@@ -1283,8 +1535,8 @@ export function App() {
                 elapsedSeconds={elapsedSeconds}
                 canCancel={Boolean(
                   loading &&
-                    executionProgress.executionId !== "pending" &&
-                    getStudioApi().cancelExecution,
+                  executionProgress.executionId !== "pending" &&
+                  getStudioApi().cancelExecution,
                 )}
                 cancelling={cancelling}
                 onCancel={() => void handleCancelRun()}
@@ -1553,12 +1805,27 @@ export function App() {
                   emptyMessage="暂无历史版本，修改并保存任务后会自动生成"
                 />
                 {previewVersion ? (
-                  <details className="flow-preview" open>
-                    <summary>
-                      版本预览 · {previewVersion.name}（{previewVersion.steps.length} 步）
-                    </summary>
-                    <pre>{JSON.stringify(previewVersion, null, 2)}</pre>
-                  </details>
+                  <section className="flow-preview" aria-labelledby="flow-version-diff-title">
+                    <h3 id="flow-version-diff-title">
+                      历史 v{versions.find((item) => item.id === selectedVersionId)?.version ?? "?"}
+                      {" → 当前任务"}
+                    </h3>
+                    <p className="flow-version-diff-summary">
+                      {versionDiff?.totalChanges ?? 0} 处业务结构变化；比较副本中的敏感值已隐藏。
+                    </p>
+                    <details className="professional-diagnostics">
+                      <summary>专业详情</summary>
+                      <div className="professional-diagnostics-content">
+                        <JsonDiffView
+                          before={previewVersion}
+                          after={portableCurrentFlow}
+                          beforeLabel="历史值"
+                          afterLabel="当前值"
+                          ariaLabel="历史版本到当前任务的只读差异"
+                        />
+                      </div>
+                    </details>
+                  </section>
                 ) : null}
               </>
             ) : projectHasNoFlows ? (
@@ -1577,6 +1844,17 @@ export function App() {
           onRiskAcknowledgedChange={setRiskAcknowledged}
           onConfirm={() => void handleRun()}
           onCancel={() => setPendingRunSummary(null)}
+        />
+      ) : null}
+      {deletionTarget ? (
+        <ExecutionDeletionConfirmation
+          execution={deletionTarget}
+          taskName={flows.find((flow) => flow.id === deletionTarget.flowId)?.name ?? "自动化任务"}
+          disabled={deletionBusy}
+          error={deletionError}
+          returnFocusTo={deletionTriggerRef.current}
+          onConfirm={() => void handleDeleteExecution()}
+          onCancel={closeDeletionConfirmation}
         />
       ) : null}
     </div>

@@ -53,6 +53,22 @@ describe("preload 执行控制桥", () => {
     expect(invokeMock).toHaveBeenCalledWith(IPC_CHANNELS.cancelExecution, "exec_preload");
   });
 
+  it("删除只允许通过固定 deleteExecution invoke 且 renderer 不能传路径", async () => {
+    const api = exposeInMainWorldMock.mock.calls[0]?.[1] as {
+      nativeExecutionDeletion: boolean;
+      deleteExecution: (projectId: string, executionId: string) => Promise<unknown>;
+    };
+
+    expect(api.nativeExecutionDeletion).toBe(true);
+    await api.deleteExecution("project_preload", "exec_preload");
+
+    expect(invokeMock).toHaveBeenCalledWith(
+      IPC_CHANNELS.deleteExecution,
+      "project_preload",
+      "exec_preload",
+    );
+  });
+
   it("导入导出桥只接受业务 ID，不向 renderer 暴露任意读写路径", async () => {
     const api = exposeInMainWorldMock.mock.calls[0]?.[1] as {
       nativeFilePortability: boolean;
@@ -65,11 +81,7 @@ describe("preload 执行控制桥", () => {
     await api.importFlowFile("project_preload");
     await api.exportFlowFile("project_preload", "flow_preload");
 
-    expect(invokeMock).toHaveBeenNthCalledWith(
-      1,
-      IPC_CHANNELS.importFlowFile,
-      "project_preload",
-    );
+    expect(invokeMock).toHaveBeenNthCalledWith(1, IPC_CHANNELS.importFlowFile, "project_preload");
     expect(invokeMock).toHaveBeenNthCalledWith(
       2,
       IPC_CHANNELS.exportFlowFile,

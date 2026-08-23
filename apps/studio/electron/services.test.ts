@@ -11,6 +11,7 @@ import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
 const mockExecuteFlow = vi.fn();
 const mockApiAllocateRunDirectory = vi.fn();
 const mockApiCreateProject = vi.fn();
+const mockApiDeleteExecution = vi.fn();
 const mockApiGetExecution = vi.fn();
 const mockApiGetFlow = vi.fn();
 const mockApiGetFlowVersion = vi.fn();
@@ -70,6 +71,7 @@ vi.mock("@flowweave/project-knowledge", () => ({
 vi.mock("./knowledge-client.js", () => ({
   apiAllocateRunDirectory: mockApiAllocateRunDirectory,
   apiCreateProject: mockApiCreateProject,
+  apiDeleteExecution: mockApiDeleteExecution,
   apiGetExecution: mockApiGetExecution,
   apiGetFlow: mockApiGetFlow,
   apiGetFlowVersion: mockApiGetFlowVersion,
@@ -136,6 +138,7 @@ describe("getExecution 缓存命中策略", () => {
     vi.resetModules();
     mockApiAllocateRunDirectory.mockReset();
     mockApiCreateProject.mockReset();
+    mockApiDeleteExecution.mockReset();
     mockApiGetExecution.mockReset();
     mockApiGetFlow.mockReset();
     mockApiGetFlowVersion.mockReset();
@@ -239,6 +242,33 @@ describe("getExecution 缓存命中策略", () => {
 
     expect(mockApiGetExecution).toHaveBeenCalledTimes(1);
     expect(mockApiGetFlow).not.toHaveBeenCalled();
+  });
+
+  it("删除成功后驱逐 execution cache，后续详情必须回源", async () => {
+    const stored = buildExecution({ flowSnapshot: buildFlow() });
+    mockApiGetExecution.mockResolvedValueOnce(stored).mockResolvedValueOnce(null);
+    mockApiDeleteExecution.mockResolvedValue({
+      projectId: stored.projectId,
+      executionId: stored.executionId,
+      status: "deleted",
+      artifacts: "deleted",
+    });
+    const { getExecution, deleteExecution } = await loadServicesModule();
+
+    await expect(getExecution(stored.executionId)).resolves.toMatchObject({
+      executionId: stored.executionId,
+    });
+    await expect(deleteExecution(stored.projectId, stored.executionId)).resolves.toMatchObject({
+      status: "deleted",
+    });
+    await expect(getExecution(stored.executionId)).resolves.toBeNull();
+
+    expect(mockApiDeleteExecution).toHaveBeenCalledWith(
+      expect.any(Object),
+      stored.projectId,
+      stored.executionId,
+    );
+    expect(mockApiGetExecution).toHaveBeenCalledTimes(2);
   });
 
   it("runFlow 在 storageStatePath 文件不存在时提前阻断", async () => {

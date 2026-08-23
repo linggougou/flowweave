@@ -15,6 +15,8 @@ describe("Studio 原生文件能力", () => {
     vi.stubGlobal("window", {});
 
     expect(getStudioApi().nativeFilePortability).toBe(false);
+    expect(getStudioApi().nativeExecutionDeletion).toBe(false);
+    expect(getStudioApi().deleteExecution).toBeUndefined();
 
     vi.unstubAllGlobals();
   });

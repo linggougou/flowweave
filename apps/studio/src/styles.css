@@ -352,6 +352,28 @@ html {
   gap: 0.375rem;
 }
 
+.execution-history-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.375rem;
+  align-items: stretch;
+}
+
+.execution-history-delete {
+  border: 1px solid rgba(255, 138, 138, 0.45);
+  border-radius: 6px;
+  background: rgba(179, 58, 58, 0.12);
+  color: #ffb0b0;
+  cursor: pointer;
+  padding: 0 0.5rem;
+}
+
+.execution-history-delete:hover,
+.execution-history-delete:focus-visible {
+  border-color: #ff8a8a;
+  background: rgba(179, 58, 58, 0.22);
+}
+
 .execution-history-item {
   width: 100%;
   text-align: left;
@@ -862,6 +884,25 @@ html {
   max-height: 320px;
   overflow: auto;
   font-size: 0.75rem;
+}
+
+.flow-version-diff-summary {
+  margin: 0.5rem 0;
+  color: #b7c1ce;
+}
+
+.danger-btn {
+  border: 1px solid #d85c5c;
+  border-radius: 6px;
+  background: #a93636;
+  color: #fff;
+  cursor: pointer;
+  padding: 0.55rem 0.9rem;
+}
+
+.danger-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .fw-step-log-empty {

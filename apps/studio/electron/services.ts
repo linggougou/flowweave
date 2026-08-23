@@ -48,6 +48,7 @@ import {
 import {
   apiAllocateRunDirectory,
   apiCreateProject,
+  apiDeleteExecution,
   apiGetExecution,
   apiGetFlow,
   apiGetFlowVersion,
@@ -663,6 +664,12 @@ export async function listExecutions(projectId: string): Promise<ExecutionSummar
   }));
 }
 
+export async function deleteExecution(projectId: string, executionId: string) {
+  const result = await apiDeleteExecution(projectKnowledgeRepository, projectId, executionId);
+  executions.delete(executionId);
+  return result;
+}
+
 export async function listFlows(
   projectId: string,
 ): Promise<Array<{ id: string; name: string; createdAt: string }>> {
@@ -693,10 +700,7 @@ export async function assertProjectExistsForFileOperation(projectId: string): Pr
   }
 }
 
-export async function getFlowForExport(
-  projectId: string,
-  flowId: string,
-): Promise<FlowDocument> {
+export async function getFlowForExport(projectId: string, flowId: string): Promise<FlowDocument> {
   await assertProjectExistsForFileOperation(projectId);
   return apiGetFlow(projectId, flowId);
 }
