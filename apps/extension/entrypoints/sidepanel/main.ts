@@ -28,7 +28,7 @@ import {
   type SyncKnowledgeResponse,
 } from "../../lib/messages.js";
 import { STORAGE_SELECTED_PROJECT_KEY } from "../../lib/storage-keys.js";
-import { formatExportSuccessStatus } from "../../lib/export-feedback.js";
+import { processExportFlowDownload } from "../../lib/export-download.js";
 
 const API_BASE_KEY = "flowweave:api-base";
 
@@ -340,14 +340,8 @@ exportBtn?.addEventListener("click", () => {
       const response = (await browser.runtime.sendMessage(message)) as
         | ExportFlowResponse
         | undefined;
-
-      if (!response?.ok) {
-        setStatus(response?.error ?? "导出失败");
-        return;
-      }
-
-      downloadJson(response.filename, response.json);
-      setStatus(formatExportSuccessStatus(response.summary));
+      const outcome = processExportFlowDownload(response, downloadJson);
+      setStatus(outcome.ok ? outcome.status : outcome.error);
     } catch (error: unknown) {
       setStatus(error instanceof Error ? `导出失败：${error.message}` : "导出失败");
     }
