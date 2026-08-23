@@ -7021,3 +7021,12 @@
 - 复审：PASS，无新增 P0/P1；主代理在集成分支复验 Web `21/21`、typecheck、lint、build 通过。
 - 临时环境：系统 `/var` 曾报告 ENOSPC，测试改用 worktree 内 TMPDIR；未清理用户文件，Agent 自建临时目录已移除。
 - 回收：G4 worktree 已移除；功能分支因 cherry-pick 导致 `git branch -d` 不认为祖先，待确认集成状态后使用已记录 SHA 清理引用。
+
+### 2026-08-23 Track G1 Flow 可移植核心验收与回收
+
+- Agent：`/root/p26_portability_core`；独立 Reviewer：`/root/audit_portability`；worktree：`flowweave-worktrees/p26-portability-core`。
+- 交付：`928ccca feat(flow-dsl): 增加安全可移植导出合同`、`33756ed fix(flow-dsl): 收紧敏感引用导出边界`、`6be5254 fix(flow-dsl): 处理裸 URL 敏感参数`；集成提交为 `8c8b58e`、`b0b04ef`、`4222c5b`。
+- TDD：从公共 API 缺失红灯开始；经两轮独立审查补齐敏感模板变量默认值硬化、OAuth fragment、`wait.urlIncludes` 裸敏感参数和密码目标误判边界。
+- 安全合同：仅处理 schemaVersion 1 可识别字段与受控敏感 key；不扫描任意业务文本，也不扩展到 schema 外 Cookie/Header/HAR/Storage。
+- 复审：最终 PASS，无 P0/P1；敏感参数会变量化并输出结构化 warning，普通业务文本与 `/orders/status=ready` 不误伤，二次处理幂等。
+- 主代理复验：flow-dsl `18/18`，typecheck、lint、build 通过；系统临时空间不足时使用项目卷内独立 TMPDIR，验证后移入废纸篓，未删除用户文件。
