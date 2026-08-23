@@ -21,7 +21,7 @@
     "@flowweave/page-intelligence": "workspace:*",
     "@flowweave/shared": "workspace:*",
     "better-sqlite3": "12.1.1",
-    "drizzle-orm": "^0.38.3"
+    "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",
