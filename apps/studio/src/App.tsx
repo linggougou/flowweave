@@ -30,6 +30,8 @@ import {
 import { isSensitiveVariableName } from "./shared/sensitive-variables.js";
 import {
   createExecutionProgressState,
+  failExecutionProgressUnlessTerminal,
+  finalizeExecutionProgress,
   reduceExecutionProgress,
   type ExecutionProgressState,
 } from "./shared/execution-progress.js";
@@ -663,6 +665,13 @@ export function App() {
         storageStatePath: storageStatePathDraft,
         variables,
       });
+      setExecutionProgress((previous) =>
+        finalizeExecutionProgress(
+          previous ?? createExecutionProgressState(result.executionId),
+          result,
+          currentFlow.steps.length,
+        ),
+      );
       const detail = await api.getExecution(result.executionId);
       setExecution(detail);
       setTab("executions");
@@ -673,11 +682,7 @@ export function App() {
       setError(formatStudioError(err));
       setExecutionProgress((previous) =>
         previous
-          ? {
-              ...previous,
-              status: "failed",
-              currentAction: "运行未完成，请查看错误提示",
-            }
+          ? failExecutionProgressUnlessTerminal(previous, "运行未完成，请查看错误提示")
           : previous,
       );
     } finally {

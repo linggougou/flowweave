@@ -1,4 +1,4 @@
-import type { StudioExecutionProgressEvent } from "./studio-api-types.js";
+import type { RunFlowResult, StudioExecutionProgressEvent } from "./studio-api-types.js";
 
 export type ExecutionProgressState = {
   executionId: string;
@@ -44,5 +44,64 @@ export function reduceExecutionProgress(
     completedSteps: event.completedSteps,
     currentStepIndex: stepIndex ?? state.currentStepIndex,
     currentAction: event.currentAction,
+  };
+}
+
+function isTerminalStatus(status: ExecutionProgressState["status"]): boolean {
+  return status === "completed" || status === "failed" || status === "cancelled";
+}
+
+export function finalizeExecutionProgress(
+  state: ExecutionProgressState,
+  result: RunFlowResult,
+  totalSteps: number,
+): ExecutionProgressState {
+  if (state.executionId === result.executionId && isTerminalStatus(state.status)) {
+    return state;
+  }
+
+  const status =
+    result.status === "passed"
+      ? "completed"
+      : result.status === "cancelled"
+        ? "cancelled"
+        : result.status === "failed"
+          ? "failed"
+          : "running";
+  const completedSteps =
+    status === "completed"
+      ? totalSteps
+      : state.executionId === result.executionId
+        ? state.completedSteps
+        : 0;
+
+  return {
+    ...state,
+    executionId: result.executionId,
+    status,
+    totalSteps,
+    completedSteps,
+    currentAction:
+      status === "completed"
+        ? "运行成功"
+        : status === "cancelled"
+          ? "已取消运行"
+          : status === "failed"
+            ? "运行失败"
+            : state.currentAction,
+  };
+}
+
+export function failExecutionProgressUnlessTerminal(
+  state: ExecutionProgressState,
+  currentAction: string,
+): ExecutionProgressState {
+  if (isTerminalStatus(state.status)) {
+    return state;
+  }
+  return {
+    ...state,
+    status: "failed",
+    currentAction,
   };
 }

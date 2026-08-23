@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { createExecutionProgressState, reduceExecutionProgress } from "./execution-progress.js";
+import {
+  createExecutionProgressState,
+  failExecutionProgressUnlessTerminal,
+  finalizeExecutionProgress,
+  reduceExecutionProgress,
+} from "./execution-progress.js";
 
 describe("执行进度模型", () => {
   it("把 started/step-started/step-finished/completed 映射为可展示状态", () => {
@@ -76,5 +81,41 @@ describe("执行进度模型", () => {
       currentStepIndex: 1,
       currentAction: "已取消运行",
     });
+  });
+
+  it("runFlow 返回后补齐终态，且结果刷新失败不覆盖真实完成状态", () => {
+    const completed = finalizeExecutionProgress(
+      createExecutionProgressState("pending"),
+      { executionId: "exec_done", status: "passed" },
+      3,
+    );
+    const afterRefreshFailure = failExecutionProgressUnlessTerminal(
+      completed,
+      "结果刷新失败",
+    );
+
+    expect(completed).toMatchObject({
+      executionId: "exec_done",
+      status: "completed",
+      completedSteps: 3,
+      totalSteps: 3,
+      currentAction: "运行成功",
+    });
+    expect(afterRefreshFailure).toBe(completed);
+  });
+
+  it("真实运行失败前的读取异常会进入 failed，但取消状态不会被覆盖", () => {
+    const pending = createExecutionProgressState("exec_pending");
+    expect(failExecutionProgressUnlessTerminal(pending, "运行未完成")).toMatchObject({
+      status: "failed",
+      currentAction: "运行未完成",
+    });
+
+    const cancelled = finalizeExecutionProgress(
+      pending,
+      { executionId: "exec_pending", status: "cancelled" },
+      3,
+    );
+    expect(failExecutionProgressUnlessTerminal(cancelled, "刷新失败")).toBe(cancelled);
   });
 });
