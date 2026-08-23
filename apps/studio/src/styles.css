@@ -1127,6 +1127,102 @@ html {
   margin-top: 1.1rem;
 }
 
+.execution-screenshot-preview-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(5, 9, 14, 0.82);
+  backdrop-filter: blur(4px);
+}
+
+.execution-screenshot-preview {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(72rem, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow: hidden;
+  border: 1px solid #3c506c;
+  border-radius: 14px;
+  background: #111923;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.56);
+}
+
+.execution-screenshot-preview-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.15rem;
+  border-bottom: 1px solid #2a394d;
+}
+
+.execution-screenshot-preview-header h3 {
+  margin: 0.2rem 0 0;
+  font-size: 1.2rem;
+}
+
+.execution-screenshot-preview-label {
+  margin: 0.2rem 0 0;
+  color: #a9b7c8;
+}
+
+.execution-screenshot-preview-close {
+  flex: none;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid #40516a;
+  border-radius: 8px;
+  background: #1c2735;
+  color: #dfe8f3;
+  cursor: pointer;
+}
+
+.execution-screenshot-preview-close:hover {
+  border-color: #5b9dff;
+  background: #243347;
+}
+
+.execution-screenshot-preview-close:focus-visible {
+  outline: 3px solid rgba(91, 157, 255, 0.75);
+  outline-offset: 2px;
+}
+
+.execution-screenshot-preview-content {
+  min-height: min(32rem, 65vh);
+  overflow: auto;
+  padding: 1rem;
+}
+
+.execution-screenshot-preview-state {
+  display: grid;
+  min-height: min(30rem, 60vh);
+  margin: 0;
+  place-items: center;
+  color: #a9b7c8;
+  text-align: center;
+}
+
+.execution-screenshot-preview-figure {
+  display: grid;
+  min-height: 100%;
+  margin: 0;
+  place-items: center;
+}
+
+.execution-screenshot-preview-figure img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  max-height: calc(100vh - 10rem);
+  border: 1px solid #2a394d;
+  border-radius: 8px;
+  background: #fff;
+  object-fit: contain;
+  user-select: none;
+}
+
 .secondary-btn,
 .cancel-run-btn {
   padding: 0.6rem 0.85rem;
