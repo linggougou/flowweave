@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { IPC_CHANNELS } from "./ipc-channels.js";
 
 const handlers = new Map<string, (...args: unknown[]) => unknown>();
-const appEventHandlers = new Map<string, () => void>();
+const appEventHandlers = new Map<string, (...args: unknown[]) => void>();
 const mockRunFlow = vi.fn();
 const mockCloseLocalApi = vi.fn(() => Promise.resolve());
 const mockStartLocalApi = vi.fn(() =>
@@ -110,11 +110,12 @@ describe("electron main runFlow IPC", () => {
     mockStartLocalApi.mockClear();
     windowInstances.length = 0;
     mockApp.on.mockReset();
-    mockApp.on.mockImplementation((event: string, handler: () => void) => {
+    mockApp.on.mockImplementation((event: string, handler: (...args: unknown[]) => void) => {
       appEventHandlers.set(event, handler);
     });
     mockApp.whenReady.mockClear();
     mockApp.getAppPath.mockClear();
+    mockApp.quit.mockReset();
     vi.resetModules();
 
     await import("./main.js");
@@ -122,13 +123,89 @@ describe("electron main runFlow IPC", () => {
     await Promise.resolve();
   });
 
-  it("ready 时启动本地同步服务并在退出前关闭", async () => {
+  it("无活跃执行时会协调关闭 API 并只触发一次真正退出", async () => {
     expect(mockStartLocalApi).toHaveBeenCalledWith({ repo: mockRepository });
+    const firstEvent = { preventDefault: vi.fn() };
 
-    appEventHandlers.get("before-quit")?.();
-    await Promise.resolve();
+    appEventHandlers.get("before-quit")?.(firstEvent);
+
+    expect(firstEvent.preventDefault).toHaveBeenCalledOnce();
+    await vi.waitFor(() => {
+      expect(mockCloseLocalApi).toHaveBeenCalledOnce();
+      expect(mockApp.quit).toHaveBeenCalledOnce();
+    });
+
+    const finalEvent = { preventDefault: vi.fn() };
+    appEventHandlers.get("before-quit")?.(finalEvent);
 
     expect(mockCloseLocalApi).toHaveBeenCalledOnce();
+    expect(mockApp.quit).toHaveBeenCalledOnce();
+    expect(finalEvent.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it("退出时先取消并等待活跃 runFlow 完成，再关闭 API 且防止重复退出", async () => {
+    let resolveRun: (() => void) | undefined;
+    mockRunFlow.mockImplementation(
+      (_projectId: string, _flowId: string, options: { executionId: string }) =>
+        new Promise((resolve) => {
+          resolveRun = () => resolve({ executionId: options.executionId, status: "cancelled" });
+        }),
+    );
+    const runHandler = handlers.get(IPC_CHANNELS.runFlow);
+    const runPromise = runHandler?.(
+      { sender: { send: mockSenderSend } },
+      "project_ipc",
+      "flow_ipc",
+      { showBrowser: false },
+    ) as Promise<unknown>;
+    await Promise.resolve();
+    const serviceOptions = mockRunFlow.mock.calls[0]?.[2] as { signal: AbortSignal };
+    const firstEvent = { preventDefault: vi.fn() };
+    const repeatedEvent = { preventDefault: vi.fn() };
+
+    appEventHandlers.get("before-quit")?.(firstEvent);
+    appEventHandlers.get("before-quit")?.(repeatedEvent);
+    await Promise.resolve();
+
+    expect(firstEvent.preventDefault).toHaveBeenCalledOnce();
+    expect(repeatedEvent.preventDefault).toHaveBeenCalledOnce();
+    expect(serviceOptions.signal.aborted).toBe(true);
+    expect(mockCloseLocalApi).not.toHaveBeenCalled();
+    expect(mockApp.quit).not.toHaveBeenCalled();
+
+    resolveRun?.();
+    await runPromise;
+    await vi.waitFor(() => {
+      expect(mockCloseLocalApi).toHaveBeenCalledOnce();
+      expect(mockApp.quit).toHaveBeenCalledOnce();
+    });
+
+    const finalEvent = { preventDefault: vi.fn() };
+    appEventHandlers.get("before-quit")?.(finalEvent);
+    expect(finalEvent.preventDefault).not.toHaveBeenCalled();
+    expect(mockCloseLocalApi).toHaveBeenCalledOnce();
+    expect(mockApp.quit).toHaveBeenCalledOnce();
+  });
+
+  it("退出协调开始后拒绝新的运行，避免漏出 drain 快照", async () => {
+    const event = { preventDefault: vi.fn() };
+    appEventHandlers.get("before-quit")?.(event);
+    const runHandler = handlers.get(IPC_CHANNELS.runFlow);
+
+    await expect(
+      runHandler?.(
+        { sender: { send: mockSenderSend } },
+        "project_ipc",
+        "flow_ipc",
+        { showBrowser: false },
+      ),
+    ).rejects.toThrow("应用正在退出");
+
+    expect(mockRunFlow).not.toHaveBeenCalled();
+    await vi.waitFor(() => {
+      expect(mockCloseLocalApi).toHaveBeenCalledOnce();
+      expect(mockApp.quit).toHaveBeenCalledOnce();
+    });
   });
 
   it("完整透传 Studio 收集的运行上下文选项", async () => {

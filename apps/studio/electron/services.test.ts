@@ -434,6 +434,42 @@ describe("getExecution 缓存命中策略", () => {
     expect(result.steps[0]?.status).toBe("skipped");
   });
 
+  it("首步前取消时使用外层 startedAt 落库并在重新回读后保持真实时间", async () => {
+    mockApiGetFlow.mockResolvedValue(buildFlow());
+    mockApiAllocateRunDirectory.mockResolvedValue("/tmp/flowweave/run-cancel-before-step");
+    mockExecuteFlow.mockResolvedValue({
+      executionId: "exec_cancelled_before_step",
+      status: "cancelled",
+      steps: [],
+    });
+
+    const { runFlow } = await loadServicesModule();
+    const result = await runFlow("project_service_history", "flow_service_history", {
+      showBrowser: false,
+      executionId: "exec_cancelled_before_step",
+    });
+    const saved = mockApiSaveExecution.mock.calls[0]?.[1] as
+      | Omit<ExecutionWithProject, "projectId">
+      | undefined;
+
+    expect(saved?.status).toBe("cancelled");
+    expect(saved?.steps).toEqual([]);
+    expect(saved?.startedAt).toBe(result.startedAt);
+    expect(new Date(saved?.startedAt ?? 0).getUTCFullYear()).toBeGreaterThan(1970);
+
+    vi.resetModules();
+    mockApiGetExecution.mockResolvedValue({
+      ...saved,
+      projectId: "project_service_history",
+    });
+    const reloadedServices = await loadServicesModule();
+    const reloaded = await reloadedServices.getExecution("exec_cancelled_before_step");
+
+    expect(reloaded?.status).toBe("cancelled");
+    expect(reloaded?.startedAt).toBe(saved?.startedAt);
+    expect(new Date(reloaded?.startedAt ?? 0).getUTCFullYear()).toBeGreaterThan(1970);
+  });
+
   it("返回指定 Flow 最近一次执行输入并把变量转成表单字符串", async () => {
     mockRepoGetLatestExecutionForFlow.mockReturnValue(
       buildExecution({

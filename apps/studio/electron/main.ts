@@ -34,8 +34,28 @@ import {
 
 let mainWindow: BrowserWindow | null = null;
 let localKnowledgeApiService: LocalKnowledgeApiService | null = null;
-const activeExecutions = new Map<string, AbortController>();
+type ActiveExecution = {
+  controller: AbortController;
+  completion: Promise<void>;
+  complete: () => void;
+};
+
+function createActiveExecution(): ActiveExecution {
+  let complete: () => void = () => undefined;
+  const completion = new Promise<void>((resolve) => {
+    complete = resolve;
+  });
+  return {
+    controller: new AbortController(),
+    completion,
+    complete,
+  };
+}
+
+const activeExecutions = new Map<string, ActiveExecution>();
 const cancelledExecutionIds = new Set<string>();
+let shutdownPromise: Promise<void> | null = null;
+let allowFinalQuit = false;
 const RUN_FLOW_OPTION_KEYS = new Set([
   "showBrowser",
   "environmentName",
@@ -206,19 +226,22 @@ function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.runFlow,
     async (_event, projectId: string, flowId?: string, options?: RunFlowOptions) => {
+      if (shutdownPromise) {
+        throw new Error("应用正在退出，无法开始新的运行");
+      }
       assertNonEmptyId(projectId, "projectId");
       if (flowId !== undefined) {
         assertNonEmptyId(flowId, "flowId");
       }
       const normalizedOptions = normalizeRunFlowOptions(options);
       const executionId = randomUUID();
-      const controller = new AbortController();
-      activeExecutions.set(executionId, controller);
+      const activeExecution = createActiveExecution();
+      activeExecutions.set(executionId, activeExecution);
       try {
         const record = await runFlow(projectId, flowId, {
           ...normalizedOptions,
           executionId,
-          signal: controller.signal,
+          signal: activeExecution.controller.signal,
           onProgress: (progress: StudioExecutionProgressEvent) => {
             if (progress.executionId !== executionId) {
               return;
@@ -236,22 +259,23 @@ function registerIpcHandlers(): void {
         throw buildRendererSafeRunError(error, normalizedOptions.variables);
       } finally {
         activeExecutions.delete(executionId);
+        activeExecution.complete();
       }
     },
   );
 
   ipcMain.handle(IPC_CHANNELS.cancelExecution, async (_event, executionId: string) => {
     assertNonEmptyId(executionId, "executionId");
-    const controller = activeExecutions.get(executionId);
-    if (!controller) {
+    const activeExecution = activeExecutions.get(executionId);
+    if (!activeExecution) {
       return {
         accepted: cancelledExecutionIds.has(executionId),
         alreadyCancelled: cancelledExecutionIds.has(executionId),
       };
     }
-    const alreadyCancelled = controller.signal.aborted;
+    const alreadyCancelled = activeExecution.controller.signal.aborted;
     if (!alreadyCancelled) {
-      controller.abort();
+      activeExecution.controller.abort();
       rememberCancelledExecution(executionId);
     }
     return { accepted: true, alreadyCancelled };
@@ -365,18 +389,34 @@ app.whenReady().then(async () => {
   });
 });
 
-app.on("before-quit", () => {
-  for (const [executionId, controller] of activeExecutions) {
-    if (!controller.signal.aborted) {
-      controller.abort();
+async function drainBeforeQuit(): Promise<void> {
+  const pendingExecutions = [...activeExecutions.entries()];
+  for (const [executionId, execution] of pendingExecutions) {
+    if (!execution.controller.signal.aborted) {
+      execution.controller.abort();
       rememberCancelledExecution(executionId);
     }
   }
+  await Promise.allSettled(pendingExecutions.map(([, execution]) => execution.completion));
+
   const service = localKnowledgeApiService;
   localKnowledgeApiService = null;
-  void service?.close().catch((error: unknown) => {
+  try {
+    await service?.close();
+  } catch (error: unknown) {
     console.error("织流本地同步服务关闭失败：", error);
-  });
+  }
+
+  allowFinalQuit = true;
+  app.quit();
+}
+
+app.on("before-quit", (event) => {
+  if (allowFinalQuit) {
+    return;
+  }
+  event.preventDefault();
+  shutdownPromise ??= drainBeforeQuit();
 });
 
 app.on("window-all-closed", () => {

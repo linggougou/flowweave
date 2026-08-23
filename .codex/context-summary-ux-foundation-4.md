@@ -46,13 +46,13 @@
 
 ### Electron / preload / service
 
-- 主进程为每次运行生成 executionId，并用 `Map<executionId, AbortController>` 管理活动会话。
+- 主进程为每次运行生成 executionId，并用 `Map<executionId, { controller, completion }>` 管理活动会话。
 - 取消接口按 executionId 操作；重复取消返回 `alreadyCancelled: true`，不会重复 abort。
-- 应用退出前主动取消仍在运行的会话。
+- 应用退出时阻止首次和重复退出，主动取消活动会话并等待各自 completion；所有 cancelled 保存与快照处理结束后再关闭本地 API，最后只触发一次真正退出。
 - runFlow IPC 使用字段白名单、类型/数量/长度/有限数校验；拒绝嵌套变量和未知字段。
 - 进度只发给发起运行的 webContents，且校验 runtime 事件 executionId 与主进程会话一致。
 - preload 只暴露固定 `onExecutionProgress` / `cancelExecution`，订阅返回 cleanup 并精确移除包装 listener。
-- service 将 cancelled execution 保存为知识库 `cancelled`，进行中步骤保存为 `skipped`，Studio execution 映射为 `cancelled`。
+- service 将 cancelled execution 保存为知识库 `cancelled`，进行中步骤保存为 `skipped`，Studio execution 映射为 `cancelled`；首步前取消时用 runFlow 外层 startedAt 作为持久化 fallback。
 - IPC 异常返回前移除 `secret_` 变量值、堆栈行并清空 Error.stack。
 
 ### Studio 共享模型
@@ -65,7 +65,7 @@
 ## 验证结果
 
 - `pnpm --filter @flowweave/runtime test`：通过，4 个文件、47 项测试。
-- `pnpm --filter @flowweave/app-studio test`：通过，25 个文件、111 项测试。
+- `pnpm --filter @flowweave/app-studio test`：通过，25 个文件、114 项测试。
 - `pnpm --filter @flowweave/runtime typecheck`：通过。
 - `pnpm --filter @flowweave/runtime lint`：通过。
 - `pnpm --filter @flowweave/runtime build`：通过。
@@ -82,6 +82,14 @@
 - 审计发现既有 `drizzle-orm@0.38.4` 命中高危公告 GHSA-gpj5-g38j-94v9（动态 SQL identifier 转义）。本轨未修改依赖；只读检索未发现 `sql.identifier` / `sql.raw` 动态标识符使用。升级到 `>=0.45.2` 涉及 knowledge 数据层兼容验证，应进入独立变更，不在 F4 中暗改锁文件。
 - `apps/studio/src/studio-client.ts` 的 HTTP fallback 私有状态映射仍会把 `cancelled` 归入 failed，且浏览器 fallback 不支持运行/取消。本轨按文件边界未修改；集成代理接入 `App.tsx` 时应同步将 HTTP 历史映射改为 cancelled，并在 Electron 能力缺失时隐藏取消入口。
 - 主界面接线与真实 Electron 点击旅程由集成轨完成；本轨交付的是已测试的 runtime/Electron/preload/shared 合同。
+
+## 独立 Reviewer P1 修复闭环
+
+- Reviewer P1-1 红测：模拟 signal 在首步前取消，runtime 返回 `steps: []`；确认原实现传给 `apiSaveExecution` 的 startedAt 为 undefined，重新回读会退化到 1970。
+- P1-1 绿测：`toKnowledgeExecution` 接受 runFlow 捕获的 outer startedAt fallback；断言 cancelled 零日志执行落库时间与 Studio 返回一致，重置 service 模块后经 `apiGetExecution` 回读仍为真实时间且状态保持 cancelled。
+- Reviewer P1-2 红测：deferred runFlow 未 resolve 时触发 before-quit；确认原实现不会 preventDefault，也会提前关闭 API，且没有最终受控 quit。
+- P1-2 绿测：活动运行记录 controller 与 completion；before-quit 防重入地 abort 并 await completion，runFlow resolve 前 API close/app.quit 均不发生，resolve 后严格按“完成运行 → 关闭 API → 最终 quit”执行一次。
+- 补充边界：无活跃运行同样通过一次协调关闭后正常退出；最终 quit 的 before-quit 不再 preventDefault，避免死循环；shutdown 开始后拒绝新 runFlow，避免漏出 drain 快照。
 
 ## 轨道结论
 

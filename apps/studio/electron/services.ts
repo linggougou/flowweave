@@ -449,13 +449,14 @@ function toKnowledgeExecution(
   flowId: string,
   flowSnapshot: FlowDocument,
   runContext?: StudioExecutionRunContext,
+  startedAtFallback?: string,
 ): KnowledgeExecutionResult {
   const finishedAt = new Date().toISOString();
   return {
     executionId: runtime.executionId,
     flowId,
     status: runtime.status,
-    startedAt: runtime.steps[0]?.startedAt,
+    startedAt: runtime.steps[0]?.startedAt ?? startedAtFallback,
     finishedAt,
     flowSnapshot,
     runContext,
@@ -552,7 +553,10 @@ export async function runFlow(
     onProgress: options.onProgress,
   });
   const runContext = toRunContext(environment, options.variables);
-  await apiSaveExecution(projectId, toKnowledgeExecution(runtimeResult, flow.id, flow, runContext));
+  await apiSaveExecution(
+    projectId,
+    toKnowledgeExecution(runtimeResult, flow.id, flow, runContext, startedAt),
+  );
 
   for (const snap of runtimeResult.pageSnapshots ?? []) {
     await apiSavePageSnapshot(projectId, snap.summary, snap.filePath);
