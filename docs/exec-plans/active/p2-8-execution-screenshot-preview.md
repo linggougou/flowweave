@@ -4,7 +4,7 @@
 
 - 生命周期：S4 里程碑计划 → S5 分轨开发 → S6 集成验证 → S7 会签。
 - 路线：`PROJECT_ROUTE_LOCK.md` 的 P2.8“Studio 执行截图受控内嵌预览”。
-- 用户授权：2026-08-24 在 P2.7 完成并要求继续开发；此前已要求 plan、worktree、Sub-Agent 并行与验收后回收。
+- 用户授权：2026-08-23 在 P2.7 完成并要求继续开发；此前已要求 plan、worktree、Sub-Agent 并行与验收后回收。
 - 主闭环：Studio 选择历史执行和步骤 → 请求受控截图 → 应用内只读查看 → 关闭后恢复原上下文与焦点。
 - 明确非目标：Web / Local API / 扩展文件服务、HAR / DOM / SVG / HTML / PDF、下载导出、OCR 标注、P3/P4、vNext、技术栈替换。
 
@@ -113,10 +113,12 @@ pnpm audit --prod --audit-level high --registry=https://registry.npmjs.org
 - [x] 预览可键盘关闭、恢复焦点，快速切换和删除不会串图。
 - [x] Web / Local API / 扩展、HAR / DOM、P3/P4、vNext 与破坏性能力未混入。
 - [x] 分轨 TDD、安全审查与 Judge 均 PASS，无未关闭 P0/P1。
-- [ ] Node 24、Node 20、recorded replay `25/25`、portability、安全审计和远端双矩阵通过。
+- [x] Node 24、Node 20、recorded replay `25/25`、portability 与安全审计通过。
+- [x] G4 独立集成总审通过。
+- [ ] 远端集成分支与 `main` Node 20 / 24 双矩阵通过。
 - [ ] worktree、分支、临时进程与 Agent 在验收后回收，留痕完整。
 
-当前状态：G0-G3 实现与分轨复审完成；G1、G2、G3 Judge 均 PASS。Node 24 本地主门禁、recorded replay `25/25`、可移植往返、生产依赖审计、真实 Electron 和 Node 20.19.6 无缓存矩阵均通过；等待 G4 独立集成总审及远端集成分支 / main Node 20、24 双矩阵。
+当前状态：G0-G4 已完成；G1、G2、G3 Judge 与 G4 集成总审均 PASS。Node 24 本地主门禁、recorded replay `25/25`、可移植往返、生产依赖审计、真实 Electron 和 Node 20.19.6 无缓存矩阵均通过；仅等待远端集成分支 / `main` Node 20、24 双矩阵。
 
 ## 7. 回滚策略
 

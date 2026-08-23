@@ -5282,7 +5282,7 @@
 - 资源复核：仅剩主工作树；本地 P2.7 功能/集成分支已删除；临时目录已移至废纸篓；测试服务端口 `3847`、`5173`、`5174` 均无监听；无运行中的非主 Agent。
 - 最终判断：P2.7 功能、独立总审、定向/全量测试、真实 UI、构建、安全审计、E2E、本地 Node 20/24 与远端集成/main 双矩阵全部通过，可以归档。
 - 路线边界：未新增 Local API / Web destructive capability；Flow/项目/批量/版本删除、可编辑 diff、P3/P4 与 vNext 未混入，继续冻结。
-## 2026-08-24 P2.8 开发前基线
+## 2026-08-23 P2.8 开发前基线
 
 - 起点：`b328ebacf1c5d3314c079f3995329f055e078878`；main 与 origin/main 一致，开发前工作区 clean。
 - CodeGraph：索引最新，113 files / 1273 nodes / 2669 edges。
@@ -5292,7 +5292,7 @@
 - 安全基线：确认现有 `openPath(filePath)` 为 renderer 任意路径能力；安全审计初判 REVISE。P2.8 计划已修订为固定业务 ID IPC、main-frame / 来源校验、sandbox / CSP / 导航硬门、`8 MiB` 与 PNG IHDR / 像素校验、可回收 Blob URL；完成前不得把本地 bytes 开放给 renderer。
 - 阶段判断：基线稳定，路线和安全合同冻结后可进入 G1/G2 分轨 TDD；P3/P4、vNext、Web / Local API 文件服务继续冻结。
 
-## 2026-08-24 P2.8 本地实现与双 Node 总验收
+## 2026-08-23 P2.8 本地实现与双 Node 总验收
 
 ### 安全与分轨审查
 
@@ -5328,3 +5328,12 @@
 
 - Node 24.14.0 冻结安装恢复完成；Studio `209/209`、生产构建、Electron bundle 严格签名和 Electron 专用 `better-sqlite3` binding 均通过。
 - 本地结论：通过；无未关闭 P0/P1。等待 G4 独立集成总审、集成分支与 main 的远端 Node 20 / 24 双矩阵后归档。
+
+## 2026-08-23 P2.8 G4 独立集成总审
+
+- 独立总审：`PASS`，`100/100`；无 P0/P1/P2、无 required fixes。
+- 审查提交：`6068077`（源自独立 review worktree `7fd199f`），正式证据位于 `.codex/reviews/p2-8/g4-integration/`。
+- 审查结论：G1/G2/G3 既有 Judge 包与本地总验收证据互相一致；文件边界、fixed-object IPC、trusted main-frame/origin、sandbox/CSP/nav、Blob 生命周期、迟到结果竞态与范围冻结均成立。
+- G4 verifier：`pnpm --filter @flowweave/project-knowledge test -- execution-screenshot-preview` 为 `31/31`；`pnpm --filter @flowweave/app-studio test -- App.execution-screenshot-preview ExecutionScreenshotPreview` 为 `9/9`。
+- review worktree 无 `node_modules`，首次直接运行 `vitest` 因环境缺依赖失败；已准确记录原因，并在同一提交 `0203c5b` 的主工作树完成独立定向复跑，不将环境问题误判为代码回归。
+- 当前结论：P2.8 本地实现、分轨审查与独立总审全部通过；仅剩远端集成分支与 `main` 的 Node 20 / 24 双矩阵会签后归档。

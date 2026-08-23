@@ -7190,7 +7190,7 @@
 - 回收：确认仅剩主工作树且工作区 clean；删除 5 条已并回功能分支与本地集成分支；P2.7 临时基线目录移动至废纸篓 `/Users/ling/.Trash/flowweave-tmp-p27-baseline-20260824`，可恢复；`3847`、`5173`、`5174` 无监听。
 - Agent：G3/G4 Judge 已中断回收，G5 总审已完成；无仍在执行的非主 Agent。
 - 生命周期：P2.7 S7 会签完成，执行计划从 `active` 迁移至 `completed`；post-v1 总路线继续保留 active，但未自动开启下一阶段。P3/P4 与 vNext 继续冻结。
-## 2026-08-24 P2.8 启动、变更分流与开发前基线
+## 2026-08-23 P2.8 启动、变更分流与开发前基线
 
 - 用户在 P2.7 完成后要求继续开发，并沿用此前“先 plan、各功能依托 worktree 分派 Sub-Agent 并行、验收后回收”的授权。
 - 已阅读项目 `AGENTS.md`、路线锁、架构、Flow DSL、ADR、产品设计、先跑通路线、生命周期、留痕、开发工作流、Skills runtime 与 CodeGraph 协议；工作区起点 `b328ebacf1c5d3314c079f3995329f055e078878`，main 与 origin/main 一致且 clean。
@@ -7201,7 +7201,7 @@
 - 开发前基线：Node `24.14.0`、pnpm `9.15.4`；`@flowweave/ui` `14/14`、`@flowweave/app-studio` `184/184`，全部通过。
 - 已更新 `PROJECT_ROUTE_LOCK.md`、post-v1 总路线，创建 P2.8 活跃执行计划与上下文摘要；只允许进入 G1/G2，不允许扩大阶段。
 
-## 2026-08-24 P2.8 G1-G3 实施、复审与本地总验收
+## 2026-08-23 P2.8 G1-G3 实施、复审与本地总验收
 
 - G1 `project-knowledge`：新增受控截图解析，只按真实 project / execution / step 推导 `step-N.png`；覆盖单段 ID、归属、普通文件、symlink / hardlink、8 MiB、PNG signature / IHDR、8192 边长、4000 万像素及文件和目录 TOCTOU。初审因缺少 run directory 身份漂移证据判 `REVISE`，补测后复审 `PASS 100/100`。
 - G2 renderer：新增只读截图 dialog，覆盖 loading / available / unavailable、Blob-only 图片来源、alt、Escape、关闭与焦点恢复；独立 Judge `PASS`。
@@ -7215,3 +7215,12 @@
 - Node 20.19.6：按 lockfile 强制重建后，`pnpm turbo typecheck test build --force` 为 `39/39`、`0 cached`；Studio `209/209`、project-knowledge `85/85`、登录 `4/4`、portability warnings=`4` / steps=`10` 全通过。
 - 环境恢复：Node 24.14.0 下再次按 lockfile 强制安装，Studio `209/209`、生产构建、Electron 严格签名与 native binding 均通过。
 - 阶段判断：本地 DoD 已通过；进入 G4 独立集成总审，之后仍须集成分支和 main 的远端 Node 20 / 24 双矩阵连续为绿色才能归档。
+
+## 2026-08-23 P2.8 G4 独立集成总审
+
+- 独立 review worktree：`/Volumes/2T/CODE/A_Mine/flowweave-p28-g4-review`；审查分支：`codex/p2-8-g4-integration-review`。
+- 先在 review worktree 运行两条贴边测试，因该 worktree 未安装 `node_modules`，`vitest` 返回 `sh: vitest: command not found`；判定为隔离审查环境缺依赖，不是代码失败，未把该结果包装成回归。
+- 改用同一提交 `0203c5b` 的主工作树执行独立 verifier：`project-knowledge` 截图预览 `31/31`，`app-studio` 截图预览相关 `9/9`，均通过。
+- G4 scorecard：`PASS 100/100`，无 P0/P1/P2、无 required fixes；证据包写入 `.codex/reviews/p2-8/g4-integration/`。
+- 审查提交：review 分支 `7fd199f`，已 cherry-pick 到当前集成分支为 `6068077`。
+- 阶段判断：P2.8 现已完成 G1-G4 与全部本地门禁；只剩远端集成分支和 `main` 的 Node 20 / 24 双矩阵会签与归档。
