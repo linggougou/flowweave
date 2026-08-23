@@ -23,4 +23,4 @@ pnpm --filter @flowweave/app-studio build:electron
 pnpm --filter @flowweave/app-studio dev
 ```
 
-首次启动会自动创建「登录演示」项目并保存 fixture 流程；点击「运行流程」将 headless 执行并写入 SQLite。
+首次启动会自动创建「登录演示」项目并保存 fixture 流程；点击「运行任务」将 headless 执行并写入 SQLite。
