@@ -5282,7 +5282,7 @@
 - 资源复核：仅剩主工作树；本地 P2.7 功能/集成分支已删除；临时目录已移至废纸篓；测试服务端口 `3847`、`5173`、`5174` 均无监听；无运行中的非主 Agent。
 - 最终判断：P2.7 功能、独立总审、定向/全量测试、真实 UI、构建、安全审计、E2E、本地 Node 20/24 与远端集成/main 双矩阵全部通过，可以归档。
 - 路线边界：未新增 Local API / Web destructive capability；Flow/项目/批量/版本删除、可编辑 diff、P3/P4 与 vNext 未混入，继续冻结。
-## 2026-08-23 P2.8 开发前基线
+## 2026-08-24 P2.8 开发前基线
 
 - 起点：`b328ebacf1c5d3314c079f3995329f055e078878`；main 与 origin/main 一致，开发前工作区 clean。
 - CodeGraph：索引最新，113 files / 1273 nodes / 2669 edges。
@@ -5292,7 +5292,7 @@
 - 安全基线：确认现有 `openPath(filePath)` 为 renderer 任意路径能力；安全审计初判 REVISE。P2.8 计划已修订为固定业务 ID IPC、main-frame / 来源校验、sandbox / CSP / 导航硬门、`8 MiB` 与 PNG IHDR / 像素校验、可回收 Blob URL；完成前不得把本地 bytes 开放给 renderer。
 - 阶段判断：基线稳定，路线和安全合同冻结后可进入 G1/G2 分轨 TDD；P3/P4、vNext、Web / Local API 文件服务继续冻结。
 
-## 2026-08-23 P2.8 本地实现与双 Node 总验收
+## 2026-08-24 P2.8 本地实现与双 Node 总验收
 
 ### 安全与分轨审查
 
@@ -5329,7 +5329,7 @@
 - Node 24.14.0 冻结安装恢复完成；Studio `209/209`、生产构建、Electron bundle 严格签名和 Electron 专用 `better-sqlite3` binding 均通过。
 - 本地结论：通过；无未关闭 P0/P1。等待 G4 独立集成总审、集成分支与 main 的远端 Node 20 / 24 双矩阵后归档。
 
-## 2026-08-23 P2.8 G4 独立集成总审
+## 2026-08-24 P2.8 G4 独立集成总审
 
 - 独立总审：`PASS`，`100/100`；无 P0/P1/P2、无 required fixes。
 - 审查提交：`6068077`（源自独立 review worktree `7fd199f`），正式证据位于 `.codex/reviews/p2-8/g4-integration/`。
@@ -5337,3 +5337,14 @@
 - G4 verifier：`pnpm --filter @flowweave/project-knowledge test -- execution-screenshot-preview` 为 `31/31`；`pnpm --filter @flowweave/app-studio test -- App.execution-screenshot-preview ExecutionScreenshotPreview` 为 `9/9`。
 - review worktree 无 `node_modules`，首次直接运行 `vitest` 因环境缺依赖失败；已准确记录原因，并在同一提交 `0203c5b` 的主工作树完成独立定向复跑，不将环境问题误判为代码回归。
 - 当前结论：P2.8 本地实现、分轨审查与独立总审全部通过；仅剩远端集成分支与 `main` 的 Node 20 / 24 双矩阵会签后归档。
+
+## 2026-08-24 P2.8 远端最终会签与归档
+
+- 集成分支首次 run `32663000442`（提交 `0203c5b`）：Node 20 `97251885593`、Node 24 `97251885475`，均成功。
+- 最终集成 run `32663433015`（提交 `d7681a2`）：Node 20 `97252972903`、Node 24 `97252972828`，均成功。
+- main run `32663661233`（提交 `d7681a2`）：Node 20 `97253546133`、Node 24 `97253546034`，均成功。
+- 三轮 job 均执行冻结安装、Playwright Chromium、lint 与完整 smoke；没有跳过或豁免失败步骤。
+- Git 复核：`main`、`origin/main` 均为 `d7681a2`；P2.8 集成是从原 `main` 的 fast-forward，无 force push、无用户提交覆盖。
+- 资源复核：仅剩 main 工作树；P2.8 review / integration 本地分支与远端集成分支已删除；`3847`、`5173`、`5174` 无监听；无 FlowWeave / Electron / Vite 残留进程；G4 Agent 已停止。
+- 最终判断：P2.8 功能、安全边界、分轨 Judge、G4 总审、真实 Electron、Node 20/24、本地矩阵、recorded replay、可移植性、依赖审计及远端集成/main 矩阵全部通过，可以归档。
+- 路线边界：未新增 Web / Local API / 扩展文件读取能力，未混入 HAR / DOM 主动内容、P3/P4、vNext 或破坏性资产操作。

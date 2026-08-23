@@ -1,5 +1,5 @@
 {
-  "review_id": "p2-8-g4-integration-2026-08-23",
+  "review_id": "p2-8-g4-integration-2026-08-24",
   "task_id": "P2.8-G4",
   "lane": "g4-integration",
   "review_level": "L3",
@@ -18,7 +18,7 @@
     "review:.codex/reviews/p2-8/g2-preview/scorecard.json",
     "review:.codex/reviews/p2-8/g3-studio-integration/scorecard.json",
     "doc:PROJECT_ROUTE_LOCK.md",
-    "doc:docs/exec-plans/active/p2-8-execution-screenshot-preview.md",
+    "doc:docs/exec-plans/completed/p2-8-execution-screenshot-preview.md",
     "doc:.codex/verification-report.md",
     "doc:.codex/operations-log.md",
     "cmd:pnpm --filter @flowweave/project-knowledge test -- execution-screenshot-preview",
@@ -72,7 +72,7 @@
       "status": "pass",
       "evidence": [
         "PROJECT_ROUTE_LOCK.md:56,68,139 明确 P2.8 仍仅剩 G4 总审与远端双矩阵，不开放 Web/Local API 文件读取、P3/P4 或 vNext",
-        "docs/exec-plans/active/p2-8-execution-screenshot-preview.md:116-119 记录 HAR/DOM/SVG/HTML/PDF 与 Web/Local API 文件服务继续冻结"
+        "docs/exec-plans/completed/p2-8-execution-screenshot-preview.md:116-121 记录 HAR/DOM/SVG/HTML/PDF 与 Web/Local API 文件服务继续冻结"
       ]
     },
     {
@@ -178,5 +178,5 @@
       "summary": "允许进入远端集成分支与 main 双矩阵会签；无 P0/P1/P2，required fixes 为空。"
     }
   ],
-  "reviewed_at": "2026-08-23T04:08:00+08:00"
+  "reviewed_at": "2026-08-24T04:08:00+08:00"
 }

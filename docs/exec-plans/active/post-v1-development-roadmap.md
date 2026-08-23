@@ -2,10 +2,10 @@
 
 ## 1. 当前基线
 
-- 生命周期：P2.8 post-v1 产品化 / Studio 执行截图受控内嵌预览进入集成验证与远端会签。
+- 生命周期：P2.8 post-v1 产品化已完成；下一阶段尚未开启。
 - 已完成：P0、P1、P2；M1-M4；真实页面 recorded replay `25/25`；Node 20/24 双基线；macOS 本地预览 `.app + DMG`。
 - M5 已有最小能力：扩展清空录制、Flow JSON 导出、Studio Flow 重命名。
-- P2.5、P2.6、P2.7 已完成并归档；P2.8 已完成实现、分轨审查与本地双 Node 门禁，等待独立总审和远端会签。
+- P2.5、P2.6、P2.7、P2.8 均已完成并归档。
 - P3 深度页面/网络理解与 P4 AI 编排继续冻结。
 
 ## 2. 执行顺序
@@ -136,7 +136,7 @@
 
 每项独立提交和验收，不绑成一次大改。
 
-### Wave D：Studio 执行截图受控预览（P2.8 会签中）
+### Wave D：Studio 执行截图受控预览（P2.8 已完成）
 
 目标：关闭“运行截图只能看路径或依赖系统外部应用”的最后一项 M3 体验缺口，同时收回 renderer 通用路径打开能力。
 
@@ -147,11 +147,11 @@
 3. Studio 提供只读截图弹层、加载 / 不可用状态、Escape / 回焦和异步竞态保护。
 4. Web / Local API / 扩展、HAR / DOM、下载导出、P3/P4 与 vNext 保持冻结。
 
-实施真源：`docs/exec-plans/active/p2-8-execution-screenshot-preview.md`。
+实施真源：`docs/exec-plans/completed/p2-8-execution-screenshot-preview.md`。
 
 退出门禁：故障注入和独立 Judge 通过；Studio 真机可预览且无路径泄露/串图；Node 24 完整门禁、Node 20 兼容与远端双矩阵通过。
 
-完成证据：G1-G5 独立审查均 PASS；本地 Node 20/24、真实 Web/Studio、recorded replay `25/25`、可移植往返与安全审计通过；集成分支和 main Node 20/24 CI 双绿。执行计划已归档，P3/P4 与 vNext 未解冻。
+完成证据：G1-G3 分轨 Judge 与 G4 独立总审均 PASS；本地 Node 20/24、真实 Electron、recorded replay `25/25`、可移植往返与安全审计通过；集成分支和 main Node 20/24 CI 双绿。执行计划已归档，P3/P4 与 vNext 未解冻。
 
 ## 3. vNext 设计门禁
 
@@ -180,4 +180,4 @@
 5. UX Foundation 4：2-4 天，完成运行守卫、进度和取消。
 6. UX Foundation 5：2-4 天，完成业务视图与 Web 结果收口。
 7. P2.6 Flow 可移植性与 Web 重命名、P2.7 本地资产安全维护均已完成并归档。
-8. P2.8 受控截图预览已完成独立路线变更并进入实施；vNext 协议设计继续冻结。
+8. P2.8 受控截图预览已完成并归档；vNext 协议设计继续冻结。
