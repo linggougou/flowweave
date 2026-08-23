@@ -30,6 +30,7 @@ const mockRepoSaveEnvironment = vi.fn();
 const mockRepoGetLatestExecutionForFlow = vi.fn();
 
 type ServicesModule = {
+  assertProjectExistsForFileOperation?: (projectId: string) => Promise<void>;
   getFlowRunInput?: (projectId: string, flowId: string) => Promise<unknown>;
   getFlowForExport?: (projectId: string, flowId: string) => Promise<FlowDocument>;
 };
@@ -178,6 +179,21 @@ describe("getExecution 缓存命中策略", () => {
     );
 
     expect(mockApiListProjects).toHaveBeenCalledOnce();
+    expect(mockApiGetFlow).not.toHaveBeenCalled();
+  });
+
+  it("文件操作项目门禁只读全局索引，并区分存在与 ghost 项目", async () => {
+    mockApiListProjects.mockResolvedValue([
+      { id: "project_real", name: "真实项目", createdAt: "2026-08-23T08:00:00.000Z" },
+    ]);
+    const { assertProjectExistsForFileOperation } = await loadServicesModule();
+
+    await expect(assertProjectExistsForFileOperation?.("project_real")).resolves.toBeUndefined();
+    await expect(assertProjectExistsForFileOperation?.("ghost_project")).rejects.toThrow(
+      "目标项目不存在",
+    );
+
+    expect(mockApiListProjects).toHaveBeenCalledTimes(2);
     expect(mockApiGetFlow).not.toHaveBeenCalled();
   });
 

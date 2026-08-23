@@ -17,6 +17,7 @@ import {
   type LocalKnowledgeApiService,
 } from "./local-api-service.js";
 import {
+  assertProjectExistsForFileOperation,
   createProject,
   getExecution,
   getFlow,
@@ -257,6 +258,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.importFlowFile, async (_event, projectId: string) => {
     assertResourceId(projectId, "projectId");
     try {
+      await assertProjectExistsForFileOperation(projectId);
       return await importFlowFromFile(projectId, {
         showOpenDialog: (options) => dialog.showOpenDialog(options),
         importFlow: importFlowDocument,

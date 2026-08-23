@@ -11,6 +11,7 @@ const mockImportFlowFromFile = vi.fn();
 const mockExportFlowToFile = vi.fn();
 const mockImportFlowDocument = vi.fn();
 const mockGetFlowForExport = vi.fn();
+const mockAssertProjectExistsForFileOperation = vi.fn();
 const mockCloseLocalApi = vi.fn(() => Promise.resolve());
 const mockStartLocalApi = vi.fn(() =>
   Promise.resolve({
@@ -94,6 +95,7 @@ vi.mock("./flow-portability-files.js", () => ({
 }));
 
 vi.mock("./services.js", () => ({
+  assertProjectExistsForFileOperation: mockAssertProjectExistsForFileOperation,
   createProject: vi.fn(),
   getExecution: vi.fn(),
   getFlow: vi.fn(),
@@ -123,6 +125,8 @@ describe("electron main runFlow IPC", () => {
     mockExportFlowToFile.mockReset();
     mockImportFlowDocument.mockReset();
     mockGetFlowForExport.mockReset();
+    mockAssertProjectExistsForFileOperation.mockReset();
+    mockAssertProjectExistsForFileOperation.mockResolvedValue(undefined);
     mockShellOpenPath.mockReset();
     mockShowOpenDialog.mockReset();
     mockShowSaveDialog.mockReset();
@@ -440,6 +444,18 @@ describe("electron main runFlow IPC", () => {
 
     expect(mockGetFlowForExport).toHaveBeenCalledWith("ghost_project", "flow_ipc");
     expect(mockShowSaveDialog).not.toHaveBeenCalled();
+  });
+
+  it("安全但不存在的项目在导入 dialog、文件读取与 importFlow 前拒绝", async () => {
+    mockAssertProjectExistsForFileOperation.mockRejectedValue(new Error("目标项目不存在"));
+    const importHandler = handlers.get(IPC_CHANNELS.importFlowFile);
+
+    await expect(importHandler?.({}, "ghost_project")).rejects.toThrow("目标项目不存在");
+
+    expect(mockAssertProjectExistsForFileOperation).toHaveBeenCalledWith("ghost_project");
+    expect(mockImportFlowFromFile).not.toHaveBeenCalled();
+    expect(mockShowOpenDialog).not.toHaveBeenCalled();
+    expect(mockImportFlowDocument).not.toHaveBeenCalled();
   });
 
   it.each([

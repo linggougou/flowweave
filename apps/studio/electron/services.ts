@@ -686,14 +686,18 @@ export async function getFlow(projectId: string, flowId: string): Promise<FlowDo
   return apiGetFlow(projectId, flowId);
 }
 
-export async function getFlowForExport(
-  projectId: string,
-  flowId: string,
-): Promise<FlowDocument> {
+export async function assertProjectExistsForFileOperation(projectId: string): Promise<void> {
   const projects = await apiListProjects();
   if (!projects.some((project) => project.id === projectId)) {
     throw new Error("目标项目不存在");
   }
+}
+
+export async function getFlowForExport(
+  projectId: string,
+  flowId: string,
+): Promise<FlowDocument> {
+  await assertProjectExistsForFileOperation(projectId);
   return apiGetFlow(projectId, flowId);
 }
 
