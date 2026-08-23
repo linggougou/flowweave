@@ -336,6 +336,48 @@ describe("createPortableFlowDocument", () => {
     ]);
   });
 
+  it("处理 wait urlIncludes 的裸敏感参数串且不误伤普通路径子串", () => {
+    const input = createFlow({
+      steps: [
+        {
+          id: "wait-token",
+          type: "wait",
+          condition: "urlIncludes",
+          urlIncludes: "access_token=top-secret&view=orders",
+        },
+        {
+          id: "wait-status",
+          type: "wait",
+          condition: "urlIncludes",
+          urlIncludes: "/orders/status=ready",
+        },
+      ],
+    });
+
+    const result = createPortableFlowDocument(input);
+
+    expect(result.document.steps).toEqual([
+      {
+        id: "wait-token",
+        type: "wait",
+        condition: "urlIncludes",
+        urlIncludes: "access_token={{secret_url_access_token_wait_token}}&view=orders",
+      },
+      {
+        id: "wait-status",
+        type: "wait",
+        condition: "urlIncludes",
+        urlIncludes: "/orders/status=ready",
+      },
+    ]);
+    expect(result.warnings).toEqual([
+      expect.objectContaining({
+        code: "url-query-variableized",
+        path: "steps[0].urlIncludes.query.access_token",
+      }),
+    ]);
+  });
+
   it("保留普通业务文本、相对 URL、普通 query 与已有模板变量", () => {
     const input = createFlow({
       name: "创建客户订单",

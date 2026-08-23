@@ -175,6 +175,13 @@ function isSensitiveQueryKey(value: string): boolean {
   return sensitiveQueryKeys.has(normalizeQueryKey(value));
 }
 
+function hasBareSensitiveParameters(value: string): boolean {
+  return value.split("&").some((part) => {
+    const separatorIndex = part.indexOf("=");
+    return separatorIndex > 0 && isSensitiveQueryKey(part.slice(0, separatorIndex));
+  });
+}
+
 function collectSensitiveParameterVariables(rawParameters: string, names: Set<string>): void {
   for (const part of rawParameters.split("&")) {
     const separatorIndex = part.indexOf("=");
@@ -190,7 +197,11 @@ function collectSensitiveParameterVariables(rawParameters: string, names: Set<st
   }
 }
 
-function collectSensitiveUrlVariables(value: string, names: Set<string>): void {
+function collectSensitiveUrlVariables(
+  value: string,
+  names: Set<string>,
+  allowBareParameters = false,
+): void {
   const hashStart = value.indexOf("#");
   const beforeHash = hashStart >= 0 ? value.slice(0, hashStart) : value;
   const queryStart = beforeHash.indexOf("?");
@@ -199,6 +210,9 @@ function collectSensitiveUrlVariables(value: string, names: Set<string>): void {
   }
 
   if (hashStart < 0) {
+    if (queryStart < 0 && allowBareParameters && hasBareSensitiveParameters(value)) {
+      collectSensitiveParameterVariables(value, names);
+    }
     return;
   }
   const rawHash = value.slice(hashStart + 1);
@@ -236,7 +250,7 @@ function collectSensitiveVariableNames(steps: NormalizedStep[]): Set<string> {
     }
 
     if (step.type === "wait" && step.condition === "urlIncludes" && step.urlIncludes) {
-      collectSensitiveUrlVariables(step.urlIncludes, names);
+      collectSensitiveUrlVariables(step.urlIncludes, names, true);
     }
   }
   return names;
@@ -353,6 +367,22 @@ function sanitizeUrlValue(
   }
 
   if (rawHash === null) {
+    if (
+      fieldName === "urlIncludes" &&
+      queryStart < 0 &&
+      hasBareSensitiveParameters(sanitizedBeforeHash)
+    ) {
+      return sanitizeUrlParameters(
+        sanitizedBeforeHash,
+        "query",
+        stepId,
+        stepIndex,
+        fieldName,
+        variables,
+        usedVariableNames,
+        warnings,
+      ).value;
+    }
     return sanitizedBeforeHash;
   }
 
