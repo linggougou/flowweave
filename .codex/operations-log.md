@@ -6968,3 +6968,16 @@
 - 工具链说明：直接执行 Studio typecheck 首次读取了旧的 runtime `dist`；按 Turborepo `typecheck.dependsOn=^build` 约定先构建 runtime 后复验通过，不修改路径或技术边界。
 - 验收结论：Track F4 通过；HTTP fallback 状态映射与 F4/F5 前台接线转入跨轨集成。
 - 回收：F4 Agent 已结束，独立 worktree移除后保留本地功能分支作为审计引用。
+
+### 2026-08-23 UX Foundation 3-5 集成与本地会签
+
+- 跨轨接线：Studio 所有运行先展示任务、域名、环境与步骤摘要；高风险动作要求勾选后二次确认；进度面板展示当前第 N/M 步、当前动作和耗时；仅在真实 executionId 与取消能力均存在时显示取消入口。
+- 状态修复：HTTP fallback 保留 `cancelled`；运行真实成功/失败/取消终态不会被后续结果刷新错误覆盖。
+- 独立集成 Reviewer：PASS，无 P0/P1/P2；补充 App 层 3 项集成合同并纳入主线。
+- Web 实测：应用内浏览器默认最近结果与业务摘要正确；375×812 视口 body/document 宽度均为 375，无横向溢出；结果/版本按钮 `aria-pressed` 切换正确。
+- 桌面工具替代：`computer-use` 所需 `orca` 不存在，准确错误为 `zsh: command not found: orca`；未猜测替代桌面二进制。以 Electron dev 启动、端口监听、构建完整性和 before-quit 时序测试作为替代证据。
+- 安全变更分流：官方 registry 审计发现 `drizzle-orm 0.38.4` High（GHSA-gpj5-g38j-94v9）；属于当前集成安全门禁内的小步依赖修复，不改变路线或技术栈。升级至 `0.45.2` 后审计 0 漏洞，project-knowledge `14/14`、local-api `4/4`、Studio `128/128`、Web `14/14` 通过。
+- 工具替代：默认 npmmirror 缺少 audit endpoint；改用 `https://registry.npmjs.org` 完成审计。
+- Node 24：`CI=1 pnpm smoke` 通过；recorded replay `25/25`，总耗时 48333ms；登录 E2E `4/4`。
+- Node 20.19.6：强制按 lockfile 重建依赖后 `CI=1 pnpm smoke` 通过；完成后已在 Node 24.14.0 下再次强制按 lockfile 安装并通过 doctor/audit。
+- 回收状态：F3/F4/F5 与集成 Reviewer 均结束；三个功能 worktree 已移除，无活跃待回收 worktree。

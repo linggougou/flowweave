@@ -5166,3 +5166,17 @@
 - 建议：通过 Track F4 定向验收。
 - 残余风险：真实 Electron 退出时序、前台确认/进度/取消接线和 HTTP fallback `cancelled` 映射必须在跨轨集成关闭。
 - 阶段判断：Foundation 4 通过；三个功能轨均完成，P2.5 进入跨轨集成，P3/P4 继续冻结。
+
+## 2026-08-23 UX Foundation 3-5 集成验收
+
+- 集成代码复审：PASS，P0/P1/P2 均为 0。
+- App 集成测试：所有运行先确认；高风险任务必须勾选；仅真实 executionId 可取消；卸载清理进度订阅，`3/3` 通过。
+- Studio 全量：`32` files / `128` tests；typecheck、lint、build 通过。
+- Runtime：`47/47`；Project Knowledge `14/14`；Local API `4/4`；Web `14/14`；Extension 生产构建通过。
+- Node 24.14.0：`CI=1 pnpm smoke` 通过；登录 E2E `4/4`；recorded replay `25/25`。
+- Node 20.19.6：强制按 lockfile 重建依赖后 `CI=1 pnpm smoke` 通过。
+- 依赖恢复：最终在 Node 24.14.0 下 `pnpm install --force --frozen-lockfile` 成功，doctor 通过。
+- 安全：`drizzle-orm` 从 `0.38.4` 升级至 `0.45.2`；官方 npm registry `pnpm audit --prod --audit-level high` 报告 0 个已知漏洞。
+- Web 真实界面：默认展示最近运行结果与人话建议；375×812 下无横向溢出；业务视图切换与 `aria-pressed` 状态一致。
+- Electron：开发态 renderer 与 Electron 自持有本地 API 均可启动；before-quit 等待取消持久化、API 排空和单次最终 quit 的时序测试通过。因 `orca` 缺失，未取得桌面 AX 树证据。
+- 阶段结论：UX Foundation 3、4、5 与 P2.5 本地门禁通过；P3/P4 继续冻结，待远端集成分支与 main Node 20/24 CI 会签。

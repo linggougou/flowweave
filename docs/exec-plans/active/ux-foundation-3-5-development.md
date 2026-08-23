@@ -126,3 +126,15 @@ Foundation 5 业务视图
 - `PROJECT_ROUTE_LOCK.md`、活跃计划、`.codex/operations-log.md` 与 `.codex/verification-report.md` 口径一致。
 - 集成提交可 fast-forward 并入 `main`，远端 Node 20/24 CI 双绿。
 - P3/P4 保持冻结，未混入额外需求。
+
+## 8. 完成结果（2026-08-23）
+
+- F3、F4、F5 均经独立 Reviewer 复审并关闭全部 P1；三个 Agent 与 worktree 已回收。
+- 集成补齐运行前确认、高风险勾选、进度订阅、取消入口、终态保护和 HTTP fallback `cancelled` 映射。
+- App 集成合同覆盖所有运行先确认、高风险二次确认、拿到 executionId 后才可取消、卸载清理订阅。
+- Web 真实浏览器检查通过：默认最近结果、业务摘要、原生按钮 `aria-pressed`、375px 窄窗口无横向溢出。
+- Electron `dev:studio` 可启动，`5173` 可访问且本地 API 由 Electron 监听；桌面 AX 自动化因本机缺少 `orca` 未取得窗口树证据，关键退出时序由主进程测试覆盖。
+- 安全审计发现并修复 `drizzle-orm <0.45.2` High 漏洞；升级至 `0.45.2` 后官方 registry 审计为 0 个已知漏洞。
+- Node 24：`CI=1 pnpm smoke`、recorded replay `25/25` 通过。
+- Node 20.19.6：`pnpm install --force --frozen-lockfile` 后 `CI=1 pnpm smoke` 通过；随后已恢复 Node 24 依赖基线。
+- 本计划已满足本地完成定义；归档后等待集成分支与 main 的远端 Node 20/24 CI 会签。
