@@ -5134,3 +5134,10 @@
 - 建议：通过 Track F3 定向验收。
 - 残余风险：尚未在真实 Chrome 中完成侧栏视觉与完整录制旅程，必须在集成验收关闭。
 - 阶段判断：Foundation 3 通过；P2.5 整体仍等待 Foundation 4/5 和跨轨门禁，不允许进入 P3/P4。
+
+### 独立复审补充
+
+- Reviewer 发现“输入名称后直接导出 JSON 未应用新名称”的 P1 测试缺口。
+- 已新增失败合同并修复为导出/同步共用 `persistTaskName()`。
+- 修复后 Extension `34/34`、typecheck 与差异检查通过。
+- P1 已关闭；Foundation 3 定向验收最终结论：通过。

@@ -6936,3 +6936,11 @@
 - 工具替代：`@vitest/coverage-v8` 未安装，原用途为生成覆盖率百分比；遵守“不新增依赖”，以 background/content/session/sidepanel 四层合同、类型检查和生产构建证据替代。
 - 验收结论：Track F3 通过，允许进入集成；真实 Chrome 侧栏旅程保留到跨轨验收。
 - 回收：F3 Agent 已结束，独立 worktree 已移除；本地功能分支暂保留作为审计与回滚引用。
+
+### 2026-08-23 Track F3 独立复审修正
+
+- 独立 Reviewer 发现 P1：完成后在输入框改名并直接导出 JSON 时，旧实现未先持久化名称，导出可能仍使用旧名或“录制流程”。
+- TDD 红灯：新增“直接导出前持久化任务名称”产品合同后，定向测试按预期失败。
+- 修复：抽取 `persistTaskName()`，Studio 同步与 JSON 导出共用同一命名校验/持久化路径；导出仅在命名成功后继续。
+- 复验：Extension `34/34`、typecheck、`git diff --check` 通过。
+- 结论：P1 已关闭，Track F3 验收结论维持通过。

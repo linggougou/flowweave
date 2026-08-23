@@ -249,6 +249,13 @@ async function runSessionAction(message: ExtensionMessage): Promise<SessionState
   return state;
 }
 
+async function persistTaskName(): Promise<SessionState | null> {
+  return runSessionAction({
+    type: MSG_SET_TASK_NAME,
+    name: taskNameEl?.value ?? "",
+  });
+}
+
 async function recordCurrentPageNavigation(): Promise<void> {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   const url = tab?.url ?? "";
@@ -324,6 +331,8 @@ reloadPageBtn?.addEventListener("click", () => {
 
 exportBtn?.addEventListener("click", () => {
   void (async () => {
+    const namedState = await persistTaskName();
+    if (!namedState) return;
     setStatus("正在生成 Flow JSON…");
     const message: ExportFlowMessage = { type: MSG_EXPORT_FLOW };
     const response = (await browser.runtime.sendMessage(message)) as ExportFlowResponse & {
@@ -363,10 +372,7 @@ syncBtn?.addEventListener("click", () => {
       setStatus("请先选择目标项目");
       return;
     }
-    const namedState = await runSessionAction({
-      type: MSG_SET_TASK_NAME,
-      name: taskNameEl?.value ?? "",
-    });
+    const namedState = await persistTaskName();
     if (!namedState) return;
     setStatus("正在保存到 Studio…");
     const message: SyncKnowledgeMessage = {

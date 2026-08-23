@@ -48,4 +48,21 @@ describe("扩展首次连接文案", () => {
     expect(mainSource).toContain("MSG_RESTORE_CLEARED_SESSION");
     expect(mainSource).toContain("MSG_SET_TASK_NAME");
   });
+
+  it("直接导出 JSON 前也会先持久化用户输入的任务名称", () => {
+    const mainSource = readFileSync(
+      fileURLToPath(new URL("../entrypoints/sidepanel/main.ts", import.meta.url)),
+      "utf8",
+    );
+    const exportHandler = mainSource.slice(
+      mainSource.indexOf('exportBtn?.addEventListener("click"'),
+      mainSource.indexOf('clearBtn?.addEventListener("click"'),
+    );
+
+    expect(mainSource).toContain("async function persistTaskName");
+    expect(exportHandler).toContain("await persistTaskName()");
+    expect(exportHandler.indexOf("await persistTaskName()")).toBeLessThan(
+      exportHandler.indexOf("MSG_EXPORT_FLOW"),
+    );
+  });
 });
