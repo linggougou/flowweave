@@ -5272,3 +5272,13 @@
 - Node 20 job `97220571970`：`success`（`3m36s`）。
 - 两条 job 的 frozen install、Chromium、lint 与完整 smoke 全部成功。
 - 阶段判断：代码提交 `7040e76` 的远端双版本门禁通过；等待会签留痕提交自身的最终集成 CI 与 main 双矩阵。
+
+## 2026-08-24 P2.7 远端最终会签与归档
+
+- 最终集成分支提交：`95e9f6d`；GitHub Actions run `32650471905` 成功。
+- 集成 jobs：Node 20 `97221127692`（`3m29s`）、Node 24 `97221127862`（`3m32s`），冻结安装、Chromium、lint 与完整 smoke 全部成功。
+- main 以 fast-forward 从 `e8047fe` 更新至 `95e9f6d`，推送前已 fetch 并验证祖先关系，无 force push。
+- main GitHub Actions run `32650677996` 成功；Node 20 job `97221661397`（`3m34s`）、Node 24 job `97221661503`（`3m20s`）全部成功。
+- 资源复核：仅剩主工作树；本地 P2.7 功能/集成分支已删除；临时目录已移至废纸篓；测试服务端口 `3847`、`5173`、`5174` 均无监听；无运行中的非主 Agent。
+- 最终判断：P2.7 功能、独立总审、定向/全量测试、真实 UI、构建、安全审计、E2E、本地 Node 20/24 与远端集成/main 双矩阵全部通过，可以归档。
+- 路线边界：未新增 Local API / Web destructive capability；Flow/项目/批量/版本删除、可编辑 diff、P3/P4 与 vNext 未混入，继续冻结。

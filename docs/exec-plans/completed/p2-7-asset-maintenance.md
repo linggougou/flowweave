@@ -146,11 +146,11 @@ pnpm audit --prod --audit-level high --registry=https://registry.npmjs.org
 - [x] Studio 确认、失败、补位、空态和异步切换一致。
 - [x] Studio / Web 共享有界安全只读 diff，语义为“历史 vN → 当前任务”。
 - [x] 分轨 TDD、安全审查与 Judge 均 PASS，无未关闭 P0/P1。
-- [ ] Node 24、Node 20、recorded replay `25/25`、portability、安全审计和远端双矩阵通过。
+- [x] Node 24、Node 20、recorded replay `25/25`、portability、安全审计和远端双矩阵通过。
 - [x] P3/P4、vNext、Flow / 项目 / 批量删除和可编辑 diff 未混入。
-- [ ] worktree、分支、临时进程与 Agent 在验收后回收，留痕完整。
+- [x] worktree、分支、临时进程与 Agent 在验收后回收，留痕完整。
 
-当前状态：G1-G5、独立总审、本地 Node 20/24、真实 Web/Studio、安全审计与 E2E 已通过；仅等待集成分支和 main 远端双矩阵，完成前不归档。
+当前状态：G1-G5、独立总审、本地 Node 20/24、真实 Web/Studio、安全审计、E2E、集成分支与 main 远端双矩阵全部通过；功能 worktree、分支、临时进程与 Agent 已回收，计划完成并归档。
 
 ## 7. 回滚策略
 

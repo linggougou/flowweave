@@ -6,9 +6,9 @@
 
 ## 2. 当前阶段
 
-- 生命周期阶段：post-v1 产品化 / 本地资产安全维护（P2.7 进行中）
-- 里程碑编号：P2.7
-- 阶段名称：执行记录安全清理与 Flow 版本只读 Diff
+- 生命周期阶段：post-v1 产品化 / P2.7 已完成，下一阶段路线评估门禁
+- 里程碑编号：P2.7（已完成）
+- 阶段名称：执行记录安全清理与 Flow 版本只读 Diff（已归档）
 - 阶段目标：在不开放匿名破坏性 HTTP 能力、不解冻 AI、深度页面理解或 vNext 编排模型的前提下，让用户可在 Studio 安全删除单条执行记录及其受控运行产物，并在 Studio / Web 只读理解历史版本与当前任务的差异。
 - 可验收交付物：
   - project / execution 单段 ID 白名单与运行目录 containment 合同
@@ -53,7 +53,7 @@
 - 变更批准：用户于 2026-07-16 明确批准按首次用户体验评审调整 post-v1 路线。
 - 阶段切换批准：用户于 2026-08-23 在收到“P2.5 已完成、下一阶段需更新路线锁”的交付说明后明确回复“继续”；本授权解释为进入 post-v1 backlog 的 P2.6，不解释为解冻 P3/P4 或 vNext 产品模型。
 - 阶段切换批准补充：用户于 2026-08-23 在收到“P2.6 已完成；下一阶段拟进行路径安全、执行记录删除 / runs 清理与 Flow 版本只读 diff，尚未开启”的交付说明后再次回复“继续”；本授权解释为进入 P2.7，不解释为开放匿名破坏性 HTTP、Flow / 项目删除、P3/P4 或 vNext 产品模型。
-- 当前状态：P2.7 G1-G5、独立总审、本地 Node 20/24、真实 Web/Studio、安全审计与 E2E 门禁已通过；等待集成分支与 main 远端双矩阵会签后归档。P3/P4 与 vNext 输入节点继续冻结。
+- 当前状态：P2.7 G1-G5、独立总审、本地 Node 20/24、真实 Web/Studio、安全审计、E2E、集成分支与 main 远端双矩阵均已通过并归档。未自动开启下一实施阶段；P3/P4 与 vNext 输入节点继续冻结。
 
 ## 2.1 里程碑路线图
 
@@ -64,7 +64,7 @@
 | P2 可演示纵向切片     | 知识库、执行历史、真实页面稳定性 | project-knowledge、执行日志、诊断 UI、recorded replay 基线 | 可诊断、可复验、主线稳定               | Node 24 `pnpm smoke`、`pnpm e2e:recorded-pages`、相关 Studio 验证；CI 保持 Node 20 / 24 | ✅ 完成   |
 | P2.5 首次体验产品化   | 非技术用户安全完成首次任务       | 内置连接、敏感输入保护、跨端刷新、录制状态、安全运行       | 首次旅程不依赖开发命令且关键风险有守卫 | 分轨测试 + 首次用户手测 + Node 20/24 CI                                                 | ✅ 完成   |
 | P2.6 本地资产可移植   | 安全迁移与维护自动化任务         | 统一导出合同、导入新副本、Studio 文件交互、Web 重命名      | 导出导入运行往返可证且无静默覆盖       | 分轨测试 + 文件往返 E2E + recorded replay + Node 20/24 CI                               | ✅ 完成   |
-| P2.7 本地资产安全维护 | 单条执行清理与版本差异理解       | 路径安全、Studio 受控删除、共享只读 Diff、双端展示         | 删除无越界且 diff 无编辑/串线          | 故障注入 + 双端 UI + recorded replay + Node 20/24 CI                                    | 🟡 进行中 |
+| P2.7 本地资产安全维护 | 单条执行清理与版本差异理解       | 路径安全、Studio 受控删除、共享只读 Diff、双端展示         | 删除无越界且 diff 无编辑/串线          | 故障注入 + 双端 UI + recorded replay + Node 20/24 CI                                    | ✅ 完成   |
 | P3 完整框架扩展       | 深度页面 / 接口理解              | page-intelligence、network-intelligence 深化能力           | 明确场景与回归面后再开放               | 待路线解冻                                                                              | ⏸ 冻结    |
 | P4 产品落地           | AI 编排与智能增强                | ai-orchestrator、AI 产品入口                               | 不影响现有稳定主线                     | 待路线解冻                                                                              | ⏸ 冻结    |
 
@@ -73,8 +73,8 @@
 - PRD：[`docs/superpowers/specs/2026-05-25-web-automation-platform-design.md`](./docs/superpowers/specs/2026-05-25-web-automation-platform-design.md)
 - 当前主路线：[`docs/superpowers/plans/2026-05-26-run-first-roadmap.md`](./docs/superpowers/plans/2026-05-26-run-first-roadmap.md)
 - 用户旅程：[`docs/guides/quickstart.md`](./docs/guides/quickstart.md)、[`docs/guides/manual-qa.md`](./docs/guides/manual-qa.md)
-- 当前执行计划：[`docs/exec-plans/active/p2-7-asset-maintenance.md`](./docs/exec-plans/active/p2-7-asset-maintenance.md)
-- 最近完成计划：[`docs/exec-plans/completed/p2-6-portability-assets.md`](./docs/exec-plans/completed/p2-6-portability-assets.md)
+- 当前执行计划：[`docs/exec-plans/active/post-v1-development-roadmap.md`](./docs/exec-plans/active/post-v1-development-roadmap.md)；当前仅允许下一低风险 backlog 的评估与变更分流，不代表已进入实施
+- 最近完成计划：[`docs/exec-plans/completed/p2-7-asset-maintenance.md`](./docs/exec-plans/completed/p2-7-asset-maintenance.md)
 - 非目标：AI 智能编排、云端协作、未纳入当前路线的深度分析能力
 
 ## 4. 设计真源
@@ -131,12 +131,12 @@
 
 ## 8. 变更入口
 
-- Backlog：`docs/exec-plans/active/post-v1-development-roadmap.md`；当前 P2.7 以 `docs/exec-plans/active/p2-7-asset-maintenance.md` 为实施真源
+- Backlog：`docs/exec-plans/active/post-v1-development-roadmap.md`；P2.7 实施真源已归档至 `docs/exec-plans/completed/p2-7-asset-maintenance.md`
 - Change Request：新增需求先进入路线计划或专门变更文档，再决定是否实施
 - 当前阶段缺口：
-  - 路径与删除核心、Studio 删除接线、共享 diff 和双端接线尚待分轨实施与验收
+  - P2.7 无未关闭实现或验收缺口；下一实施阶段尚未选择
 - 后续阶段需求：
-  - P2.7 完成后再评估下一项低风险 post-v1 backlog
+  - 评估下一项低风险 post-v1 backlog，并先更新路线锁与阶段真源
   - Flow 删除或批量资产清理
   - vNext 任务模板输入节点、编辑模型与暂停/继续协议
   - P3 深度 page / network intelligence

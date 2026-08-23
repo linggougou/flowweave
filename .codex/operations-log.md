@@ -7181,3 +7181,12 @@
 - Node 20 job `97220571970`：`success`，`3m36s`。
 - 两条矩阵均完成冻结安装、Playwright Chromium、lint 与完整 smoke。
 - 当前仅剩：包含本会签留痕的最终集成提交双绿、main fast-forward 与 main 双矩阵；完成前不归档。
+
+### 2026-08-24 P2.7 最终远端会签、归档与资源回收
+
+- 最终集成分支 run `32650471905` 成功：Node 20 job `97221127692`（`3m29s`）、Node 24 job `97221127862`（`3m32s`）均完成冻结安装、Playwright Chromium、lint 与完整 smoke。
+- 推送前重新 fetch，确认 `origin/main=e8047fe` 为集成提交 `95e9f6d` 的祖先；切换 `main` 后以 `git merge --ff-only` 快进并非强制推送，未覆盖远端并行提交。
+- main run `32650677996` 成功：Node 20 job `97221661397`（`3m34s`）、Node 24 job `97221661503`（`3m20s`）均完成冻结安装、Playwright Chromium、lint 与完整 smoke。
+- 回收：确认仅剩主工作树且工作区 clean；删除 5 条已并回功能分支与本地集成分支；P2.7 临时基线目录移动至废纸篓 `/Users/ling/.Trash/flowweave-tmp-p27-baseline-20260824`，可恢复；`3847`、`5173`、`5174` 无监听。
+- Agent：G3/G4 Judge 已中断回收，G5 总审已完成；无仍在执行的非主 Agent。
+- 生命周期：P2.7 S7 会签完成，执行计划从 `active` 迁移至 `completed`；post-v1 总路线继续保留 active，但未自动开启下一阶段。P3/P4 与 vNext 继续冻结。
