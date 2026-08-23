@@ -19,7 +19,8 @@
 ## 与知识库关系
 
 - **SQLite**（`store.sqlite`）仅存：执行元数据、步骤状态、`screenshot_path` 等**路径字符串**，不存 BLOB。
-- Studio / Web 步骤表展示路径；Studio v1 支持点击路径用系统默认应用打开截图。
+- Studio renderer 不接收或展示这些绝对路径。用户可在 Studio 的“运行记录 → 专业诊断”中点击“步骤截图”，由 Electron 主进程根据项目、执行和步骤业务标识推导固定 `step-<N>.png`，完成归属、文件类型、大小、PNG 头和读取期间身份校验后，以短生命周期 Blob URL 只读内嵌预览。
+- Web / Local API 不提供运行产物文件读取能力；页面摘要与诊断信息只以结构化数据展示，HAR 仍仅供本机人工排查。
 
 ## 清理
 

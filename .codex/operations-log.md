@@ -7200,3 +7200,18 @@
 - 缺失工具：Orca CLI。原用途：按 orchestration skill 进行多 Agent / worktree 调度。替代流程：Codex 原生 Sub-Agent + Git worktree + 主代理集成与独立 Judge；替代结果：三路只读审计完成，后续仍按独立 worktree 与审查门禁执行。
 - 开发前基线：Node `24.14.0`、pnpm `9.15.4`；`@flowweave/ui` `14/14`、`@flowweave/app-studio` `184/184`，全部通过。
 - 已更新 `PROJECT_ROUTE_LOCK.md`、post-v1 总路线，创建 P2.8 活跃执行计划与上下文摘要；只允许进入 G1/G2，不允许扩大阶段。
+
+## 2026-08-24 P2.8 G1-G3 实施、复审与本地总验收
+
+- G1 `project-knowledge`：新增受控截图解析，只按真实 project / execution / step 推导 `step-N.png`；覆盖单段 ID、归属、普通文件、symlink / hardlink、8 MiB、PNG signature / IHDR、8192 边长、4000 万像素及文件和目录 TOCTOU。初审因缺少 run directory 身份漂移证据判 `REVISE`，补测后复审 `PASS 100/100`。
+- G2 renderer：新增只读截图 dialog，覆盖 loading / available / unavailable、Blob-only 图片来源、alt、Escape、关闭与焦点恢复；独立 Judge `PASS`。
+- G3 Electron / App：移除 renderer `openPath` 和 `shell.openPath`；固定业务 ID IPC，严格校验 own keys、prototype、main window / main frame / renderer origin；启用 sandbox、生产 / 开发分离 CSP、导航与新窗口拒绝；App 统一以 project / flow / execution / generation 守卫所有成功、缺失和异常迟到响应。初审发现切换上下文后的迟到 reject 竞态并判 `REVISE`，修复后复审 `PASS 100/100`。
+- 结构化诊断与页面摘要继续只读取受控 run 目录中的固定 JSON，未新增 Web / Local API / 扩展文件能力，也未混入 HAR / DOM 预览、P3/P4 或 vNext。
+- 分轨实现与 Judge worktree 均在确认补丁已进入集成分支后回收；功能 Agent 已完成或中断，无仍在运行的实现 Agent。
+- Node 24.14.0：`pnpm lint`、`CI=1 pnpm smoke`、Studio `209/209`、project-knowledge `85/85`、登录 `4/4`、recorded replay `25/25`（`48315ms`）、portability warnings=`4` / steps=`10`、官方 registry 生产依赖审计均通过。
+- 真实 Electron：通过 Playwright Electron 启动生产构建，选择已有真实执行并展开专业诊断；截图以 `blob:file:` 加载，尺寸 `2400×1802`，alt 和弹窗文案正确；页面不含绝对路径、project ID 或 execution ID；Escape 关闭并回焦原“步骤截图”按钮。
+- `computer-use` 技能运行时缺失：当前终端未提供 `ORCA_CLI_COMMAND` / `ORCA_DEV_REPO_ROOT`，也无 `orca` 可执行文件。原用途为真实桌面可见 UI 操作；替代为项目既有 `playwright` 的 ElectronApplication 直接启动真实 Electron 窗口并检查 DOM、图片像素与焦点，替代验证通过。
+- Node 版本陷阱：首次 `nvm use 20.19.6` 被 `~/.local/bin/node` shim 抢占，实际仍为 24.14.0，因此未计入双版本证据；随后把 `/Users/ling/.nvm/versions/node/v20.19.6/bin` 显式置于 PATH 首位，并以 `process.execPath` 复核后重新执行。
+- Node 20.19.6：按 lockfile 强制重建后，`pnpm turbo typecheck test build --force` 为 `39/39`、`0 cached`；Studio `209/209`、project-knowledge `85/85`、登录 `4/4`、portability warnings=`4` / steps=`10` 全通过。
+- 环境恢复：Node 24.14.0 下再次按 lockfile 强制安装，Studio `209/209`、生产构建、Electron 严格签名与 native binding 均通过。
+- 阶段判断：本地 DoD 已通过；进入 G4 独立集成总审，之后仍须集成分支和 main 的远端 Node 20 / 24 双矩阵连续为绿色才能归档。

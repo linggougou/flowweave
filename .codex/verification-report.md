@@ -5291,3 +5291,40 @@
 - `pnpm --filter @flowweave/app-studio test`：`38` files / `184` tests，全通过。
 - 安全基线：确认现有 `openPath(filePath)` 为 renderer 任意路径能力；安全审计初判 REVISE。P2.8 计划已修订为固定业务 ID IPC、main-frame / 来源校验、sandbox / CSP / 导航硬门、`8 MiB` 与 PNG IHDR / 像素校验、可回收 Blob URL；完成前不得把本地 bytes 开放给 renderer。
 - 阶段判断：基线稳定，路线和安全合同冻结后可进入 G1/G2 分轨 TDD；P3/P4、vNext、Web / Local API 文件服务继续冻结。
+
+## 2026-08-24 P2.8 本地实现与双 Node 总验收
+
+### 安全与分轨审查
+
+- G1 受控截图 resolver：初审 `REVISE 88/100`，补 run-directory 身份漂移故障注入后复审 `PASS 100/100`。
+- G2 只读预览组件：独立 Judge `PASS`。
+- G3 Electron / Studio 集成：初审 `REVISE 84/100`，补完整上下文守卫和迟到 reject 回归后复审 `PASS 100/100`。
+- 最终实现不信任数据库 artifact path，不向 renderer 暴露通用路径能力；固定 PNG、大小 / 维度 / 像素、symlink / hardlink、文件类型与 TOCTOU 均 fail closed。
+
+### Node 24.14.0
+
+- `pnpm lint`：13/13 任务通过。
+- `CI=1 pnpm smoke`：doctor、typecheck、全量 test、生产 build 与登录 `4/4` 全通过。
+- `pnpm e2e:recorded-pages`：`25/25`，总耗时 `48315ms`。
+- `pnpm e2e:portability`：warnings=`4`、steps=`10`，通过。
+- `pnpm audit --prod --audit-level high --registry=https://registry.npmjs.org`：`No known vulnerabilities found`。
+- 定向复核：Studio `40` files / `209` tests；project-knowledge `5` files / `85` tests；Studio 生产构建通过。
+
+### 真实 Electron
+
+- 使用仓库 `playwright` 的 ElectronApplication 启动 `apps/studio` 生产构建，加载真实本地项目与执行记录。
+- “专业诊断 → 步骤截图”弹窗成功加载 `blob:file:` 图片，natural size=`2400×1802`；alt=`第 1 步“navigate”的执行截图`。
+- 页面正文不含本机绝对路径、目标 project ID 或 execution ID。
+- Escape 关闭弹窗，焦点恢复到原“步骤截图”按钮。
+- Orca / `computer-use` CLI 不可用，已按全局协议记录缺失及上述等价替代；不把工具缺失包装为 Orca 验收成功。
+
+### Node 20.19.6
+
+- 显式将 `/Users/ling/.nvm/versions/node/v20.19.6/bin` 置于 PATH 首位，并以 `process.execPath` 确认真实版本，排除用户目录 Node shim 干扰。
+- 冻结 lockfile 强制重建后，`pnpm turbo typecheck test build --force`：`39/39` successful、`0 cached`。
+- 其中 Studio `209/209`、project-knowledge `85/85`；真实登录 `4/4`；portability warnings=`4`、steps=`10`，全部通过。
+
+### 环境恢复与结论
+
+- Node 24.14.0 冻结安装恢复完成；Studio `209/209`、生产构建、Electron bundle 严格签名和 Electron 专用 `better-sqlite3` binding 均通过。
+- 本地结论：通过；无未关闭 P0/P1。等待 G4 独立集成总审、集成分支与 main 的远端 Node 20 / 24 双矩阵后归档。

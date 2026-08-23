@@ -107,16 +107,16 @@ pnpm audit --prod --audit-level high --registry=https://registry.npmjs.org
 
 ## 6. Definition of Done
 
-- [ ] renderer 不再拥有通用 `openPath`，截图请求和响应均不含本机绝对路径。
-- [ ] 受控 resolver 不信任 SQLite artifact path，跨项目、symlink / hardlink、类型、signature / IHDR、大小 / 像素和 TOCTOU 全部 fail closed。
-- [ ] Studio 内可只读查看成功与失败执行的步骤截图，缺失或拒绝有明确状态。
-- [ ] 预览可键盘关闭、恢复焦点，快速切换和删除不会串图。
-- [ ] Web / Local API / 扩展、HAR / DOM、P3/P4、vNext 与破坏性能力未混入。
-- [ ] 分轨 TDD、安全审查与 Judge 均 PASS，无未关闭 P0/P1。
+- [x] renderer 不再拥有通用 `openPath`，截图请求和响应均不含本机绝对路径。
+- [x] 受控 resolver 不信任 SQLite artifact path，跨项目、symlink / hardlink、类型、signature / IHDR、大小 / 像素和 TOCTOU 全部 fail closed。
+- [x] Studio 内可只读查看成功与失败执行的步骤截图，缺失或拒绝有明确状态。
+- [x] 预览可键盘关闭、恢复焦点，快速切换和删除不会串图。
+- [x] Web / Local API / 扩展、HAR / DOM、P3/P4、vNext 与破坏性能力未混入。
+- [x] 分轨 TDD、安全审查与 Judge 均 PASS，无未关闭 P0/P1。
 - [ ] Node 24、Node 20、recorded replay `25/25`、portability、安全审计和远端双矩阵通过。
 - [ ] worktree、分支、临时进程与 Agent 在验收后回收，留痕完整。
 
-当前状态：G0 路线、合同和开发前基线已冻结；准备进入 G1 / G2 并行 TDD。
+当前状态：G0-G3 实现与分轨复审完成；G1、G2、G3 Judge 均 PASS。Node 24 本地主门禁、recorded replay `25/25`、可移植往返、生产依赖审计、真实 Electron 和 Node 20.19.6 无缓存矩阵均通过；等待 G4 独立集成总审及远端集成分支 / main Node 20、24 双矩阵。
 
 ## 7. 回滚策略
 
