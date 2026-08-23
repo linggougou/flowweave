@@ -7040,3 +7040,13 @@
 - HTTP：新增独立 `POST /api/projects/:projectId/flow-imports`，保留原 sync/upsert 语义；原始 body 恰好 1 MiB 可用、超 1 字节为结构化 413。
 - 独立安全复验：`../escape` 被 `PROJECT_NOT_FOUND` 拒绝且未创建越界数据库；raw chunked 超限后同一 keep-alive health 仍为 200，413 仅返回一次、零写入、无双响应。
 - 主代理复验：project-knowledge `18/18`、local-api `8/8`，两包 typecheck/lint/build 通过；首次并行验证因 local-api 读取旧 knowledge `dist` 出现预期依赖竞态，按 Turborepo 依赖顺序完成 knowledge build 后串行复验全绿，未掩盖失败。
+
+### 2026-08-23 Track G3 Extension 安全导出验收与回收
+
+- Agent：`/root/audit_web_assets`；独立 Reviewer：`/root/audit_portability`；worktree：`flowweave-worktrees/p26-extension-export`。
+- 交付：`1b610e9 feat(extension): 复用可移植 Flow 导出合同`、`e9cc861 fix(extension): 校验导出响应后再下载`、`63a75da fix(extension): 封闭导出响应信任边界`、`3008d0f fix(extension): 重序列化已校验导出文档`；集成提交为 `46c0b94`、`f85c8a7`、`f47fc73`、`dca227c`。
+- 公共合同：background 复用 `createPortableFlowDocument`，下载文件保持裸 schemaVersion 1 FlowDocument；warnings 只作为结构化响应与用户摘要，不进入文件。
+- 独立审查三轮返工关闭：未校验跨上下文响应、hostile getter/Proxy 与换值 TOCTOU、伪造 warning code/错误消息泄漏、Zod strip 后仍下载原始嵌套未知字段。
+- 最终边界：响应字段单次读取并快照，warning code 受控，校验/下载异常使用固定文案；下载 JSON 仅由 `parseFlowDocument` 的规范化结果重序列化，未知嵌套字段不能旁路进入文件。
+- UI 文案：只声明“已触发 JSON 下载”，按真实 warning 数提示，并始终提醒继续检查业务文本；不宣称完全匿名化或最终保存成功。
+- 最终复审：PASS，无 P0/P1；主代理复验 Extension `76/76`、typecheck、lint、build、diff-check 全绿；sidepanel 70.79 kB、扩展总计 234.38 kB，无新增依赖或 P1 包体风险。
