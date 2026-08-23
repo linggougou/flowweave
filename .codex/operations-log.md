@@ -7050,3 +7050,14 @@
 - 最终边界：响应字段单次读取并快照，warning code 受控，校验/下载异常使用固定文案；下载 JSON 仅由 `parseFlowDocument` 的规范化结果重序列化，未知嵌套字段不能旁路进入文件。
 - UI 文案：只声明“已触发 JSON 下载”，按真实 warning 数提示，并始终提醒继续检查业务文本；不宣称完全匿名化或最终保存成功。
 - 最终复审：PASS，无 P0/P1；主代理复验 Extension `76/76`、typecheck、lint、build、diff-check 全绿；sidepanel 70.79 kB、扩展总计 234.38 kB，无新增依赖或 P1 包体风险。
+
+### 2026-08-23 Track G5 Studio 文件导入导出验收与回收
+
+- Agent：`/root/p26_portability_core`；独立 Reviewer：`/root/audit_release_scope`；worktree：`flowweave-worktrees/p26-studio-portability`。
+- 交付：`d9da25a feat(studio): 支持安全导入导出 Flow JSON`、`9b42b4a fix(studio): 收紧 Flow 文件操作边界`、`7e24bc6 fix(studio): 在文件导入前校验项目`；集成提交为 `512a1f8`、`92fd37a`、`9869575`。
+- IPC/文件边界：renderer 仅传 projectId/flowId；主进程独占系统文件对话框，取消为正常可判别状态；导入使用 `O_NOFOLLOW | O_NONBLOCK` 与同一 handle `stat()` 拒绝 symlink、目录和 FIFO，并以 1 MiB+1 探针限制读取。
+- 资源门禁：单段资源 ID 白名单在副作用前拒绝 traversal/编码/控制字符/对象输入；导入与导出均先从全局项目索引验证目标真实存在，ghost project 不进入 dialog/fs/目标仓库。
+- 语义：开发态调用 G2 专用 endpoint，打包态调用同一 repository `importFlow`；绝不走普通 save/upsert。导出复用 G1 公共合同并写 pretty bare FlowDocument。
+- UI：原生文件 capability 仅 Electron 为 true，Browser fallback 不展示可点击入口；同项目切换任务时已持久化导入仍刷新侧栏，但不抢回当前选择，项目切换则丢弃旧响应。
+- 独立审查两轮返工关闭 5 个 P1：路径越界、符号链接、同项目异步列表陈旧、Browser 能力误报，以及 ghost import 在项目门禁前弹窗/读文件。
+- 最终复审：PASS，无 P0/P1；主代理复验 Studio `167/167`、typecheck、lint、build、diff-check 全绿。系统原生 dialog 的真实人机点击保留到 G6 集成烟测。
