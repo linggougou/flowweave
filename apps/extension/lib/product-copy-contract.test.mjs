@@ -18,4 +18,34 @@ describe("扩展首次连接文案", () => {
     expect(mainSource).toContain("未连接织流 Studio");
     expect(htmlSource).toContain("保存到 Studio");
   });
+
+  it("侧栏提供完整录制状态机、完成预览、命名保存与清空恢复入口", () => {
+    const mainSource = readFileSync(
+      fileURLToPath(new URL("../entrypoints/sidepanel/main.ts", import.meta.url)),
+      "utf8",
+    );
+    const htmlSource = readFileSync(
+      fileURLToPath(new URL("../entrypoints/sidepanel/index.html", import.meta.url)),
+      "utf8",
+    );
+
+    for (const id of [
+      "start-btn",
+      "pause-btn",
+      "resume-btn",
+      "complete-btn",
+      "step-preview",
+      "target-sites",
+      "task-name",
+      "restore-btn",
+    ]) {
+      expect(htmlSource).toContain(`id="${id}"`);
+    }
+    expect(htmlSource).toContain("开始录制");
+    expect(htmlSource).toContain("完成录制");
+    expect(htmlSource).toContain("确认名称并保存到 Studio");
+    expect(mainSource).toContain("window.confirm");
+    expect(mainSource).toContain("MSG_RESTORE_CLEARED_SESSION");
+    expect(mainSource).toContain("MSG_SET_TASK_NAME");
+  });
 });
