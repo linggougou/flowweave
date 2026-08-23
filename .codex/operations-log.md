@@ -7010,3 +7010,14 @@
   - G4：`flowweave-worktrees/p26-web-rename` / `codex/p26-web-rename`，独占 `apps/web/**`。
 - 并行约束：两轨必须 TDD 先红后绿，不新增依赖，不跨越文件所有权，不回退其他 Agent 改动。
 - 后续 DAG：G1 合入后，从同一公共合同基线创建 G2 knowledge/local-api 与 G3 extension；G2 稳定后再创建 G5 Studio。
+
+### 2026-08-23 Track G4 Web 任务重命名验收与回收
+
+- Agent：复用 `/root/audit_web_assets`；worktree：`flowweave-worktrees/p26-web-rename`。
+- 交付：`1875410 feat(web): 补齐自动化任务重命名`、`5229ef5 fix(web): 同步异步重命名侧栏缓存`；集成提交为 `f654fad`、`1ab3ad9`。
+- TDD：首轮新增 7 项合同均因缺失 API/入口红灯；最终 Web `21/21`，typecheck、lint、build 与 `git diff --check` 通过。
+- 独立审查首轮发现 1 个 P1：同项目切换任务时，服务端改名成功但侧栏可能保留旧缓存。
+- 返工：同项目最新成功响应始终按 flowId 更新列表；当前标题与编辑态继续受选择/requestId 守卫；新增侧栏与当前标题并行断言。
+- 复审：PASS，无新增 P0/P1；主代理在集成分支复验 Web `21/21`、typecheck、lint、build 通过。
+- 临时环境：系统 `/var` 曾报告 ENOSPC，测试改用 worktree 内 TMPDIR；未清理用户文件，Agent 自建临时目录已移除。
+- 回收：G4 worktree 已移除；功能分支因 cherry-pick 导致 `git branch -d` 不认为祖先，待确认集成状态后使用已记录 SHA 清理引用。
