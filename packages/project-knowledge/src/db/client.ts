@@ -139,6 +139,24 @@ export function openProjectDatabase(
   return { db, sqlite, storePath };
 }
 
+/** 只读打开已存在的项目库；不会创建目录、文件或执行迁移。 */
+export function openExistingProjectDatabaseReadOnly(
+  projectId: string,
+  dataDir = "~/.flowweave/projects",
+  options: ProjectDatabaseNativeOptions = {},
+): { db: ProjectDatabase; sqlite: Database.Database; storePath: string } {
+  const storePath = resolveProjectStorePath(projectId, dataDir);
+  const databaseOptions: Database.Options = {
+    readonly: true,
+    fileMustExist: true,
+    ...(options.nativeBinding ? { nativeBinding: options.nativeBinding } : {}),
+  };
+  const sqlite = new Database(storePath, databaseOptions);
+  sqlite.pragma("query_only = ON");
+  sqlite.pragma("foreign_keys = ON");
+  return { db: drizzle(sqlite, { schema }), sqlite, storePath };
+}
+
 /** 关闭数据库连接 */
 export function closeProjectDatabase(sqlite: Database.Database): void {
   sqlite.close();

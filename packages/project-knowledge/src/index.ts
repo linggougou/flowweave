@@ -3,7 +3,7 @@ export const PROJECT_KNOWLEDGE_PHASE = "P2" as const;
 export {
   getDefaultDataDir,
   resolveRunDirectory,
-  ensureRunDirectory,
+  assertSafeResourceId,
 } from "./paths.js";
 export type {
   ProjectRef,
@@ -15,6 +15,7 @@ export type {
   ExecutionResult,
   ExecutionVariableValue,
   ExecutionWithProject,
+  ExecutionDeletionResult,
   StepLog,
 } from "./types.js";
 export { ProjectKnowledgeRepository } from "./repository.js";

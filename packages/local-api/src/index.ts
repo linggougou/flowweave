@@ -204,13 +204,27 @@ export async function handleKnowledgeApiRequest(
     }
 
     if (segments[3] === "runs" && segments.length === 4 && method === "POST") {
-      const body = (await readJsonBody(req)) as { executionId?: string };
-      if (!body.executionId) {
-        sendJson(res, 400, { error: "缺少 executionId" });
-        return true;
+      try {
+        const body = await readJsonBody(req);
+        const executionId =
+          body && typeof body === "object" && !Array.isArray(body)
+            ? (body as { executionId?: unknown }).executionId
+            : undefined;
+        if (typeof executionId !== "string" || !executionId) {
+          sendApiError(res, 400, "INVALID_RUN_REQUEST", "运行目录请求无效");
+          return true;
+        }
+        const artifactDir = repo.allocateRunDirectory(projectId, executionId);
+        sendJson(res, 200, { artifactDir });
+      } catch (error: unknown) {
+        if (error instanceof FlowWeaveError && error.code === "PROJECT_NOT_FOUND") {
+          sendApiError(res, 404, "PROJECT_NOT_FOUND", "目标项目不存在");
+        } else if (error instanceof FlowWeaveError && error.code === "VALIDATION_FAILED") {
+          sendApiError(res, 400, "INVALID_RUN_REQUEST", "运行目录请求无效");
+        } else {
+          sendApiError(res, 500, "RUN_ALLOCATION_FAILED", "运行目录分配失败");
+        }
       }
-      const artifactDir = repo.allocateRunDirectory(projectId, body.executionId);
-      sendJson(res, 200, { artifactDir });
       return true;
     }
 

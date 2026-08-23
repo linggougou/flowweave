@@ -1,5 +1,16 @@
 import { randomUUID } from "node:crypto";
-import { readdirSync, statSync } from "node:fs";
+import {
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  renameSync,
+  rmdirSync,
+  statSync,
+  unlinkSync,
+  type Dirent,
+  type Stats,
+} from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 
 import type { FlowDocument } from "@flowweave/flow-dsl";
 import { createPortableFlowDocument, parseFlowDocument } from "@flowweave/flow-dsl";
@@ -9,17 +20,19 @@ import { FlowWeaveError } from "@flowweave/shared";
 import {
   closeProjectDatabase,
   expandHomePath,
+  openExistingProjectDatabaseReadOnly,
   openProjectDatabase,
   type ProjectDatabaseNativeOptions,
   resolveProjectStorePath,
 } from "./db/client.js";
-import { ensureRunDirectory } from "./paths.js";
+import { assertSafeResourceId, resolveRunDirectory } from "./paths.js";
 import * as dbSchema from "./db/schema.js";
 import type { PageSnapshotSummary } from "@flowweave/page-intelligence";
 
 import type {
   ExecutionRunContext,
   ExecutionResult,
+  ExecutionDeletionResult,
   ExecutionWithProject,
   FlowImportResult,
   FlowVersionRecord,
@@ -38,6 +51,125 @@ const EXECUTION_ENVIRONMENT_NAME_COLUMN = "environment_name";
 const EXECUTION_BASE_URL_COLUMN = "base_url";
 const EXECUTION_STORAGE_STATE_PATH_COLUMN = "storage_state_path";
 const EXECUTION_VARIABLES_JSON_COLUMN = "variables_json";
+const RUN_ARTIFACT_NAME_PATTERNS = [
+  /^network\.har$/,
+  /^step-\d+\.png$/,
+  /^page-\d+\.json$/,
+  /^step-\d+-diagnostic\.json$/,
+] as const;
+const PAGE_SNAPSHOT_NAME_PATTERN = /^page-\d+\.json$/;
+
+type FileIdentity = {
+  dev: number;
+  ino: number;
+  mode: number;
+};
+
+class MissingLocalPathError extends Error {}
+
+function isMissingPathError(error: unknown): boolean {
+  return error instanceof MissingLocalPathError;
+}
+
+function invalidLocalAsset(message: string): FlowWeaveError {
+  return new FlowWeaveError("VALIDATION_FAILED", message);
+}
+
+function assertDirectoryWithoutSymlink(path: string, label: string): FileIdentity {
+  let stats: Stats;
+  try {
+    stats = lstatSync(path);
+  } catch (error: unknown) {
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      (error as NodeJS.ErrnoException).code === "ENOENT"
+    ) {
+      throw new MissingLocalPathError();
+    }
+    throw new FlowWeaveError("UNKNOWN", `${label}不可访问`);
+  }
+  if (stats.isSymbolicLink() || !stats.isDirectory()) {
+    throw invalidLocalAsset(`${label}结构不安全`);
+  }
+  return { dev: stats.dev, ino: stats.ino, mode: stats.mode };
+}
+
+function assertRegularFileWithoutSymlink(path: string, label: string): FileIdentity {
+  let stats: Stats;
+  try {
+    stats = lstatSync(path);
+  } catch (error: unknown) {
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      (error as NodeJS.ErrnoException).code === "ENOENT"
+    ) {
+      throw new MissingLocalPathError();
+    }
+    throw new FlowWeaveError("UNKNOWN", `${label}不可访问`);
+  }
+  if (stats.isSymbolicLink() || !stats.isFile()) {
+    throw invalidLocalAsset(`${label}结构不安全`);
+  }
+  return { dev: stats.dev, ino: stats.ino, mode: stats.mode };
+}
+
+function assertSameDirectoryIdentity(path: string, expected: FileIdentity, label: string): void {
+  const actual = assertDirectoryWithoutSymlink(path, label);
+  if (
+    actual.dev !== expected.dev ||
+    actual.ino !== expected.ino ||
+    actual.mode !== expected.mode
+  ) {
+    throw invalidLocalAsset(`${label}在维护期间发生变化`);
+  }
+}
+
+function assertSameFileIdentity(path: string, expected: FileIdentity, label: string): void {
+  const actual = assertRegularFileWithoutSymlink(path, label);
+  if (
+    actual.dev !== expected.dev ||
+    actual.ino !== expected.ino ||
+    actual.mode !== expected.mode
+  ) {
+    throw invalidLocalAsset(`${label}在维护期间发生变化`);
+  }
+}
+
+function assertSafeRunArtifacts(runDirectory: string): void {
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(runDirectory, { withFileTypes: true });
+  } catch {
+    throw invalidLocalAsset("运行产物在维护期间发生变化，已停止删除");
+  }
+  for (const entry of entries) {
+    if (!RUN_ARTIFACT_NAME_PATTERNS.some((pattern) => pattern.test(entry.name))) {
+      throw invalidLocalAsset("运行产物包含未识别条目，已停止删除");
+    }
+    let stats: Stats;
+    try {
+      stats = lstatSync(join(runDirectory, entry.name));
+    } catch {
+      throw invalidLocalAsset("运行产物在维护期间发生变化，已停止删除");
+    }
+    if (stats.isSymbolicLink() || !stats.isFile()) {
+      throw invalidLocalAsset("运行产物包含非普通文件，已停止删除");
+    }
+  }
+}
+
+function snapshotBelongsToRun(snapshotPath: string | null, runDirectory: string): boolean {
+  if (!snapshotPath) {
+    return false;
+  }
+  const normalized = resolve(snapshotPath);
+  return (
+    dirname(normalized) === runDirectory &&
+    PAGE_SNAPSHOT_NAME_PATTERN.test(basename(normalized))
+  );
+}
 
 function parseExecutionStatus(status: string): ExecutionResult["status"] {
   return EXECUTION_STATUSES.includes(status as ExecutionResult["status"])
@@ -206,15 +338,109 @@ export class ProjectKnowledgeRepository {
   private readonly databaseOptions: ProjectDatabaseNativeOptions;
 
   constructor(options: ProjectKnowledgeRepositoryOptions = {}) {
-    this.dataDir = expandHomePath(options.dataDir ?? "~/.flowweave/projects");
+    this.dataDir = resolve(expandHomePath(options.dataDir ?? "~/.flowweave/projects"));
     this.databaseOptions = {
       nativeBinding: options.nativeBinding,
     };
   }
 
+  /** @internal 仅供故障注入测试覆盖 rename 后身份漂移。 */
+  protected verifyQuarantinedRunIdentity(path: string, expected: FileIdentity): void {
+    assertSameDirectoryIdentity(path, expected, "隔离运行目录");
+  }
+
+  /** @internal 仅供故障注入测试覆盖提交后的清理失败。 */
+  protected beforeQuarantinedArtifactCleanup(): void {}
+
   /** 为单次执行创建 `runs/<executionId>/` 目录 */
   allocateRunDirectory(projectId: string, executionId: string): string {
-    return ensureRunDirectory(this.dataDir, projectId, executionId);
+    assertSafeResourceId(projectId, "项目标识");
+    assertSafeResourceId(executionId, "执行标识");
+    const { projectDirectory, projectIdentity } = this.assertExistingProject(projectId);
+    const runsDirectory = join(projectDirectory, "runs");
+
+    try {
+      assertDirectoryWithoutSymlink(runsDirectory, "运行目录根");
+    } catch (error: unknown) {
+      if (!isMissingPathError(error)) {
+        throw error;
+      }
+      assertSameDirectoryIdentity(projectDirectory, projectIdentity, "项目目录");
+      try {
+        mkdirSync(runsDirectory);
+      } catch {
+        throw new FlowWeaveError("UNKNOWN", "创建运行目录根失败");
+      }
+    }
+
+    assertSameDirectoryIdentity(projectDirectory, projectIdentity, "项目目录");
+    assertDirectoryWithoutSymlink(runsDirectory, "运行目录根");
+    const runDirectory = resolveRunDirectory(this.dataDir, projectId, executionId);
+    try {
+      mkdirSync(runDirectory);
+    } catch (error: unknown) {
+      if (!(
+        error instanceof Error &&
+        "code" in error &&
+        (error as NodeJS.ErrnoException).code === "EEXIST"
+      )) {
+        throw new FlowWeaveError("UNKNOWN", "创建单次运行目录失败");
+      }
+    }
+    assertDirectoryWithoutSymlink(runDirectory, "单次运行目录");
+    return runDirectory;
+  }
+
+  private assertExistingProject(projectId: string): {
+    projectDirectory: string;
+    projectIdentity: FileIdentity;
+    storePath: string;
+    storeIdentity: FileIdentity;
+  } {
+    assertSafeResourceId(projectId, "项目标识");
+    const projectDirectory = dirname(resolveProjectStorePath(projectId, this.dataDir));
+    const storePath = resolveProjectStorePath(projectId, this.dataDir);
+
+    let projectIdentity: FileIdentity;
+    let storeIdentity: FileIdentity;
+    try {
+      projectIdentity = assertDirectoryWithoutSymlink(projectDirectory, "项目目录");
+      storeIdentity = assertRegularFileWithoutSymlink(storePath, "项目数据文件");
+    } catch (error: unknown) {
+      if (isMissingPathError(error)) {
+        throw new FlowWeaveError("PROJECT_NOT_FOUND", "目标项目不存在");
+      }
+      throw error;
+    }
+
+    let readonlyDatabase: ReturnType<typeof openExistingProjectDatabaseReadOnly> | undefined;
+    try {
+      readonlyDatabase = openExistingProjectDatabaseReadOnly(
+        projectId,
+        this.dataDir,
+        this.databaseOptions,
+      );
+      assertSameDirectoryIdentity(projectDirectory, projectIdentity, "项目目录");
+      assertSameFileIdentity(storePath, storeIdentity, "项目数据文件");
+      const row = readonlyDatabase.db
+        .select({ id: dbSchema.projects.id })
+        .from(dbSchema.projects)
+        .where(eq(dbSchema.projects.id, projectId))
+        .get();
+      if (!row) {
+        throw new FlowWeaveError("PROJECT_NOT_FOUND", "目标项目不存在");
+      }
+      return { projectDirectory, projectIdentity, storePath, storeIdentity };
+    } catch (error: unknown) {
+      if (error instanceof FlowWeaveError) {
+        throw error;
+      }
+      throw new FlowWeaveError("UNKNOWN", "项目数据不可用");
+    } finally {
+      if (readonlyDatabase) {
+        closeProjectDatabase(readonlyDatabase.sqlite);
+      }
+    }
   }
 
   createProject(name: string): ProjectRef {
@@ -611,45 +837,286 @@ export class ProjectKnowledgeRepository {
   }
 
   saveExecution(projectId: string, result: ExecutionResult): void {
+    assertSafeResourceId(projectId, "项目标识");
+    assertSafeResourceId(result.executionId, "执行标识");
+    this.assertExistingProject(projectId);
     const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
     try {
       ensureExecutionRunContextColumns(sqlite);
       ensureExecutionStepDiagnosticPathColumn(sqlite);
-      db.insert(dbSchema.executions)
-        .values({
-          id: result.executionId,
-          projectId,
-          flowId: result.flowId,
-          status: result.status,
-          flowSnapshotJson: serializeExecutionFlowSnapshot(result.flowSnapshot),
-          environmentName: result.runContext?.environmentName ?? null,
-          baseUrl: result.runContext?.baseUrl ?? null,
-          storageStatePath: result.runContext?.storageStatePath ?? null,
-          variablesJson: serializeExecutionVariables(result.runContext?.variables),
-          startedAt: result.startedAt ?? null,
-          finishedAt: result.finishedAt ?? null,
-        })
-        .run();
-
-      if (result.steps.length > 0) {
-        db.insert(dbSchema.executionSteps)
-          .values(
-            result.steps.map((step) => ({
-              id: randomUUID(),
-              executionId: result.executionId,
-              stepIndex: step.stepIndex,
-              stepId: step.stepId,
-              status: step.status,
-              durationMs: step.durationMs ?? null,
-              errorMessage: step.errorMessage ?? null,
-              screenshotPath: step.screenshotPath ?? null,
-              diagnosticPath: step.diagnosticPath ?? null,
-            })),
-          )
+      const saveTransaction = sqlite.transaction(() => {
+        db.insert(dbSchema.executions)
+          .values({
+            id: result.executionId,
+            projectId,
+            flowId: result.flowId,
+            status: result.status,
+            flowSnapshotJson: serializeExecutionFlowSnapshot(result.flowSnapshot),
+            environmentName: result.runContext?.environmentName ?? null,
+            baseUrl: result.runContext?.baseUrl ?? null,
+            storageStatePath: result.runContext?.storageStatePath ?? null,
+            variablesJson: serializeExecutionVariables(result.runContext?.variables),
+            startedAt: result.startedAt ?? null,
+            finishedAt: result.finishedAt ?? null,
+          })
           .run();
-      }
+
+        if (result.steps.length > 0) {
+          db.insert(dbSchema.executionSteps)
+            .values(
+              result.steps.map((step) => ({
+                id: randomUUID(),
+                executionId: result.executionId,
+                stepIndex: step.stepIndex,
+                stepId: step.stepId,
+                status: step.status,
+                durationMs: step.durationMs ?? null,
+                errorMessage: step.errorMessage ?? null,
+                screenshotPath: step.screenshotPath ?? null,
+                diagnosticPath: step.diagnosticPath ?? null,
+              })),
+            )
+            .run();
+        }
+      });
+      saveTransaction.immediate();
     } finally {
       closeProjectDatabase(sqlite);
+    }
+  }
+
+  /** 安全删除单条已落库 execution，并只清理其受控直属运行产物。 */
+  deleteExecution(projectId: string, executionId: string): ExecutionDeletionResult {
+    assertSafeResourceId(projectId, "项目标识");
+    assertSafeResourceId(executionId, "执行标识");
+    const { projectDirectory, projectIdentity, storePath, storeIdentity } =
+      this.assertExistingProject(projectId);
+
+    let readonlyDatabase: ReturnType<typeof openExistingProjectDatabaseReadOnly> | undefined;
+    try {
+      readonlyDatabase = openExistingProjectDatabaseReadOnly(
+        projectId,
+        this.dataDir,
+        this.databaseOptions,
+      );
+      const execution = readonlyDatabase.db
+        .select({ id: dbSchema.executions.id })
+        .from(dbSchema.executions)
+        .where(
+          and(
+            eq(dbSchema.executions.id, executionId),
+            eq(dbSchema.executions.projectId, projectId),
+          ),
+        )
+        .get();
+      if (!execution) {
+        return {
+          projectId,
+          executionId,
+          status: "already-absent",
+          artifacts: "untouched",
+        };
+      }
+    } catch (error: unknown) {
+      if (error instanceof FlowWeaveError) {
+        throw error;
+      }
+      throw new FlowWeaveError("UNKNOWN", "读取执行记录失败");
+    } finally {
+      if (readonlyDatabase) {
+        closeProjectDatabase(readonlyDatabase.sqlite);
+      }
+    }
+
+    const runsDirectory = join(projectDirectory, "runs");
+    const runDirectory = resolveRunDirectory(this.dataDir, projectId, executionId);
+    let runIdentity: FileIdentity | undefined;
+    let runsIdentity: FileIdentity | undefined;
+    try {
+      runsIdentity = assertDirectoryWithoutSymlink(runsDirectory, "运行目录根");
+      runIdentity = assertDirectoryWithoutSymlink(runDirectory, "单次运行目录");
+      assertSafeRunArtifacts(runDirectory);
+    } catch (error: unknown) {
+      if (!isMissingPathError(error)) {
+        throw error;
+      }
+      runIdentity = undefined;
+    }
+
+    let quarantineDirectory: string | undefined;
+    if (runIdentity && runsIdentity) {
+      assertSameDirectoryIdentity(projectDirectory, projectIdentity, "项目目录");
+      assertSameDirectoryIdentity(runsDirectory, runsIdentity, "运行目录根");
+      assertSameDirectoryIdentity(runDirectory, runIdentity, "单次运行目录");
+      assertSafeRunArtifacts(runDirectory);
+
+      quarantineDirectory = join(
+        runsDirectory,
+        `.execution-quarantine-${randomUUID()}`,
+      );
+      try {
+        renameSync(runDirectory, quarantineDirectory);
+      } catch {
+        throw new FlowWeaveError("UNKNOWN", "隔离运行产物失败，未删除执行记录");
+      }
+      try {
+        this.verifyQuarantinedRunIdentity(quarantineDirectory, runIdentity);
+        assertSafeRunArtifacts(quarantineDirectory);
+      } catch (error: unknown) {
+        this.restoreQuarantinedRun({
+          quarantineDirectory,
+          runDirectory,
+          runIdentity,
+          runsDirectory,
+          runsIdentity,
+          projectDirectory,
+          projectIdentity,
+        });
+        throw error;
+      }
+    }
+
+    if (!runIdentity) {
+      assertSameDirectoryIdentity(projectDirectory, projectIdentity, "项目目录");
+      try {
+        assertDirectoryWithoutSymlink(runsDirectory, "运行目录根");
+        assertDirectoryWithoutSymlink(runDirectory, "单次运行目录");
+        throw invalidLocalAsset("单次运行目录在维护期间发生变化，已停止删除");
+      } catch (error: unknown) {
+        if (!isMissingPathError(error)) {
+          throw error;
+        }
+      }
+    }
+
+    let writableDatabase: ReturnType<typeof openProjectDatabase> | undefined;
+    try {
+      assertSameDirectoryIdentity(projectDirectory, projectIdentity, "项目目录");
+      assertSameFileIdentity(storePath, storeIdentity, "项目数据文件");
+      writableDatabase = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
+      assertSameDirectoryIdentity(projectDirectory, projectIdentity, "项目目录");
+      assertSameFileIdentity(storePath, storeIdentity, "项目数据文件");
+      const { db, sqlite } = writableDatabase;
+      const deleteTransaction = sqlite.transaction(() => {
+        const snapshotRows = db
+          .select({
+            id: dbSchema.pageSnapshots.id,
+            snapshotPath: dbSchema.pageSnapshots.snapshotPath,
+          })
+          .from(dbSchema.pageSnapshots)
+          .where(eq(dbSchema.pageSnapshots.projectId, projectId))
+          .all();
+        for (const snapshot of snapshotRows) {
+          if (snapshotBelongsToRun(snapshot.snapshotPath, runDirectory)) {
+            db.delete(dbSchema.pageSnapshots)
+              .where(
+                and(
+                  eq(dbSchema.pageSnapshots.id, snapshot.id),
+                  eq(dbSchema.pageSnapshots.projectId, projectId),
+                ),
+              )
+              .run();
+          }
+        }
+
+        const deletion = db
+          .delete(dbSchema.executions)
+          .where(
+            and(
+              eq(dbSchema.executions.id, executionId),
+              eq(dbSchema.executions.projectId, projectId),
+            ),
+          )
+          .run();
+        if (deletion.changes !== 1) {
+          throw new Error("execution ownership changed");
+        }
+      });
+      deleteTransaction.immediate();
+    } catch {
+      if (quarantineDirectory) {
+        this.restoreQuarantinedRun({
+          quarantineDirectory,
+          runDirectory,
+          runIdentity: runIdentity!,
+          runsDirectory,
+          runsIdentity: runsIdentity!,
+          projectDirectory,
+          projectIdentity,
+        });
+        throw new FlowWeaveError("UNKNOWN", "删除执行记录失败，运行产物已恢复");
+      }
+      throw new FlowWeaveError("UNKNOWN", "删除执行记录失败，未变更运行产物");
+    } finally {
+      if (writableDatabase) {
+        closeProjectDatabase(writableDatabase.sqlite);
+      }
+    }
+
+    if (!quarantineDirectory) {
+      return { projectId, executionId, status: "deleted", artifacts: "absent" };
+    }
+
+    try {
+      this.verifyQuarantinedRunIdentity(quarantineDirectory, runIdentity!);
+      assertSafeRunArtifacts(quarantineDirectory);
+      this.beforeQuarantinedArtifactCleanup();
+      for (const entry of readdirSync(quarantineDirectory, { withFileTypes: true })) {
+        unlinkSync(join(quarantineDirectory, entry.name));
+      }
+      rmdirSync(quarantineDirectory);
+      return { projectId, executionId, status: "deleted", artifacts: "deleted" };
+    } catch {
+      return { projectId, executionId, status: "deleted", artifacts: "quarantined" };
+    }
+  }
+
+  private restoreQuarantinedRun(input: {
+    quarantineDirectory: string;
+    runDirectory: string;
+    runIdentity: FileIdentity;
+    runsDirectory: string;
+    runsIdentity: FileIdentity;
+    projectDirectory: string;
+    projectIdentity: FileIdentity;
+  }): void {
+    try {
+      assertSameDirectoryIdentity(input.projectDirectory, input.projectIdentity, "项目目录");
+      assertSameDirectoryIdentity(input.runsDirectory, input.runsIdentity, "运行目录根");
+      assertSameDirectoryIdentity(
+        input.quarantineDirectory,
+        input.runIdentity,
+        "隔离运行目录",
+      );
+
+      let destinationIsMissing = false;
+      try {
+        assertDirectoryWithoutSymlink(input.runDirectory, "单次运行目录");
+      } catch (error: unknown) {
+        if (isMissingPathError(error)) {
+          destinationIsMissing = true;
+        } else {
+          throw error;
+        }
+      }
+      if (!destinationIsMissing) {
+        throw invalidLocalAsset("原运行目录已被占用");
+      }
+
+      assertSameDirectoryIdentity(input.projectDirectory, input.projectIdentity, "项目目录");
+      assertSameDirectoryIdentity(input.runsDirectory, input.runsIdentity, "运行目录根");
+      assertSameDirectoryIdentity(
+        input.quarantineDirectory,
+        input.runIdentity,
+        "隔离运行目录",
+      );
+      renameSync(input.quarantineDirectory, input.runDirectory);
+      assertSameDirectoryIdentity(input.runDirectory, input.runIdentity, "单次运行目录");
+    } catch {
+      throw new FlowWeaveError(
+        "UNKNOWN",
+        "删除执行记录失败且运行产物恢复失败，请立即停止相关维护操作",
+      );
     }
   }
 

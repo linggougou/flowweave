@@ -75,6 +75,37 @@ describe("本地知识库 API", () => {
     expect(projects).toContainEqual(expect.objectContaining(created));
   });
 
+  it("运行目录分配拒绝非法 ID 与 ghost project，且不泄露路径", async () => {
+    const project = repo.createProject("运行目录安全项目");
+    const invalidExecution = await fetch(`${baseUrl}/api/projects/${project.id}/runs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ executionId: "../escape" }),
+    });
+    const invalidProject = await fetch(`${baseUrl}/api/projects/invalid.project/runs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ executionId: "exec_safe" }),
+    });
+    const missingProject = await fetch(`${baseUrl}/api/projects/ghost_project/runs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ executionId: "exec_safe" }),
+    });
+
+    expect(invalidExecution.status).toBe(400);
+    await expect(invalidExecution.json()).resolves.toEqual({
+      code: "INVALID_RUN_REQUEST",
+      error: "运行目录请求无效",
+    });
+    expect(invalidProject.status).toBe(400);
+    expect(missingProject.status).toBe(404);
+    const missingBody = (await missingProject.json()) as { error: string };
+    expect(missingBody.error).toBe("目标项目不存在");
+    expect(missingBody.error).not.toContain(dataDir);
+    expect(existsSync(resolveProjectStorePath("ghost_project", dataDir))).toBe(false);
+  });
+
   it("保存扩展同步的 Flow", async () => {
     const projectResponse = await fetch(`${baseUrl}/api/projects`, {
       method: "POST",

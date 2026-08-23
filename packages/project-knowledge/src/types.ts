@@ -79,3 +79,17 @@ export type ExecutionResult = {
 export type ExecutionWithProject = ExecutionResult & {
   projectId: string;
 };
+
+export type ExecutionDeletionResult =
+  | {
+      projectId: string;
+      executionId: string;
+      status: "deleted";
+      artifacts: "deleted" | "absent" | "quarantined";
+    }
+  | {
+      projectId: string;
+      executionId: string;
+      status: "already-absent";
+      artifacts: "untouched";
+    };
