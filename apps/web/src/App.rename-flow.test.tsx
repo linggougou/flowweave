@@ -212,7 +212,7 @@ describe("Web 自动化任务重命名", () => {
     expect(container.textContent).not.toContain("旧项目新名称");
   });
 
-  it("切换任务后旧响应不会改写当前任务标题", async () => {
+  it("切换任务后仍更新同项目侧栏，但不会改写当前任务标题", async () => {
     const pending = deferred<{ flowId: string; name: string; createdAt: string }>();
     apiMocks.renameFlow.mockReturnValueOnce(pending.promise);
     act(() => button(container, "重命名 自动化 A").click());
@@ -228,6 +228,7 @@ describe("Web 自动化任务重命名", () => {
     });
     await flushEffects();
 
+    expect(button(container, "重命名 自动化 A 新名称")).toBeTruthy();
     expect(container.querySelector(".workspace-breadcrumb")?.textContent).toContain("自动化 A2");
     expect(container.querySelector(".workspace-breadcrumb")?.textContent).not.toContain(
       "自动化 A 新名称",

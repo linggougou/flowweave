@@ -32,6 +32,7 @@ export function App() {
   const [renaming, setRenaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const renameRequestIdRef = useRef(0);
+  const latestRenameRequestByFlowRef = useRef(new Map<string, number>());
   const selectedProjectIdRef = useRef(selectedProjectId);
   const selectedFlowIdRef = useRef(selectedFlowId);
 
@@ -187,15 +188,16 @@ export function App() {
     const flowId = renamingFlowId;
     const requestId = renameRequestIdRef.current + 1;
     renameRequestIdRef.current = requestId;
+    const requestKey = `${projectId}\u0000${flowId}`;
+    latestRenameRequestByFlowRef.current.set(requestKey, requestId);
     setRenaming(true);
     setError(null);
 
     try {
       const updated = await api.renameFlow(projectId, flowId, name);
       if (
-        requestId !== renameRequestIdRef.current ||
-        selectedProjectIdRef.current !== projectId ||
-        selectedFlowIdRef.current !== flowId
+        latestRenameRequestByFlowRef.current.get(requestKey) !== requestId ||
+        selectedProjectIdRef.current !== projectId
       ) {
         return;
       }
@@ -206,10 +208,16 @@ export function App() {
         ),
       );
       setCurrentFlow((current) =>
-        current?.id === updated.flowId ? { ...current, name: updated.name } : current,
+        requestId === renameRequestIdRef.current &&
+        selectedFlowIdRef.current === flowId &&
+        current?.id === updated.flowId
+          ? { ...current, name: updated.name }
+          : current,
       );
-      setRenamingFlowId(null);
-      setRenameDraft("");
+      if (requestId === renameRequestIdRef.current && selectedFlowIdRef.current === flowId) {
+        setRenamingFlowId(null);
+        setRenameDraft("");
+      }
     } catch (reason: unknown) {
       if (
         requestId === renameRequestIdRef.current &&
