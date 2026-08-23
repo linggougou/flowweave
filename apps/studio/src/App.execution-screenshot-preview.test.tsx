@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act } from "react";
+import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FlowDocument } from "@flowweave/flow-dsl";
@@ -77,10 +78,12 @@ function detail(executionId: string): StudioExecution {
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((next) => {
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((next, fail) => {
     resolve = next;
+    reject = fail;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }
 
 function button(container: ParentNode, text: string): HTMLButtonElement {
@@ -298,6 +301,47 @@ describe("App 执行截图预览", () => {
 
     expect(host.querySelector("[role='dialog']")).toBeNull();
     expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:http://127.0.0.1/preview-1");
+  });
+
+  it("切换执行的新 render 已提交但 passive effect 尚未清理时，旧请求拒绝也不能污染新上下文", async () => {
+    const pending = deferred<Awaited<ReturnType<StudioApi["getExecutionScreenshotPreview"]>>>();
+    const studioApi = api({
+      listExecutions: vi
+        .fn()
+        .mockResolvedValue([summary("exec_preview_1"), summary("exec_preview_2")]),
+      getExecutionScreenshotPreview: vi.fn(() => pending.promise),
+    });
+    const host = await render(studioApi);
+
+    act(() => button(host, "最近运行记录2 条▸").click());
+    const executionButtons = Array.from(
+      host.querySelectorAll<HTMLButtonElement>(
+        ".sidebar-section-executions .execution-history-item",
+      ),
+    );
+    act(() => executionButtons[0]?.click());
+    await flush();
+    act(() => button(host, "步骤截图").click());
+    expect(host.textContent).toContain("正在加载截图");
+
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
+      .IS_REACT_ACT_ENVIRONMENT = false;
+    try {
+      flushSync(() => executionButtons[1]?.click());
+      pending.reject(new Error("旧截图请求失败：/Users/alice/private.png"));
+      await pending.promise.catch(() => undefined);
+      flushSync(() => undefined);
+    } finally {
+      (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
+        .IS_REACT_ACT_ENVIRONMENT = true;
+    }
+
+    expect(host.textContent).not.toContain("旧截图请求失败");
+    expect(host.textContent).not.toContain("/Users/alice/private.png");
+    expect(host.textContent).not.toContain("没有可预览的截图");
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+    await flush();
+    expect(host.querySelector("[role='dialog']")).toBeNull();
   });
 
   it("组件卸载时使请求失效并回收已创建的 Blob URL", async () => {

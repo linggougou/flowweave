@@ -1149,6 +1149,11 @@ export function App() {
     }
 
     const generation = ++screenshotPreviewGenerationRef.current;
+    const isCurrentPreviewRequest = () =>
+      generation === screenshotPreviewGenerationRef.current &&
+      selectedProjectIdRef.current === projectId &&
+      selectedFlowIdRef.current === flowId &&
+      selectedExecutionIdRef.current === executionId;
     revokeScreenshotPreviewBlobUrl();
     setScreenshotPreview({
       status: "loading",
@@ -1163,15 +1168,8 @@ export function App() {
         executionId,
         stepIndex: step.stepIndex,
       });
-      if (
-        generation !== screenshotPreviewGenerationRef.current ||
-        selectedProjectIdRef.current !== projectId ||
-        selectedFlowIdRef.current !== flowId ||
-        selectedExecutionIdRef.current !== executionId
-      ) {
-        return;
-      }
       if (result.status === "absent") {
+        if (!isCurrentPreviewRequest()) return;
         setScreenshotPreview({
           status: "unavailable",
           blobUrl: null,
@@ -1181,14 +1179,11 @@ export function App() {
         return;
       }
 
+      if (!isCurrentPreviewRequest()) return;
+
       const bytes = new Uint8Array(result.bytes);
       const blobUrl = URL.createObjectURL(new Blob([bytes], { type: "image/png" }));
-      if (
-        generation !== screenshotPreviewGenerationRef.current ||
-        selectedProjectIdRef.current !== projectId ||
-        selectedFlowIdRef.current !== flowId ||
-        selectedExecutionIdRef.current !== executionId
-      ) {
+      if (!isCurrentPreviewRequest()) {
         URL.revokeObjectURL(blobUrl);
         return;
       }
@@ -1200,7 +1195,7 @@ export function App() {
         stepLabel: step.label,
       });
     } catch (err: unknown) {
-      if (generation !== screenshotPreviewGenerationRef.current) {
+      if (!isCurrentPreviewRequest()) {
         return;
       }
       setScreenshotPreview({
