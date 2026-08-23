@@ -3,9 +3,9 @@ import type { FlowWeaveErrorCode } from "@flowweave/shared";
 import type { NormalizedStep, Target } from "@flowweave/flow-dsl";
 import type { PageSnapshotSummary } from "@flowweave/page-intelligence";
 
-export type ExecutionStatus = "success" | "failed";
+export type ExecutionStatus = "success" | "failed" | "cancelled";
 
-export type StepLogStatus = "success" | "failed";
+export type StepLogStatus = "success" | "failed" | "cancelled";
 
 type ScopeKind = NonNullable<NonNullable<Target["hints"]>["scopeKind"]>;
 
@@ -107,6 +107,31 @@ export interface ExecutionResult {
   };
 }
 
+type ExecutionProgressBase = {
+  executionId: string;
+  totalSteps: number;
+  completedSteps: number;
+  /** 面向用户的安全动作描述；不包含定位器、变量值或错误堆栈。 */
+  currentAction: string;
+};
+
+type ExecutionStepProgress = ExecutionProgressBase & {
+  stepIndex: number;
+  stepId: string;
+  stepType: NormalizedStep["type"];
+};
+
+export type ExecutionProgressEvent =
+  | (ExecutionProgressBase & { type: "started" })
+  | (ExecutionStepProgress & { type: "step-started" })
+  | (ExecutionStepProgress & {
+      type: "step-finished";
+      stepStatus: Exclude<StepLogStatus, "cancelled">;
+    })
+  | (ExecutionProgressBase & { type: "completed" })
+  | (ExecutionProgressBase & { type: "failed"; stepIndex?: number })
+  | (ExecutionProgressBase & { type: "cancelled"; stepIndex?: number });
+
 export type ExecutionVariableValue = string | number | boolean;
 export type ExecutionVariables = Record<string, ExecutionVariableValue>;
 
@@ -133,4 +158,8 @@ export type ExecutionOptions = {
   cookies?: ExecutionCookie[];
   /** 当前运行使用的环境名称，便于诊断与落盘 */
   environmentName?: string;
+  /** 外部取消信号；触发后 runtime 会尽快关闭浏览器会话。 */
+  signal?: AbortSignal;
+  /** 结构化进度回调；事件不会携带 variables、定位器或错误堆栈。 */
+  onProgress?: (event: ExecutionProgressEvent) => void;
 };

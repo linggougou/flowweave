@@ -380,6 +380,60 @@ describe("getExecution 缓存命中策略", () => {
     );
   });
 
+  it("runFlow 透传取消与进度控制并把 cancelled 幂等落库", async () => {
+    mockApiGetFlow.mockResolvedValue(
+      buildFlow({
+        steps: [{ id: "s1", type: "wait", ms: 1000 }],
+      }),
+    );
+    mockApiAllocateRunDirectory.mockResolvedValue("/tmp/flowweave/run-cancel");
+    mockExecuteFlow.mockResolvedValue({
+      executionId: "exec_cancelled",
+      status: "cancelled",
+      steps: [
+        {
+          stepIndex: 0,
+          stepId: "s1",
+          type: "wait",
+          status: "cancelled",
+          startedAt: "2026-08-23T00:00:00.000Z",
+          endedAt: "2026-08-23T00:00:00.100Z",
+          durationMs: 100,
+        },
+      ],
+    });
+    const controller = new AbortController();
+    const onProgress = vi.fn();
+
+    const { runFlow } = await loadServicesModule();
+    const result = await runFlow("project_service_history", "flow_service_history", {
+      showBrowser: false,
+      executionId: "exec_cancelled",
+      signal: controller.signal,
+      onProgress,
+    });
+
+    expect(mockExecuteFlow).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "flow_service_history" }),
+      expect.objectContaining({
+        executionId: "exec_cancelled",
+        signal: controller.signal,
+        onProgress,
+      }),
+    );
+    expect(mockApiSaveExecution).toHaveBeenCalledOnce();
+    expect(mockApiSaveExecution).toHaveBeenCalledWith(
+      "project_service_history",
+      expect.objectContaining({
+        executionId: "exec_cancelled",
+        status: "cancelled",
+        steps: [expect.objectContaining({ status: "skipped" })],
+      }),
+    );
+    expect(result.status).toBe("cancelled");
+    expect(result.steps[0]?.status).toBe("skipped");
+  });
+
   it("返回指定 Flow 最近一次执行输入并把变量转成表单字符串", async () => {
     mockRepoGetLatestExecutionForFlow.mockReturnValue(
       buildExecution({

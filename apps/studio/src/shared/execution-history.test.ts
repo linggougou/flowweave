@@ -76,6 +76,14 @@ function buildExecution(
 }
 
 describe("mapStoredExecutionToStudioExecution", () => {
+  it("把知识库 cancelled 状态保留为已取消", () => {
+    const execution = mapStoredExecutionToStudioExecution(
+      buildExecution({ status: "cancelled" }),
+    );
+
+    expect(execution.status).toBe("cancelled");
+  });
+
   it("优先使用执行当时的 Flow 快照生成步骤标签与 fragility", () => {
     const currentFlow = buildFlow({
       steps: [

@@ -5,6 +5,7 @@ export type { ExecutionOptions } from "./types.js";
 export type {
   BaseStepDiagnostic,
   DiagnosticCandidateSummary,
+  ExecutionProgressEvent,
   ExecutionResult,
   ExecutionStatus,
   RuntimeErrorDiagnostic,

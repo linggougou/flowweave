@@ -11,6 +11,7 @@ import { chromium, type BrowserContext, type ElementHandle, type Locator, type P
 import type {
   DiagnosticCandidateSummary,
   ExecutionOptions,
+  ExecutionProgressEvent,
   ExecutionResult,
   ExecutionVariables,
   RuntimeErrorDiagnostic,
@@ -91,6 +92,13 @@ type ExecutionSession = {
   close: () => Promise<void>;
 };
 
+function onceAsync(action: () => Promise<void>): () => Promise<void> {
+  let pending: Promise<void> | undefined;
+  return () => {
+    pending ??= action();
+    return pending;
+  };
+}
 type RuntimeRecoveryMetadata = {
   runtimeCauseCategory?: RuntimeCauseCategory;
   recoveryTried?: boolean;
@@ -133,10 +141,13 @@ async function openExecutionSession(
     return {
       context,
       page,
-      close: async () => {
-        await context.close();
-        await browser.close();
-      },
+      close: onceAsync(async () => {
+        try {
+          await context.close();
+        } finally {
+          await browser.close();
+        }
+      }),
     };
   }
 
@@ -155,10 +166,13 @@ async function openExecutionSession(
     return {
       context,
       page,
-      close: async () => {
-        await context.close();
-        rmSync(userDataDir, { recursive: true, force: true });
-      },
+      close: onceAsync(async () => {
+        try {
+          await context.close();
+        } finally {
+          rmSync(userDataDir, { recursive: true, force: true });
+        }
+      }),
     };
   } catch (error) {
     rmSync(userDataDir, { recursive: true, force: true });
@@ -1823,6 +1837,18 @@ async function runStep(
 ): Promise<StepLog> {
   const startedAt = nowIso();
   const startMs = Date.now();
+  if (options.signal?.aborted) {
+    return {
+      stepIndex,
+      stepId: step.id,
+      type: step.type,
+      status: "cancelled",
+      startedAt,
+      endedAt: nowIso(),
+      durationMs: Date.now() - startMs,
+      message: "执行已取消",
+    };
+  }
   const resolvedStep = resolveStep(step, options);
 
   try {
@@ -2047,6 +2073,19 @@ async function runStep(
       }
     }
 
+    if (options.signal?.aborted) {
+      return {
+        stepIndex,
+        stepId: resolvedStep.id,
+        type: resolvedStep.type,
+        status: "cancelled",
+        startedAt,
+        endedAt: nowIso(),
+        durationMs: Date.now() - startMs,
+        message: "执行已取消",
+      };
+    }
+
     const endedAt = nowIso();
     const screenshotPath = artifactDir
       ? await captureStepScreenshot(page, artifactDir, stepIndex)
@@ -2063,6 +2102,18 @@ async function runStep(
     };
   } catch (error) {
     const endedAt = nowIso();
+    if (options.signal?.aborted) {
+      return {
+        stepIndex,
+        stepId: resolvedStep.id,
+        type: resolvedStep.type,
+        status: "cancelled",
+        startedAt,
+        endedAt,
+        durationMs: Date.now() - startMs,
+        message: "执行已取消",
+      };
+    }
     const message =
       error instanceof FlowWeaveError
         ? error.message
@@ -2115,6 +2166,65 @@ async function runStep(
   }
 }
 
+function describeStepAction(step: NormalizedStep): string {
+  switch (step.type) {
+    case "navigate":
+      return "正在打开页面";
+    case "click":
+      return "正在点击页面控件";
+    case "fill":
+      return "正在填写字段";
+    case "select":
+      return "正在选择选项";
+    case "setChecked":
+      return "正在更新勾选状态";
+    case "press":
+      return "正在执行键盘操作";
+    case "scroll":
+      return "正在滚动页面";
+    case "upload":
+      return "正在上传文件";
+    case "wait":
+      return "正在等待页面就绪";
+    default: {
+      const exhaustive: never = step;
+      return exhaustive;
+    }
+  }
+}
+
+function emitProgress(options: ExecutionOptions, event: ExecutionProgressEvent): void {
+  try {
+    options.onProgress?.(event);
+  } catch {
+    // UI 订阅异常不能破坏浏览器执行与资源清理。
+  }
+}
+
+function cancelledResult(
+  executionId: string,
+  totalSteps: number,
+  stepLogs: StepLog[],
+  options: ExecutionOptions,
+  artifacts: Pick<ExecutionResult, "harPath" | "pageSnapshots">,
+  stepIndex?: number,
+): ExecutionResult {
+  emitProgress(options, {
+    type: "cancelled",
+    executionId,
+    totalSteps,
+    completedSteps: stepLogs.filter((step) => step.status === "success").length,
+    currentAction: "已取消运行",
+    stepIndex,
+  });
+  return {
+    executionId,
+    status: "cancelled",
+    steps: stepLogs,
+    ...artifacts,
+  };
+}
+
 /** 使用 Playwright 执行 Flow 文档中的步骤 */
 export async function executeFlow(
   flow: FlowDocument,
@@ -2131,17 +2241,62 @@ export async function executeFlow(
   const pageSnapshots: RuntimePageSnapshot[] = [];
   const recordHar = artifactDir ? (options.recordHar ?? true) : false;
   const harPath = artifactDir && recordHar ? join(artifactDir, "network.har") : undefined;
+  const artifacts = { harPath, pageSnapshots };
 
-  const session = await openExecutionSession(headless, options, harPath);
+  emitProgress(options, {
+    type: "started",
+    executionId,
+    totalSteps: flow.steps.length,
+    completedSteps: 0,
+    currentAction: "正在准备运行",
+  });
+  if (options.signal?.aborted) {
+    return cancelledResult(executionId, flow.steps.length, stepLogs, options, artifacts);
+  }
+
+  let session: ExecutionSession;
+  try {
+    session = await openExecutionSession(headless, options, harPath);
+  } catch (error) {
+    if (options.signal?.aborted) {
+      return cancelledResult(executionId, flow.steps.length, stepLogs, options, artifacts);
+    }
+    throw error;
+  }
+  const closeOnAbort = () => {
+    void session.close().catch(() => undefined);
+  };
+  options.signal?.addEventListener("abort", closeOnAbort, { once: true });
+
   try {
     const { page } = session;
     page.setDefaultTimeout(timeoutMs);
 
     for (let stepIndex = 0; stepIndex < flow.steps.length; stepIndex++) {
+      if (options.signal?.aborted) {
+        return cancelledResult(
+          executionId,
+          flow.steps.length,
+          stepLogs,
+          options,
+          artifacts,
+          stepIndex,
+        );
+      }
       const step = flow.steps[stepIndex];
       if (!step) {
         continue;
       }
+      emitProgress(options, {
+        type: "step-started",
+        executionId,
+        totalSteps: flow.steps.length,
+        completedSteps: stepLogs.filter((item) => item.status === "success").length,
+        stepIndex,
+        stepId: step.id,
+        stepType: step.type,
+        currentAction: describeStepAction(step),
+      });
       const log = await runStep(
         page,
         step,
@@ -2152,7 +2307,39 @@ export async function executeFlow(
         timeoutMs,
       );
       stepLogs.push(log);
+      if (log.status === "cancelled" || options.signal?.aborted) {
+        return cancelledResult(
+          executionId,
+          flow.steps.length,
+          stepLogs,
+          options,
+          artifacts,
+          stepIndex,
+        );
+      }
+      emitProgress(options, {
+        type: "step-finished",
+        executionId,
+        totalSteps: flow.steps.length,
+        completedSteps: stepLogs.filter((item) => item.status === "success").length,
+        stepIndex,
+        stepId: step.id,
+        stepType: step.type,
+        stepStatus: log.status,
+        currentAction:
+          log.status === "success"
+            ? `已完成第 ${stepIndex + 1}/${flow.steps.length} 步`
+            : `第 ${stepIndex + 1}/${flow.steps.length} 步未完成`,
+      });
       if (log.status === "failed") {
+        emitProgress(options, {
+          type: "failed",
+          executionId,
+          totalSteps: flow.steps.length,
+          completedSteps: stepLogs.filter((item) => item.status === "success").length,
+          currentAction: "运行未完成",
+          stepIndex,
+        });
         return {
           executionId,
           status: "failed",
@@ -2164,6 +2351,13 @@ export async function executeFlow(
       }
     }
 
+    emitProgress(options, {
+      type: "completed",
+      executionId,
+      totalSteps: flow.steps.length,
+      completedSteps: flow.steps.length,
+      currentAction: "运行成功",
+    });
     return {
       executionId,
       status: "success",
@@ -2172,6 +2366,7 @@ export async function executeFlow(
       pageSnapshots,
     };
   } finally {
+    options.signal?.removeEventListener("abort", closeOnAbort);
     await session.close();
   }
 }

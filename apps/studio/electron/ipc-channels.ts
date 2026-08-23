@@ -5,6 +5,8 @@ export const IPC_CHANNELS = {
   getFlowRunInput: "studio:get-flow-run-input",
   renameFlow: "studio:rename-flow",
   runFlow: "studio:run-flow",
+  cancelExecution: "studio:cancel-execution",
+  executionProgress: "studio:execution-progress",
   getExecution: "studio:get-execution",
   createProject: "studio:create-project",
   listExecutions: "studio:list-executions",

@@ -12,7 +12,11 @@ import {
   type ExecutionResult as KnowledgeExecutionResult,
   type ProjectEnvironment,
 } from "@flowweave/project-knowledge";
-import { executeFlow, type ExecutionResult as RuntimeExecutionResult } from "@flowweave/runtime";
+import {
+  executeFlow,
+  type ExecutionOptions,
+  type ExecutionResult as RuntimeExecutionResult,
+} from "@flowweave/runtime";
 import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
 import { isChromiumInstalled } from "./env-setup.js";
 import type {
@@ -423,7 +427,8 @@ function mapRuntimeSteps(result: RuntimeExecutionResult, flow?: FlowDocument): E
       stepId: step.stepId,
       label: resolveStepLabel(flow, step.stepIndex, step.type),
       stepType: step.type,
-      status: step.status === "success" ? "passed" : "failed",
+      status:
+        step.status === "success" ? "passed" : step.status === "cancelled" ? "skipped" : "failed",
       message: step.message,
       startedAt: step.startedAt,
       finishedAt: step.endedAt,
@@ -449,7 +454,7 @@ function toKnowledgeExecution(
   return {
     executionId: runtime.executionId,
     flowId,
-    status: runtime.status === "success" ? "success" : "failed",
+    status: runtime.status,
     startedAt: runtime.steps[0]?.startedAt,
     finishedAt,
     flowSnapshot,
@@ -457,7 +462,8 @@ function toKnowledgeExecution(
     steps: runtime.steps.map((step) => ({
       stepIndex: step.stepIndex,
       stepId: step.stepId,
-      status: step.status === "success" ? "passed" : "failed",
+      status:
+        step.status === "success" ? "passed" : step.status === "cancelled" ? "skipped" : "failed",
       durationMs: step.durationMs,
       errorMessage: step.message,
       screenshotPath: step.screenshotPath,
@@ -500,7 +506,20 @@ function toStudioFlowRunInputVariables(
   );
 }
 
-export type RunFlowServiceOptions = RunFlowOptions;
+export type RunFlowServiceOptions = RunFlowOptions &
+  Pick<ExecutionOptions, "executionId" | "signal" | "onProgress">;
+
+function mapRuntimeExecutionStatus(
+  status: RuntimeExecutionResult["status"],
+): StudioExecution["status"] {
+  if (status === "success") {
+    return "passed";
+  }
+  if (status === "cancelled") {
+    return "cancelled";
+  }
+  return "failed";
+}
 
 export async function runFlow(
   projectId: string,
@@ -509,7 +528,7 @@ export async function runFlow(
 ): Promise<StudioExecution> {
   const flow = await resolveFlowForRun(projectId, flowId);
   const startedAt = new Date().toISOString();
-  const executionId = randomUUID();
+  const executionId = options.executionId ?? randomUUID();
   const artifactDir = await apiAllocateRunDirectory(projectId, executionId);
   const showBrowser = options.showBrowser ?? true;
   const environment = resolveRunEnvironment(projectId, options);
@@ -529,6 +548,8 @@ export async function runFlow(
     storageStatePath: environment.storageStatePath,
     variables: options.variables,
     environmentName: environment.name,
+    signal: options.signal,
+    onProgress: options.onProgress,
   });
   const runContext = toRunContext(environment, options.variables);
   await apiSaveExecution(projectId, toKnowledgeExecution(runtimeResult, flow.id, flow, runContext));
@@ -541,7 +562,7 @@ export async function runFlow(
     executionId: runtimeResult.executionId,
     projectId,
     flowId: flow.id,
-    status: runtimeResult.status === "success" ? "passed" : "failed",
+    status: mapRuntimeExecutionStatus(runtimeResult.status),
     steps: mapRuntimeSteps(runtimeResult, flow),
     startedAt,
     finishedAt: new Date().toISOString(),
@@ -591,6 +612,9 @@ export async function getFlowRunInput(
 function mapKnowledgeStatus(status: KnowledgeExecutionResult["status"]): StudioExecution["status"] {
   if (status === "success") {
     return "passed";
+  }
+  if (status === "cancelled") {
+    return "cancelled";
   }
   return "failed";
 }

@@ -33,6 +33,9 @@ function mapExecutionStatus(
   if (status === "success") {
     return "passed";
   }
+  if (status === "cancelled") {
+    return "cancelled";
+  }
   return "failed";
 }
 

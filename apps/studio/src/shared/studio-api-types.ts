@@ -1,6 +1,7 @@
 /** 渲染进程与 preload 共享的 Studio API 类型 */
 import type { FlowDocument, NormalizedStep } from "@flowweave/flow-dsl";
 import type { FragilityIssue, PageSnapshotSummary } from "@flowweave/page-intelligence";
+import type { ExecutionProgressEvent } from "@flowweave/runtime";
 
 export type RunFlowVariableValue = string | number | boolean;
 
@@ -347,7 +348,7 @@ export type StudioExecution = {
   executionId: string;
   projectId: string;
   flowId: string;
-  status: "pending" | "running" | "passed" | "failed";
+  status: "pending" | "running" | "passed" | "failed" | "cancelled";
   steps: ExecutionStepLog[];
   startedAt: string;
   finishedAt?: string;
@@ -360,6 +361,13 @@ export type StudioExecution = {
 export type RunFlowResult = {
   executionId: string;
   status: StudioExecution["status"];
+};
+
+export type StudioExecutionProgressEvent = ExecutionProgressEvent;
+
+export type CancelExecutionResult = {
+  accepted: boolean;
+  alreadyCancelled: boolean;
 };
 
 /** 运行流程时的选项；showBrowser 为 true 时弹出 Playwright 浏览器窗口 */
@@ -412,6 +420,10 @@ export type StudioApi = {
     flowId?: string,
     options?: RunFlowOptions,
   ) => Promise<RunFlowResult>;
+  cancelExecution?: (executionId: string) => Promise<CancelExecutionResult>;
+  onExecutionProgress?: (
+    listener: (event: StudioExecutionProgressEvent) => void,
+  ) => () => void;
   getExecution: (executionId: string) => Promise<StudioExecution | null>;
   listExecutions: (projectId: string) => Promise<ExecutionSummary[]>;
   listFlowVersions: (projectId: string, flowId: string) => Promise<StudioFlowVersion[]>;
