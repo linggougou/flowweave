@@ -18,3 +18,14 @@ export {
   type FlowVersionRow,
   type FlowVersionListProps,
 } from "./FlowVersionList.js";
+export {
+  JsonDiffView,
+  createJsonDiff,
+  formatJsonDiffValue,
+  type JsonDiffEntry,
+  type JsonDiffKind,
+  type JsonDiffOptions,
+  type JsonDiffResult,
+  type JsonDiffValueFormat,
+  type JsonDiffViewProps,
+} from "./JsonDiffView.js";

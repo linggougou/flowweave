@@ -52,6 +52,7 @@ export function FlowVersionList({
                 ? "flow-version-summary active"
                 : "flow-version-summary"
             }
+            aria-pressed={item.id === selectedVersionId}
             onClick={() => onSelect?.(item.id)}
           >
             <span className="flow-version-label">
