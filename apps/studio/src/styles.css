@@ -967,6 +967,168 @@ html {
   cursor: not-allowed;
 }
 
+.run-confirmation-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(5, 9, 14, 0.76);
+  backdrop-filter: blur(4px);
+}
+
+.run-confirmation {
+  width: min(34rem, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  padding: 1.25rem;
+  border: 1px solid #3c506c;
+  border-radius: 14px;
+  background: #151f2b;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48);
+}
+
+.run-confirmation h3 {
+  margin: 0.2rem 0 1rem;
+  font-size: 1.2rem;
+}
+
+.run-confirmation-facts {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+}
+
+.run-confirmation-facts div {
+  display: grid;
+  grid-template-columns: 6rem minmax(0, 1fr);
+  gap: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #2a394d;
+}
+
+.run-confirmation-facts dt {
+  color: #91a0b4;
+}
+
+.run-confirmation-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #edf3fa;
+}
+
+.run-risk-warning {
+  margin-top: 1rem;
+  padding: 0.8rem;
+  border: 1px solid #8d6435;
+  border-radius: 9px;
+  background: rgba(133, 82, 25, 0.18);
+  color: #ffd9a8;
+}
+
+.run-risk-warning ul {
+  margin: 0.45rem 0 0.7rem;
+  padding-left: 1.25rem;
+}
+
+.run-risk-warning label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  color: #f5e2ca;
+}
+
+.run-risk-warning input {
+  margin-top: 0.25rem;
+}
+
+.run-confirmation-note {
+  margin: 1rem 0 0;
+  color: #a9b7c8;
+}
+
+.run-confirmation-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 1.1rem;
+}
+
+.secondary-btn,
+.cancel-run-btn {
+  padding: 0.6rem 0.85rem;
+  border: 1px solid #40516a;
+  border-radius: 8px;
+  background: #1c2735;
+  color: #dfe8f3;
+  cursor: pointer;
+}
+
+.secondary-btn:disabled,
+.cancel-run-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.execution-progress {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.8rem;
+  border: 1px solid #315f91;
+  border-radius: 10px;
+  background: rgba(30, 76, 122, 0.18);
+}
+
+.execution-progress-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.execution-progress-heading > div {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.execution-progress-heading span,
+.execution-progress p {
+  color: #aebdd0;
+  font-size: 0.82rem;
+}
+
+.execution-progress p {
+  margin: 0;
+}
+
+.execution-progress-track {
+  height: 0.45rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #243246;
+}
+
+.execution-progress-track span {
+  display: block;
+  height: 100%;
+  min-width: 0.2rem;
+  border-radius: inherit;
+  background: #63a4ff;
+  transition: width 180ms ease;
+}
+
+.execution-progress-completed {
+  border-color: #34765b;
+  background: rgba(32, 105, 76, 0.16);
+}
+
+.execution-progress-failed,
+.execution-progress-cancelled {
+  border-color: #805050;
+  background: rgba(114, 52, 52, 0.14);
+}
+
 .task-facts {
   display: grid;
   grid-template-columns: minmax(0, 2fr) repeat(2, minmax(7rem, 1fr));
@@ -1237,6 +1399,17 @@ select:focus-visible,
   }
 
   .run-primary-btn {
+    width: 100%;
+  }
+
+  .run-confirmation-actions,
+  .execution-progress-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .run-confirmation-actions button,
+  .cancel-run-btn {
     width: 100%;
   }
 

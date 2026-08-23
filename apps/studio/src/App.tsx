@@ -12,6 +12,7 @@ import { DiagnosticInspector } from "./DiagnosticInspector.js";
 import { ExecutionRunContextPanel } from "./ExecutionRunContextPanel.js";
 import { ExecutionResultSummary } from "./ExecutionResultSummary.js";
 import { ExecutionCompatibilityNotice } from "./ExecutionCompatibilityNotice.js";
+import { ExecutionProgressPanel } from "./ExecutionProgressPanel.js";
 import { FragilityNotice } from "./FragilityNotice.js";
 import { flowStepsToRows } from "./flow-step-format.js";
 import { registerWindowFocusRefresh, resolveRefreshedFlowSelection } from "./refresh-state.js";
@@ -27,6 +28,16 @@ import {
   type VariableInputs,
 } from "./shared/run-input-state.js";
 import { isSensitiveVariableName } from "./shared/sensitive-variables.js";
+import {
+  createExecutionProgressState,
+  reduceExecutionProgress,
+  type ExecutionProgressState,
+} from "./shared/execution-progress.js";
+import {
+  buildRunConfirmationSummary,
+  type RunConfirmationSummary,
+} from "./shared/run-safety.js";
+import { RunSafetyConfirmation } from "./RunSafetyConfirmation.js";
 import { ViewSwitcher } from "./ViewSwitcher.js";
 import type {
   ExecutionStepLog,
@@ -173,7 +184,46 @@ export function App() {
   const [selectedDiagnosticStepIndex, setSelectedDiagnosticStepIndex] = useState<number | null>(
     null,
   );
+  const [pendingRunSummary, setPendingRunSummary] = useState<RunConfirmationSummary | null>(null);
+  const [riskAcknowledged, setRiskAcknowledged] = useState(false);
+  const [executionProgress, setExecutionProgress] = useState<ExecutionProgressState | null>(null);
+  const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [cancelling, setCancelling] = useState(false);
   const previousDraftFlowIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const api = getStudioApi();
+    if (!api.onExecutionProgress) {
+      return;
+    }
+    return api.onExecutionProgress((event) => {
+      setExecutionProgress((previous) => {
+        const current =
+          previous && previous.executionId === event.executionId
+            ? previous
+            : createExecutionProgressState(event.executionId);
+        return reduceExecutionProgress(current, event);
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!loading || runStartedAt === null) {
+      return;
+    }
+    const updateElapsed = () => {
+      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - runStartedAt) / 1000)));
+    };
+    updateElapsed();
+    const timer = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(timer);
+  }, [loading, runStartedAt]);
+
+  useEffect(() => {
+    setPendingRunSummary(null);
+    setRiskAcknowledged(false);
+  }, [selectedProjectId, selectedFlowId]);
 
   const selectedProject = projects.find((project) => project.id === selectedProjectId) ?? null;
   const selectedProjectName = selectedProject?.name;
@@ -551,7 +601,7 @@ export function App() {
     setStorageStatePathDraft(environment?.storageStatePath ?? "");
   };
 
-  const handleRun = async () => {
+  const handlePrepareRun = () => {
     if (!selectedProjectId || !selectedFlowId || !currentFlow) {
       return;
     }
@@ -566,7 +616,36 @@ export function App() {
       return;
     }
 
+    setRiskAcknowledged(false);
+    setPendingRunSummary(
+      buildRunConfirmationSummary(currentFlow, {
+        environmentName: selectedEnvironmentName || "默认环境",
+        baseUrl: baseUrlDraft,
+      }),
+    );
+  };
+
+  const handleRun = async () => {
+    if (!selectedProjectId || !selectedFlowId || !currentFlow) {
+      return;
+    }
+    const preflightIssues = collectRunPreflightIssues(currentFlow, {
+      baseUrl: baseUrlDraft,
+      storageStatePath: storageStatePathDraft,
+      variables: variableInputs,
+    });
+    if (preflightIssues.length > 0) {
+      setPendingRunSummary(null);
+      setError(`运行前检查未通过：${preflightIssues.map((issue) => issue.message).join("；")}`);
+      return;
+    }
+
+    setPendingRunSummary(null);
     setLoading(true);
+    setCancelling(false);
+    setElapsedSeconds(0);
+    setRunStartedAt(Date.now());
+    setExecutionProgress(createExecutionProgressState("pending"));
     try {
       const variables: Record<string, string | number | boolean> = {};
       for (const variable of currentFlow.variables) {
@@ -592,8 +671,38 @@ export function App() {
       await loadFlowDocument(selectedProjectId, selectedFlowId);
     } catch (err: unknown) {
       setError(formatStudioError(err));
+      setExecutionProgress((previous) =>
+        previous
+          ? {
+              ...previous,
+              status: "failed",
+              currentAction: "运行未完成，请查看错误提示",
+            }
+          : previous,
+      );
     } finally {
       setLoading(false);
+      setRunStartedAt(null);
+      setCancelling(false);
+    }
+  };
+
+  const handleCancelRun = async () => {
+    const executionId = executionProgress?.executionId;
+    const api = getStudioApi();
+    if (!executionId || executionId === "pending" || !api.cancelExecution) {
+      return;
+    }
+    setCancelling(true);
+    setError(null);
+    try {
+      const result = await api.cancelExecution(executionId);
+      if (!result.accepted && !result.alreadyCancelled) {
+        setError("当前任务已结束，无法再取消运行");
+      }
+    } catch (err: unknown) {
+      setError(formatStudioError(err));
+      setCancelling(false);
     }
   };
 
@@ -954,7 +1063,7 @@ export function App() {
                 type="button"
                 className="run-primary-btn"
                 disabled={loading || projectHasNoFlows}
-                onClick={() => void handleRun()}
+                onClick={handlePrepareRun}
               >
                 {loading ? "运行中…" : "运行任务"}
               </button>
@@ -980,6 +1089,20 @@ export function App() {
                 </dd>
               </div>
             </dl>
+
+            {executionProgress ? (
+              <ExecutionProgressPanel
+                progress={executionProgress}
+                elapsedSeconds={elapsedSeconds}
+                canCancel={Boolean(
+                  loading &&
+                    executionProgress.executionId !== "pending" &&
+                    getStudioApi().cancelExecution,
+                )}
+                cancelling={cancelling}
+                onCancel={() => void handleCancelRun()}
+              />
+            ) : null}
 
             <section className="necessary-parameters" aria-labelledby="necessary-parameters-title">
               <h3 id="necessary-parameters-title">必要参数</h3>
@@ -1259,6 +1382,16 @@ export function App() {
           </section>
         ) : null}
       </main>
+      {pendingRunSummary ? (
+        <RunSafetyConfirmation
+          summary={pendingRunSummary}
+          riskAcknowledged={riskAcknowledged}
+          disabled={loading}
+          onRiskAcknowledgedChange={setRiskAcknowledged}
+          onConfirm={() => void handleRun()}
+          onCancel={() => setPendingRunSummary(null)}
+        />
+      ) : null}
     </div>
   );
 }

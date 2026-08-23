@@ -55,9 +55,14 @@ async function knowledgeRequest<T>(path: string, init?: RequestInit): Promise<T>
   return body;
 }
 
-function mapExecutionStatus(status: ExecutionResult["status"]): StudioExecution["status"] {
+export function mapExecutionStatusToStudio(
+  status: ExecutionResult["status"],
+): StudioExecution["status"] {
   if (status === "success") {
     return "passed";
+  }
+  if (status === "cancelled") {
+    return "cancelled";
   }
   return "failed";
 }
@@ -66,7 +71,7 @@ function toExecutionSummary(item: ExecutionResult): ExecutionSummary {
   return {
     executionId: item.executionId,
     flowId: item.flowId,
-    status: mapExecutionStatus(item.status),
+    status: mapExecutionStatusToStudio(item.status),
     startedAt: item.startedAt,
     finishedAt: item.finishedAt,
     environmentName: item.runContext?.environmentName,
