@@ -6944,3 +6944,15 @@
 - 修复：抽取 `persistTaskName()`，Studio 同步与 JSON 导出共用同一命名校验/持久化路径；导出仅在命名成功后继续。
 - 复验：Extension `34/34`、typecheck、`git diff --check` 通过。
 - 结论：P1 已关闭，Track F3 验收结论维持通过。
+
+### 2026-08-23 Track F5 验收与回收
+
+- Agent：`/root/ux_foundation_5`；交付 `b0a4aee feat: 收口 Studio 与 Web 业务视图`。
+- 首轮验证：Studio `101/101`、Web `8/8`，两端 typecheck/lint/build 通过。
+- 独立 Reviewer 首轮退回 3 个 P1：运行记录异步选择可能混显、伪 tab ARIA 语义、测试未覆盖真实切换行为。
+- 返工提交：`a578948 fix: 保持运行记录切换一致性`；增加最新请求守卫、详情匹配/加载隔离、原生按钮组 `aria-pressed` 语义和可控 Promise 竞态测试。
+- Reviewer 复审：PASS，无剩余 P0/P1。
+- 主代理复验：Studio `102/102`、Web `14/14`，两端 typecheck 与差异检查通过。
+- 集成：两提交已 cherry-pick 为 `c9a80d2`、`3cd6295`。
+- 验收结论：Track F5 通过；真实浏览器视觉与窄窗口验收保留到跨轨集成阶段。
+- 回收：F5 Agent 已结束，独立 worktree 已移除；本地功能分支暂保留作为审计与回滚引用。

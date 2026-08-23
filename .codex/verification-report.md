@@ -5141,3 +5141,16 @@
 - 已新增失败合同并修复为导出/同步共用 `persistTaskName()`。
 - 修复后 Extension `34/34`、typecheck 与差异检查通过。
 - P1 已关闭；Foundation 3 定向验收最终结论：通过。
+
+## 2026-08-23 UX Foundation 5 定向验收
+
+- 功能：Studio 业务运行区与信息分层；Web 默认最近结果；项目/任务/视图上下文；业务状态、空状态、失败主因与专业日志折叠。
+- 首轮 Agent 验证：Studio `101/101`、Web `8/8`，typecheck/lint/build 通过。
+- 首轮独立审查：发现运行记录异步错位、伪 tab 语义、行为测试不足共 3 个 P1，结论退回。
+- 修复：受控 `ExecutionRecordsView`、最新详情请求守卫、匹配详情/加载隔离、原生按钮组 `aria-pressed`、真实回调与乱序 Promise 合同。
+- 复审：PASS，无剩余 P0/P1。
+- 最终复验：Studio `102/102`、Web `14/14`，两端 typecheck、lint、build 与 `git diff --check` 通过。
+- 质量评分：94/100。
+- 建议：通过 Track F5 定向验收。
+- 残余风险：真实浏览器视觉、窄窗口与和 F4 进度组件的接线仍需集成验收。
+- 阶段判断：Foundation 5 通过；P2.5 整体仍等待 F4 与跨轨门禁，P3/P4 继续冻结。
