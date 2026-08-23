@@ -1,0 +1,174 @@
+{
+  "review_id": "p2-7-g5-integration-20260823",
+  "task_id": "P2.7-G5",
+  "lane": "g5-integration",
+  "review_level": "L3",
+  "rubric_id": "p2-7-integration-safety-readonly-v1",
+  "artifact_refs": [
+    "commit:acb0925",
+    "commit:d2ab55e",
+    "commit:a382057",
+    "commit:294d8b0",
+    "commit:77efa1a",
+    "commit:5cea046",
+    "commit:7556a9b",
+    "worktree:/Volumes/2T/CODE/A_Mine/flowweave-worktrees/p27-integration-review",
+    "packages/project-knowledge/src/repository.ts",
+    "packages/local-api/src/index.ts",
+    "apps/studio/electron/main.ts",
+    "apps/studio/src/App.tsx",
+    "apps/web/src/App.tsx",
+    "packages/ui/src/JsonDiffView.tsx"
+  ],
+  "hard_gates": [
+    {
+      "id": "integration-no-http-or-web-delete",
+      "status": "pass",
+      "evidence": [
+        "packages/local-api/src/index.ts 仅暴露 GET/POST/PATCH/OPTIONS，本阶段没有 execution DELETE 路由",
+        "apps/studio/src/studio-client.ts 将 Browser/HTTP fallback 的 nativeExecutionDeletion 固定为 false 且 deleteExecution=undefined",
+        "apps/web/src/App.version-diff.test.tsx 断言无 DELETE、无删除按钮、无 deleteExecution"
+      ]
+    },
+    {
+      "id": "knowledge-delete-fail-closed",
+      "status": "pass",
+      "evidence": [
+        "packages/project-knowledge/src/repository.ts 对 projectId/executionId、真实项目、runDir/runs symlink、直属白名单、quarantine 回滚和提交后隔离都有 fail-closed 守卫",
+        "packages/project-knowledge/src/execution-deletion.test.ts 覆盖 traversal、ghost project、兄弟 sentinel、未知产物、DB 回滚、quarantine 保留、重复删除等 36 个用例",
+        "2026-08-23 pnpm --filter @flowweave/project-knowledge test -> 4 files / 54 tests 全绿"
+      ]
+    },
+    {
+      "id": "studio-delete-ipc-active-cache-request-guards",
+      "status": "pass",
+      "evidence": [
+        "apps/studio/electron/main.ts 删除能力仅经 studio:delete-execution 固定 IPC，活动执行直接拒绝并对错误做 renderer-safe 掩码",
+        "apps/studio/electron/services.ts 删除成功后驱逐 executions cache",
+        "apps/studio/src/App.tsx 与 shared/maintenance-request-guards.ts 对 deletion/version 响应执行 project/flow/version/requestId 匹配守卫"
+      ]
+    },
+    {
+      "id": "shared-diff-studio-web-readonly-safe",
+      "status": "pass",
+      "evidence": [
+        "packages/ui/src/JsonDiffView.tsx 提供有界 deterministic JSON Pointer diff、循环保护、长值截断和只读视图",
+        "apps/studio/src/App.tsx 与 apps/web/src/App.tsx 都以 createPortableFlowDocument(...) 的安全展示副本做“历史 vN → 当前任务”对比",
+        "packages/ui/src/JsonDiffView.test.ts、apps/studio/src/App.asset-maintenance.test.tsx、apps/web/src/App.version-diff.test.tsx 覆盖只读合同与慢响应隔离"
+      ]
+    },
+    {
+      "id": "focused-tests-build-green",
+      "status": "pass",
+      "evidence": [
+        "2026-08-23 pnpm --filter @flowweave/project-knowledge test -> 54/54",
+        "2026-08-23 pnpm --filter @flowweave/local-api test -> 9/9",
+        "2026-08-23 pnpm --filter @flowweave/ui test -> 14/14",
+        "2026-08-23 pnpm --filter @flowweave/app-web test -> 9 files / 31 tests",
+        "2026-08-23 pnpm --filter @flowweave/app-studio test -> 38 files / 184 tests",
+        "2026-08-23 pnpm --filter @flowweave/app-studio build 与 pnpm --filter @flowweave/app-web build 通过",
+        "2026-08-23 git diff --check e8047fe..acb0925 通过"
+      ]
+    },
+    {
+      "id": "route-boundary-no-p3-p4-vnext-scope-creep",
+      "status": "pass",
+      "evidence": [
+        "git diff e8047fe..acb0925 的业务改动集中在 project-knowledge/local-api/ui/studio/web 与 P2.7 文档",
+        "未发现 AI orchestrator、page/network intelligence 深化、Flow/项目/批量删除、可编辑 diff 或 vNext 输入节点接入"
+      ]
+    }
+  ],
+  "dimensions": [
+    {
+      "name": "correctness",
+      "score": 25,
+      "max_score": 25,
+      "reason": "G1-G4 集成后，删除核心、Studio 补位刷新和 Studio/Web 历史版本只读 diff 的主闭环一致，且都有针对性测试回归。",
+      "evidence_refs": [
+        "packages/project-knowledge/src/repository.ts",
+        "apps/studio/src/App.tsx",
+        "apps/web/src/App.tsx",
+        "2026-08-23 定向测试结果"
+      ]
+    },
+    {
+      "name": "security",
+      "score": 25,
+      "max_score": 25,
+      "reason": "破坏性能力保持在 Electron 主进程边界内，Local API/Web 无 destructive capability；仓储删除逻辑保持 fail-closed，不递归删除、不跟随 symlink。",
+      "evidence_refs": [
+        "packages/local-api/src/index.ts",
+        "apps/studio/electron/main.ts",
+        "packages/project-knowledge/src/execution-deletion.test.ts"
+      ]
+    },
+    {
+      "name": "integration_isolation",
+      "score": 20,
+      "max_score": 20,
+      "reason": "Studio/Web 都对项目、任务、版本、执行记录的慢响应做了 requestId/所有权匹配，未发现 G3/G4 交叉串线或回归。",
+      "evidence_refs": [
+        "apps/studio/src/shared/maintenance-request-guards.ts",
+        "apps/studio/src/App.asset-maintenance.test.tsx",
+        "apps/web/src/App.version-diff.test.tsx"
+      ]
+    },
+    {
+      "name": "route_discipline",
+      "score": 20,
+      "max_score": 20,
+      "reason": "本提交面严格停留在 P2.7 合同内，没有把删除扩展到 HTTP/Web，也没有混入 P3/P4/vNext 能力。",
+      "evidence_refs": [
+        "PROJECT_ROUTE_LOCK.md",
+        "docs/exec-plans/active/p2-7-asset-maintenance.md",
+        "git diff --name-only e8047fe..acb0925"
+      ]
+    },
+    {
+      "name": "evidence_quality",
+      "score": 8,
+      "max_score": 10,
+      "reason": "源码、定向测试、构建和 diff-check 证据完整；本独立复审未重跑 Node 20、smoke、recorded replay、portability 与真实 UI 交互，因此保留小额证据扣分。",
+      "evidence_refs": [
+        "2026-08-23 pnpm --filter @flowweave/project-knowledge test",
+        "2026-08-23 pnpm --filter @flowweave/app-studio test",
+        "2026-08-23 pnpm --filter @flowweave/app-web build"
+      ]
+    }
+  ],
+  "penalties": [],
+  "totals": {
+    "raw_score": 98,
+    "penalty_total": 0,
+    "final_score": 98
+  },
+  "verdict": "PASS",
+  "required_fixes": [],
+  "nice_to_have": [
+    "在主集成会签继续保留 Node 20、smoke、recorded replay、portability 与真实桌面/浏览器证据，不必因本独立复审再返工业务代码。"
+  ],
+  "reviewers": [
+    {
+      "role": "verifier",
+      "conclusion": "PASS",
+      "summary": "硬门全部通过：无 HTTP/Web 删除、删除 fail-closed、双端只读 diff、Studio 固定 IPC 和定向门禁全绿。"
+    },
+    {
+      "role": "strict_judge",
+      "conclusion": "PASS",
+      "summary": "未发现会阻断 P2.7 集成的正确性、安全或行为回归问题。"
+    },
+    {
+      "role": "anti_slop_judge",
+      "conclusion": "PASS",
+      "summary": "实现不是空壳包装；每个高风险合同点都有真实代码和测试支撑。"
+    },
+    {
+      "role": "chief_reviewer",
+      "conclusion": "PASS",
+      "summary": "允许 P2.7 继续进入主集成会签，不需要退回 G1-G4 修复。"
+    }
+  ],
+  "reviewed_at": "2026-08-23T23:48:54+0800"
+}
