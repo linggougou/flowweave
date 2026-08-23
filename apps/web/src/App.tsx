@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { FlowDocument } from "@flowweave/flow-dsl";
 import type { ExecutionResult, FlowVersionRecord } from "@flowweave/project-knowledge";
 import { APP_DISPLAY_NAME, FlowVersionList } from "@flowweave/ui";
@@ -27,7 +27,16 @@ export function App() {
   const [previewFlow, setPreviewFlow] = useState<FlowDocument | null>(null);
   const [currentFlow, setCurrentFlow] = useState<FlowDocument | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [renamingFlowId, setRenamingFlowId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [renaming, setRenaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const renameRequestIdRef = useRef(0);
+  const selectedProjectIdRef = useRef(selectedProjectId);
+  const selectedFlowIdRef = useRef(selectedFlowId);
+
+  selectedProjectIdRef.current = selectedProjectId;
+  selectedFlowIdRef.current = selectedFlowId;
 
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const selectedFlow = flows.find((flow) => flow.id === selectedFlowId);
@@ -148,6 +157,78 @@ export function App() {
     }
   };
 
+  const resetRename = () => {
+    renameRequestIdRef.current += 1;
+    setRenamingFlowId(null);
+    setRenameDraft("");
+    setRenaming(false);
+  };
+
+  const handleStartRename = (flow: { id: string; name: string }) => {
+    renameRequestIdRef.current += 1;
+    setSelectedFlowId(flow.id);
+    setRenamingFlowId(flow.id);
+    setRenameDraft(flow.name);
+    setRenaming(false);
+    setError(null);
+  };
+
+  const handleSubmitRename = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedProjectId || !renamingFlowId || renaming) return;
+
+    const name = renameDraft.trim();
+    if (!name) {
+      setError("任务名称不能为空");
+      return;
+    }
+
+    const projectId = selectedProjectId;
+    const flowId = renamingFlowId;
+    const requestId = renameRequestIdRef.current + 1;
+    renameRequestIdRef.current = requestId;
+    setRenaming(true);
+    setError(null);
+
+    try {
+      const updated = await api.renameFlow(projectId, flowId, name);
+      if (
+        requestId !== renameRequestIdRef.current ||
+        selectedProjectIdRef.current !== projectId ||
+        selectedFlowIdRef.current !== flowId
+      ) {
+        return;
+      }
+
+      setFlows((current) =>
+        current.map((flow) =>
+          flow.id === updated.flowId ? { ...flow, name: updated.name } : flow,
+        ),
+      );
+      setCurrentFlow((current) =>
+        current?.id === updated.flowId ? { ...current, name: updated.name } : current,
+      );
+      setRenamingFlowId(null);
+      setRenameDraft("");
+    } catch (reason: unknown) {
+      if (
+        requestId === renameRequestIdRef.current &&
+        selectedProjectIdRef.current === projectId &&
+        selectedFlowIdRef.current === flowId
+      ) {
+        setError(reason instanceof Error ? reason.message : "重命名失败");
+      }
+    } finally {
+      if (
+        requestId === renameRequestIdRef.current &&
+        selectedProjectIdRef.current === projectId &&
+        selectedFlowIdRef.current === flowId
+      ) {
+        setRenaming(false);
+      }
+    }
+  };
+
   const viewName = mainTab === "executions" ? "最近运行结果" : "版本记录";
 
   return (
@@ -169,6 +250,7 @@ export function App() {
                 }
                 aria-current={project.id === selectedProjectId ? "true" : undefined}
                 onClick={() => {
+                  resetRename();
                   setSelectedProjectId(project.id);
                   setSelectedFlowId(null);
                   setSelectedExecutionId(null);
@@ -193,18 +275,68 @@ export function App() {
               <ul className="flow-list">
                 {flows.map((flow) => (
                   <li key={flow.id}>
-                    <button
-                      type="button"
-                      className={flow.id === selectedFlowId ? "flow-item active" : "flow-item"}
-                      aria-current={flow.id === selectedFlowId ? "true" : undefined}
-                      onClick={() => {
-                        setSelectedFlowId(flow.id);
-                        setSelectedExecutionId(null);
-                        setMainTab("executions");
-                      }}
-                    >
-                      <span className="flow-item-name">{flow.name}</span>
-                    </button>
+                    {renamingFlowId === flow.id ? (
+                      <form
+                        className="flow-rename-form"
+                        onSubmit={(event) => void handleSubmitRename(event)}
+                      >
+                        <label className="sr-only" htmlFor={`flow-name-${flow.id}`}>
+                          自动化任务名称
+                        </label>
+                        <input
+                          id={`flow-name-${flow.id}`}
+                          name="flow-name"
+                          value={renameDraft}
+                          onChange={(event) => setRenameDraft(event.target.value)}
+                          disabled={renaming}
+                          autoFocus
+                          onKeyDown={(event) => {
+                            if (event.key === "Escape" && !renaming) {
+                              event.preventDefault();
+                              resetRename();
+                            }
+                          }}
+                        />
+                        <div className="flow-rename-actions">
+                          <button type="submit" aria-label="保存名称" disabled={renaming}>
+                            {renaming ? "保存中…" : "保存"}
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="取消重命名"
+                            disabled={renaming}
+                            onClick={resetRename}
+                          >
+                            取消
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="flow-item-row">
+                        <button
+                          type="button"
+                          className={flow.id === selectedFlowId ? "flow-item active" : "flow-item"}
+                          aria-current={flow.id === selectedFlowId ? "true" : undefined}
+                          onClick={() => {
+                            resetRename();
+                            setSelectedFlowId(flow.id);
+                            setSelectedExecutionId(null);
+                            setMainTab("executions");
+                          }}
+                        >
+                          <span className="flow-item-name">{flow.name}</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="flow-rename-trigger"
+                          aria-label={`重命名 ${flow.name}`}
+                          title={`重命名「${flow.name}」`}
+                          onClick={() => handleStartRename(flow)}
+                        >
+                          重命名
+                        </button>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>

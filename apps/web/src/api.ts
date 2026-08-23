@@ -2,6 +2,11 @@ import type { FlowDocument } from "@flowweave/flow-dsl";
 import type { ExecutionResult, FlowVersionRecord, ProjectRef } from "@flowweave/project-knowledge";
 
 export type WebProject = ProjectRef & { baseUrl?: string };
+export type RenameFlowResult = {
+  flowId: string;
+  name: string;
+  createdAt: string;
+};
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
@@ -24,6 +29,18 @@ export function listFlows(
 
 export function getFlow(projectId: string, flowId: string): Promise<FlowDocument> {
   return request(`/api/projects/${projectId}/flows/${flowId}`);
+}
+
+export function renameFlow(
+  projectId: string,
+  flowId: string,
+  name: string,
+): Promise<RenameFlowResult> {
+  return request(`/api/projects/${projectId}/flows/${flowId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: name.trim() }),
+  });
 }
 
 export function listFlowVersions(projectId: string, flowId: string): Promise<FlowVersionRecord[]> {
