@@ -1,0 +1,127 @@
+{
+  "review_id": "p2-8-g2-preview-2026-08-23",
+  "task_id": "P2.8-G2",
+  "lane": "G2",
+  "review_level": "L2",
+  "rubric_id": "p2.8-execution-screenshot-preview-renderer",
+  "artifact_refs": [
+    "commit:05345ff feat(studio): 新增执行截图预览组件",
+    "baseline:93380de",
+    "worktree:/Volumes/2T/CODE/A_Mine/flowweave-p28-g2-judge",
+    "file:apps/studio/src/ExecutionScreenshotPreview.tsx",
+    "file:apps/studio/src/ExecutionScreenshotPreview.test.tsx",
+    "file:apps/studio/src/styles.css",
+    "cmd:pnpm --filter @flowweave/app-studio test -- ExecutionScreenshotPreview",
+    "cmd:pnpm --filter @flowweave/app-studio lint",
+    "cmd:pnpm --filter @flowweave/app-studio typecheck"
+  ],
+  "hard_gates": [
+    {
+      "id": "no-path-input-and-safe-dom",
+      "status": "pass",
+      "evidence": [
+        "ExecutionScreenshotPreviewProps 仅接收 status、blobUrl、stepIndex、stepLabel、onClose，不接收本机路径、MIME、URL 类型切换或文件名输入",
+        "ExecutionScreenshotPreview.tsx 仅在 status=available 且 blobUrl 以 blob: 开头时渲染 <img>，未引入 iframe/object/embed/webview/script 等主动内容容器",
+        "ExecutionScreenshotPreview.test.tsx 覆盖 file: URL 不渲染且 DOM 不泄露 /Users/example"
+      ]
+    },
+    {
+      "id": "dialog-close-and-focus-restore",
+      "status": "pass",
+      "evidence": [
+        "ExecutionScreenshotPreview.tsx 在挂载时聚焦关闭按钮，卸载时仅向仍然 connected 的原触发元素恢复焦点",
+        "ExecutionScreenshotPreview.tsx 为 Escape 注册 onClose，关闭按钮也走同一关闭回调",
+        "ExecutionScreenshotPreview.test.tsx 覆盖按钮关闭、Escape 关闭和卸载后焦点恢复"
+      ]
+    },
+    {
+      "id": "three-states-and-image-removal",
+      "status": "pass",
+      "evidence": [
+        "ExecutionScreenshotPreview.tsx 明确区分 loading、available、unavailable 三态",
+        "ExecutionScreenshotPreview.test.tsx 覆盖从 available 切回 unavailable 时旧 <img> 被移除，不保留旧截图节点"
+      ]
+    },
+    {
+      "id": "targeted-verification",
+      "status": "skipped",
+      "evidence": [
+        "pnpm --filter @flowweave/app-studio test -- ExecutionScreenshotPreview 通过，4/4",
+        "pnpm --filter @flowweave/app-studio lint 通过",
+        "pnpm --filter @flowweave/app-studio typecheck 失败于未改动文件 src/shared/studio-api-types.ts 对 @flowweave/runtime 声明文件缺失的现存依赖问题；本次 diff 仅包含 ExecutionScreenshotPreview.tsx、ExecutionScreenshotPreview.test.tsx、styles.css"
+      ]
+    }
+  ],
+  "dimensions": [
+    {
+      "name": "正确性",
+      "score": 10,
+      "max_score": 10,
+      "reason": "组件状态机简单明确，旧图片节点切换后可被移除，关闭语义单一且可预测。",
+      "evidence_refs": [
+        "apps/studio/src/ExecutionScreenshotPreview.tsx",
+        "apps/studio/src/ExecutionScreenshotPreview.test.tsx"
+      ]
+    },
+    {
+      "name": "安全与边界",
+      "score": 10,
+      "max_score": 10,
+      "reason": "renderer 面未接受绝对路径，也未引入 file:/data:/svg/html 等主动内容渲染面；React 文本插值保持 DOM 转义。",
+      "evidence_refs": [
+        "apps/studio/src/ExecutionScreenshotPreview.tsx",
+        "apps/studio/src/ExecutionScreenshotPreview.test.tsx"
+      ]
+    },
+    {
+      "name": "可访问性与体验",
+      "score": 9,
+      "max_score": 10,
+      "reason": "role=dialog、aria-modal、aria-labelledby、aria-describedby、加载态 aria-busy 和焦点恢复都已具备；焦点圈样式与自适应宽度也到位。剩余验证主要在集成期真实 Electron 小屏截图。",
+      "evidence_refs": [
+        "apps/studio/src/ExecutionScreenshotPreview.tsx",
+        "apps/studio/src/styles.css"
+      ]
+    },
+    {
+      "name": "测试证据",
+      "score": 8,
+      "max_score": 10,
+      "reason": "组件级 happy-dom 用例覆盖核心三态与关闭交互，lint 通过；但 app-studio typecheck 仍受仓库现存声明产物问题阻塞，不能把这一项记为完整绿灯。",
+      "evidence_refs": [
+        "cmd:pnpm --filter @flowweave/app-studio test -- ExecutionScreenshotPreview",
+        "cmd:pnpm --filter @flowweave/app-studio lint",
+        "cmd:pnpm --filter @flowweave/app-studio typecheck"
+      ]
+    }
+  ],
+  "penalties": [],
+  "totals": {
+    "raw_score": 37,
+    "penalty_total": 0,
+    "final_score": 37
+  },
+  "verdict": "PASS",
+  "required_fixes": [],
+  "nice_to_have": [
+    "G3 集成时补一条真实 Electron 窄屏截图证据，确认长步骤名与关闭按钮在 375px 左右宽度下不挤压溢出。"
+  ],
+  "reviewers": [
+    {
+      "role": "Verifier",
+      "conclusion": "PASS",
+      "summary": "G2 自身硬门禁通过；唯一未闭合的是仓库现存 type declaration 噪音，不归因于本次 diff。"
+    },
+    {
+      "role": "Strict Judge",
+      "conclusion": "PASS",
+      "summary": "该组件已满足 P2.8 G2 的 renderer 只读预览合同，可进入集成。"
+    },
+    {
+      "role": "Chief Reviewer",
+      "conclusion": "PASS",
+      "summary": "允许回收 G2 开发轨并进入后续集成/联调。"
+    }
+  ],
+  "reviewed_at": "2026-08-23T02:45:00+08:00"
+}
