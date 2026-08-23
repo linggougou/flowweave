@@ -6,7 +6,7 @@
 
 ## 2. 当前阶段
 
-- 生命周期阶段：post-v1 产品化 / 本地资产可移植
+- 生命周期阶段：post-v1 产品化 / 本地资产可移植（P2.6 已完成，下一阶段未开启）
 - 里程碑编号：P2.6
 - 阶段名称：Flow 可移植性与低风险资产维护
 - 阶段目标：在不解冻 AI、深度页面理解或 vNext 编排模型的前提下，让用户可在 Studio 安全导出、校验导入任务，并在 Web 维护任务名称。
@@ -51,7 +51,7 @@
   - 若进入破坏性删除、vNext 产品模型、P3 或 P4，必须再次更新路线并获得明确确认
 - 变更批准：用户于 2026-07-16 明确批准按首次用户体验评审调整 post-v1 路线。
 - 阶段切换批准：用户于 2026-08-23 在收到“P2.5 已完成、下一阶段需更新路线锁”的交付说明后明确回复“继续”；本授权解释为进入 post-v1 backlog 的 P2.6，不解释为解冻 P3/P4 或 vNext 产品模型。
-- 当前状态：P2.6 功能、独立复审、本地 Node 20/24 门禁和集成分支远端双矩阵已通过，正在等待最终文档提交与 main 双矩阵会签；P3/P4 与 vNext 输入节点继续冻结。
+- 当前状态：P2.6 已完成并通过本地、集成分支与 main 的 Node 20/24 双矩阵门禁；执行计划已归档。P2.7 尚未开启，P3/P4 与 vNext 输入节点继续冻结。
 
 ## 2.1 里程碑路线图
 
@@ -61,7 +61,7 @@
 | P1 核心闭环         | 扩展录制 → Studio 回放           | recorder、runtime、extension、studio                       | 可录制、可同步、可执行                 | `pnpm e2e:login`、手测闭环                                                              | ✅ 完成   |
 | P2 可演示纵向切片   | 知识库、执行历史、真实页面稳定性 | project-knowledge、执行日志、诊断 UI、recorded replay 基线 | 可诊断、可复验、主线稳定               | Node 24 `pnpm smoke`、`pnpm e2e:recorded-pages`、相关 Studio 验证；CI 保持 Node 20 / 24 | ✅ 完成   |
 | P2.5 首次体验产品化 | 非技术用户安全完成首次任务       | 内置连接、敏感输入保护、跨端刷新、录制状态、安全运行       | 首次旅程不依赖开发命令且关键风险有守卫 | 分轨测试 + 首次用户手测 + Node 20/24 CI                                                 | ✅ 完成   |
-| P2.6 本地资产可移植 | 安全迁移与维护自动化任务         | 统一导出合同、导入新副本、Studio 文件交互、Web 重命名      | 导出导入运行往返可证且无静默覆盖       | 分轨测试 + 文件往返 E2E + recorded replay + Node 20/24 CI                               | 🟡 本地通过，待远端会签 |
+| P2.6 本地资产可移植 | 安全迁移与维护自动化任务         | 统一导出合同、导入新副本、Studio 文件交互、Web 重命名      | 导出导入运行往返可证且无静默覆盖       | 分轨测试 + 文件往返 E2E + recorded replay + Node 20/24 CI                               | ✅ 完成   |
 | P3 完整框架扩展     | 深度页面 / 接口理解              | page-intelligence、network-intelligence 深化能力           | 明确场景与回归面后再开放               | 待路线解冻                                                                              | ⏸ 冻结    |
 | P4 产品落地         | AI 编排与智能增强                | ai-orchestrator、AI 产品入口                               | 不影响现有稳定主线                     | 待路线解冻                                                                              | ⏸ 冻结    |
 
@@ -70,7 +70,7 @@
 - PRD：[`docs/superpowers/specs/2026-05-25-web-automation-platform-design.md`](./docs/superpowers/specs/2026-05-25-web-automation-platform-design.md)
 - 当前主路线：[`docs/superpowers/plans/2026-05-26-run-first-roadmap.md`](./docs/superpowers/plans/2026-05-26-run-first-roadmap.md)
 - 用户旅程：[`docs/guides/quickstart.md`](./docs/guides/quickstart.md)、[`docs/guides/manual-qa.md`](./docs/guides/manual-qa.md)
-- 当前实施计划：[`docs/exec-plans/active/p2-6-portability-assets.md`](./docs/exec-plans/active/p2-6-portability-assets.md)
+- 最近完成计划：[`docs/exec-plans/completed/p2-6-portability-assets.md`](./docs/exec-plans/completed/p2-6-portability-assets.md)
 - 非目标：AI 智能编排、云端协作、未纳入当前路线的深度分析能力
 
 ## 4. 设计真源
@@ -123,10 +123,10 @@
 
 ## 8. 变更入口
 
-- Backlog：`docs/exec-plans/active/post-v1-development-roadmap.md` 中的 P2.6 后续资产维护与未来智能阶段事项
+- Backlog：`docs/exec-plans/active/post-v1-development-roadmap.md` 中的 P2.7 资产维护与未来智能阶段事项
 - Change Request：新增需求先进入路线计划或专门变更文档，再决定是否实施
 - 当前阶段缺口：
-  - 本地功能与验证缺口已关闭，首轮集成分支 Node 20/24 已双绿；仅等待最终文档提交与 main 远端会签
+  - 无；P2.6 已完成，未自动进入 P2.7
 - 后续阶段需求：
   - P2.7 路径安全、执行记录删除与 Flow 版本只读 diff
   - vNext 任务模板输入节点、编辑模型与暂停/继续协议

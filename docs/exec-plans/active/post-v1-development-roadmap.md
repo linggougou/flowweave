@@ -2,10 +2,10 @@
 
 ## 1. 当前基线
 
-- 生命周期：P2.6 post-v1 产品化 / 本地资产可移植，已完成本地门禁并等待远端会签。
+- 生命周期：P2.6 post-v1 产品化 / 本地资产可移植已完成；下一阶段未开启。
 - 已完成：P0、P1、P2；M1-M4；真实页面 recorded replay `25/25`；Node 20/24 双基线；macOS 本地预览 `.app + DMG`。
 - M5 已有最小能力：扩展清空录制、Flow JSON 导出、Studio Flow 重命名。
-- P2.5 已完成并归档；P2.6 已完成可移植合同、导入、扩展接线、Studio 文件交互、Web 重命名和本地双版本验证。
+- P2.5、P2.6 已完成并归档；P2.7 尚未进入路线与实施门禁。
 - P3 深度页面/网络理解与 P4 AI 编排继续冻结。
 
 ## 2. 执行顺序
@@ -94,7 +94,7 @@
 
 完成证据：Studio 业务视图、Web 最近结果、异步记录选择与窄窗口合同通过；Web `14/14`，浏览器实测无横向溢出且任务视图可切换。
 
-### Wave A：Flow 可移植性闭环（P2.6 本地完成，待远端会签）
+### Wave A：Flow 可移植性闭环（P2.6 已完成）
 
 目标：让录制产物可安全导出、校验并重新导入本地知识库。
 
@@ -106,7 +106,7 @@
 4. 导入/导出结果给出可诊断错误，不接受无提示失败。
 5. 补 repository、Electron IPC、Studio UI 和往返 E2E 测试。
 
-完成证据：共享可移植合同、始终导入为新副本、Extension/Studio 统一导出、受控 Electron 文件边界和真实 `10` 步往返均已通过；Node 24 完整 smoke、recorded replay `25/25`、官方 registry 安全审计，以及 Node 20 无缓存 typecheck/test/build、登录与往返均通过。
+完成证据：共享可移植合同、始终导入为新副本、Extension/Studio 统一导出、受控 Electron 文件边界和真实 `10` 步往返均已通过；Node 24 完整 smoke、recorded replay `25/25`、官方 registry 安全审计，以及 Node 20 无缓存 typecheck/test/build、登录与往返均通过；集成分支与 main Node 20/24 CI 双绿。
 
 退出门禁：安全导出 -> 导入空项目为新副本 -> Studio 运行通过；Node 24 smoke、recorded replay 与 Node 20/24 CI 通过。
 
@@ -162,4 +162,4 @@
 4. UX Foundation 3：2-3 天，完成录制状态机、预览和命名。
 5. UX Foundation 4：2-4 天，完成运行守卫、进度和取消。
 6. UX Foundation 5：2-4 天，完成业务视图与 Web 结果收口。
-7. P2.6 Flow 可移植性与 Web 重命名已完成本地门禁；远端会签后归档，vNext 协议设计继续等待独立路线变更。
+7. P2.6 Flow 可移植性与 Web 重命名已完成并归档；P2.7 与 vNext 协议设计继续等待独立路线变更。

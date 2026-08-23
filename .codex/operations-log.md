@@ -7093,3 +7093,10 @@
 - 返工 worktree、临时分支与新增任务 TMPDIR 已回收；TMPDIR 移入既有废纸篓回收目录，可恢复。
 - 最终 Reviewer 复审：PASS，无 P0/P1；确认动态 URL token 从来源、结构化 warning、导出移除、导入变量到真实 `10/10` 运行形成非平凡闭环，且 DoD 与 `.codex` 证据一致。
 - 集成分支远端会签：GitHub Actions run `32642660882` 成功；Node 20 job `97202040554`（`3m33s`）与 Node 24 job `97202040678`（`3m21s`）均完成 install、Playwright、lint 和完整 smoke。
+
+### 2026-08-23 P2.6 远端 main 会签与归档
+
+- 最终分支提交 `966cffa` 再次通过 GitHub Actions run `32642875346`：Node 20 job `97202559089`（`3m34s`）、Node 24 job `97202559229`（`3m35s`）均 success。
+- 合入前重新 fetch，确认 `origin/main=54cbfa1` 是 `966cffa` 的祖先；以非强制 fast-forward 推送 `HEAD:main`，未覆盖远端并行提交。
+- main run `32643072629` 成功：Node 20 job `97203054439`（`3m39s`）、Node 24 job `97203054597`（`3m24s`）均完成 install、Playwright、lint 与完整 smoke。
+- 生命周期：P2.6 S7 会签完成，执行计划从 `active` 迁移至 `completed`；post-v1 总路线继续保留 active，P2.7 未开启，P3/P4 与 vNext 继续冻结。
