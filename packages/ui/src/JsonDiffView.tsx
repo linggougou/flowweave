@@ -124,6 +124,7 @@ export function createJsonDiff(
   const maxChanges = normalizeLimit(options.maxChanges, DEFAULT_MAX_CHANGES);
   const entries: JsonDiffEntry[] = [];
   let totalChanges = 0;
+  const activePairs = new WeakMap<object, WeakSet<object>>();
 
   const addEntry = (entry: JsonDiffEntry): void => {
     totalChanges += 1;
@@ -132,55 +133,88 @@ export function createJsonDiff(
     }
   };
 
+  const enterPair = (previous: object, current: object): boolean => {
+    const currentPairs = activePairs.get(previous);
+    if (currentPairs?.has(current)) {
+      return false;
+    }
+    if (currentPairs) {
+      currentPairs.add(current);
+      return true;
+    }
+    const pairs = new WeakSet<object>();
+    pairs.add(current);
+    activePairs.set(previous, pairs);
+    return true;
+  };
+
+  const leavePair = (previous: object, current: object): void => {
+    activePairs.get(previous)?.delete(current);
+  };
+
   const visit = (previous: unknown, current: unknown, path: string): void => {
     if (Object.is(previous, current)) {
       return;
     }
 
     if (Array.isArray(previous) && Array.isArray(current)) {
-      const identityKey = findSharedIdentityKey(previous, current);
-      if (identityKey !== null) {
-        visitIdentityArray(previous, current, path, identityKey);
+      if (!enterPair(previous, current)) {
         return;
       }
-
-      const length = Math.max(previous.length, current.length);
-      for (let index = 0; index < length; index += 1) {
-        const itemPath = appendJsonPointer(path, index);
-        if (index >= previous.length) {
-          addEntry({ kind: "added", path: itemPath, after: current[index] });
-        } else if (index >= current.length) {
-          addEntry({
-            kind: "removed",
-            path: itemPath,
-            before: previous[index],
-          });
-        } else {
-          visit(previous[index], current[index], itemPath);
+      try {
+        const identityKey = findSharedIdentityKey(previous, current);
+        if (identityKey !== null) {
+          visitIdentityArray(previous, current, path, identityKey);
+          return;
         }
+
+        const length = Math.max(previous.length, current.length);
+        for (let index = 0; index < length; index += 1) {
+          const itemPath = appendJsonPointer(path, index);
+          if (index >= previous.length) {
+            addEntry({ kind: "added", path: itemPath, after: current[index] });
+          } else if (index >= current.length) {
+            addEntry({
+              kind: "removed",
+              path: itemPath,
+              before: previous[index],
+            });
+          } else {
+            visit(previous[index], current[index], itemPath);
+          }
+        }
+      } finally {
+        leavePair(previous, current);
       }
       return;
     }
 
     if (isObject(previous) && isObject(current)) {
-      const keys = new Set([...Object.keys(previous), ...Object.keys(current)]);
-      // Object.keys / Set 的插入顺序由 ECMAScript 明确定义；先历史端、再当前端
-      // 的新键，可在线性遍历中获得可重复顺序。
-      for (const key of keys) {
-        const itemPath = appendJsonPointer(path, key);
-        const hasPrevious = Object.hasOwn(previous, key);
-        const hasCurrent = Object.hasOwn(current, key);
-        if (!hasPrevious) {
-          addEntry({ kind: "added", path: itemPath, after: current[key] });
-        } else if (!hasCurrent) {
-          addEntry({
-            kind: "removed",
-            path: itemPath,
-            before: previous[key],
-          });
-        } else {
-          visit(previous[key], current[key], itemPath);
+      if (!enterPair(previous, current)) {
+        return;
+      }
+      try {
+        const keys = new Set([...Object.keys(previous), ...Object.keys(current)]);
+        // Object.keys / Set 的插入顺序由 ECMAScript 明确定义；先历史端、再当前端
+        // 的新键，可在线性遍历中获得可重复顺序。
+        for (const key of keys) {
+          const itemPath = appendJsonPointer(path, key);
+          const hasPrevious = Object.hasOwn(previous, key);
+          const hasCurrent = Object.hasOwn(current, key);
+          if (!hasPrevious) {
+            addEntry({ kind: "added", path: itemPath, after: current[key] });
+          } else if (!hasCurrent) {
+            addEntry({
+              kind: "removed",
+              path: itemPath,
+              before: previous[key],
+            });
+          } else {
+            visit(previous[key], current[key], itemPath);
+          }
         }
+      } finally {
+        leavePair(previous, current);
       }
       return;
     }

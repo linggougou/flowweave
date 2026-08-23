@@ -157,6 +157,22 @@ describe("createJsonDiff", () => {
     expect(result.truncated).toBe(true);
     expect(result.maxChanges).toBe(500);
   });
+
+  it("遇到不同但循环引用的对象时不会炸栈，并保留普通字段差异", () => {
+    const before: Record<string, unknown> = { title: "历史标题" };
+    before.self = before;
+    const after: Record<string, unknown> = { title: "当前标题" };
+    after.self = after;
+
+    expect(createJsonDiff(before, after).entries).toEqual([
+      {
+        kind: "changed",
+        path: "/title",
+        before: "历史标题",
+        after: "当前标题",
+      },
+    ]);
+  });
 });
 
 describe("formatJsonDiffValue", () => {
@@ -167,6 +183,16 @@ describe("formatJsonDiffValue", () => {
     expect(formatted.text.endsWith("…")).toBe(true);
     expect(formatted.truncated).toBe(true);
     expect(formatted.originalLength).toBeGreaterThan(12);
+  });
+
+  it("循环引用使用安全占位文本输出", () => {
+    const value: Record<string, unknown> = { title: "任务" };
+    value.self = value;
+
+    const formatted = formatJsonDiffValue(value);
+
+    expect(formatted.text).toContain("[循环引用]");
+    expect(formatted.truncated).toBe(false);
   });
 });
 
