@@ -1,0 +1,182 @@
+{
+  "review_id": "p2-8-g4-integration-2026-08-23",
+  "task_id": "P2.8-G4",
+  "lane": "g4-integration",
+  "review_level": "L3",
+  "rubric_id": "p2-8-execution-screenshot-preview-integration-v1",
+  "artifact_refs": [
+    "baseline:b328ebacf1c5d3314c079f3995329f055e078878",
+    "reviewed-commit:0203c5b",
+    "file:packages/project-knowledge/src/repository.ts",
+    "file:apps/studio/electron/main.ts",
+    "file:apps/studio/electron/services.ts",
+    "file:apps/studio/electron/preload.ts",
+    "file:apps/studio/csp-policy.ts",
+    "file:apps/studio/src/App.tsx",
+    "file:apps/studio/src/ExecutionScreenshotPreview.tsx",
+    "review:.codex/reviews/p2-8/g1-secure-screenshot/scorecard.json",
+    "review:.codex/reviews/p2-8/g2-preview/scorecard.json",
+    "review:.codex/reviews/p2-8/g3-studio-integration/scorecard.json",
+    "doc:PROJECT_ROUTE_LOCK.md",
+    "doc:docs/exec-plans/active/p2-8-execution-screenshot-preview.md",
+    "doc:.codex/verification-report.md",
+    "doc:.codex/operations-log.md",
+    "cmd:pnpm --filter @flowweave/project-knowledge test -- execution-screenshot-preview",
+    "cmd:pnpm --filter @flowweave/app-studio test -- App.execution-screenshot-preview ExecutionScreenshotPreview"
+  ],
+  "hard_gates": [
+    {
+      "id": "g1-g3-review-artifacts-present-and-passing",
+      "status": "pass",
+      "evidence": [
+        "g1-secure-screenshot 为 PASS 100/100，覆盖业务归属、固定路径、PNG/大小、symlink/hardlink 与文件/目录 TOCTOU",
+        "g2-preview 为 PASS，覆盖 blob-only 渲染、Escape/关闭/焦点恢复和 file: URL 拒绝",
+        "g3-studio-integration 为 PASS 100/100，覆盖 fixed-object IPC、trusted sender、sandbox/CSP/nav、Blob 生命周期和迟到 reject 竞态"
+      ]
+    },
+    {
+      "id": "controlled-file-boundary-remains-closed",
+      "status": "pass",
+      "evidence": [
+        "packages/project-knowledge/src/repository.ts:994-1160 仅由 projectId/executionId/stepIndex 推导 step-<N>.png，并对 data/project/runs/run/file 身份进行读取前后复核",
+        "packages/project-knowledge/src/execution-screenshot-preview.test.ts 31/31 覆盖非法 ID/index、外部数据库路径、symlink、hardlink、FIFO、>8 MiB、伪 PNG 与目录漂移"
+      ]
+    },
+    {
+      "id": "renderer-has-no-arbitrary-path-capability",
+      "status": "pass",
+      "evidence": [
+        "apps/studio/electron/preload.ts:9-50 仅暴露固定 getExecutionScreenshotPreview(request) 与既有业务 API，不含 openPath",
+        "apps/studio/electron/main.ts:91-149,455-465 只接受普通对象、固定键、合法业务 ID 与可信 mainFrame 来源；异常统一脱敏"
+      ]
+    },
+    {
+      "id": "sandbox-csp-and-navigation-hardening-hold",
+      "status": "pass",
+      "evidence": [
+        "apps/studio/electron/main.ts:530-545 启用 contextIsolation、nodeIntegration=false、sandbox=true，并拒绝新窗口和所有 will-navigate",
+        "apps/studio/csp-policy.ts:1-23 生产态仅允许 self/blob 图片、无 connect-src，开发态也只放通固定本地 API 与 Vite/HMR"
+      ]
+    },
+    {
+      "id": "blob-lifecycle-and-race-guard-complete",
+      "status": "pass",
+      "evidence": [
+        "apps/studio/src/App.tsx:274-300 在关闭、切换与卸载时统一 revoke Blob URL",
+        "apps/studio/src/App.tsx:1137-1208 将 generation、projectId、flowId、executionId 组合成统一 current guard，迟到 success/absent/error 均不能污染新上下文",
+        "apps/studio/src/ExecutionScreenshotPreview.tsx:14-109 只在 blob: 时渲染 img，Escape 关闭并回焦触发元素"
+      ]
+    },
+    {
+      "id": "route-scope-remains-frozen",
+      "status": "pass",
+      "evidence": [
+        "PROJECT_ROUTE_LOCK.md:56,68,139 明确 P2.8 仍仅剩 G4 总审与远端双矩阵，不开放 Web/Local API 文件读取、P3/P4 或 vNext",
+        "docs/exec-plans/active/p2-8-execution-screenshot-preview.md:116-119 记录 HAR/DOM/SVG/HTML/PDF 与 Web/Local API 文件服务继续冻结"
+      ]
+    },
+    {
+      "id": "verification-evidence-complete",
+      "status": "pass",
+      "evidence": [
+        ".codex/verification-report.md:5295-5329 与 .codex/operations-log.md:7204-7217 记录 Node 24 smoke、recorded replay 25/25、portability、安全审计、真实 Electron、Node 20 无缓存矩阵全部绿色",
+        "本次 G4 独立复跑：project-knowledge 31/31、app-studio 9/9 通过；review worktree 无 node_modules 的失败已确认为环境问题，不是代码回归"
+      ]
+    }
+  ],
+  "dimensions": [
+    {
+      "name": "correctness",
+      "score": 25,
+      "max_score": 25,
+      "reason": "业务归属、固定路径、缺失语义、renderer 三态和真实 Electron 行为与执行计划完全一致，未见串图、误图或错误上下文泄露。",
+      "evidence_refs": [
+        "packages/project-knowledge/src/repository.ts:994-1160",
+        "apps/studio/src/App.tsx:1137-1208",
+        ".codex/verification-report.md:5313-5319"
+      ]
+    },
+    {
+      "name": "security",
+      "score": 25,
+      "max_score": 25,
+      "reason": "arbitrary path 能力已移除，主进程 sender/origin 校验、sandbox/CSP/nav 限制和受控 PNG 读取都已闭环，未发现跨项目或任意文件读取面。",
+      "evidence_refs": [
+        "apps/studio/electron/main.ts:91-149,455-465,530-545",
+        "apps/studio/electron/preload.ts:9-50",
+        "apps/studio/csp-policy.ts:1-23",
+        "packages/project-knowledge/src/repository.ts:994-1160"
+      ]
+    },
+    {
+      "name": "regression_safety",
+      "score": 20,
+      "max_score": 20,
+      "reason": "本地 Node 24 主门禁、Node 20 无缓存矩阵、recorded replay 25/25、portability、真实 Electron 与本次 31/31 + 9/9 定向复跑共同证明改动没有带坏主线。",
+      "evidence_refs": [
+        ".codex/verification-report.md:5304-5329",
+        ".codex/operations-log.md:7211-7216",
+        "cmd:pnpm --filter @flowweave/project-knowledge test -- execution-screenshot-preview",
+        "cmd:pnpm --filter @flowweave/app-studio test -- App.execution-screenshot-preview ExecutionScreenshotPreview"
+      ]
+    },
+    {
+      "name": "route_discipline",
+      "score": 10,
+      "max_score": 10,
+      "reason": "提交面集中在 project-knowledge 与 Studio 壳层/renderer，没有扩展到 Web、Local API、P3/P4 或其他删除/编辑能力。",
+      "evidence_refs": [
+        "git diff --name-only b328ebacf1c5d3314c079f3995329f055e078878..0203c5b",
+        "PROJECT_ROUTE_LOCK.md:68,139"
+      ]
+    },
+    {
+      "name": "evidence_quality",
+      "score": 20,
+      "max_score": 20,
+      "reason": "G1-G3 各自有独立 Judge 包，G4 再叠加真实 Electron、双 Node 与针对性复跑；即使 review worktree 缺依赖，也保留了准确失败原因并用同一提交主工作树完成独立 verifier。",
+      "evidence_refs": [
+        ".codex/reviews/p2-8/g1-secure-screenshot/scorecard.json",
+        ".codex/reviews/p2-8/g2-preview/scorecard.json",
+        ".codex/reviews/p2-8/g3-studio-integration/scorecard.json",
+        ".codex/verification-report.md:5313-5319",
+        "cmd:pnpm --filter @flowweave/project-knowledge test -- execution-screenshot-preview",
+        "cmd:pnpm --filter @flowweave/app-studio test -- App.execution-screenshot-preview ExecutionScreenshotPreview"
+      ]
+    }
+  ],
+  "penalties": [],
+  "totals": {
+    "raw_score": 100,
+    "penalty_total": 0,
+    "final_score": 100
+  },
+  "verdict": "PASS",
+  "required_fixes": [],
+  "nice_to_have": [
+    "后续若把 Studio 的自定义 dataDir 暴露为正式用户能力，应把 services.ts 中结构化 JSON 的 runDirectory 推导也统一接到同一受控配置源；这不是本轮 P2.8 阻塞项。"
+  ],
+  "reviewers": [
+    {
+      "role": "verifier",
+      "conclusion": "PASS",
+      "summary": "本地 Node 20/24、真实 Electron、recorded replay、安全审计与 G4 独立定向复跑均为绿色。"
+    },
+    {
+      "role": "strict_judge",
+      "conclusion": "PASS",
+      "summary": "P2.8 的文件边界、IPC 边界、CSP/sandbox 边界与竞态边界全部闭合。"
+    },
+    {
+      "role": "anti_slop_judge",
+      "conclusion": "PASS",
+      "summary": "证据来自真实故障注入、真实 Electron 与贴边测试，不是模板化自证。"
+    },
+    {
+      "role": "chief_reviewer",
+      "conclusion": "PASS",
+      "summary": "允许进入远端集成分支与 main 双矩阵会签；无 P0/P1/P2，required fixes 为空。"
+    }
+  ],
+  "reviewed_at": "2026-08-23T04:08:00+08:00"
+}
