@@ -140,17 +140,17 @@ pnpm audit --prod --audit-level high --registry=https://registry.npmjs.org
 
 ## 6. Definition of Done
 
-- [ ] 无路径穿越、ghost project、symlink 跟随、递归删除或任意路径删除能力。
-- [ ] 单条 deletion 的 DB / FS 顺序可回滚，page snapshot 无精确已知悬挂，未知产物 fail closed。
-- [ ] Local API 与 Web 没有 destructive endpoint / capability；Studio 活动执行不能删除。
-- [ ] Studio 确认、失败、补位、空态和异步切换一致。
-- [ ] Studio / Web 共享有界安全只读 diff，语义为“历史 vN → 当前任务”。
-- [ ] 分轨 TDD、安全审查与 Judge 均 PASS，无未关闭 P0/P1。
+- [x] 无路径穿越、ghost project、symlink 跟随、递归删除或任意路径删除能力。
+- [x] 单条 deletion 的 DB / FS 顺序可回滚，page snapshot 无精确已知悬挂，未知产物 fail closed。
+- [x] Local API 与 Web 没有 destructive endpoint / capability；Studio 活动执行不能删除。
+- [x] Studio 确认、失败、补位、空态和异步切换一致。
+- [x] Studio / Web 共享有界安全只读 diff，语义为“历史 vN → 当前任务”。
+- [x] 分轨 TDD、安全审查与 Judge 均 PASS，无未关闭 P0/P1。
 - [ ] Node 24、Node 20、recorded replay `25/25`、portability、安全审计和远端双矩阵通过。
-- [ ] P3/P4、vNext、Flow / 项目 / 批量删除和可编辑 diff 未混入。
+- [x] P3/P4、vNext、Flow / 项目 / 批量删除和可编辑 diff 未混入。
 - [ ] worktree、分支、临时进程与 Agent 在验收后回收，留痕完整。
 
-当前状态：G1 / G2 / G3 / G4 已通过定向门禁与独立 Judge 并合入集成分支；正在执行 G5 组合回归、真实 UI、双 Node、安全与 CI 会签。
+当前状态：G1-G5、独立总审、本地 Node 20/24、真实 Web/Studio、安全审计与 E2E 已通过；仅等待集成分支和 main 远端双矩阵，完成前不归档。
 
 ## 7. 回滚策略
 

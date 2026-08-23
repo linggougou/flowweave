@@ -1230,7 +1230,7 @@
    - `packages/runtime/src/playwright-runner.test.ts` 的既有用例：
      - `支持将录制事件构建出的 upload Flow 直接回放`
      - `真实页面 fixture 矩阵全部成功`
-     在默认 5 秒超时下失败。
+       在默认 5 秒超时下失败。
    - `packages/runtime/src/real-page-matrix.test.ts` 的 `执行 P6 增强矩阵并返回汇总统计` 也在默认 5 秒超时下失败。
    - 这些失败说明 runtime 真实页面测试整体仍偏时间敏感，但它们都不是 `384db3a` 新增内容。
 
@@ -1511,7 +1511,7 @@
        - 不依赖环境 / 变量的旧记录不应误报
        - 说明字段与 `target.hints` 中的字面 `{{...}}` 不应触发兼容提示
        - 变量已有默认值时，缺少运行上下文不应误报
-5. 最新 Node 20 验证通过。
+4. 最新 Node 20 验证通过。
    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- execution-fragility`
      - 结果：通过，`13/13`
    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio typecheck`
@@ -1641,7 +1641,7 @@
        - 调用方可在公共映射后补 artifact 扩展字段
        - 缺少 `flowSnapshot` 时禁止直接命中缓存
        - Flow 不依赖环境 / 变量时允许复用无 `runContext` 缓存
-4. 最新 Node 20 验证通过。
+5. 最新 Node 20 验证通过。
    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test -- execution-history`
      - 结果：通过，`4/4`
    - `PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm --filter @flowweave/app-studio test`
@@ -2369,9 +2369,9 @@
 
 ### Findings
 
-1. 阻塞：`MISSING_VARIABLE` 的变量名契约比 DSL 更窄，导致合法变量名场景漏报。  
+1. 阻塞：`MISSING_VARIABLE` 的变量名契约比 DSL 更窄，导致合法变量名场景漏报。
    - 位置：`[fragility.ts](/Users/ling/codeHome/A_Mine/flowweave/.worktrees/codex-real-page-fragility-context/packages/page-intelligence/src/fragility.ts:3)`、`[fragility.ts](/Users/ling/codeHome/A_Mine/flowweave/.worktrees/codex-real-page-fragility-context/packages/page-intelligence/src/fragility.ts:44)`、`[schema.ts](/Users/ling/codeHome/A_Mine/flowweave/.worktrees/codex-real-page-fragility-context/packages/flow-dsl/src/schema.ts:22)`
-   - 说明：本次新增能力以 `/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/` 抽取变量名，只能识别字母、数字、下划线。与此同时，DSL 的 `variableDefSchema.name` 仅要求非空字符串，没有同样的命名限制。结果是：像 `user-name`、`env.prod`、中文名` 这类当前 DSL 允许的变量，既不会被 `extractVariableNames()` 捕获，也不会触发 `MISSING_VARIABLE`。这与“显式提供 `context.variables` 时扫描步骤中的 `{{variable}}` 引用”这一验收目标不完全一致，属于直接漏报。
+   - 说明：本次新增能力以 `/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/` 抽取变量名，只能识别字母、数字、下划线。与此同时，DSL 的 `variableDefSchema.name` 仅要求非空字符串，没有同样的命名限制。结果是：像 `user-name`、`env.prod`、中文名`这类当前 DSL 允许的变量，既不会被`extractVariableNames()`捕获，也不会触发`MISSING_VARIABLE`。这与“显式提供 `context.variables`时扫描步骤中的`{{variable}}` 引用”这一验收目标不完全一致，属于直接漏报。
 
 ### 测试缺口
 
@@ -2398,6 +2398,7 @@
   - `pnpm --filter @flowweave/page-intelligence test`
   - `pnpm --filter @flowweave/page-intelligence typecheck`
   - `pnpm --filter @flowweave/page-intelligence build`
+
 ## 调研验证报告 - better-sqlite3 与 Node 24 兼容性
 
 时间：2026-06-06 20:16:00 CST
@@ -4104,7 +4105,7 @@
    - [packages/shared/src/recording-protocol.ts](/Users/ling/codeHome/A_Mine/flowweave/packages/shared/src/recording-protocol.ts:4)
    - [apps/extension/entrypoints/content.ts](/Users/ling/codeHome/A_Mine/flowweave/apps/extension/entrypoints/content.ts:393)
    - [packages/flow-dsl/src/schema.ts](/Users/ling/codeHome/A_Mine/flowweave/packages/flow-dsl/src/schema.ts:58)  
-   说明：共享协议把 `scroll` 列为合法 `RecordedEvent`，但内容脚本没有 `scroll` 监听，recorder 没有对应归一化，DSL 也没有 `scroll` 步骤。这类“名义支持”会误导后续扩展和测试设计。
+     说明：共享协议把 `scroll` 列为合法 `RecordedEvent`，但内容脚本没有 `scroll` 监听，recorder 没有对应归一化，DSL 也没有 `scroll` 步骤。这类“名义支持”会误导后续扩展和测试设计。
 
 ### 已完成内容（按 v1 主线）
 
@@ -4786,6 +4787,7 @@
 ### 建议
 
 - 通过
+
 ## 2026-07-15 Node 24 Linux Studio CI 收口验收
 
 ### 验证范围
@@ -4980,17 +4982,17 @@
 
 ### 10 个体验维度映射
 
-| 维度 | 主要问题 |
-|---|---|
-| ① 第一印象 | P0-1、P1-3 |
-| ② 是否知道下一步 | P0-1、P1-1、P1-6 |
-| ③ 信息是否过多 | P1-3、P1-4 |
-| ④ 是否存在认知负担 | P0-1、P1-3、P2-1 |
-| ⑤ 是否需要思考才能操作 | P0-3、P1-1、P2-1 |
-| ⑥ 是否容易迷路 | P1-1、P1-4、P2-2 |
-| ⑦ 是否容易误操作 | P0-2、P0-3、P1-2 |
-| ⑧ 是否存在等待焦虑 | P1-5、P1-6 |
-| ⑨ 是否存在重复操作 | P0-1、P1-1 |
+| 维度                   | 主要问题               |
+| ---------------------- | ---------------------- |
+| ① 第一印象             | P0-1、P1-3             |
+| ② 是否知道下一步       | P0-1、P1-1、P1-6       |
+| ③ 信息是否过多         | P1-3、P1-4             |
+| ④ 是否存在认知负担     | P0-1、P1-3、P2-1       |
+| ⑤ 是否需要思考才能操作 | P0-3、P1-1、P2-1       |
+| ⑥ 是否容易迷路         | P1-1、P1-4、P2-2       |
+| ⑦ 是否容易误操作       | P0-2、P0-3、P1-2       |
+| ⑧ 是否存在等待焦虑     | P1-5、P1-6             |
+| ⑨ 是否存在重复操作     | P0-1、P1-1             |
 | ⑩ 是否符合用户心理模型 | P0-1、P1-2、P2-1、P2-2 |
 
 ### P0（必须解决）
@@ -5098,6 +5100,7 @@
 - 本次实际运行：首个默认 Flow 在约 30 秒后失败，运行中只显示“运行中…”，结果页产生可行动摘要与大量专业诊断。
 - 扩展：构建通过并核对侧栏可见 UI/交互合同；Chrome 安全策略阻止读取 `chrome://extensions`，本轮未安装或替换用户扩展，因此扩展真实侧栏视觉与录制运行仍是残余风险。
 - 清理验证：Web/API 与 Studio 已停止，`5173`、`5174`、`3847` 均无监听；`git diff --check` 通过。
+
 ## 2026-07-16 UX Foundation 2 验收完成
 
 - [x] 共享 API health、项目创建/列表、Flow 同步合同通过（`4/4`，含来源拦截）。
@@ -5250,3 +5253,14 @@
 - 编译门禁：五个受影响包的 typecheck、lint、build 共 `20/20` Turbo 任务通过；Studio Electron 严格签名、native binding 与 Web client/server 构建通过。
 - 差异门禁：`git diff --check` 通过。
 - 阶段判断：G1-G4 分轨与组合定向门禁通过，进入 G5；真实 UI、无缓存全仓 smoke、recorded replay、portability、安全审计、Node 20/24 和远端 CI 尚未完成，因此 P2.7 仍不可归档。
+
+## 2026-08-23 P2.7 G5 本地最终验证
+
+- 独立 L3 总审：`PASS`，98/100，无 P0/P1/P2、无 required fixes。
+- Node 24.14.0：`CI=1 pnpm smoke` 通过；登录 `4/4`；recorded replay `25/25`、总耗时 `48625ms`；portability warnings=`4`、steps=`10`；官方 registry 审计 0 个已知漏洞。
+- Web 浏览器：真实版本 Diff 展示新增 `0` / 删除 `1` / 修改 `3`；无编辑控件和删除能力；375×812 无横向溢出；控制台无 error。版本项为原生 button、启用、`tabIndex=0`、`aria-pressed`；浏览器工具合成 Tab 未移动焦点，未把该工具限制误记为成功。
+- Studio Electron：最近记录 `5` 条与逐条删除入口可见；确认框初始聚焦取消，Escape 关闭并回焦删除按钮；未执行永久删除。历史 v4 → 当前任务显示 `4` 处安全结构变化。
+- Node 20.19.6：冻结安装后无缓存 typecheck/test/build `39/39`、`0 cached`；登录 `4/4` 与 portability `10/10` 通过。
+- 默认环境恢复：Node 24 冻结安装、doctor、官方 registry 审计、Studio 严格签名、better-sqlite3 Electron binding 与生产构建全部通过。
+- 资源：`3847`、`5173`、`5174` 无监听；G3/G4/G5 worktree 已回收；主工作树 clean。
+- 当前结论：本地代码、测试、安全、真实 UI、E2E 与双 Node 门禁通过；必须等待集成分支及 main 远端 Node 20/24 CI 双绿后才能归档。

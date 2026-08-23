@@ -844,13 +844,13 @@
 
 ### 并行轨道（best-of-n-runner / worktree）
 
-| 轨道 | 分支 | Agent ID | 状态 |
-|------|------|----------|------|
-| R1 recorder | feat/p1-recorder | 3d3acde7 | running |
+| 轨道         | 分支              | Agent ID | 状态    |
+| ------------ | ----------------- | -------- | ------- |
+| R1 recorder  | feat/p1-recorder  | 3d3acde7 | running |
 | R5 knowledge | feat/p1-knowledge | 40f0d962 | running |
-| R2 runtime | feat/p1-runtime | 49ca873f | running |
+| R2 runtime   | feat/p1-runtime   | 49ca873f | running |
 | R3 extension | feat/p1-extension | 4251cdf1 | running |
-| R4 studio | feat/p1-studio | 369da3d1 | running |
+| R4 studio    | feat/p1-studio    | 369da3d1 | running |
 
 ### 合并队列（验收后）
 
@@ -1837,13 +1837,14 @@
 
 □ 已查阅上下文摘要文件：`.codex/context-summary-execution-context-persistence.md`
 □ 将使用以下可复用组件：
+
 - `resolveRunEnvironment`: `apps/studio/electron/services.ts` - 收敛环境字段
 - `buildFragilityIssues`: `apps/studio/electron/services.ts` - 统一 fragility 构造
 - `analyzeFlowFragility`: `packages/page-intelligence/src/fragility.ts` - 复原诊断上下文
 - `ensure*Column` 模式：`packages/project-knowledge/src/repository.ts` - 旧库补列兼容
-□ 将遵循命名约定：延续 `RunFlowOptions` 与 `ExecutionResult` 的字段命名，优先复用 `baseUrl / storageStatePath / variables / environmentName`
-□ 将遵循代码风格：TypeScript strict、小函数、显式类型，新增注释仅说明兼容迁移或上下文意图
-□ 确认不重复造轮子，证明：已检查 `services.ts`、`studio-client.ts`、`repository.ts`、`App.tsx` 中的现有上下文与 fragility 处理链路，当前仓库不存在已持久化执行上下文的等价实现
+  □ 将遵循命名约定：延续 `RunFlowOptions` 与 `ExecutionResult` 的字段命名，优先复用 `baseUrl / storageStatePath / variables / environmentName`
+  □ 将遵循代码风格：TypeScript strict、小函数、显式类型，新增注释仅说明兼容迁移或上下文意图
+  □ 确认不重复造轮子，证明：已检查 `services.ts`、`studio-client.ts`、`repository.ts`、`App.tsx` 中的现有上下文与 fragility 处理链路，当前仓库不存在已持久化执行上下文的等价实现
 
 ## 2026-06-06 续跑记录 - 执行上下文持久化 Foundation 收口
 
@@ -2051,12 +2052,13 @@
 
 □ 已查阅上下文摘要文件：`.codex/context-summary-historical-execution-compatibility.md`
 □ 将使用以下可复用组件：
+
 - `StudioExecution`：现有执行页唯一数据源
 - `execution-fragility.ts`：历史执行共享判断逻辑落点
 - `FragilityNotice` / `DiagnosticInspector`：执行页提示信息层级与文案模式参考
-□ 将遵循命名约定：共享判断逻辑放 `apps/studio/src/shared/`，展示组件保持轻量
-□ 将遵循代码风格：TypeScript strict、中文文案、单一职责、小步 TDD
-□ 确认不重复造轮子，证明：已检查执行页、提示组件和诊断组件，当前仓库没有针对旧执行兼容边界的现成提示实现
+  □ 将遵循命名约定：共享判断逻辑放 `apps/studio/src/shared/`，展示组件保持轻量
+  □ 将遵循代码风格：TypeScript strict、中文文案、单一职责、小步 TDD
+  □ 确认不重复造轮子，证明：已检查执行页、提示组件和诊断组件，当前仓库没有针对旧执行兼容边界的现成提示实现
 
 ## 单 agent 串行执行说明 - 旧历史执行兼容提示
 
@@ -2207,12 +2209,13 @@
 
 □ 已查阅上下文摘要文件：`.codex/context-summary-execution-history-mapping-regression.md`
 □ 将使用以下可复用组件：
+
 - `resolveExecutionFlow()`：继续作为“快照优先 / 当前 Flow 回退”的唯一入口
 - `buildExecutionFragilityIssues()`：继续作为历史执行 fragility 计算入口
 - `ExecutionWithProject`：继续作为 Electron / HTTP fallback 共享底层执行记录契约
-□ 将遵循命名约定：共享纯函数落在 `apps/studio/src/shared/`，IO 差异留在 `electron/` 与 `src/`
-□ 将遵循代码风格：先写红灯测试，再做最小重构，不引入额外测试基建
-□ 确认不重复造轮子，证明：已检查 `services.ts`、`studio-client.ts`、`execution-fragility.test.ts` 与 repository 测试，当前仓库没有统一的执行历史映射 helper
+  □ 将遵循命名约定：共享纯函数落在 `apps/studio/src/shared/`，IO 差异留在 `electron/` 与 `src/`
+  □ 将遵循代码风格：先写红灯测试，再做最小重构，不引入额外测试基建
+  □ 确认不重复造轮子，证明：已检查 `services.ts`、`studio-client.ts`、`execution-fragility.test.ts` 与 repository 测试，当前仓库没有统一的执行历史映射 helper
 
 ## 单 agent 串行执行说明 - 执行历史映射回归
 
@@ -2331,6 +2334,7 @@
       - 执行 ID：`c2c4d108-1959-4bbe-98f1-e894f6b20659`
       - `4` 个步骤全部 `success`
   - reviewer 子代理 `Carver` 已回收
+
 ## 调研任务 - better-sqlite3 与 Node 24 兼容性
 
 - 时间：2026-06-06 20:08:00 CST
@@ -2586,13 +2590,14 @@
 
 □ 已查阅上下文摘要文件：`.codex/context-summary-recorded-flow-playback-regression.md`
 □ 将使用以下可复用组件：
+
 - `buildFlowFromEvents`：录制事件聚合为 Flow 的唯一入口
 - `parseRecordedEvent`：模拟扩展真实协议
 - `executeFlow`：验证导出 Flow 是否可执行
 - `apps/studio/src/App.tsx` 现有变量表单：验证变量声明的真实消费方
-□ 将遵循命名约定：延续 `upload_<token>_<index>` 占位符命名，不新增第二套变量协议
-□ 将遵循代码风格：先写红灯测试，再做最小实现，最后 Node 20 验收
-□ 确认不重复造轮子，证明：已检查 recorder、runtime 与 Studio 变量链路，仓库当前没有“自动从录制占位符声明 Flow 变量”的等价实现
+  □ 将遵循命名约定：延续 `upload_<token>_<index>` 占位符命名，不新增第二套变量协议
+  □ 将遵循代码风格：先写红灯测试，再做最小实现，最后 Node 20 验收
+  □ 确认不重复造轮子，证明：已检查 recorder、runtime 与 Studio 变量链路，仓库当前没有“自动从录制占位符声明 Flow 变量”的等价实现
 
 ## 单 agent 串行执行说明 - 录制事件到回放整链回归
 
@@ -4509,9 +4514,9 @@
 - `startStaticServer`: `packages/runtime/src/playwright-runner.test.ts` - 为 session 场景提供稳定 origin
 - `buildFlowFromEvents`: `packages/recorder/src/normalize.ts` - 录制事件归一化入口
 - `parseRecordedEvent`: `packages/shared/src/recording-protocol.ts` - 录制事件 schema 校验入口
-□ 将遵循命名约定：沿用“支持将录制事件构建出的 X Flow 直接回放”测试命名风格
-□ 将遵循代码风格：保持当前测试文件的事件数组 + `buildFlowFromEvents()` + `executeFlow()` 结构
-□ 确认不重复造轮子，证明：已检查 `packages/runtime/src/playwright-runner.test.ts` 现有 recorded replay 用例、`examples/real-page-smoke.ts` 手写矩阵、`packages/recorder/src/normalize.test.ts` 等待推断回归，暂无等价场景覆盖上述 4 条目标
+  □ 将遵循命名约定：沿用“支持将录制事件构建出的 X Flow 直接回放”测试命名风格
+  □ 将遵循代码风格：保持当前测试文件的事件数组 + `buildFlowFromEvents()` + `executeFlow()` 结构
+  □ 确认不重复造轮子，证明：已检查 `packages/runtime/src/playwright-runner.test.ts` 现有 recorded replay 用例、`examples/real-page-smoke.ts` 手写矩阵、`packages/recorder/src/normalize.test.ts` 等待推断回归，暂无等价场景覆盖上述 4 条目标
 
 ## 任务计划 - Wave 7 Recorded Replay Coverage Expansion
 
@@ -6672,6 +6677,7 @@
   - 这段录屏里的核心异常不是“DOM 文字堆叠”或“左侧不能滚动”，而是更底层的浏览器可视内容在某一步后整体黑掉。
   - 黑屏发生点非常接近“切换酒店确认弹窗的确认动作”之后。
   - 从关键帧看，更像 headed Chromium / 渲染 surface / GPU 相关问题，或者页面切换后浏览器窗口内容没有继续正确绘制，而不是单纯某个 DOM 片段布局错乱。
+
 ## 2026-07-15 Node 24 Linux CI 与提交收口启动
 
 - 用户授权：按“先修 CI、整理提交边界、双版本验收、拆分提交并推送”的顺序执行。
@@ -6736,6 +6742,7 @@
   - `verify (node 24)`：成功。
   - Node 24 已在真实 Ubuntu runner 越过原 `@flowweave/app-studio#build` 失败点。
 - 最终结论：本地与远端双基线门禁均通过，P2 收口条件恢复；本轮任务已结束。
+
 ## 2026-07-15 v1 main 集成与 macOS 发布打包启动
 
 - 用户授权：继续执行状态梳理后的下一优先级，先合并稳定主线，再补 v1 正式交付能力。
@@ -6872,6 +6879,7 @@
 - 清理：开发 Studio/Web 已停止，`3847`、`5173`、`5174` 均无监听。
 - 阶段判断：UX Foundation 1 本地门禁通过；UX Foundation 2-5 继续待开发，整体首次体验仍未会签通过。
 - 远端会签：GitHub Actions run `29497693297`，`verify (node 20)` 与 `verify (node 24)` 均成功。
+
 ## 2026-07-16 UX Foundation 2：产品内首次启动
 
 - 用户指令：继续首次用户旅程产品化修复。
@@ -7100,6 +7108,7 @@
 - 合入前重新 fetch，确认 `origin/main=54cbfa1` 是 `966cffa` 的祖先；以非强制 fast-forward 推送 `HEAD:main`，未覆盖远端并行提交。
 - main run `32643072629` 成功：Node 20 job `97203054439`（`3m39s`）、Node 24 job `97203054597`（`3m24s`）均完成 install、Playwright、lint 与完整 smoke。
 - 生命周期：P2.6 S7 会签完成，执行计划从 `active` 迁移至 `completed`；post-v1 总路线继续保留 active，P2.7 未开启，P3/P4 与 vNext 继续冻结。
+
 ## 2026-08-23 P2.7 本地资产维护启动
 
 - 用户指令：在 P2.6 归档后继续回复“继续”，并已提前授权“自主规划任务、持续开发、依托 worktree 分派 subagent 并行开发，验收合格即可回收对应 agent”。
@@ -7150,3 +7159,16 @@
 - 主代理组合复验：先构建 project-knowledge 与 ui，再通过 knowledge `54/54`、local-api `9/9`、ui `14/14`、Studio `184/184`、Web `31/31`。
 - 受影响包 typecheck、lint、build 共 `20/20` 任务通过；Studio Electron bundle 严格签名与 better-sqlite3 native binding 校验通过。
 - 两名 Judge 写完正式 artifacts 后仍保持运行态，主代理已停止并回收；未接受其对业务代码的任何额外修改。
+
+### 2026-08-23 P2.7 G5 本地总验收与 worktree 回收
+
+- 独立总审：专用 `p27-integration-review` worktree 基于 `acb0925` 完成 L3 审查，结论 `PASS`、98/100、无 P0/P1/P2 和 required fixes；审查提交以 `dfa1e99` 合入。
+- Node 24.14.0：`CI=1 pnpm smoke` 通过，完整测试与生产构建通过，真实登录 `4/4`；recorded replay `25/25`（`48625ms`）；portability warnings=`4`、steps=`10`；官方 npm registry 生产依赖审计 0 个已知漏洞。
+- Web 实机：应用内浏览器打开真实本地服务；历史 v4 → 当前任务显示新增 `0`、删除 `1`、修改 `3`；无 textarea、contenteditable、删除按钮或控制台 error；375×812 下 body/document 宽度均为 `375`，Diff 区 `clientWidth=scrollWidth=349`。
+- Web 键盘证据：版本项为原生启用 `button`、`tabIndex=0`、`aria-pressed`；应用内浏览器的合成 Tab 未移动焦点，按工具侧限制留痕，已有原生语义与行为测试覆盖，不包装为真实 Tab 成功。
+- Studio 实机：开发态 Electron 与本地 API 正常启动；左侧真实展示最近 `5` 条记录与逐条删除入口。删除确认框初始焦点为“取消”，明确列出时间、状态、受控产物、不可恢复和隔离区语义；Escape 关闭后焦点返回原删除按钮。未执行永久删除，避免动用户已有运行数据。
+- Studio Diff：真实历史 v4 → 当前任务展示 `4` 处业务结构变化，敏感值隐藏，版本项 `aria-pressed` 正确。
+- Node 20.19.6：按 lockfile 强制重建后，`pnpm turbo typecheck test build --force` 共 `39/39` 成功、`0 cached`；真实登录 `4/4`、portability warnings=`4` / steps=`10` 通过。
+- 环境恢复：Node 24.14.0 下再次按 lockfile 强制安装，doctor、官方 registry 审计、Studio 严格签名、Electron native binding 与生产构建通过。
+- 资源回收：Web/Studio 服务及测试启动的 Electron 进程均已停止，`3847`、`5173`、`5174` 无监听；G3、G4、G5 worktree 均在 clean 后移除。功能分支保留至远端与 main 会签完成。
+- 阶段判断：P2.7 本地 DoD 已通过；远端集成分支与 main Node 20/24 双矩阵仍是归档硬门。
