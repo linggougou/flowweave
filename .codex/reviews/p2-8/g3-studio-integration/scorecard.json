@@ -7,6 +7,8 @@
   "artifact_refs": [
     "reviewed-commit:393c8135aeda2ee4d674c766c424593e8ded3a3e",
     "source-commit:c39ceafe935a7e2c4d530a7d49d31c736fd8f2a8",
+    "required-fix-reviewed:595804d4dd0dfa745200ce9adbeecee3b606643f",
+    "required-fix-original:9661fff",
     "file:apps/studio/electron/main.ts",
     "file:apps/studio/electron/preload.ts",
     "file:apps/studio/electron/services.ts",
@@ -14,9 +16,8 @@
     "file:apps/studio/src/App.tsx",
     "file:apps/studio/src/App.execution-screenshot-preview.test.tsx",
     "file:apps/studio/src/ExecutionScreenshotPreview.tsx",
-    "verifier:Studio 208/208; UI 14/14; typecheck/lint/build pass",
-    "cmd:git diff --quiet c39ceaf 393c813 -- apps/studio packages/ui",
-    "cmd:git diff --check 393c813^..393c813"
+    "verifier:App screenshot preview 5/5; Studio 209/209; UI 14/14; typecheck/lint/build pass",
+    "cmd:git diff --check dc82c25..595804d"
   ],
   "hard_gates": [
     {
@@ -52,7 +53,7 @@
       "evidence": [
         "services.ts:290-374,462-490 历史诊断只从推导的 runDirectory 读取固定文件名，使用 no-follow fd 与身份重验，不信任 SQLite diagnosticPath",
         "services.test.ts:261-289 以外部秘密文件注入 diagnosticPath，验证既不读取秘密也不向 Studio DTO 返回路径",
-        "studio-api-types.ts:55-70 的 ExecutionStepLog 仅暴露 hasScreenshot/hasDiagnostic/hasPageSnapshot 与结构化内容，不含 screenshotPath/diagnosticPath/pageSnapshotPath"
+        "studio-api-types.ts:55-70 的 ExecutionStepLog 仅暴露 artifact 存在标记与结构化内容，不含本机路径"
       ]
     },
     {
@@ -60,44 +61,44 @@
       "status": "pass",
       "evidence": [
         "ExecutionScreenshotPreview.tsx:14-16,32,92-99 仅允许 blob: 进入只读 img，不渲染 file:/data:/iframe/object/embed/webview",
-        "App.tsx:274-300,1151-1201 在新请求、关闭、选择 effect、卸载与创建后判旧时回收 Blob URL",
-        "App.execution-screenshot-preview.test.tsx:169-220,269-330 覆盖创建、关闭、切换执行和卸载 revoke"
+        "App.tsx:274-300,1151-1200 在新请求、关闭、选择 effect、卸载与创建后判旧时回收 Blob URL",
+        "App.execution-screenshot-preview.test.tsx 覆盖创建、关闭、切换执行和卸载 revoke"
       ]
     },
     {
       "id": "complete-late-result-context-guard",
-      "status": "fail",
+      "status": "pass",
       "evidence": [
-        "App.tsx:1166-1173 与 1186-1194 对 fulfilled 结果校验 generation + projectId + flowId + executionId",
-        "App.tsx:1202-1212 的 catch 仅校验 generation；选择 refs 在 render 时更新（269-271），generation 直到 passive effect（288-292）才递增，留下 selection render 到 effect 执行之间的迟到 reject 污染窗口",
-        "App.execution-screenshot-preview.test.tsx:222-267 只覆盖迟到 fulfilled；切换执行用例 269-301 使用立即 fulfilled，没有覆盖 project/flow/execution 切换后的迟到 reject"
+        "595804d 在 App.tsx:1152-1157 定义统一 isCurrentPreviewRequest，同时绑定 generation、projectId、flowId、executionId",
+        "统一 guard 覆盖 absent 写状态前、available 创建 Blob 前、Blob 创建后及 catch 写错误前；判旧的 Blob 会立即 revoke",
+        "新增测试以 pending 旧请求、flushSync execution 切换和 effect 前迟到 reject 精确复现初审窗口，验证无旧错误、路径、unavailable 弹层或 Blob 创建；主证据 App 5/5"
       ]
     },
     {
       "id": "route-and-scope",
       "status": "pass",
       "evidence": [
-        "未新增 Web/Local API 敏感文件能力；浏览器 fallback 明确不支持截图预览",
-        "未接入 P3/P4、vNext，修改面保持 P2.8 G3 Electron/Studio/UI 集成范围"
+        "required fix 仅修改 App.tsx 与对应测试，没有新增 Web/Local API 敏感文件能力",
+        "未接入 P3/P4、vNext，修改面保持 P2.8 G3 竞态修复范围"
       ]
     }
   ],
   "dimensions": [
     {
       "name": "correctness",
-      "score": 18,
+      "score": 25,
       "max_score": 25,
-      "reason": "主流程接线正确，但 reject 分支未绑定完整选择上下文，违反快速切换不得串线的冻结合同。",
+      "reason": "统一 current guard 已覆盖所有响应出口，旧选择的成功、缺席和异常均不能写入新上下文。",
       "evidence_refs": [
-        "apps/studio/src/App.tsx:1137-1213",
-        "apps/studio/src/App.execution-screenshot-preview.test.tsx:222-301"
+        "apps/studio/src/App.tsx:1151-1207",
+        "apps/studio/src/App.execution-screenshot-preview.test.tsx:306-344"
       ]
     },
     {
       "name": "security",
       "score": 25,
       "max_score": 25,
-      "reason": "固定对象 IPC、主窗口来源校验、openPath 移除、sandbox/CSP/导航限制和污染 DB 路径拒绝均成立；未发现新的任意文件读取能力。",
+      "reason": "固定对象 IPC、主窗口来源校验、openPath 移除、sandbox/CSP/导航限制、污染 DB 路径拒绝与 renderer 无路径边界均成立。",
       "evidence_refs": [
         "apps/studio/electron/main.ts:91-151,455-465,530-545",
         "apps/studio/electron/services.ts:290-374,462-490",
@@ -106,12 +107,12 @@
     },
     {
       "name": "regression_safety",
-      "score": 15,
+      "score": 20,
       "max_score": 20,
-      "reason": "主代理的 Studio 208/208、UI 14/14 与编译门禁可复用，但关键迟到 reject 分支没有故障注入测试。",
+      "reason": "required fix 后 App 定向 5/5、Studio 209/209、UI 14/14 与 typecheck/lint/build 全绿；修复仅触及 App guard 与测试。",
       "evidence_refs": [
-        "verifier:Studio 208/208; UI 14/14; typecheck/lint/build pass",
-        "apps/studio/src/App.execution-screenshot-preview.test.tsx"
+        "verifier:App screenshot preview 5/5; Studio 209/209; UI 14/14; typecheck/lint/build pass",
+        "commit:595804d4dd0dfa745200ce9adbeecee3b606643f"
       ]
     },
     {
@@ -121,58 +122,65 @@
       "reason": "没有新增 Web/Local API 文件服务，也未解冻 P3/P4 或 vNext。",
       "evidence_refs": [
         "docs/exec-plans/active/p2-8-execution-screenshot-preview.md:7-9,64-69",
-        "apps/studio/src/studio-client.ts:265-267"
+        "git show --stat 595804d"
       ]
     },
     {
       "name": "evidence_quality",
-      "score": 16,
+      "score": 20,
       "max_score": 20,
-      "reason": "IPC、sender、CSP、路径污染和 Blob 生命周期证据充分；缺少冻结清单明确要求的 project/flow/execution 切换后迟到 reject 证据。",
+      "reason": "新增用例不是普通切换测试，而是直接制造初审指出的 render 已提交、passive effect 未清理窗口，并在其中注入 reject。",
       "evidence_refs": [
-        "apps/studio/electron/main.test.ts:550-715",
-        "apps/studio/electron/services.test.ts:261-307",
-        "apps/studio/src/App.execution-screenshot-preview.test.tsx:169-330"
+        "apps/studio/src/App.execution-screenshot-preview.test.tsx:306-344",
+        "verifier:App screenshot preview 5/5"
       ]
     }
   ],
   "penalties": [],
   "totals": {
-    "raw_score": 84,
+    "raw_score": 100,
     "penalty_total": 0,
-    "final_score": 84
+    "final_score": 100
   },
-  "verdict": "REVISE",
-  "required_fixes": [
-    {
-      "priority": "P1",
-      "title": "reject 分支必须使用完整选择上下文守卫",
-      "description": "在 App.tsx 的 catch 写入 unavailable 状态前，除 generation 外还必须比较请求捕获的 projectId、flowId、executionId 与当前 refs；建议把成功、缺席、Blob 创建后和异常分支统一到同一 isCurrentRequest 判定，避免未来再次分叉。",
-      "test_requirement": "新增故障注入：旧截图请求 pending 时切换 project、flow 或 execution，在选择已 render 但 generation 清理 effect 尚未成为唯一保障的窗口让旧请求 reject；断言新选择不出现旧步骤标签/错误/不可用弹层，且不创建 Blob URL。至少覆盖 execution，最好参数化三种上下文。"
-    }
-  ],
+  "verdict": "PASS",
+  "required_fixes": [],
   "nice_to_have": [],
   "reviewers": [
     {
       "role": "verifier",
-      "conclusion": "REVISE",
-      "summary": "外围安全门和既有 208/208、14/14、编译证据通过，但 App 的迟到 reject 上下文守卫缺失。"
+      "conclusion": "PASS",
+      "summary": "595804d 关闭完整上下文 guard 缺口，既有 App 5/5、Studio 209/209、UI 14/14 与编译门禁证据可复用。"
     },
     {
       "role": "strict_judge",
-      "conclusion": "REVISE",
-      "summary": "冻结合同要求 project/flow/execution 快速切换不串线；该分支级缺口属于必须关闭的 P1。"
+      "conclusion": "PASS",
+      "summary": "初审 P1 已由统一守卫和精确竞态故障注入共同关闭。"
     },
     {
       "role": "anti_slop_judge",
-      "conclusion": "REVISE",
-      "summary": "现有乱序测试只证明 fulfilled 路径，不能替代 reject 路径的独立故障注入。"
+      "conclusion": "PASS",
+      "summary": "测试明确控制 effect 时序并验证用户可见污染与 Blob 副作用，不是泛化 happy-path 凑数。"
     },
     {
       "role": "chief_reviewer",
-      "conclusion": "REVISE",
-      "summary": "退回 G3 做最小上下文 guard 与测试修复；其他安全边界无需扩大或重写。"
+      "conclusion": "PASS",
+      "summary": "G3 可离开独立审查进入 G4 会签；该结论不扩展 Web/Local API、P3/P4 或 vNext 范围。"
     }
   ],
-  "reviewed_at": "2026-08-24T12:00:00+08:00"
+  "review_history": [
+    {
+      "reviewed_at": "2026-08-24T12:00:00+08:00",
+      "verdict": "REVISE",
+      "score": 84,
+      "summary": "初审发现 catch 仅校验 generation，存在 selection render 到 passive effect 之间的迟到 reject 污染窗口。",
+      "review_commit": "dc82c25ab54e77ff5d9edd50a664e9c7db4e3431"
+    },
+    {
+      "reviewed_at": "2026-08-24T12:20:00+08:00",
+      "verdict": "PASS",
+      "score": 100,
+      "summary": "595804d 引入统一完整上下文 guard，并以精确时序故障注入关闭初审 P1。"
+    }
+  ],
+  "reviewed_at": "2026-08-24T12:20:00+08:00"
 }

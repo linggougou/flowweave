@@ -1,24 +1,24 @@
 # 结论
 
-**REVISE（84/100）**。固定对象 IPC、sender/main-frame/origin、`openPath` 移除、sandbox/导航/CSP、污染数据库路径拒绝、renderer 无路径与 Blob 回收均通过；但 `App` 的迟到 reject 守卫存在一个 P1 竞态，G3 暂不能会签。
+**PASS（100/100）**。`595804d` 已精确关闭初审 P1，G3 可离开独立审查并进入 G4 会签。
+
+初审历史：`dc82c25` 曾给出 **REVISE（84/100）**，原因是 `catch` 只校验 generation，存在 selection render 到 passive effect 之间的迟到 reject 污染窗口；其余 IPC、路径与渲染安全硬门当时均已通过。
 
 # 为什么
 
-`App.tsx:1166-1173` 和 `1186-1194` 对成功/缺席响应都比较 `generation + projectId + flowId + executionId`，而 `1202-1212` 的 `catch` 只比较 generation。选择 refs 在 render 时同步更新（`269-271`），generation 则依赖选择变化后的 passive effect 才递增（`288-292`）；因此旧截图请求可在“新选择已经 render、清理 effect 尚未执行”的窗口 reject，并把旧步骤错误写成当前 UI 的 unavailable 状态。现有乱序用例只覆盖迟到 fulfilled，切换执行用例使用立即 fulfilled，无法关闭这个分支。
+修复在单次预览请求内统一定义 `isCurrentPreviewRequest`，同时绑定 generation、projectId、flowId、executionId，并用于 absent 写状态前、available 创建 Blob 前、Blob 创建后以及 catch 写错误前。判旧发生在 Blob 创建后时仍会立即 revoke，因此所有完成出口现已共享同一上下文合同。
 
-其余安全边界成立：主进程严格拒绝路径/额外字段和非受信 frame，preload 不再暴露通用路径能力；Studio 壳启用 sandbox 并封锁导航、新窗口与主动内容；结构化诊断只从受控运行目录读取固定 JSON 文件，不信任 SQLite 路径；renderer DTO/DOM 不含本机路径，图片只使用短生命周期 `blob:`。未新增 Web/Local API 文件读取，也未触及 P3/P4/vNext。
+新增测试不是普通切换 happy path：它让旧请求保持 pending，用 `flushSync` 提交新 execution render，在 passive effect 尚未成为 generation 保障的窗口触发旧请求 reject，验证新上下文不出现旧错误、本机路径或 unavailable 状态，也不创建 Blob URL；随后 effect 清理关闭弹层。复用验证证据为 App 5/5、Studio 209/209、UI 14/14、typecheck、lint、build 全绿。
 
 # 必须修改
 
-P1：在 `catch` 写入 unavailable 前，使用与 fulfilled 分支完全相同的 `generation + projectId + flowId + executionId` 当前性判断；建议抽为单一判定，避免分支漂移。补一条迟到 reject 故障注入：旧请求 pending 时切换 execution（最好参数化 project/flow/execution），在新上下文已经 render 后触发旧请求 reject，断言新上下文不出现旧步骤标签、旧错误或 unavailable 弹层，且不创建 Blob URL。除这一最小修复与测试外无需扩大范围。
+无。初审 required fix 已关闭。后续仅进入既定 G4 会签；不得据此新增 Web/Local API 文件能力或解冻 P3/P4、vNext。
 
 # 证据
 
-- 被审：`393c8135aeda2ee4d674c766c424593e8ded3a3e` / `c39ceafe935a7e2c4d530a7d49d31c736fd8f2a8`；`apps/studio` 与 `packages/ui` 代码树一致
-- 缺陷：`apps/studio/src/App.tsx:269-292,1166-1213`
-- 测试缺口：`apps/studio/src/App.execution-screenshot-preview.test.tsx:222-301`
-- IPC/sender/壳层：`apps/studio/electron/main.ts:91-151,455-465,530-545`
-- 路径污染：`apps/studio/electron/services.ts:290-374,462-490`；`apps/studio/electron/services.test.ts:261-289`
-- CSP/renderer：`apps/studio/csp-policy.ts:3-22`；`apps/studio/src/ExecutionScreenshotPreview.tsx:14-16,92-99`
-- 复用主证据：Studio 208/208、UI 14/14、typecheck、lint、build 全绿
-- 本轮收敛检查：`git diff --quiet c39ceaf 393c813 -- apps/studio packages/ui`、`git diff --check 393c813^..393c813` 通过；未重跑全量测试
+- 被审 G3：`393c8135aeda2ee4d674c766c424593e8ded3a3e` / `c39ceafe935a7e2c4d530a7d49d31c736fd8f2a8`
+- Required fix：`595804d4dd0dfa745200ce9adbeecee3b606643f`（原提交 `9661fff`）
+- 统一 guard：`apps/studio/src/App.tsx:1151-1207`
+- 精确故障注入：`apps/studio/src/App.execution-screenshot-preview.test.tsx:306-344`
+- 复用主证据：App 截图预览 5/5、Studio 209/209、UI 14/14、typecheck、lint、build 全绿
+- 收敛检查：`git diff --check dc82c25..595804d` 通过；required fix 仅修改 `App.tsx` 与对应测试，本轮未重跑全量
