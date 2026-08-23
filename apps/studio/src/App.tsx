@@ -192,7 +192,15 @@ export function App() {
   const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [cancelling, setCancelling] = useState(false);
+  const [portabilityBusy, setPortabilityBusy] = useState<"import" | "export" | null>(null);
+  const [portabilityNotice, setPortabilityNotice] = useState<string | null>(null);
   const previousDraftFlowIdRef = useRef<string | null>(null);
+  const selectedProjectIdRef = useRef(selectedProjectId);
+  const selectedFlowIdRef = useRef(selectedFlowId);
+  const flowLoadRequestIdRef = useRef(0);
+  const portabilityRequestIdRef = useRef(0);
+  selectedProjectIdRef.current = selectedProjectId;
+  selectedFlowIdRef.current = selectedFlowId;
 
   useEffect(() => {
     const api = getStudioApi();
@@ -332,13 +340,28 @@ export function App() {
   }, [flows, refreshing, selectedFlowId, selectedProjectId]);
 
   const loadFlowDocument = useCallback(async (projectId: string, flowId: string) => {
+    const requestId = ++flowLoadRequestIdRef.current;
     setFlowLoading(true);
     setError(null);
     try {
       const api = getStudioApi();
       const doc = await api.getFlow(projectId, flowId);
+      if (
+        requestId !== flowLoadRequestIdRef.current ||
+        selectedProjectIdRef.current !== projectId ||
+        selectedFlowIdRef.current !== flowId
+      ) {
+        return;
+      }
       setCurrentFlow(doc);
     } catch (err: unknown) {
+      if (
+        requestId !== flowLoadRequestIdRef.current ||
+        selectedProjectIdRef.current !== projectId ||
+        selectedFlowIdRef.current !== flowId
+      ) {
+        return;
+      }
       const message = formatStudioError(err);
       if (isFlowNotFoundMessage(message)) {
         setCurrentFlow(null);
@@ -348,7 +371,9 @@ export function App() {
       setCurrentFlow(null);
       setError(message);
     } finally {
-      setFlowLoading(false);
+      if (requestId === flowLoadRequestIdRef.current) {
+        setFlowLoading(false);
+      }
     }
   }, []);
 
@@ -499,6 +524,10 @@ export function App() {
     if (renamingFlowId) {
       return;
     }
+    portabilityRequestIdRef.current += 1;
+    flowLoadRequestIdRef.current += 1;
+    selectedFlowIdRef.current = flowId;
+    setPortabilityBusy(null);
     setSelectedFlowId(flowId);
     setTab("flow");
   };
@@ -553,6 +582,12 @@ export function App() {
   };
 
   const handleSelectProject = (projectId: string) => {
+    portabilityRequestIdRef.current += 1;
+    flowLoadRequestIdRef.current += 1;
+    selectedProjectIdRef.current = projectId;
+    selectedFlowIdRef.current = null;
+    setPortabilityBusy(null);
+    setFlowLoading(false);
     setSelectedProjectId(projectId);
     setSelectedFlowId(null);
     setCurrentFlow(null);
@@ -564,7 +599,97 @@ export function App() {
     setBaseUrlDraft("");
     setStorageStatePathDraft("");
     setVariableInputs({});
+    setPortabilityNotice(null);
     setTab("flow");
+  };
+
+  const handleImportFlowFile = async () => {
+    if (!selectedProjectId || portabilityBusy) {
+      return;
+    }
+    const projectId = selectedProjectId;
+    const requestId = ++portabilityRequestIdRef.current;
+    setPortabilityBusy("import");
+    setError(null);
+    setPortabilityNotice(null);
+    try {
+      const api = getStudioApi();
+      const result = await api.importFlowFile(projectId);
+      if (result.status === "cancelled") {
+        return;
+      }
+      if (
+        requestId !== portabilityRequestIdRef.current ||
+        selectedProjectIdRef.current !== projectId
+      ) {
+        return;
+      }
+      const nextFlows = await api.listFlows(projectId);
+      if (
+        requestId !== portabilityRequestIdRef.current ||
+        selectedProjectIdRef.current !== projectId
+      ) {
+        return;
+      }
+      flowLoadRequestIdRef.current += 1;
+      selectedFlowIdRef.current = result.flow.id;
+      setFlows(nextFlows);
+      setSelectedFlowId(result.flow.id);
+      setCurrentFlow(result.flow);
+      setVersions([]);
+      setPreviewVersion(null);
+      setTab("flow");
+      setPortabilityNotice(
+        `已导入「${result.flow.name}」，产生 ${result.warnings.length} 条安全处理提醒。请补齐运行所需输入，并检查业务文本是否符合预期。`,
+      );
+    } catch (err: unknown) {
+      if (
+        requestId === portabilityRequestIdRef.current &&
+        selectedProjectIdRef.current === projectId
+      ) {
+        setError(formatStudioError(err));
+      }
+    } finally {
+      if (requestId === portabilityRequestIdRef.current) {
+        setPortabilityBusy(null);
+      }
+    }
+  };
+
+  const handleExportFlowFile = async () => {
+    if (!selectedProjectId || !selectedFlowId || portabilityBusy) {
+      return;
+    }
+    const projectId = selectedProjectId;
+    const flowId = selectedFlowId;
+    const requestId = ++portabilityRequestIdRef.current;
+    setPortabilityBusy("export");
+    setError(null);
+    setPortabilityNotice(null);
+    try {
+      const result = await getStudioApi().exportFlowFile(projectId, flowId);
+      if (result.status === "cancelled") {
+        return;
+      }
+      if (
+        requestId !== portabilityRequestIdRef.current ||
+        selectedProjectIdRef.current !== projectId ||
+        selectedFlowIdRef.current !== flowId
+      ) {
+        return;
+      }
+      setPortabilityNotice(
+        `已导出「${selectedFlowName}」，包含 ${result.warnings.length} 条安全处理提醒。导出仅处理可识别的敏感字段，请检查业务文本。`,
+      );
+    } catch (err: unknown) {
+      if (requestId === portabilityRequestIdRef.current) {
+        setError(formatStudioError(err));
+      }
+    } finally {
+      if (requestId === portabilityRequestIdRef.current) {
+        setPortabilityBusy(null);
+      }
+    }
   };
 
   const handleCreateProject = async (event: FormEvent) => {
@@ -894,7 +1019,17 @@ export function App() {
 
           {selectedProjectId ? (
             <section className="sidebar-section sidebar-section-primary">
-              <h2>自动化任务</h2>
+              <div className="sidebar-section-head">
+                <h2>自动化任务</h2>
+                <button
+                  type="button"
+                  className="sidebar-text-btn"
+                  disabled={portabilityBusy !== null}
+                  onClick={() => void handleImportFlowFile()}
+                >
+                  {portabilityBusy === "import" ? "导入中…" : "导入 JSON"}
+                </button>
+              </div>
               {refreshNotice ? (
                 <p className="sidebar-refresh-notice" role="status">
                   {refreshNotice}
@@ -1057,6 +1192,11 @@ export function App() {
             {error}
           </p>
         ) : null}
+        {portabilityNotice ? (
+          <p className="portability-notice" role="status">
+            {portabilityNotice}
+          </p>
+        ) : null}
         {selectedProjectId && currentFlow ? (
           <section className="run-workspace" aria-labelledby="run-workspace-title">
             <header className="run-workspace-header">
@@ -1064,14 +1204,24 @@ export function App() {
                 <p className="business-eyebrow">当前自动化任务</p>
                 <h2 id="run-workspace-title">{currentFlow.name}</h2>
               </div>
-              <button
-                type="button"
-                className="run-primary-btn"
-                disabled={loading || projectHasNoFlows}
-                onClick={handlePrepareRun}
-              >
-                {loading ? "运行中…" : "运行任务"}
-              </button>
+              <div className="run-workspace-actions">
+                <button
+                  type="button"
+                  className="run-secondary-btn"
+                  disabled={portabilityBusy !== null}
+                  onClick={() => void handleExportFlowFile()}
+                >
+                  {portabilityBusy === "export" ? "导出中…" : "导出 JSON"}
+                </button>
+                <button
+                  type="button"
+                  className="run-primary-btn"
+                  disabled={loading || projectHasNoFlows}
+                  onClick={handlePrepareRun}
+                >
+                  {loading ? "运行中…" : "运行任务"}
+                </button>
+              </div>
             </header>
 
             <dl className="task-facts">

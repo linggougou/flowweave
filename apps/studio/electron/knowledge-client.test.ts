@@ -5,6 +5,7 @@ import type { ProjectKnowledgeRepository } from "@flowweave/project-knowledge";
 import {
   apiAllocateRunDirectory,
   apiGetFlow,
+  apiImportFlow,
   apiListProjects,
   apiRenameFlow,
   configureLocalKnowledgeRepository,
@@ -61,6 +62,70 @@ describe("Electron 本地知识库模式", () => {
     });
     await expect(apiAllocateRunDirectory("project_local", "execution_local")).resolves.toBe(
       "/tmp/run-local",
+    );
+  });
+
+  it("导入只调用专用 importFlow，不复用 saveFlow/upsert", async () => {
+    const source = {
+      schemaVersion: 1,
+      id: "flow_source",
+      projectId: "project_source",
+      name: "导入来源",
+      variables: [],
+      steps: [{ id: "navigate", type: "navigate", url: "/" }],
+      meta: {
+        createdAt: "2026-08-23T08:00:00.000Z",
+        updatedAt: "2026-08-23T08:00:00.000Z",
+        source: "recorded",
+      },
+    } as FlowDocument;
+    const imported = { ...source, id: "flow_new", projectId: "project_target" };
+    const importFlow = vi.fn(() => ({ flow: imported, warnings: [] }));
+    const saveFlow = vi.fn();
+    configureLocalKnowledgeRepository({
+      importFlow,
+      saveFlow,
+    } as unknown as ProjectKnowledgeRepository);
+
+    await expect(apiImportFlow("project_target", source)).resolves.toEqual({
+      flow: imported,
+      warnings: [],
+    });
+    expect(importFlow).toHaveBeenCalledWith("project_target", source);
+    expect(saveFlow).not.toHaveBeenCalled();
+  });
+
+  it("开发态通过 G2 专用 flow-imports endpoint 导入裸文档", async () => {
+    const source = {
+      schemaVersion: 1,
+      id: "flow_http_source",
+      projectId: "project_source",
+      name: "HTTP 导入来源",
+      variables: [],
+      steps: [{ id: "navigate", type: "navigate", url: "/" }],
+      meta: {
+        createdAt: "2026-08-23T08:00:00.000Z",
+        updatedAt: "2026-08-23T08:00:00.000Z",
+        source: "recorded",
+      },
+    } as FlowDocument;
+    const responseBody = {
+      flow: { ...source, id: "flow_http_new", projectId: "project_target" },
+      warnings: [],
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(responseBody),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(apiImportFlow("project_target", source)).resolves.toEqual(responseBody);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:3847/api/projects/project_target/flow-imports",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(source),
+      }),
     );
   });
 });

@@ -1,5 +1,9 @@
 /** 渲染进程与 preload 共享的 Studio API 类型 */
-import type { FlowDocument, NormalizedStep } from "@flowweave/flow-dsl";
+import type {
+  FlowDocument,
+  FlowPortabilityWarning,
+  NormalizedStep,
+} from "@flowweave/flow-dsl";
 import type { FragilityIssue, PageSnapshotSummary } from "@flowweave/page-intelligence";
 import type { ExecutionProgressEvent } from "@flowweave/runtime";
 
@@ -394,6 +398,21 @@ export type StudioFlowRef = {
   createdAt: string;
 };
 
+export type StudioImportFlowFileResult =
+  | { status: "cancelled" }
+  | {
+      status: "imported";
+      flow: FlowDocument;
+      warnings: FlowPortabilityWarning[];
+    };
+
+export type StudioExportFlowFileResult =
+  | { status: "cancelled" }
+  | {
+      status: "exported";
+      warnings: FlowPortabilityWarning[];
+    };
+
 export type StudioFlowVersion = {
   id: string;
   flowId: string;
@@ -414,6 +433,11 @@ export type StudioApi = {
     name: string,
   ) => Promise<StudioFlowRef>;
   getFlow: (projectId: string, flowId: string) => Promise<FlowDocument>;
+  importFlowFile: (projectId: string) => Promise<StudioImportFlowFileResult>;
+  exportFlowFile: (
+    projectId: string,
+    flowId: string,
+  ) => Promise<StudioExportFlowFileResult>;
   getFlowRunInput: (projectId: string, flowId: string) => Promise<StudioFlowRunInput | null>;
   runFlow: (
     projectId: string,

@@ -162,6 +162,8 @@ function createApiHarness(flow: FlowDocument, overrides: Partial<StudioApi> = {}
     renameFlow: vi.fn(),
     getFlow: vi.fn().mockResolvedValue(flow),
     getFlowRunInput: vi.fn().mockResolvedValue(null),
+    importFlowFile: vi.fn().mockResolvedValue({ status: "cancelled" }),
+    exportFlowFile: vi.fn().mockResolvedValue({ status: "cancelled" }),
     runFlow: vi.fn<StudioApi["runFlow"]>().mockResolvedValue({
       executionId: "exec_run_safe",
       status: "passed",

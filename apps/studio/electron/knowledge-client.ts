@@ -3,6 +3,7 @@ import type { PageSnapshotSummary } from "@flowweave/page-intelligence";
 import type {
   ExecutionResult,
   ExecutionWithProject,
+  FlowImportResult,
   FlowVersionRecord,
   ProjectKnowledgeRepository,
   ProjectRef,
@@ -92,6 +93,19 @@ export async function apiGetFlow(projectId: string, flowId: string): Promise<Flo
     return flow;
   }
   return request(`/api/projects/${projectId}/flows/${flowId}`);
+}
+
+export async function apiImportFlow(
+  projectId: string,
+  input: unknown,
+): Promise<FlowImportResult> {
+  if (localRepository) {
+    return localRepository.importFlow(projectId, input);
+  }
+  return request(`/api/projects/${projectId}/flow-imports`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 export async function apiSaveFlow(

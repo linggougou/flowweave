@@ -10,6 +10,7 @@ import type { PageSnapshotSummary } from "@flowweave/page-intelligence";
 import {
   ProjectKnowledgeRepository,
   type ExecutionResult as KnowledgeExecutionResult,
+  type FlowImportResult,
   type ProjectEnvironment,
 } from "@flowweave/project-knowledge";
 import {
@@ -50,6 +51,7 @@ import {
   apiGetExecution,
   apiGetFlow,
   apiGetFlowVersion,
+  apiImportFlow,
   apiListExecutions,
   apiListFlowVersions,
   apiListFlows,
@@ -682,6 +684,13 @@ export async function renameFlow(
 
 export async function getFlow(projectId: string, flowId: string): Promise<FlowDocument> {
   return apiGetFlow(projectId, flowId);
+}
+
+export async function importFlowDocument(
+  projectId: string,
+  input: unknown,
+): Promise<FlowImportResult> {
+  return apiImportFlow(projectId, input);
 }
 
 export async function listFlowVersions(

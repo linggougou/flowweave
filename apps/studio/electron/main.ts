@@ -1,5 +1,5 @@
 import "./env-setup.js";
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type {
@@ -23,6 +23,7 @@ import {
   getFlowRunInput,
   getFlowVersion,
   getProjectKnowledgeRepository,
+  importFlowDocument,
   listExecutions,
   listFlows,
   listFlowVersions,
@@ -31,6 +32,7 @@ import {
   restoreFlowVersion,
   runFlow,
 } from "./services.js";
+import { exportFlowToFile, importFlowFromFile } from "./flow-portability-files.js";
 
 let mainWindow: BrowserWindow | null = null;
 let localKnowledgeApiService: LocalKnowledgeApiService | null = null;
@@ -212,6 +214,26 @@ function registerIpcHandlers(): void {
     }
     return getFlow(projectId, flowId);
   });
+
+  ipcMain.handle(IPC_CHANNELS.importFlowFile, async (_event, projectId: string) => {
+    assertNonEmptyId(projectId, "projectId");
+    return importFlowFromFile(projectId, {
+      showOpenDialog: (options) => dialog.showOpenDialog(options),
+      importFlow: importFlowDocument,
+    });
+  });
+
+  ipcMain.handle(
+    IPC_CHANNELS.exportFlowFile,
+    async (_event, projectId: string, flowId: string) => {
+      assertNonEmptyId(projectId, "projectId");
+      assertNonEmptyId(flowId, "flowId");
+      return exportFlowToFile(projectId, flowId, {
+        showSaveDialog: (options) => dialog.showSaveDialog(options),
+        getFlow,
+      });
+    },
+  );
 
   ipcMain.handle(IPC_CHANNELS.getFlowRunInput, (_event, projectId: string, flowId: string) => {
     if (typeof projectId !== "string" || projectId.length === 0) {

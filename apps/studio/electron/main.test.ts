@@ -5,6 +5,9 @@ import { IPC_CHANNELS } from "./ipc-channels.js";
 const handlers = new Map<string, (...args: unknown[]) => unknown>();
 const appEventHandlers = new Map<string, (...args: unknown[]) => void>();
 const mockRunFlow = vi.fn();
+const mockImportFlowFromFile = vi.fn();
+const mockExportFlowToFile = vi.fn();
+const mockImportFlowDocument = vi.fn();
 const mockCloseLocalApi = vi.fn(() => Promise.resolve());
 const mockStartLocalApi = vi.fn(() =>
   Promise.resolve({
@@ -23,6 +26,8 @@ const mockApp = {
 };
 
 const mockShellOpenPath = vi.fn();
+const mockShowOpenDialog = vi.fn();
+const mockShowSaveDialog = vi.fn();
 const mockLoadURL = vi.fn();
 const mockLoadFile = vi.fn();
 const mockOpenDevTools = vi.fn();
@@ -74,6 +79,15 @@ vi.mock("electron", () => ({
   shell: {
     openPath: mockShellOpenPath,
   },
+  dialog: {
+    showOpenDialog: mockShowOpenDialog,
+    showSaveDialog: mockShowSaveDialog,
+  },
+}));
+
+vi.mock("./flow-portability-files.js", () => ({
+  importFlowFromFile: mockImportFlowFromFile,
+  exportFlowToFile: mockExportFlowToFile,
 }));
 
 vi.mock("./services.js", () => ({
@@ -82,6 +96,7 @@ vi.mock("./services.js", () => ({
   getFlow: vi.fn(),
   getFlowRunInput: vi.fn(),
   getFlowVersion: vi.fn(),
+  importFlowDocument: mockImportFlowDocument,
   getProjectKnowledgeRepository: vi.fn(() => mockRepository),
   listExecutions: vi.fn(),
   listFlows: vi.fn(),
@@ -100,6 +115,9 @@ describe("electron main runFlow IPC", () => {
     handlers.clear();
     appEventHandlers.clear();
     mockRunFlow.mockReset();
+    mockImportFlowFromFile.mockReset();
+    mockExportFlowToFile.mockReset();
+    mockImportFlowDocument.mockReset();
     mockShellOpenPath.mockReset();
     mockLoadURL.mockReset();
     mockLoadFile.mockReset();
@@ -330,5 +348,48 @@ describe("electron main runFlow IPC", () => {
 
     await expect(cancelHandler?.({}, "")).rejects.toThrow("executionId 无效");
     await expect(cancelHandler?.({}, { id: "exec" })).rejects.toThrow("executionId 无效");
+  });
+
+  it("导入导出 IPC 只接收业务 ID，额外路径参数不会进入文件服务", async () => {
+    mockImportFlowFromFile.mockResolvedValue({ status: "cancelled" });
+    mockExportFlowToFile.mockResolvedValue({ status: "cancelled" });
+    const importHandler = handlers.get(IPC_CHANNELS.importFlowFile);
+    const exportHandler = handlers.get(IPC_CHANNELS.exportFlowFile);
+
+    await importHandler?.({}, "project_ipc", "/renderer/cannot-read.json");
+    await exportHandler?.(
+      {},
+      "project_ipc",
+      "flow_ipc",
+      "/renderer/cannot-write.json",
+    );
+
+    expect(mockImportFlowFromFile).toHaveBeenCalledWith(
+      "project_ipc",
+      expect.objectContaining({
+        showOpenDialog: expect.any(Function),
+        importFlow: mockImportFlowDocument,
+      }),
+    );
+    expect(mockExportFlowToFile).toHaveBeenCalledWith(
+      "project_ipc",
+      "flow_ipc",
+      expect.objectContaining({
+        showSaveDialog: expect.any(Function),
+        getFlow: expect.any(Function),
+      }),
+    );
+    expect(JSON.stringify(mockImportFlowFromFile.mock.calls)).not.toContain("cannot-read");
+    expect(JSON.stringify(mockExportFlowToFile.mock.calls)).not.toContain("cannot-write");
+  });
+
+  it("导入导出 IPC 会校验 projectId 和 flowId", async () => {
+    const importHandler = handlers.get(IPC_CHANNELS.importFlowFile);
+    const exportHandler = handlers.get(IPC_CHANNELS.exportFlowFile);
+
+    await expect(importHandler?.({}, "")).rejects.toThrow("projectId 无效");
+    await expect(exportHandler?.({}, "project_ipc", "")).rejects.toThrow("flowId 无效");
+    expect(mockImportFlowFromFile).not.toHaveBeenCalled();
+    expect(mockExportFlowToFile).not.toHaveBeenCalled();
   });
 });

@@ -14,6 +14,10 @@ const studioApi: StudioApi = {
     ipcRenderer.invoke(IPC_CHANNELS.renameFlow, projectId, flowId, name),
   getFlow: (projectId: string, flowId: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.getFlow, projectId, flowId),
+  importFlowFile: (projectId: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.importFlowFile, projectId),
+  exportFlowFile: (projectId: string, flowId: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.exportFlowFile, projectId, flowId),
   getFlowRunInput: (projectId: string, flowId: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.getFlowRunInput, projectId, flowId),
   runFlow: (projectId: string, flowId?: string, options?: RunFlowOptions) =>

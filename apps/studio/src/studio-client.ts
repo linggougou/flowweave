@@ -264,6 +264,12 @@ function createBrowserStudioApi(): StudioApi {
     runFlow: async (): Promise<RunFlowResult> => {
       throw new Error("流程运行需在 Electron Studio 中执行，请先运行 pnpm dev:studio");
     },
+    importFlowFile: async () => {
+      throw new Error("导入 JSON 仅支持 Electron Studio");
+    },
+    exportFlowFile: async () => {
+      throw new Error("导出 JSON 仅支持 Electron Studio");
+    },
     openPath: async (): Promise<{ ok: true }> => {
       throw new Error("打开目录仅支持 Electron Studio");
     },
