@@ -2,45 +2,43 @@
 
 ## 1. 当前路线一句话
 
-以“先跑通、再稳定、再让业务用户独立完成首次任务、最后智能”为唯一主线，在 Node 24 默认稳定基线下，把现有录制回放闭环收敛为安全、可理解、可连续操作的本地产品，并保留 Node 20 兼容。
+以“先跑通、再稳定、再让业务用户独立完成首次任务、再实现本地资产可移植、最后智能”为唯一主线，在 Node 24 默认稳定基线下，把现有录制回放闭环收敛为安全、可理解、可连续操作且可迁移的本地产品，并保留 Node 20 兼容。
 
 ## 2. 当前阶段
 
-- 生命周期阶段：post-v1 产品化 / 首次用户体验修复
-- 里程碑编号：P2.5
-- 阶段名称：非技术用户首次旅程闭环
-- 阶段目标：在不解冻 AI 与深度页面理解的前提下，消除首次启动、敏感输入、跨端同步、录制边界和安全运行的主要阻塞。
+- 生命周期阶段：post-v1 产品化 / 本地资产可移植
+- 里程碑编号：P2.6
+- 阶段名称：Flow 可移植性与低风险资产维护
+- 阶段目标：在不解冻 AI、深度页面理解或 vNext 编排模型的前提下，让用户可在 Studio 安全导出、校验导入任务，并在 Web 维护任务名称。
 - 可验收交付物：
-  - 项目根物理 `PROJECT_ROUTE_LOCK.md`
-  - 与当前主线一致的 `README.md`、架构总览和路线计划
-  - recorded replay 稳定基线 `25 = 23 fixture + 2 runtime-generated`
-  - Studio 布局 contract、歧义候选诊断增强、Electron bundle integrity 修复
-  - 敏感输入默认不落明文，Studio 展示默认遮罩
-  - 扩展同步后 Studio 可自动或手动刷新并定位新任务
-  - 扩展录制开始/暂停/继续/完成、预览、命名与可恢复清空
-  - Studio 运行前摘要、高风险二次确认、步骤进度、取消与可靠退出
-  - Studio / Web 业务视图、最近结果与专业信息分层
+  - 统一的 `FlowDocument` 可移植与已知敏感值处理合同
+  - project-knowledge / local-api 的“始终导入为新副本”能力
+  - Studio 受控文件对话框、导入/导出 UI 与错误反馈
+  - 扩展导出复用同一安全合同并兼容历史裸 `FlowDocument` JSON
+  - Web 自动化任务重命名与异步选择保护
+  - 导出 → 空项目导入 → 运行的可重复验收证据
 - Definition of Done：
-  - Node 24 下主线验证链与相关定向验证通过
-  - Node 20 / 24 双基线 CI 与文档口径一致
-  - 项目入口文档与 `.codex/verification-report.md` 口径一致
-  - 当前 residual gaps 已并回主线且无活跃待回收 worktree
-  - 首次旅程 P0 问题具备测试合同和可重复验收证据
+  - 当前与历史扩展裸 JSON 均可由 Studio 校验并导入
+  - 导入生成新 `flowId`、覆盖目标 `projectId`，不静默覆盖现有任务
+  - `secret_*` 默认值、密码字面量、本机上传路径和 URL 明显凭据按合同移除或变量化
+  - 非法、超大、版本不兼容文件不产生数据库副作用
+  - Web 重命名持久化，快速切换项目/任务不会被旧响应污染
+  - Node 24 本地主门禁、Node 20 / 24 CI、recorded replay `25/25` 与安全审计通过
 - 阶段出口：
-  - 非技术用户不需要理解 pnpm、端口和源码目录即可进入首次录制主线
-  - 真实页面稳定性增强主线不再依赖临时口头说明
-  - Studio 桌面端可在当前电脑稳定构建与启动
-  - 密码等敏感输入不会以明文进入录制 Flow 或默认界面
-  - 扩展保存后，Studio 能可靠发现新任务
-  - 用户可明确控制录制边界，并在运行前核对目标、环境与风险动作
-  - 运行中可看到第 N/M 步与当前动作，可取消且取消状态不会伪装为失败
-  - Studio / Web 默认以项目、自动化任务、运行记录和业务结果为主线
+  - 用户无需访问源码目录即可从 Studio 导出或导入任务
+  - 导出文件只承诺处理当前 schema 中可识别的敏感内容，不误报“完全脱敏”
+  - 导入失败、取消选择与 ID/名称冲突都有清晰且无副作用的结果
+  - 扩展与 Studio 共享导出合同，历史导出文件保持可导入
+  - Web 可在保持当前选择上下文的情况下重命名任务
 - 最小可验收闭环：
-  - 扩展录制事件可入库
-  - Studio 可运行选定 Flow 并展示执行诊断
-  - recorded replay `25/25`
-  - Electron GUI 可正常启动并通过 bundle 完整性校验
+  - 扩展或 Studio 导出安全 `FlowDocument` JSON
+  - Studio 将其导入空项目为新副本
+  - 用户补齐被移除/变量化的运行输入后成功执行
+  - Web 重命名任务后刷新仍保持新名称
 - 明确非目标：
+  - 执行记录或 Flow 删除、`runs/` 递归清理
+  - Flow 版本 JSON diff
+  - vNext 输入节点、步骤编辑、执行暂停后输入并继续
   - P3 深度 page / network intelligence 扩展
   - P4 AI 编排产品化与相关 UI
   - 云端协作、多用户同步、全新技术栈替换
@@ -48,11 +46,12 @@
   - P3 深度能力解冻
   - P4 AI 编排接入 Studio / 扩展 / Web
 - 允许进入下一阶段的条件：
-  - 当前稳定基线连续通过
+  - P2.6 本地往返闭环与稳定基线连续通过
   - 入口文档与验证证据齐全
-  - 用户明确确认解冻下一阶段路线
+  - 若进入破坏性删除、vNext 产品模型、P3 或 P4，必须再次更新路线并获得明确确认
 - 变更批准：用户于 2026-07-16 明确批准按首次用户体验评审调整 post-v1 路线。
-- 当前状态：P2 工程门禁保持通过；P2.5 于 2026-08-23 完成，本地与远端 main Node 20/24 双门禁均通过；P3/P4 继续冻结，进入下一阶段仍需用户明确确认。
+- 阶段切换批准：用户于 2026-08-23 在收到“P2.5 已完成、下一阶段需更新路线锁”的交付说明后明确回复“继续”；本授权解释为进入 post-v1 backlog 的 P2.6，不解释为解冻 P3/P4 或 vNext 产品模型。
+- 当前状态：P2.5 于 2026-08-23 完成并通过本地与远端 main Node 20/24 双门禁；P2.6 计划已启动；P3/P4 与 vNext 输入节点继续冻结。
 
 ## 2.1 里程碑路线图
 
@@ -62,6 +61,7 @@
 | P1 核心闭环         | 扩展录制 → Studio 回放           | recorder、runtime、extension、studio                       | 可录制、可同步、可执行                 | `pnpm e2e:login`、手测闭环                                                              | ✅ 完成   |
 | P2 可演示纵向切片   | 知识库、执行历史、真实页面稳定性 | project-knowledge、执行日志、诊断 UI、recorded replay 基线 | 可诊断、可复验、主线稳定               | Node 24 `pnpm smoke`、`pnpm e2e:recorded-pages`、相关 Studio 验证；CI 保持 Node 20 / 24 | ✅ 完成   |
 | P2.5 首次体验产品化 | 非技术用户安全完成首次任务       | 内置连接、敏感输入保护、跨端刷新、录制状态、安全运行       | 首次旅程不依赖开发命令且关键风险有守卫 | 分轨测试 + 首次用户手测 + Node 20/24 CI                                                 | ✅ 完成   |
+| P2.6 本地资产可移植 | 安全迁移与维护自动化任务         | 统一导出合同、导入新副本、Studio 文件交互、Web 重命名      | 导出导入运行往返可证且无静默覆盖       | 分轨测试 + 文件往返 E2E + recorded replay + Node 20/24 CI                               | 🚧 进行中 |
 | P3 完整框架扩展     | 深度页面 / 接口理解              | page-intelligence、network-intelligence 深化能力           | 明确场景与回归面后再开放               | 待路线解冻                                                                              | ⏸ 冻结    |
 | P4 产品落地         | AI 编排与智能增强                | ai-orchestrator、AI 产品入口                               | 不影响现有稳定主线                     | 待路线解冻                                                                              | ⏸ 冻结    |
 
@@ -70,6 +70,7 @@
 - PRD：[`docs/superpowers/specs/2026-05-25-web-automation-platform-design.md`](./docs/superpowers/specs/2026-05-25-web-automation-platform-design.md)
 - 当前主路线：[`docs/superpowers/plans/2026-05-26-run-first-roadmap.md`](./docs/superpowers/plans/2026-05-26-run-first-roadmap.md)
 - 用户旅程：[`docs/guides/quickstart.md`](./docs/guides/quickstart.md)、[`docs/guides/manual-qa.md`](./docs/guides/manual-qa.md)
+- 当前实施计划：[`docs/exec-plans/active/p2-6-portability-assets.md`](./docs/exec-plans/active/p2-6-portability-assets.md)
 - 非目标：AI 智能编排、云端协作、未纳入当前路线的深度分析能力
 
 ## 4. 设计真源
@@ -79,6 +80,7 @@
 - 不允许偏离的页面 / 交互：
   - 扩展录制并将自动化任务同步到知识库
   - Studio 选择自动化任务后确认运行并查看业务结果或专业诊断
+  - Studio 仅通过主进程受控文件对话框导入/导出，不接受 renderer 任意路径
   - Web 查看项目、自动化任务与运行记录
 
 ## 5. 技术真源
@@ -92,6 +94,7 @@
 ## 6. 验收门禁
 
 - 本地测试：
+  - 各分轨 TDD 定向测试、typecheck、lint、build
   - Node 24：`pnpm lint`
   - Node 24：`pnpm smoke`
   - Node 24：`pnpm e2e:recorded-pages`
@@ -112,18 +115,20 @@
 ## 7. 禁止无确认改动
 
 - 禁止重写：runtime / Studio / knowledge 主链路骨架
-- 禁止删除：smoke、recorded replay、Electron 完整性相关门禁与 `.codex` 验收留痕
+- 禁止删除：smoke、recorded replay、Electron 完整性相关门禁与 `.codex` 验收留痕；本阶段不新增 Flow / execution 删除端点，不执行递归资产清理
 - 禁止替换：Playwright、Electron、SQLite、pnpm workspace / Turbo 主技术栈
 - 禁止新增：AI 产品入口、云协作、与当前稳定主线无关的大范围功能
 
 ## 8. 变更入口
 
-- Backlog：`docs/superpowers/plans/2026-05-26-run-first-roadmap.md` 中的 M5 与未来智能阶段事项
+- Backlog：`docs/exec-plans/active/post-v1-development-roadmap.md` 中的 P2.6 后续资产维护与未来智能阶段事项
 - Change Request：新增需求先进入路线计划或专门变更文档，再决定是否实施
 - 当前阶段缺口：
-  - 扩展正式分发与一键启用仍属于发布渠道工作；当前生产构建与手动加载指南已具备
-  - Developer ID、公证与正式 `.icns` 图标仍属于公开发布前外部条件
+  - Flow 导出尚未复用统一安全合同，Studio 尚无导入/导出入口
+  - Web 已有重命名后端但缺少前端交互
 - 后续阶段需求：
+  - P2.7 路径安全、执行记录删除与 Flow 版本只读 diff
+  - vNext 任务模板输入节点、编辑模型与暂停/继续协议
   - P3 深度 page / network intelligence
   - P4 AI 编排、建议与自动修复
 - 已拒绝需求：

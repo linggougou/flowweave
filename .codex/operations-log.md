@@ -6985,3 +6985,18 @@
 - main 合入：确认 `origin/main=145fafc` 是集成分支祖先后，以 fast-forward 推送至 `14e6a26`，未覆盖并行提交。
 - main 会签：run `32636101584`，Node 20 `97185988481` 与 Node 24 `97185988523` 均为 success。
 - 文档生命周期：`ux-foundation-3-5-development.md` 完成后从 active 迁移至 completed；post-v1 总路线继续保留 active，P3/P4 未解冻。
+
+## 2026-08-23 P2.6 Flow 可移植性与低风险资产维护启动
+
+- 用户指令：在 P2.5 完成交付后回复“继续”；按此前已说明的路线门禁，将其解释为继续 post-v1 backlog，不解释为解冻 P3/P4 或 vNext 产品模型。
+- 生命周期：S4 里程碑计划，计划冻结后进入 S5 开发落地；本轮为 L3 跨包功能任务。
+- 路线依据：更新后的 `PROJECT_ROUTE_LOCK.md` P2.6；里程碑真源为 `docs/exec-plans/active/p2-6-portability-assets.md`。
+- 阶段出口：扩展/Studio 共享安全导出合同；Studio 受控导入为新副本并可运行；Web 可可靠重命名任务。
+- 最小闭环：导出 → 空项目导入 → 补齐输入 → 运行；Web 重命名刷新后保持。
+- 明确非目标：Flow/execution 删除、runs 递归清理、版本 diff、vNext 输入节点与暂停继续、P3/P4、云协作和技术栈替换。
+- 变更分流：Wave A 与 Web 重命名属于 post-v1 已登记 backlog；执行删除和版本 diff 延后 P2.7；vNext 继续处于设计门禁。
+- 分支：从 main 同步提交 `54cbfa1` 创建 `codex/p2-6-portability-integration`。
+- Skills：`tdd-workflow` 用于先红后绿；`verification-loop` 用于分轨和集成分层验收。
+- CodeGraph：项目索引存在且最新；首次 `context --max-files` 因参数不存在失败，改用 `--max-nodes`，并以精确 symbol query/impact、`rg` 和源码阅读补足中文召回。
+- 并行审计：可移植链路、Web 资产能力、路线/DoD 三个只读 Agent；路线审查建议 P2.6 仅纳入 Wave A 与 Web 重命名，破坏性删除和版本 diff 延期。
+- 当前状态：路线锁、执行计划与上下文摘要已建立，尚未进入功能编码。

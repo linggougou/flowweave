@@ -2,10 +2,10 @@
 
 ## 1. 当前基线
 
-- 生命周期：P2.5 post-v1 产品化 / 首次用户体验修复。
+- 生命周期：P2.6 post-v1 产品化 / 本地资产可移植。
 - 已完成：P0、P1、P2；M1-M4；真实页面 recorded replay `25/25`；Node 20/24 双基线；macOS 本地预览 `.app + DMG`。
 - M5 已有最小能力：扩展清空录制、Flow JSON 导出、Studio Flow 重命名。
-- 当前没有活跃 worktree 或并行轨道。
+- P2.5 已完成并归档；P2.6 正在按独立 worktree 规划可移植合同、导入、扩展接线、Studio 文件交互与 Web 重命名。
 - P3 深度页面/网络理解与 P4 AI 编排继续冻结。
 
 ## 2. 执行顺序
@@ -94,21 +94,21 @@
 
 完成证据：Studio 业务视图、Web 最近结果、异步记录选择与窄窗口合同通过；Web `14/14`，浏览器实测无横向溢出且任务视图可切换。
 
-### Wave A：Flow 可移植性闭环（后移）
+### Wave A：Flow 可移植性闭环（P2.6 进行中）
 
 目标：让录制产物可安全导出、校验并重新导入本地知识库。
 
 范围：
 
-1. 定义脱敏导出合同，默认处理 Cookie、Header、HAR 路径和本地敏感变量。
+1. 定义当前 `FlowDocument` schema 范围内的安全导出合同；Cookie、Header、HAR 不在 schema 内，不作“已完全脱敏”承诺。
 2. Studio 提供 Flow JSON 导入入口，使用 `flowDocumentSchema` 结构化校验。
-3. 明确冲突策略：新建副本，不静默覆盖同 ID Flow。
+3. 明确冲突策略：每次导入均生成新 ID 和副本，不静默覆盖任何 Flow。
 4. 导入/导出结果给出可诊断错误，不接受无提示失败。
 5. 补 repository、Electron IPC、Studio UI 和往返 E2E 测试。
 
-退出门禁：脱敏导出 -> 删除本地副本 -> 导入 -> Studio 运行通过；Node 24 smoke、recorded replay 与 Node 20/24 CI 通过。
+退出门禁：安全导出 -> 导入空项目为新副本 -> Studio 运行通过；Node 24 smoke、recorded replay 与 Node 20/24 CI 通过。
 
-### Wave B：录制暂停/继续闭环
+### Wave B：录制暂停/继续闭环（已由 UX Foundation 3 完成）
 
 目标：扩展录制过程中可暂停和继续，避免把无关操作写入会话。
 
@@ -122,15 +122,15 @@
 
 退出门禁：录制 A -> 暂停并操作 B -> 继续录制 C，最终 Flow 只包含 A/C；扩展构建、测试与主线 CI 通过。
 
-### Wave C：本地资产管理补齐
+### Wave C：本地资产管理补齐（P2.6 仅实施低风险重命名）
 
 目标：补齐高频维护操作，不扩大为通用流程编排器。
 
 候选范围按价值依次实施：
 
-1. Web Flow 重命名 UI，与已有 API 对齐。
-2. 执行记录删除，连同受控 runs 产物清理和确认流程。
-3. Flow 版本 JSON diff，只读展示，不引入复杂编辑器。
+1. Web Flow 重命名 UI，与已有 API 对齐（P2.6）。
+2. 执行记录删除及受控 runs 清理（P2.7；先完成路径安全设计）。
+3. Flow 版本 JSON diff（P2.7；只读展示，不引入复杂编辑器）。
 
 每项独立提交和验收，不绑成一次大改。
 
@@ -160,4 +160,4 @@
 4. UX Foundation 3：2-3 天，完成录制状态机、预览和命名。
 5. UX Foundation 4：2-4 天，完成运行守卫、进度和取消。
 6. UX Foundation 5：2-4 天，完成业务视图与 Web 结果收口。
-7. Flow 可移植性与 vNext 协议设计在首次体验 P0/P1 收口后恢复。
+7. P2.6 Flow 可移植性与 Web 重命名已恢复；vNext 协议设计继续等待独立路线变更。
