@@ -3,11 +3,13 @@ import { flowDocumentSchema, type FlowDocument, type NormalizedStep, type Target
 
 export type FlowPortabilityWarningCode =
   | "secret-default-removed"
+  | "sensitive-variable-hardened"
   | "password-value-variableized"
   | "password-hint-removed"
   | "upload-path-variableized"
   | "url-userinfo-removed"
-  | "url-query-variableized";
+  | "url-query-variableized"
+  | "url-fragment-variableized";
 
 export type FlowPortabilityWarning = {
   code: FlowPortabilityWarningCode;
@@ -79,8 +81,8 @@ function createRequiredStringVariable(name: string): FlowVariable {
 
 function isPasswordTarget(target: Target): boolean {
   const hints = target.hints;
-  if (hints?.inputType?.toLowerCase() === "password") {
-    return true;
+  if (hints?.inputType !== undefined) {
+    return hints.inputType.toLowerCase() === "password";
   }
 
   if (
@@ -173,6 +175,73 @@ function isSensitiveQueryKey(value: string): boolean {
   return sensitiveQueryKeys.has(normalizeQueryKey(value));
 }
 
+function collectSensitiveParameterVariables(rawParameters: string, names: Set<string>): void {
+  for (const part of rawParameters.split("&")) {
+    const separatorIndex = part.indexOf("=");
+    const rawKey = separatorIndex >= 0 ? part.slice(0, separatorIndex) : part;
+    const rawValue = separatorIndex >= 0 ? part.slice(separatorIndex + 1) : "";
+    if (!rawKey || !isSensitiveQueryKey(rawKey)) {
+      continue;
+    }
+    const variableName = getSingleTemplateVariableName(decodeQueryKey(rawValue));
+    if (variableName) {
+      names.add(variableName);
+    }
+  }
+}
+
+function collectSensitiveUrlVariables(value: string, names: Set<string>): void {
+  const hashStart = value.indexOf("#");
+  const beforeHash = hashStart >= 0 ? value.slice(0, hashStart) : value;
+  const queryStart = beforeHash.indexOf("?");
+  if (queryStart >= 0) {
+    collectSensitiveParameterVariables(beforeHash.slice(queryStart + 1), names);
+  }
+
+  if (hashStart < 0) {
+    return;
+  }
+  const rawHash = value.slice(hashStart + 1);
+  const hashQueryStart = rawHash.indexOf("?");
+  collectSensitiveParameterVariables(
+    hashQueryStart >= 0 ? rawHash.slice(hashQueryStart + 1) : rawHash,
+    names,
+  );
+}
+
+function collectSensitiveVariableNames(steps: NormalizedStep[]): Set<string> {
+  const names = new Set<string>();
+  for (const step of steps) {
+    if (step.type === "fill" && isPasswordTarget(step.target)) {
+      const variableName = getSingleTemplateVariableName(step.value);
+      if (variableName) {
+        names.add(variableName);
+      }
+      continue;
+    }
+
+    if (step.type === "upload") {
+      for (const file of step.files) {
+        const variableName = getSingleTemplateVariableName(file);
+        if (variableName) {
+          names.add(variableName);
+        }
+      }
+      continue;
+    }
+
+    if (step.type === "navigate") {
+      collectSensitiveUrlVariables(step.url, names);
+      continue;
+    }
+
+    if (step.type === "wait" && step.condition === "urlIncludes" && step.urlIncludes) {
+      collectSensitiveUrlVariables(step.urlIncludes, names);
+    }
+  }
+  return names;
+}
+
 function stripUrlUserInfo(value: string): { url: string; removed: boolean } {
   const match = urlWithAuthorityPattern.exec(value);
   if (!match) {
@@ -196,37 +265,18 @@ function stripUrlUserInfo(value: string): { url: string; removed: boolean } {
   };
 }
 
-function sanitizeNavigateUrl(
+function sanitizeUrlParameters(
   value: string,
+  location: "query" | "hash",
   stepId: string,
   stepIndex: number,
+  fieldName: "url" | "urlIncludes",
   variables: FlowVariable[],
   usedVariableNames: Set<string>,
   warnings: FlowPortabilityWarning[],
-): string {
-  const withoutUserInfo = stripUrlUserInfo(value);
-  if (withoutUserInfo.removed) {
-    warnings.push({
-      code: "url-userinfo-removed",
-      path: `steps[${stepIndex}].url`,
-      message: "已移除 URL 中的用户名或密码。",
-    });
-  }
-
-  const hashStart = withoutUserInfo.url.indexOf("#");
-  const beforeHash = hashStart >= 0 ? withoutUserInfo.url.slice(0, hashStart) : withoutUserInfo.url;
-  const hash = hashStart >= 0 ? withoutUserInfo.url.slice(hashStart) : "";
-  const queryStart = beforeHash.indexOf("?");
-  if (queryStart < 0) {
-    return withoutUserInfo.url;
-  }
-
-  const prefix = beforeHash.slice(0, queryStart + 1);
-  const rawQuery = beforeHash.slice(queryStart + 1);
-  const queryParts = rawQuery.split("&");
+): { value: string; changed: boolean } {
   let changed = false;
-
-  const sanitizedParts = queryParts.map((part) => {
+  const sanitizedParts = value.split("&").map((part) => {
     const separatorIndex = part.indexOf("=");
     const rawKey = separatorIndex >= 0 ? part.slice(0, separatorIndex) : part;
     const rawValue = separatorIndex >= 0 ? part.slice(separatorIndex + 1) : "";
@@ -248,19 +298,78 @@ function sanitizeNavigateUrl(
     );
     variables.push(createRequiredStringVariable(variableName));
     warnings.push({
-      code: "url-query-variableized",
-      path: `steps[${stepIndex}].url.query.${decodeQueryKey(rawKey)}`,
-      message: "已将 URL 中的明显敏感查询参数替换为必填变量。",
+      code: location === "query" ? "url-query-variableized" : "url-fragment-variableized",
+      path: `steps[${stepIndex}].${fieldName}.${location}.${decodeQueryKey(rawKey)}`,
+      message:
+        location === "query"
+          ? "已将 URL 中的明显敏感查询参数替换为必填变量。"
+          : "已将 URL hash 中的明显敏感参数替换为必填变量。",
       variableName,
     });
     changed = true;
     return `${rawKey}={{${variableName}}}`;
   });
 
-  if (!changed) {
-    return withoutUserInfo.url;
+  return { value: changed ? sanitizedParts.join("&") : value, changed };
+}
+
+function sanitizeUrlValue(
+  value: string,
+  stepId: string,
+  stepIndex: number,
+  fieldName: "url" | "urlIncludes",
+  variables: FlowVariable[],
+  usedVariableNames: Set<string>,
+  warnings: FlowPortabilityWarning[],
+): string {
+  const withoutUserInfo = stripUrlUserInfo(value);
+  if (withoutUserInfo.removed) {
+    warnings.push({
+      code: "url-userinfo-removed",
+      path: `steps[${stepIndex}].${fieldName}`,
+      message: "已移除 URL 中的用户名或密码。",
+    });
   }
-  return `${prefix}${sanitizedParts.join("&")}${hash}`;
+
+  const hashStart = withoutUserInfo.url.indexOf("#");
+  const beforeHash = hashStart >= 0 ? withoutUserInfo.url.slice(0, hashStart) : withoutUserInfo.url;
+  const rawHash = hashStart >= 0 ? withoutUserInfo.url.slice(hashStart + 1) : null;
+  const queryStart = beforeHash.indexOf("?");
+  let sanitizedBeforeHash = beforeHash;
+  if (queryStart >= 0) {
+    const query = sanitizeUrlParameters(
+      beforeHash.slice(queryStart + 1),
+      "query",
+      stepId,
+      stepIndex,
+      fieldName,
+      variables,
+      usedVariableNames,
+      warnings,
+    );
+    if (query.changed) {
+      sanitizedBeforeHash = `${beforeHash.slice(0, queryStart + 1)}${query.value}`;
+    }
+  }
+
+  if (rawHash === null) {
+    return sanitizedBeforeHash;
+  }
+
+  const hashQueryStart = rawHash.indexOf("?");
+  const hashPrefix = hashQueryStart >= 0 ? rawHash.slice(0, hashQueryStart + 1) : "";
+  const hashParameters = hashQueryStart >= 0 ? rawHash.slice(hashQueryStart + 1) : rawHash;
+  const hash = sanitizeUrlParameters(
+    hashParameters,
+    "hash",
+    stepId,
+    stepIndex,
+    fieldName,
+    variables,
+    usedVariableNames,
+    warnings,
+  );
+  return `${sanitizedBeforeHash}#${hashPrefix}${hash.value}`;
 }
 
 function sanitizeStep(
@@ -339,15 +448,29 @@ function sanitizeStep(
   }
 
   if (step.type === "navigate") {
-    const url = sanitizeNavigateUrl(
+    const url = sanitizeUrlValue(
       step.url,
       step.id,
       stepIndex,
+      "url",
       variables,
       usedVariableNames,
       warnings,
     );
     return url === step.url ? step : { ...step, url };
+  }
+
+  if (step.type === "wait" && step.condition === "urlIncludes" && step.urlIncludes) {
+    const urlIncludes = sanitizeUrlValue(
+      step.urlIncludes,
+      step.id,
+      stepIndex,
+      "urlIncludes",
+      variables,
+      usedVariableNames,
+      warnings,
+    );
+    return urlIncludes === step.urlIncludes ? step : { ...step, urlIncludes };
   }
 
   return step;
@@ -361,19 +484,37 @@ function sanitizeStep(
 export function createPortableFlowDocument(input: unknown): PortableFlowDocumentResult {
   const source = flowDocumentSchema.parse(input) as FlowDocument;
   const warnings: FlowPortabilityWarning[] = [];
+  const sensitiveVariableNames = collectSensitiveVariableNames(source.steps);
   const variables = source.variables.map((variable, variableIndex) => {
-    if (!secretVariablePattern.test(variable.name) || variable.defaultValue === undefined) {
+    const isSecretVariable = secretVariablePattern.test(variable.name);
+    const isSensitiveReference = sensitiveVariableNames.has(variable.name);
+    const removesDefault =
+      (isSecretVariable || isSensitiveReference) && variable.defaultValue !== undefined;
+    const requiresHardening =
+      (isSecretVariable || isSensitiveReference) && variable.required !== true;
+    if (!removesDefault && !requiresHardening) {
       return variable;
     }
 
     const { defaultValue: _removedDefaultValue, ...portableVariable } = variable;
-    warnings.push({
-      code: "secret-default-removed",
-      path: `variables[${variableIndex}].defaultValue`,
-      message: "已移除敏感变量默认值。",
-      variableName: variable.name,
-    });
-    return portableVariable;
+    if (isSecretVariable && removesDefault) {
+      warnings.push({
+        code: "secret-default-removed",
+        path: `variables[${variableIndex}].defaultValue`,
+        message: "已移除敏感变量默认值并将其设为必填。",
+        variableName: variable.name,
+      });
+    } else {
+      warnings.push({
+        code: "sensitive-variable-hardened",
+        path: `variables[${variableIndex}]`,
+        message: removesDefault
+          ? "已移除敏感位置引用变量的默认值并将其设为必填。"
+          : "已将敏感变量设为必填。",
+        variableName: variable.name,
+      });
+    }
+    return { ...portableVariable, required: true };
   });
   const usedVariableNames = new Set(variables.map((variable) => variable.name));
   const steps = source.steps.map((step, stepIndex) =>

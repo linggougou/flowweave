@@ -41,7 +41,7 @@ describe("createPortableFlowDocument", () => {
     const result = createPortableFlowDocument(input);
 
     expect(result.document.variables).toEqual([
-      { name: "secret_api_key", type: "string", required: false },
+      { name: "secret_api_key", type: "string", required: true },
       { name: "page_size", type: "number", required: false, defaultValue: 20 },
     ]);
     expect(result.warnings).toEqual([
@@ -154,6 +154,66 @@ describe("createPortableFlowDocument", () => {
     ]);
   });
 
+  it("反向硬化密码、敏感 URL 与上传位置引用的已有变量", () => {
+    const input = createFlow({
+      variables: [
+        { name: "password", type: "string", required: false, defaultValue: "hunter2" },
+        { name: "token", type: "string", required: false, defaultValue: "url-token" },
+        {
+          name: "file",
+          type: "string",
+          required: false,
+          defaultValue: "/Users/ling/private.pdf",
+        },
+      ],
+      steps: [
+        {
+          id: "password",
+          type: "fill",
+          target: {
+            strategies: [{ kind: "css", selector: "input[type=password]" }],
+            hints: { inputType: "password" },
+          },
+          value: "{{password}}",
+        },
+        {
+          id: "upload",
+          type: "upload",
+          target: { strategies: [{ kind: "css", selector: "input[type=file]" }] },
+          files: ["{{file}}"],
+        },
+        {
+          id: "navigate",
+          type: "navigate",
+          url: "/callback?access_token={{token}}&state=ready",
+        },
+      ],
+    });
+
+    const result = createPortableFlowDocument(input);
+
+    expect(result.document.variables).toEqual([
+      { name: "password", type: "string", required: true },
+      { name: "token", type: "string", required: true },
+      { name: "file", type: "string", required: true },
+    ]);
+    expect(result.document.steps).toEqual(input.steps);
+    expect(result.warnings.map(({ code, variableName }) => ({ code, variableName }))).toEqual([
+      { code: "sensitive-variable-hardened", variableName: "password" },
+      { code: "sensitive-variable-hardened", variableName: "token" },
+      { code: "sensitive-variable-hardened", variableName: "file" },
+    ]);
+    expect(input.variables.map((variable) => variable.defaultValue)).toEqual([
+      "hunter2",
+      "url-token",
+      "/Users/ling/private.pdf",
+    ]);
+    expect(createPortableFlowDocument(result.document)).toEqual({
+      document: result.document,
+      warnings: [],
+    });
+  });
+
   it("只把非模板化绝对上传路径替换为稳定且无冲突的必填文件变量", () => {
     const input = createFlow({
       variables: [
@@ -228,6 +288,54 @@ describe("createPortableFlowDocument", () => {
     ]);
   });
 
+  it("变量化 OAuth hash 与 wait urlIncludes 中的敏感参数并保留普通片段", () => {
+    const input = createFlow({
+      steps: [
+        {
+          id: "oauth-callback",
+          type: "navigate",
+          url: "/callback#access_token=oauth-secret&state=ready",
+        },
+        {
+          id: "wait-auth",
+          type: "wait",
+          condition: "urlIncludes",
+          urlIncludes: "?auth=wait-secret&view=orders",
+        },
+        {
+          id: "password-policy",
+          type: "navigate",
+          url: "/settings#password-policy",
+        },
+      ],
+    });
+
+    const result = createPortableFlowDocument(input);
+
+    expect(result.document.steps).toEqual([
+      {
+        id: "oauth-callback",
+        type: "navigate",
+        url: "/callback#access_token={{secret_url_access_token_oauth_callback}}&state=ready",
+      },
+      {
+        id: "wait-auth",
+        type: "wait",
+        condition: "urlIncludes",
+        urlIncludes: "?auth={{secret_url_auth_wait_auth}}&view=orders",
+      },
+      {
+        id: "password-policy",
+        type: "navigate",
+        url: "/settings#password-policy",
+      },
+    ]);
+    expect(result.warnings.map(({ code, path }) => ({ code, path }))).toEqual([
+      { code: "url-fragment-variableized", path: "steps[0].url.hash.access_token" },
+      { code: "url-query-variableized", path: "steps[1].urlIncludes.query.auth" },
+    ]);
+  });
+
   it("保留普通业务文本、相对 URL、普通 query 与已有模板变量", () => {
     const input = createFlow({
       name: "创建客户订单",
@@ -255,6 +363,31 @@ describe("createPortableFlowDocument", () => {
             hints: { inputType: "password", labelText: "密码" },
           },
           value: "{{secret_password}}",
+        },
+      ],
+    });
+
+    const result = createPortableFlowDocument(input);
+
+    expect(result.document).toEqual(input);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("显式非 password inputType 优先于密码字样启发式", () => {
+    const input = createFlow({
+      steps: [
+        {
+          id: "password-policy-note",
+          type: "fill",
+          target: {
+            strategies: [{ kind: "css", selector: "#password-policy-note" }],
+            hints: {
+              inputType: "text",
+              labelText: "密码策略说明",
+              textSample: "至少十二位",
+            },
+          },
+          value: "至少十二位，需包含数字",
         },
       ],
     });
