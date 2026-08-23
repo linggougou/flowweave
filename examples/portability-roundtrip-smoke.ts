@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -20,16 +20,55 @@ import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const loginFixtureUrl = pathToFileURL(join(repoRoot, "examples/fixtures/login.html")).href;
+const uploadFixtureUrl = pathToFileURL(join(repoRoot, "examples/fixtures/upload-form.html")).href;
 
-function buildLoginFlow(projectId: string, passwordLiteral: string): FlowDocument {
+function buildLoginFlow(
+  projectId: string,
+  passwordLiteral: string,
+  uploadFilePath: string,
+): FlowDocument {
   const now = new Date().toISOString();
   return {
     schemaVersion: FLOW_SCHEMA_VERSION,
     id: "flow_portability_login_source",
     projectId,
     name: "可移植登录闭环",
-    variables: [{ name: "login_url", type: "string", required: true }],
+    variables: [
+      { name: "upload_url", type: "string", required: true },
+      { name: "login_url", type: "string", required: true },
+    ],
     steps: [
+      {
+        id: "open-upload",
+        type: "navigate",
+        url: "{{upload_url}}",
+        waitUntil: "domcontentloaded",
+      },
+      {
+        id: "fill-operator",
+        type: "fill",
+        target: { strategies: [{ kind: "css", selector: "#operator-name" }] },
+        value: "portable-user",
+      },
+      {
+        id: "upload-evidence",
+        type: "upload",
+        target: { strategies: [{ kind: "testId", testId: "evidence-files" }] },
+        files: [uploadFilePath],
+      },
+      {
+        id: "submit-upload",
+        type: "click",
+        target: { strategies: [{ kind: "css", selector: "#submit-upload" }] },
+      },
+      {
+        id: "verify-upload",
+        type: "wait",
+        condition: "visible",
+        target: {
+          strategies: [{ kind: "css", selector: "#upload-result[data-ready='true']" }],
+        },
+      },
       {
         id: "open-login",
         type: "navigate",
@@ -103,13 +142,15 @@ async function main(): Promise<void> {
   const dataDir = await mkdtemp(join(tmpdir(), "flowweave-portability-"));
 
   try {
+    const uploadFilePath = join(dataDir, "roundtrip-upload.txt");
+    await writeFile(uploadFilePath, "flowweave portability fixture\n", "utf8");
     const repo = new ProjectKnowledgeRepository({ dataDir });
     const sourceProject = repo.createProject("可移植来源项目");
     const targetProject = repo.createProject("可移植空目标项目");
     assert.deepEqual(repo.listFlows(targetProject.id), [], "目标项目必须从空 Flow 列表开始");
 
     const passwordLiteral = `fixture-${randomUUID()}`;
-    const sourceFlow = buildLoginFlow(sourceProject.id, passwordLiteral);
+    const sourceFlow = buildLoginFlow(sourceProject.id, passwordLiteral, uploadFilePath);
     const sourceSnapshot = JSON.parse(JSON.stringify(sourceFlow)) as FlowDocument;
     repo.saveFlow(sourceProject.id, sourceFlow);
 
@@ -124,6 +165,10 @@ async function main(): Promise<void> {
       portable.warnings.some((warning) => warning.code === "password-value-variableized"),
       "密码字面量必须被变量化",
     );
+    assert.ok(
+      portable.warnings.some((warning) => warning.code === "upload-path-variableized"),
+      "上传绝对路径必须被变量化",
+    );
 
     const exportedJson = JSON.stringify(portable.document, null, 2);
     assert.equal(exportedJson.includes(passwordLiteral), false, "导出 JSON 不得包含密码字面量");
@@ -134,6 +179,7 @@ async function main(): Promise<void> {
     );
     assert.equal(exportedJson.includes(repoRoot), false, "导出 JSON 不得包含仓库绝对路径");
     assert.equal(exportedJson.includes(dataDir), false, "导出 JSON 不得包含临时数据路径");
+    assert.equal(exportedJson.includes(uploadFilePath), false, "导出 JSON 不得包含上传绝对路径");
 
     const roundTrippedInput = JSON.parse(exportedJson) as unknown;
     const imported = repo.importFlow(targetProject.id, roundTrippedInput);
@@ -152,9 +198,15 @@ async function main(): Promise<void> {
       (warning) => warning.code === "password-value-variableized",
     );
     assert.ok(passwordWarning?.variableName, "密码 warning 必须提供运行变量名");
+    const uploadWarning = portable.warnings.find(
+      (warning) => warning.code === "upload-path-variableized",
+    );
+    assert.ok(uploadWarning?.variableName, "上传路径 warning 必须提供运行变量名");
     const runtimeVariables = {
+      upload_url: uploadFixtureUrl,
       login_url: loginFixtureUrl,
       [passwordWarning.variableName]: passwordLiteral,
+      [uploadWarning.variableName]: uploadFilePath,
     };
     const requiredVariableNames = imported.flow.variables
       .filter((variable) => variable.required)
