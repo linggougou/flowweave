@@ -7000,3 +7000,13 @@
 - CodeGraph：项目索引存在且最新；首次 `context --max-files` 因参数不存在失败，改用 `--max-nodes`，并以精确 symbol query/impact、`rg` 和源码阅读补足中文召回。
 - 并行审计：可移植链路、Web 资产能力、路线/DoD 三个只读 Agent；路线审查建议 P2.6 仅纳入 Wave A 与 Web 重命名，破坏性删除和版本 diff 延期。
 - 当前状态：路线锁、执行计划与上下文摘要已建立，尚未进入功能编码。
+
+### 2026-08-23 P2.6 定向基线与首批并行轨道
+
+- 集成分支起点：`bf41057 docs: 启动 P2.6 Flow 可移植阶段`。
+- 定向基线：flow-dsl `6/6`、project-knowledge `14/14`、local-api `4/4`、Web `14/14`，均通过。
+- 首批 worktree：
+  - G1：`flowweave-worktrees/p26-portability-core` / `codex/p26-portability-core`，独占 `packages/flow-dsl/**`。
+  - G4：`flowweave-worktrees/p26-web-rename` / `codex/p26-web-rename`，独占 `apps/web/**`。
+- 并行约束：两轨必须 TDD 先红后绿，不新增依赖，不跨越文件所有权，不回退其他 Agent 改动。
+- 后续 DAG：G1 合入后，从同一公共合同基线创建 G2 knowledge/local-api 与 G3 extension；G2 稳定后再创建 G5 Studio。
