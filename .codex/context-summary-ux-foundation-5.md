@@ -72,3 +72,28 @@
 - 综合评分：94/100，建议通过并交由集成代理接入 F4 进度/取消组件。
 - 当前轨道门禁：通过；P3/P4 保持冻结，不构成进入下一阶段的授权。
 - 残余风险：本 worktree 未包含并行 F4 的最终共享状态类型，`cancelled` 的 Studio 真实接线需由集成代理在合并 F4 后复验；F5 已预留独立运行区且文案格式器可识别该状态。
+
+## Reviewer P1 修复（追加提交）
+
+### 问题与 TDD 红灯
+
+- Web 选择较早运行记录时，顶部摘要曾在详情未匹配期间回退到最新摘要；专业日志也可能继续使用旧详情。
+- 原详情请求没有取消/最新请求守卫，慢响应可能覆盖用户后来的选择。
+- Studio/Web 使用了不完整的 `tab/tablist` 语义，没有 `tabpanel`、`aria-controls` 或方向键合同。
+- 新增行为合同首次运行按预期红灯：`ViewSwitcher`、`ExecutionRecordsView`、`execution-detail-loader` 尚不存在，共 4 个测试文件加载失败。
+
+### 实施与绿灯
+
+- 抽取 Web 受控 `ExecutionRecordsView`：摘要始终来自当前选择；只有详情标识匹配时才显示专业日志与技术标识，否则展示所选记录加载状态。
+- 抽取 `createExecutionDetailLoader`：每次请求带单调序号，清理函数可取消当前请求，慢响应、卸载后响应和标识错配响应不会进入状态。
+- App 切换选择时主动清空旧详情并进入加载态，成功/失败回调只处理最新请求。
+- Studio/Web 视图切换回退为语义完整的原生按钮组，使用 `aria-pressed` 表示受控选择；原生 button 保留 Enter/Space 键盘激活行为。
+- 行为测试真实调用较早记录按钮与视图按钮回调，并用两个可控 Promise 复现新请求先返回、旧请求后返回的竞态。
+- 定向绿灯：Studio `6/6`；Web `8/8`。
+- 修复后全量：Studio `25` 个文件、`102/102`；Web `6` 个文件、`14/14`。
+- Studio/Web typecheck、lint、生产构建再次通过；`role=tab/tablist` 与 `aria-selected` 生产代码扫描无发现。
+
+### 测试环境限制
+
+- 当前 workspace 未安装 jsdom、happy-dom 或 Testing Library，且本轨禁止新增依赖。
+- 按 Reviewer 允许的替代路径，测试使用无 hooks 的受控组件、`renderToStaticMarkup`、React element 回调调用和可控异步 Promise；覆盖了点击回调、选择一致性、加载隔离和竞态丢弃，但不替代集成分支上的真实浏览器视觉验收。

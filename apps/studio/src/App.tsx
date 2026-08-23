@@ -27,6 +27,7 @@ import {
   type VariableInputs,
 } from "./shared/run-input-state.js";
 import { isSensitiveVariableName } from "./shared/sensitive-variables.js";
+import { ViewSwitcher } from "./ViewSwitcher.js";
 import type {
   ExecutionStepLog,
   ExecutionSummary,
@@ -936,35 +937,7 @@ export function App() {
             {tab === "flow" ? "任务步骤" : tab === "executions" ? "运行记录" : "版本记录"}
           </strong>
         </nav>
-        <div className="toolbar" role="tablist" aria-label="任务视图">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "flow"}
-            className={tab === "flow" ? "tab-btn active" : "tab-btn"}
-            onClick={() => setTab("flow")}
-          >
-            任务步骤
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "executions"}
-            className={tab === "executions" ? "tab-btn active" : "tab-btn"}
-            onClick={() => setTab("executions")}
-          >
-            运行记录
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "versions"}
-            className={tab === "versions" ? "tab-btn active" : "tab-btn"}
-            onClick={() => setTab("versions")}
-          >
-            版本记录
-          </button>
-        </div>
+        <ViewSwitcher value={tab} onChange={setTab} />
         {error ? (
           <p className="error" role="alert">
             {error}

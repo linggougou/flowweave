@@ -1,36 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FlowDocument } from "@flowweave/flow-dsl";
 import type { ExecutionResult, FlowVersionRecord } from "@flowweave/project-knowledge";
-import { APP_DISPLAY_NAME, FlowVersionList, StepLogTable, type StepLogRow } from "@flowweave/ui";
+import { APP_DISPLAY_NAME, FlowVersionList } from "@flowweave/ui";
 
 import * as api from "./api.js";
 import type { WebProject } from "./api.js";
-import {
-  EmptyWorkspaceGuide,
-  ExecutionResultSummary,
-  WorkspaceBreadcrumb,
-  formatBusinessStatus,
-} from "./business-view.js";
+import { EmptyWorkspaceGuide, WorkspaceBreadcrumb } from "./business-view.js";
+import { ExecutionRecordsView } from "./ExecutionRecordsView.js";
+import { ViewSwitcher } from "./ViewSwitcher.js";
+import { createExecutionDetailLoader } from "./execution-detail-loader.js";
 
 type MainTab = "executions" | "versions";
-
-function formatExecutionTime(iso?: string): string {
-  if (!iso) return "时间未记录";
-  try {
-    return new Date(iso).toLocaleString("zh-CN", {
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return iso;
-  }
-}
-
-function executionStatusClass(status: ExecutionResult["status"]): string {
-  return `execution-history-status status-${status}`;
-}
 
 export function App() {
   const [projects, setProjects] = useState<WebProject[]>([]);
@@ -41,6 +21,7 @@ export function App() {
   const [executions, setExecutions] = useState<ExecutionResult[]>([]);
   const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null);
   const [executionDetail, setExecutionDetail] = useState<ExecutionResult | null>(null);
+  const [executionDetailLoading, setExecutionDetailLoading] = useState(false);
   const [versions, setVersions] = useState<FlowVersionRecord[]>([]);
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [previewFlow, setPreviewFlow] = useState<FlowDocument | null>(null);
@@ -54,6 +35,7 @@ export function App() {
     () => executions.filter((execution) => execution.flowId === selectedFlowId),
     [executions, selectedFlowId],
   );
+  const executionDetailLoader = useMemo(() => createExecutionDetailLoader(api.getExecution), []);
 
   const refreshProjects = useCallback(async () => {
     const list = await api.listProjects();
@@ -127,15 +109,24 @@ export function App() {
   useEffect(() => {
     if (!selectedExecutionId) {
       setExecutionDetail(null);
+      setExecutionDetailLoading(false);
       return;
     }
-    void api
-      .getExecution(selectedExecutionId)
-      .then(setExecutionDetail)
-      .catch((reason: unknown) => {
+    setExecutionDetail(null);
+    setExecutionDetailLoading(true);
+    setError(null);
+    return executionDetailLoader.load(selectedExecutionId, {
+      onSuccess: (_executionId, detail) => {
+        setExecutionDetail(detail);
+        setExecutionDetailLoading(false);
+      },
+      onError: (_executionId, reason) => {
+        setExecutionDetail(null);
+        setExecutionDetailLoading(false);
         setError(reason instanceof Error ? reason.message : "加载运行详情失败");
-      });
-  }, [selectedExecutionId]);
+      },
+    });
+  }, [executionDetailLoader, selectedExecutionId]);
 
   const loadVersionPreview = async (versionId: string) => {
     if (!selectedProjectId) return;
@@ -156,19 +147,6 @@ export function App() {
       setRestoringId(null);
     }
   };
-
-  const steps: StepLogRow[] = (executionDetail?.steps ?? []).map((step) => ({
-    stepIndex: step.stepIndex,
-    stepId: step.stepId,
-    label: `步骤 ${step.stepIndex + 1}`,
-    status: step.status,
-    message: step.errorMessage,
-    durationMs: step.durationMs,
-    startedAt: executionDetail?.startedAt ?? "—",
-    finishedAt: executionDetail?.finishedAt,
-    screenshotPath: step.screenshotPath,
-    diagnosticPath: step.diagnosticPath,
-  }));
 
   const viewName = mainTab === "executions" ? "最近运行结果" : "版本记录";
 
@@ -242,26 +220,7 @@ export function App() {
           viewName={viewName}
         />
 
-        <div className="main-tabs" role="tablist" aria-label="任务视图">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mainTab === "executions"}
-            className={mainTab === "executions" ? "main-tab active" : "main-tab"}
-            onClick={() => setMainTab("executions")}
-          >
-            最近运行结果
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mainTab === "versions"}
-            className={mainTab === "versions" ? "main-tab active" : "main-tab"}
-            onClick={() => setMainTab("versions")}
-          >
-            版本记录
-          </button>
-        </div>
+        <ViewSwitcher value={mainTab} onChange={setMainTab} />
 
         {error ? (
           <p className="error" role="alert">
@@ -278,66 +237,14 @@ export function App() {
             {taskExecutions.length === 0 ? (
               <EmptyWorkspaceGuide kind="executions" taskName={selectedFlow?.name} />
             ) : (
-              <>
-                <ExecutionResultSummary
-                  execution={
-                    executionDetail?.executionId === selectedExecutionId
-                      ? executionDetail
-                      : taskExecutions[0]!
-                  }
-                  taskName={selectedFlow?.name ?? "当前自动化任务"}
-                />
-                <div className="execution-records-layout">
-                  <section className="run-record-list" aria-labelledby="run-record-list-title">
-                    <h2 id="run-record-list-title">运行记录</h2>
-                    <ul className="execution-history-list">
-                      {taskExecutions.map((item, index) => (
-                        <li key={item.executionId}>
-                          <button
-                            type="button"
-                            className={
-                              item.executionId === selectedExecutionId
-                                ? "execution-history-item active"
-                                : "execution-history-item"
-                            }
-                            onClick={() => setSelectedExecutionId(item.executionId)}
-                          >
-                            <span className="execution-history-label">
-                              {index === 0 ? "最近一次" : `较早记录 ${index}`}
-                            </span>
-                            <span className={executionStatusClass(item.status)}>
-                              {formatBusinessStatus(item.status)} ·{" "}
-                              {formatExecutionTime(item.finishedAt ?? item.startedAt)}
-                            </span>
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-
-                  <details className="professional-details">
-                    <summary>专业日志</summary>
-                    <p className="professional-details-intro">
-                      供排障使用：步骤状态、底层错误、截图路径和诊断文件。
-                    </p>
-                    <div className="table-scroll">
-                      <StepLogTable steps={steps} emptyMessage="选择一条运行记录查看专业日志" />
-                    </div>
-                    {executionDetail ? (
-                      <dl className="technical-identifiers">
-                        <div>
-                          <dt>运行标识</dt>
-                          <dd>{executionDetail.executionId}</dd>
-                        </div>
-                        <div>
-                          <dt>任务标识</dt>
-                          <dd>{executionDetail.flowId}</dd>
-                        </div>
-                      </dl>
-                    ) : null}
-                  </details>
-                </div>
-              </>
+              <ExecutionRecordsView
+                taskName={selectedFlow?.name ?? "当前自动化任务"}
+                executions={taskExecutions}
+                selectedExecutionId={selectedExecutionId}
+                executionDetail={executionDetail}
+                detailLoading={executionDetailLoading}
+                onSelect={setSelectedExecutionId}
+              />
             )}
           </section>
         ) : (
