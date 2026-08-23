@@ -8,12 +8,14 @@
     "baseline:93380de",
     "original-commit:5ae8a22",
     "reviewed-commit:1069c393e1eab98a4d776219eef4e3f6e186d369",
+    "required-fix-original:6265b57",
+    "required-fix-reviewed:cc245555c8ad05f89b3e82a666fb985ec773cc02",
     "file:packages/project-knowledge/src/repository.ts",
     "file:packages/project-knowledge/src/types.ts",
     "file:packages/project-knowledge/src/execution-screenshot-preview.test.ts",
     "file:packages/project-knowledge/src/execution-deletion.test.ts",
-    "cmd:pnpm exec vitest run src/execution-screenshot-preview.test.ts src/execution-deletion.test.ts --reporter=verbose",
-    "cmd:git diff --check 93380de..1069c39"
+    "cmd:pnpm exec vitest run src/execution-screenshot-preview.test.ts src/execution-deletion.test.ts --reporter=dot",
+    "cmd:git diff --check 1069c39..cc24555"
   ],
   "hard_gates": [
     {
@@ -50,11 +52,11 @@
     },
     {
       "id": "toctou-fault-injection-complete",
-      "status": "fail",
+      "status": "pass",
       "evidence": [
         "repository.ts:1093-1137 对 fd、最终路径和全部父目录执行读取后身份重验，源码守卫存在",
-        "execution-screenshot-preview.test.ts:283-302 只注入目标文件路径替换",
-        "docs/exec-plans/active/p2-8-execution-screenshot-preview.md:68 明确要求同时注入运行目录替换与文件替换；候选 30 项缺少前者的可重复证据"
+        "execution-screenshot-preview.test.ts:283-302 注入目标文件路径替换并验证 fail closed 与错误脱敏",
+        "cc24555 新增运行目录身份漂移：保留同一截图 inode 后整体替换 runDirectory，验证目录身份重验仍拒绝读取，且原目录、替换目录和兄弟 sentinel 均不受影响"
       ]
     },
     {
@@ -63,22 +65,22 @@
       "evidence": [
         "types.ts 的结果联合仅含 status/mediaType/bytes/width/height，不含路径或文件名",
         "repository.ts 的读取错误均映射为稳定 FlowWeaveError 消息，未拼接本机路径",
-        "execution-screenshot-preview.test.ts:283-301 验证 TOCTOU 错误不含 dataDir"
+        "execution-screenshot-preview.test.ts 的文件替换与目录替换用例均验证错误不含 dataDir/runDirectory"
       ]
     },
     {
       "id": "deletion-regression",
       "status": "pass",
       "evidence": [
-        "2026-08-24 定向复验 execution-deletion.test.ts 36/36 通过",
-        "主代理既有证据：project-knowledge 全包 84/84、typecheck、lint、build 全绿"
+        "2026-08-24 收敛复验 execution-deletion.test.ts 36/36 通过",
+        "主代理既有证据：修复后 project-knowledge 全包 85/85、typecheck、lint、build 全绿"
       ]
     },
     {
       "id": "route-and-scope",
       "status": "pass",
       "evidence": [
-        "1069c39 仅修改 packages/project-knowledge 的 resolver、类型、导出与测试",
+        "1069c39 与 required fix cc24555 仅修改 packages/project-knowledge 的 resolver、类型、导出与测试",
         "未新增 Local API/Web 文件读取、未改 runtime 产物格式，P3/P4/vNext 未解冻"
       ]
     }
@@ -108,10 +110,10 @@
       "name": "regression_safety",
       "score": 20,
       "max_score": 20,
-      "reason": "截图与删除关键定向共 66/66 通过；主代理的全包 84/84 与编译门禁证据可复用。",
+      "reason": "修复后截图与删除关键定向共 67/67 通过；主代理的全包 85/85 与编译门禁证据可复用。",
       "evidence_refs": [
-        "cmd:pnpm exec vitest run src/execution-screenshot-preview.test.ts src/execution-deletion.test.ts --reporter=verbose",
-        "verifier:project-knowledge 84/84 + typecheck/lint/build"
+        "cmd:pnpm exec vitest run src/execution-screenshot-preview.test.ts src/execution-deletion.test.ts --reporter=dot",
+        "verifier:project-knowledge 85/85 + typecheck/lint/build"
       ]
     },
     {
@@ -126,60 +128,63 @@
     },
     {
       "name": "evidence_quality",
-      "score": 14,
+      "score": 20,
       "max_score": 20,
-      "reason": "30 项截图测试覆盖大多数安全分支，但冻结的运行目录替换故障注入缺失，L3 不能以源码推断替代可重复证据。",
+      "reason": "31 项截图测试已分别覆盖文件路径替换和运行目录身份漂移，并验证错误脱敏与多类 sentinel 不受影响；冻结的 L3 故障注入证据完整。",
       "evidence_refs": [
-        "packages/project-knowledge/src/execution-screenshot-preview.test.ts:53-303",
-        "docs/exec-plans/active/p2-8-execution-screenshot-preview.md:68"
+        "packages/project-knowledge/src/execution-screenshot-preview.test.ts",
+        "commit:cc245555c8ad05f89b3e82a666fb985ec773cc02",
+        "cmd:31/31 screenshot + 36/36 deletion"
       ]
     }
   ],
-  "penalties": [
-    {
-      "id": "missing-run-directory-toctou-injection",
-      "severity": "P1",
-      "deduction": 6,
-      "reason": "G1 冻结 TDD 清单要求运行目录替换和文件替换两类 TOCTOU；当前仅覆盖文件替换。",
-      "evidence_refs": [
-        "docs/exec-plans/active/p2-8-execution-screenshot-preview.md:68",
-        "packages/project-knowledge/src/execution-screenshot-preview.test.ts:283-302"
-      ]
-    }
-  ],
+  "penalties": [],
   "totals": {
-    "raw_score": 94,
-    "penalty_total": 6,
-    "final_score": 88
+    "raw_score": 100,
+    "penalty_total": 0,
+    "final_score": 100
   },
-  "verdict": "REVISE",
-  "required_fixes": [
-    "在 execution-screenshot-preview.test.ts 增加运行目录身份漂移故障注入：在 beforeExecutionScreenshotFileRevalidation() 中替换 runDirectory，断言 getExecutionScreenshotPreview fail closed、错误不泄露路径、替换目录与兄弟 sentinel 不被读取或修改；复跑截图 31 项、删除 36 项和 project-knowledge 全包。"
-  ],
+  "verdict": "PASS",
+  "required_fixes": [],
   "nice_to_have": [
     "可补充恰好 8 MiB 边界与非字符串运行时输入用例，但现有实现和共享 ID 守卫已足以支撑这些分支，不作为本轮阻塞。"
   ],
   "reviewers": [
     {
       "role": "verifier",
-      "conclusion": "REVISE",
-      "summary": "业务归属、固定路径、PNG/大小、文件替换和删除回归均通过；运行目录替换硬门证据缺失。"
+      "conclusion": "PASS",
+      "summary": "业务归属、固定路径、PNG/大小、文件与目录 TOCTOU、错误脱敏和删除回归全部通过。"
     },
     {
       "role": "strict_judge",
-      "conclusion": "REVISE",
-      "summary": "实现未发现可利用安全缺陷，但 L3 冻结故障注入未完整兑现，需补最小测试后复审。"
+      "conclusion": "PASS",
+      "summary": "cc24555 精确关闭初审 required fix；实现和 L3 故障注入证据已完整。"
     },
     {
       "role": "anti_slop_judge",
       "conclusion": "PASS",
-      "summary": "实现与 30 项测试均为真实安全逻辑，不存在空壳、模板凑数或范围漂移。"
+      "summary": "实现与 31 项测试均为真实安全逻辑，不存在空壳、模板凑数或范围漂移。"
     },
     {
       "role": "chief_reviewer",
-      "conclusion": "REVISE",
-      "summary": "退回 G1 仅补运行目录 TOCTOU 故障注入；无需重写 resolver 或扩大阶段范围。"
+      "conclusion": "PASS",
+      "summary": "G1 required fix 已关闭，允许进入 G3 集成；不得据此解冻 Web/Local API、P3/P4 或 vNext。"
     }
   ],
-  "reviewed_at": "2026-08-24T03:00:00+08:00"
+  "review_history": [
+    {
+      "reviewed_at": "2026-08-24T03:00:00+08:00",
+      "verdict": "REVISE",
+      "score": 88,
+      "summary": "初审确认 resolver 实现安全，但缺少冻结要求的运行目录身份漂移故障注入。",
+      "review_commit": "19e043a"
+    },
+    {
+      "reviewed_at": "2026-08-24T03:02:00+08:00",
+      "verdict": "PASS",
+      "score": 100,
+      "summary": "cc24555 补齐目录替换、错误脱敏和 sentinel 不受影响证据；31/31 + 36/36 通过。"
+    }
+  ],
+  "reviewed_at": "2026-08-24T03:02:00+08:00"
 }
