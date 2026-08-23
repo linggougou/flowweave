@@ -6956,3 +6956,15 @@
 - 集成：两提交已 cherry-pick 为 `c9a80d2`、`3cd6295`。
 - 验收结论：Track F5 通过；真实浏览器视觉与窄窗口验收保留到跨轨集成阶段。
 - 回收：F5 Agent 已结束，独立 worktree 已移除；本地功能分支暂保留作为审计与回滚引用。
+
+### 2026-08-23 Track F4 验收与回收
+
+- Agent：`/root/ux_foundation_4`；交付提交 `83d98b2 feat(runtime): 支持安全运行进度与取消`、`9343d83 fix(studio): 可靠持久化取消并等待退出`。
+- 首轮独立 Reviewer 退回 2 个 P1：零步取消可能把 `startedAt` 回读为 1970；Electron 退出未等待运行取消后的持久化与本地 API 排空。
+- 返工：以外层启动时间作为零步执行兜底；主进程退出时防重入、拒绝新运行、取消并等待所有 `runFlow` 完整收尾，再关闭 API 并仅放行一次最终退出。
+- Reviewer 复审：PASS，无新增 P0/P1；真实 Electron 进程级退出保留到集成烟测。
+- 主代理复验：runtime `47/47`；Studio `118/118`；runtime build 后 Studio typecheck 通过；`git diff --check` 通过。
+- 集成：两提交已 cherry-pick 为 `2ed5ed5`、`77f7ddc`。
+- 工具链说明：直接执行 Studio typecheck 首次读取了旧的 runtime `dist`；按 Turborepo `typecheck.dependsOn=^build` 约定先构建 runtime 后复验通过，不修改路径或技术边界。
+- 验收结论：Track F4 通过；HTTP fallback 状态映射与 F4/F5 前台接线转入跨轨集成。
+- 回收：F4 Agent 已结束，独立 worktree移除后保留本地功能分支作为审计引用。

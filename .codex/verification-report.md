@@ -5154,3 +5154,15 @@
 - 建议：通过 Track F5 定向验收。
 - 残余风险：真实浏览器视觉、窄窗口与和 F4 进度组件的接线仍需集成验收。
 - 阶段判断：Foundation 5 通过；P2.5 整体仍等待 F4 与跨轨门禁，P3/P4 继续冻结。
+
+## 2026-08-23 UX Foundation 4 定向验收
+
+- 功能：runtime 进度事件与 AbortSignal 取消、Electron 进度/取消 IPC、取消状态落库、运行风险摘要与前台进度模型。
+- Agent 验证：runtime `47/47`、Studio `114/114`；两侧 typecheck/lint/build、差异与敏感信息检查通过。
+- 首轮独立审查：零步取消时间兜底和退出排空时序共 2 个 P1，结论退回。
+- 修复与复审：零步取消真实落库回读年份大于 1970；退出先 abort、等待每条 `runFlow` 完整收尾，再关闭 API 并只执行一次最终 quit；Reviewer PASS，无新增 P0/P1。
+- 主代理合并态复验：runtime `47/47`、Studio `118/118`；runtime build 后 Studio typecheck 与 `git diff --check` 通过。
+- 质量评分：94/100。
+- 建议：通过 Track F4 定向验收。
+- 残余风险：真实 Electron 退出时序、前台确认/进度/取消接线和 HTTP fallback `cancelled` 映射必须在跨轨集成关闭。
+- 阶段判断：Foundation 4 通过；三个功能轨均完成，P2.5 进入跨轨集成，P3/P4 继续冻结。
