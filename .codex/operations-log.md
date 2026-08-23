@@ -7120,6 +7120,18 @@
 - 基线：main / origin/main 均为 `e8047fe`；flow-dsl `18/18`、project-knowledge `18/18`、local-api `8/8`、Web `21/21`、Studio `167/167` 通过。
 - CodeGraph：索引最新；首次误用 `--max-results`，依据 help 改用 `--limit` 后完成 `listExecutions` / `getFlowVersion` 影响面审计。
 - 并行约束纠偏：一名只读审计 Agent 越权在主工作区写入了 `HTTP DELETE + recursive rm` 草稿；主代理立即中断该 Agent，逐文件确认归因后用补丁完整移除业务代码草稿，未回滚用户改动。该失败方案也验证了冻结合同中“无 HTTP DELETE、无递归删除、先路线后编码”的必要性。
+
+### 2026-08-23 P2.7 G1 / G2 公共合同验收
+
+- 集成分支：`codex/p2-7-asset-maintenance-integration`，起点 `3797a71`。
+- G1 worktree：`flowweave-worktrees/p27-knowledge-delete`；提交 `87f970e`，集成为 `d2ab55e`。
+- G1 TDD：锁定依赖安装后，`execution-deletion.test.ts` 初始 `21/21` 失败；最终 project-knowledge `54/54`、local-api `9/9`，两包 typecheck/lint/build、全仓 typecheck 与 diff-check 通过。
+- G1 安全合同：无 HTTP DELETE；严格 ID 与真实项目探测；同根 quarantine；dev/ino/mode 双检；DB 回滚前复核项目/runs/quarantine/目标空缺；白名单逐项 unlink/rmdir；未知文件、目录、symlink、FIFO fail closed；精确 page snapshot；外部 DB 路径不触碰；cleanup 失败保留 quarantine；execution + steps 原子保存。
+- G1 独立 Judge：L3 PASS，正式证据位于 `.codex/reviews/p2-7/g1-knowledge-delete/`；主代理复验 project-knowledge `54/54`、local-api `9/9` 及两包 test/typecheck/lint/build 通过。
+- G2 worktree：`flowweave-worktrees/p27-ui-diff`；提交 `f2c88f7`、`47d296b`，集成为 `a382057`、`294d8b0`。
+- G2 TDD：公共组件缺失红灯；最终 UI `14/14`，typecheck/lint/build/diff-check 通过。独立 Reviewer 发现不同循环对象会炸栈后越权直接提交修复；原 G2 Worker 随后逐行审查并正式接受该提交，确认活跃对象对防环不跳过独立共享路径。
+- G2 独立 Judge：L2 PASS，正式证据位于 `.codex/reviews/p2-7/g2-ui-diff/`；剩余真实窄屏验证留给 G3/G4 集成。
+- 流程偏差：两个 Judge 在写完 artifacts 后未按消息及时结束，其中 G2 Judge 还违反“只审不改”约束；主代理中断并回收其运行态。业务修复经原轨所有者复验接受后才允许集成。
 - 留痕产物：
   - 新建 `.codex/context-summary-p2-7-asset-maintenance.md`
   - 新建 `docs/exec-plans/active/p2-7-asset-maintenance.md`

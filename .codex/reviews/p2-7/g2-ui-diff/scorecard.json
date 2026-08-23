@@ -1,0 +1,126 @@
+{
+  "review_id": "p2-7-g2-ui-diff-2026-08-23",
+  "task_id": "P2.7-G2",
+  "lane": "G2",
+  "review_level": "L2",
+  "rubric_id": "p2.7-readonly-json-diff",
+  "artifact_refs": [
+    "commit:47d296b fix(ui): 处理循环 JSON diff",
+    "commit:f2c88f7 feat(ui): 新增只读 JSON 差异视图",
+    "worktree:/Volumes/2T/CODE/A_Mine/flowweave-worktrees/p27-ui-diff",
+    "file:packages/ui/src/JsonDiffView.tsx",
+    "file:packages/ui/src/JsonDiffView.test.ts",
+    "cmd:pnpm --filter @flowweave/ui test",
+    "cmd:pnpm --filter @flowweave/ui typecheck",
+    "cmd:pnpm --filter @flowweave/ui build",
+    "cmd:pnpm exec tsx -e createJsonDiff(cyclicBefore, cyclicAfter)"
+  ],
+  "hard_gates": [
+    {
+      "id": "readonly-surface",
+      "status": "pass",
+      "evidence": [
+        "JsonDiffView.test.ts 覆盖无 textarea、button 的只读渲染约束",
+        "本轨提交仅修改 packages/ui，无写 API 或状态变更入口"
+      ]
+    },
+    {
+      "id": "bounded-and-deterministic",
+      "status": "pass",
+      "evidence": [
+        "JsonDiffView.test.ts 覆盖 500 条上限、JSON Pointer 转义、id/name 稳定匹配",
+        "JsonDiffView.tsx 通过 maxChanges 与稳定遍历保证有界输出"
+      ]
+    },
+    {
+      "id": "cycle-safe-non-json-safe-display",
+      "status": "pass",
+      "evidence": [
+        "47d296b 为 createJsonDiff 增加活跃对象对检测，避免循环对象炸栈",
+        "直接复现脚本输出 {\"total\":1,\"entries\":[{\"kind\":\"changed\",\"path\":\"/x\",\"before\":1,\"after\":2}]}",
+        "JsonDiffView.test.ts 新增循环 diff 与 formatJsonDiffValue 占位文本用例"
+      ]
+    },
+    {
+      "id": "package-validation",
+      "status": "pass",
+      "evidence": [
+        "pnpm --filter @flowweave/ui test 14/14 通过",
+        "pnpm --filter @flowweave/ui typecheck 通过",
+        "pnpm --filter @flowweave/ui build 通过"
+      ]
+    }
+  ],
+  "dimensions": [
+    {
+      "name": "正确性",
+      "score": 10,
+      "max_score": 10,
+      "reason": "对象、数组、根 primitive、长值截断和循环输入都已有可重复证据。",
+      "evidence_refs": [
+        "packages/ui/src/JsonDiffView.test.ts",
+        "cmd:pnpm exec tsx -e createJsonDiff(cyclicBefore, cyclicAfter)"
+      ]
+    },
+    {
+      "name": "安全与边界",
+      "score": 10,
+      "max_score": 10,
+      "reason": "组件保持只读，未引入写路径；长值和非 JSON 值都有安全展示策略。",
+      "evidence_refs": [
+        "packages/ui/src/JsonDiffView.tsx",
+        "packages/ui/src/JsonDiffView.test.ts"
+      ]
+    },
+    {
+      "name": "测试证据",
+      "score": 9,
+      "max_score": 10,
+      "reason": "单包单测、typecheck、build 与异常输入复现场景齐备；视觉级窄屏证据将留到 G3/G4 集成。",
+      "evidence_refs": [
+        "cmd:pnpm --filter @flowweave/ui test",
+        "cmd:pnpm --filter @flowweave/ui typecheck",
+        "cmd:pnpm --filter @flowweave/ui build"
+      ]
+    },
+    {
+      "name": "集成就绪度",
+      "score": 9,
+      "max_score": 10,
+      "reason": "导出面清晰，可直接供 Studio/Web 复用；剩余风险主要在业务接入而非共享包本身。",
+      "evidence_refs": [
+        "packages/ui/src/index.ts",
+        "packages/ui/src/FlowVersionList.tsx"
+      ]
+    }
+  ],
+  "penalties": [],
+  "totals": {
+    "raw_score": 38,
+    "penalty_total": 0,
+    "final_score": 38
+  },
+  "verdict": "PASS",
+  "required_fixes": [],
+  "nice_to_have": [
+    "G3/G4 集成阶段补 375x812 实际渲染验证，覆盖长路径和多条 diff 的窄屏布局。"
+  ],
+  "reviewers": [
+    {
+      "role": "Verifier",
+      "conclusion": "PASS",
+      "summary": "硬门禁、包级验证和循环输入回归均通过。"
+    },
+    {
+      "role": "Strict Judge",
+      "conclusion": "PASS",
+      "summary": "共享只读 diff 已满足 P2.7 G2 合同，可作为双端集成基线。"
+    },
+    {
+      "role": "Chief Reviewer",
+      "conclusion": "PASS",
+      "summary": "允许离开 G2 审查，进入集成分支。"
+    }
+  ],
+  "reviewed_at": "2026-08-23T23:18:00+08:00"
+}

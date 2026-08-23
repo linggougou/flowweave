@@ -150,7 +150,7 @@ pnpm audit --prod --audit-level high --registry=https://registry.npmjs.org
 - [ ] P3/P4、vNext、Flow / 项目 / 批量删除和可编辑 diff 未混入。
 - [ ] worktree、分支、临时进程与 Agent 在验收后回收，留痕完整。
 
-当前状态：合同已冻结，等待首批 G1 / G2 worktree 并行实施。
+当前状态：G1 / G2 已通过定向门禁与独立 Judge 并合入集成分支；G3 / G4 从共同合同基线并行实施中。
 
 ## 7. 回滚策略
 

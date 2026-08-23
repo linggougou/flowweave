@@ -1,0 +1,142 @@
+{
+  "review_id": "p2-7-g1-knowledge-delete-2026-08-23",
+  "task_id": "P2.7-G1",
+  "lane": "G1",
+  "review_level": "L3",
+  "rubric_id": "p2.7-safe-execution-deletion",
+  "artifact_refs": [
+    "commit:87f970e feat(project-knowledge): 安全删除执行记录",
+    "worktree:/Volumes/2T/CODE/A_Mine/flowweave-worktrees/p27-knowledge-delete",
+    "file:packages/project-knowledge/src/repository.ts",
+    "file:packages/project-knowledge/src/paths.ts",
+    "file:packages/project-knowledge/src/execution-deletion.test.ts",
+    "file:packages/local-api/src/index.ts",
+    "file:packages/local-api/src/index.test.ts",
+    "cmd:pnpm --filter @flowweave/project-knowledge test",
+    "cmd:pnpm --filter @flowweave/project-knowledge typecheck",
+    "cmd:pnpm --filter @flowweave/local-api test",
+    "cmd:pnpm --filter @flowweave/local-api typecheck"
+  ],
+  "hard_gates": [
+    {
+      "id": "no-ghost-project-or-traversal",
+      "status": "pass",
+      "evidence": [
+        "paths.ts 统一 projectId/executionId 单段校验",
+        "execution-deletion.test.ts 覆盖非法 ID 与 ghost project 无副作用",
+        "local-api index.test.ts 验证错误映射且不泄露路径"
+      ]
+    },
+    {
+      "id": "controlled-delete-order",
+      "status": "pass",
+      "evidence": [
+        "repository.ts 采用 项目校验 -> quarantine rename -> SQLite immediate transaction -> 白名单 unlink/rmdir 顺序",
+        "execution-deletion.test.ts 覆盖事务失败回滚、rename 后身份漂移与 cleanup failure 保留 quarantine"
+      ]
+    },
+    {
+      "id": "fail-closed-on-unsafe-artifacts",
+      "status": "pass",
+      "evidence": [
+        "repository.ts 只允许 network.har、step-<n>.png、page-<n>.json、step-<n>-diagnostic.json",
+        "execution-deletion.test.ts 覆盖未知文件、子目录、symlink、FIFO 全部在数据库变更前拒绝"
+      ]
+    },
+    {
+      "id": "no-destructive-http-surface",
+      "status": "pass",
+      "evidence": [
+        "local-api 仅收紧 runs 分配入口，没有新增 DELETE 或其他破坏性 HTTP 路由",
+        "packages/local-api/src/index.ts 仍只暴露安全分配与只读查询"
+      ]
+    },
+    {
+      "id": "package-validation",
+      "status": "pass",
+      "evidence": [
+        "pnpm --filter @flowweave/project-knowledge test 54/54 通过",
+        "pnpm --filter @flowweave/project-knowledge typecheck 通过",
+        "pnpm --filter @flowweave/local-api test 9/9 通过",
+        "pnpm --filter @flowweave/local-api typecheck 通过"
+      ]
+    }
+  ],
+  "dimensions": [
+    {
+      "name": "正确性",
+      "score": 10,
+      "max_score": 10,
+      "reason": "删除顺序、幂等语义、page snapshot 精确归属和 execution+steps 原子保存都有定向用例。",
+      "evidence_refs": [
+        "packages/project-knowledge/src/execution-deletion.test.ts",
+        "packages/project-knowledge/src/repository.ts"
+      ]
+    },
+    {
+      "name": "安全性",
+      "score": 10,
+      "max_score": 10,
+      "reason": "路径单段校验、项目存在性只读探测、symlink/特殊文件 fail closed 与无 HTTP destructive surface 均符合合同。",
+      "evidence_refs": [
+        "packages/project-knowledge/src/paths.ts",
+        "packages/project-knowledge/src/repository.ts",
+        "packages/local-api/src/index.ts"
+      ]
+    },
+    {
+      "name": "测试证据",
+      "score": 9,
+      "max_score": 10,
+      "reason": "包级测试和故障注入覆盖充分；Studio 侧 active execution/UI 行为仍在后续 G3 集成验证。",
+      "evidence_refs": [
+        "cmd:pnpm --filter @flowweave/project-knowledge test",
+        "cmd:pnpm --filter @flowweave/local-api test"
+      ]
+    },
+    {
+      "name": "集成就绪度",
+      "score": 9,
+      "max_score": 10,
+      "reason": "仓储和 API 契约已经稳定，适合作为 Studio IPC 接入基线；剩余工作集中在应用层守卫与交互。",
+      "evidence_refs": [
+        "packages/project-knowledge/src/index.ts",
+        "packages/project-knowledge/src/types.ts"
+      ]
+    }
+  ],
+  "penalties": [],
+  "totals": {
+    "raw_score": 38,
+    "penalty_total": 0,
+    "final_score": 38
+  },
+  "verdict": "PASS",
+  "required_fixes": [],
+  "nice_to_have": [
+    "G3 集成时补活动执行拒绝、缓存驱逐和删除后补位的应用层联调证据。"
+  ],
+  "reviewers": [
+    {
+      "role": "Verifier",
+      "conclusion": "PASS",
+      "summary": "高风险删除轨的硬门禁、故障注入和包级验证均已通过。"
+    },
+    {
+      "role": "Strict Judge",
+      "conclusion": "PASS",
+      "summary": "删除合同完整且回滚路径清晰，可进入应用层接入。"
+    },
+    {
+      "role": "Anti-Slop Judge",
+      "conclusion": "PASS",
+      "summary": "未见模板化凑数实现；测试和错误语义与合同一致。"
+    },
+    {
+      "role": "Chief Reviewer",
+      "conclusion": "PASS",
+      "summary": "允许离开 G1 审查，进入集成分支。"
+    }
+  ],
+  "reviewed_at": "2026-08-23T23:19:00+08:00"
+}
