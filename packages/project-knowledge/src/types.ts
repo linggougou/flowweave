@@ -93,3 +93,16 @@ export type ExecutionDeletionResult =
       status: "already-absent";
       artifacts: "untouched";
     };
+
+/** 受控截图读取结果；不会向调用方暴露本机路径。 */
+export type ExecutionScreenshotPreviewResult =
+  | {
+      status: "available";
+      mediaType: "image/png";
+      bytes: Uint8Array;
+      width: number;
+      height: number;
+    }
+  | {
+      status: "absent";
+    };

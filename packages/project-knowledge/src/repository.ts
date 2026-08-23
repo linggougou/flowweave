@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
 import {
+  closeSync,
+  constants,
+  fstatSync,
   lstatSync,
   mkdirSync,
+  openSync,
+  readSync,
   readdirSync,
   renameSync,
   rmdirSync,
@@ -33,6 +38,7 @@ import type {
   ExecutionRunContext,
   ExecutionResult,
   ExecutionDeletionResult,
+  ExecutionScreenshotPreviewResult,
   ExecutionWithProject,
   FlowImportResult,
   FlowVersionRecord,
@@ -58,11 +64,23 @@ const RUN_ARTIFACT_NAME_PATTERNS = [
   /^step-\d+-diagnostic\.json$/,
 ] as const;
 const PAGE_SNAPSHOT_NAME_PATTERN = /^page-\d+\.json$/;
+const EXECUTION_SCREENSHOT_MAX_STEP_INDEX = 1_000_000;
+const EXECUTION_SCREENSHOT_MAX_BYTES = 8 * 1024 * 1024;
+const EXECUTION_SCREENSHOT_MAX_DIMENSION = 8192;
+const EXECUTION_SCREENSHOT_MAX_PIXELS = 40_000_000;
+const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
 type FileIdentity = {
   dev: number;
   ino: number;
   mode: number;
+};
+
+type ScreenshotFileIdentity = FileIdentity & {
+  size: number;
+  nlink: number;
+  mtimeMs: number;
+  ctimeMs: number;
 };
 
 class MissingLocalPathError extends Error {}
@@ -135,6 +153,87 @@ function assertSameFileIdentity(path: string, expected: FileIdentity, label: str
   ) {
     throw invalidLocalAsset(`${label}在维护期间发生变化`);
   }
+}
+
+function toScreenshotFileIdentity(stats: Stats): ScreenshotFileIdentity {
+  return {
+    dev: stats.dev,
+    ino: stats.ino,
+    mode: stats.mode,
+    size: stats.size,
+    nlink: stats.nlink,
+    mtimeMs: stats.mtimeMs,
+    ctimeMs: stats.ctimeMs,
+  };
+}
+
+function sameScreenshotFileIdentity(
+  actual: ScreenshotFileIdentity,
+  expected: ScreenshotFileIdentity,
+): boolean {
+  return (
+    actual.dev === expected.dev &&
+    actual.ino === expected.ino &&
+    actual.mode === expected.mode &&
+    actual.size === expected.size &&
+    actual.nlink === expected.nlink &&
+    actual.mtimeMs === expected.mtimeMs &&
+    actual.ctimeMs === expected.ctimeMs
+  );
+}
+
+function assertScreenshotFileStats(stats: Stats): ScreenshotFileIdentity {
+  if (!stats.isFile() || stats.isSymbolicLink() || stats.nlink !== 1) {
+    throw invalidLocalAsset("执行截图结构不安全");
+  }
+  if (
+    !Number.isSafeInteger(stats.size) ||
+    stats.size < 0 ||
+    stats.size > EXECUTION_SCREENSHOT_MAX_BYTES
+  ) {
+    throw invalidLocalAsset("执行截图大小无效");
+  }
+  return toScreenshotFileIdentity(stats);
+}
+
+function lstatExecutionScreenshot(path: string): ScreenshotFileIdentity {
+  let stats: Stats;
+  try {
+    stats = lstatSync(path);
+  } catch (error: unknown) {
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      (error as NodeJS.ErrnoException).code === "ENOENT"
+    ) {
+      throw new MissingLocalPathError();
+    }
+    throw new FlowWeaveError("UNKNOWN", "执行截图不可访问");
+  }
+  return assertScreenshotFileStats(stats);
+}
+
+function parsePngDimensions(bytes: Buffer): { width: number; height: number } {
+  if (
+    bytes.length < 33 ||
+    !bytes.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE) ||
+    bytes.readUInt32BE(8) !== 13 ||
+    bytes.toString("ascii", 12, 16) !== "IHDR"
+  ) {
+    throw invalidLocalAsset("执行截图不是有效的 PNG");
+  }
+  const width = bytes.readUInt32BE(16);
+  const height = bytes.readUInt32BE(20);
+  if (
+    width === 0 ||
+    height === 0 ||
+    width > EXECUTION_SCREENSHOT_MAX_DIMENSION ||
+    height > EXECUTION_SCREENSHOT_MAX_DIMENSION ||
+    width * height > EXECUTION_SCREENSHOT_MAX_PIXELS
+  ) {
+    throw invalidLocalAsset("执行截图尺寸无效");
+  }
+  return { width, height };
 }
 
 function assertSafeRunArtifacts(runDirectory: string): void {
@@ -351,6 +450,9 @@ export class ProjectKnowledgeRepository {
 
   /** @internal 仅供故障注入测试覆盖提交后的清理失败。 */
   protected beforeQuarantinedArtifactCleanup(): void {}
+
+  /** @internal 仅供故障注入测试模拟截图读取后的路径身份漂移。 */
+  protected beforeExecutionScreenshotFileRevalidation(): void {}
 
   /** 为单次执行创建 `runs/<executionId>/` 目录 */
   allocateRunDirectory(projectId: string, executionId: string): string {
@@ -883,6 +985,179 @@ export class ProjectKnowledgeRepository {
     } finally {
       closeProjectDatabase(sqlite);
     }
+  }
+
+  /**
+   * 按业务标识读取受控运行目录中的 PNG，不信任数据库内保存的截图路径。
+   * 返回值不会携带文件名或绝对路径。
+   */
+  getExecutionScreenshotPreview(
+    projectId: string,
+    executionId: string,
+    stepIndex: number,
+  ): ExecutionScreenshotPreviewResult {
+    assertSafeResourceId(projectId, "项目标识");
+    assertSafeResourceId(executionId, "执行标识");
+    if (
+      !Number.isSafeInteger(stepIndex) ||
+      stepIndex < 0 ||
+      stepIndex > EXECUTION_SCREENSHOT_MAX_STEP_INDEX
+    ) {
+      throw new FlowWeaveError("VALIDATION_FAILED", "步骤序号格式无效");
+    }
+
+    let dataDirectoryIdentity: FileIdentity;
+    try {
+      dataDirectoryIdentity = assertDirectoryWithoutSymlink(this.dataDir, "项目数据根");
+    } catch (error: unknown) {
+      if (isMissingPathError(error)) {
+        throw new FlowWeaveError("PROJECT_NOT_FOUND", "目标项目不存在");
+      }
+      throw error;
+    }
+    const { projectDirectory, projectIdentity, storePath, storeIdentity } =
+      this.assertExistingProject(projectId);
+    let readonlyDatabase: ReturnType<typeof openExistingProjectDatabaseReadOnly> | undefined;
+    try {
+      readonlyDatabase = openExistingProjectDatabaseReadOnly(
+        projectId,
+        this.dataDir,
+        this.databaseOptions,
+      );
+      const execution = readonlyDatabase.db
+        .select({ id: dbSchema.executions.id })
+        .from(dbSchema.executions)
+        .where(
+          and(
+            eq(dbSchema.executions.id, executionId),
+            eq(dbSchema.executions.projectId, projectId),
+          ),
+        )
+        .get();
+      if (!execution) {
+        throw invalidLocalAsset("执行记录不存在或不属于目标项目");
+      }
+      const step = readonlyDatabase.db
+        .select({ id: dbSchema.executionSteps.id })
+        .from(dbSchema.executionSteps)
+        .where(
+          and(
+            eq(dbSchema.executionSteps.executionId, executionId),
+            eq(dbSchema.executionSteps.stepIndex, stepIndex),
+          ),
+        )
+        .get();
+      if (!step) {
+        throw invalidLocalAsset("执行步骤不存在");
+      }
+      assertSameDirectoryIdentity(this.dataDir, dataDirectoryIdentity, "项目数据根");
+      assertSameDirectoryIdentity(projectDirectory, projectIdentity, "项目目录");
+      assertSameFileIdentity(storePath, storeIdentity, "项目数据文件");
+    } catch (error: unknown) {
+      if (error instanceof FlowWeaveError) {
+        throw error;
+      }
+      throw new FlowWeaveError("UNKNOWN", "读取执行记录失败");
+    } finally {
+      if (readonlyDatabase) {
+        closeProjectDatabase(readonlyDatabase.sqlite);
+      }
+    }
+
+    const runsDirectory = join(projectDirectory, "runs");
+    const runDirectory = resolveRunDirectory(this.dataDir, projectId, executionId);
+    const screenshotPath = join(runDirectory, `step-${stepIndex}.png`);
+    let runsIdentity: FileIdentity;
+    let runIdentity: FileIdentity;
+    let screenshotIdentity: ScreenshotFileIdentity;
+    try {
+      runsIdentity = assertDirectoryWithoutSymlink(runsDirectory, "运行目录根");
+      runIdentity = assertDirectoryWithoutSymlink(runDirectory, "单次运行目录");
+      screenshotIdentity = lstatExecutionScreenshot(screenshotPath);
+    } catch (error: unknown) {
+      if (isMissingPathError(error)) {
+        return { status: "absent" };
+      }
+      throw error;
+    }
+
+    assertSameDirectoryIdentity(this.dataDir, dataDirectoryIdentity, "项目数据根");
+    assertSameDirectoryIdentity(projectDirectory, projectIdentity, "项目目录");
+    assertSameFileIdentity(storePath, storeIdentity, "项目数据文件");
+    assertSameDirectoryIdentity(runsDirectory, runsIdentity, "运行目录根");
+    assertSameDirectoryIdentity(runDirectory, runIdentity, "单次运行目录");
+
+    let descriptor: number | undefined;
+    let contents: Buffer;
+    try {
+      const noFollowFlag = constants.O_NOFOLLOW ?? 0;
+      try {
+        descriptor = openSync(
+          screenshotPath,
+          constants.O_RDONLY | constants.O_NONBLOCK | noFollowFlag,
+        );
+      } catch {
+        throw invalidLocalAsset("执行截图在读取期间发生变化");
+      }
+
+      const openedIdentity = assertScreenshotFileStats(fstatSync(descriptor));
+      if (!sameScreenshotFileIdentity(openedIdentity, screenshotIdentity)) {
+        throw invalidLocalAsset("执行截图在读取期间发生变化");
+      }
+
+      contents = Buffer.allocUnsafe(openedIdentity.size);
+      let offset = 0;
+      while (offset < contents.length) {
+        const bytesRead = readSync(descriptor, contents, offset, contents.length - offset, offset);
+        if (bytesRead === 0) {
+          throw invalidLocalAsset("执行截图在读取期间发生变化");
+        }
+        offset += bytesRead;
+      }
+
+      this.beforeExecutionScreenshotFileRevalidation();
+
+      const finalDescriptorIdentity = assertScreenshotFileStats(fstatSync(descriptor));
+      if (!sameScreenshotFileIdentity(finalDescriptorIdentity, screenshotIdentity)) {
+        throw invalidLocalAsset("执行截图在读取期间发生变化");
+      }
+      let finalPathIdentity: ScreenshotFileIdentity;
+      try {
+        finalPathIdentity = lstatExecutionScreenshot(screenshotPath);
+      } catch {
+        throw invalidLocalAsset("执行截图在读取期间发生变化");
+      }
+      if (!sameScreenshotFileIdentity(finalPathIdentity, screenshotIdentity)) {
+        throw invalidLocalAsset("执行截图在读取期间发生变化");
+      }
+      assertSameDirectoryIdentity(this.dataDir, dataDirectoryIdentity, "项目数据根");
+      assertSameDirectoryIdentity(projectDirectory, projectIdentity, "项目目录");
+      assertSameFileIdentity(storePath, storeIdentity, "项目数据文件");
+      assertSameDirectoryIdentity(runsDirectory, runsIdentity, "运行目录根");
+      assertSameDirectoryIdentity(runDirectory, runIdentity, "单次运行目录");
+    } catch (error: unknown) {
+      if (error instanceof FlowWeaveError) {
+        throw error;
+      }
+      throw new FlowWeaveError("UNKNOWN", "执行截图读取失败");
+    } finally {
+      if (descriptor !== undefined) {
+        try {
+          closeSync(descriptor);
+        } catch {
+          // 读取结果仍由前述身份校验决定；关闭失败不暴露文件路径。
+        }
+      }
+    }
+
+    const { width, height } = parsePngDimensions(contents);
+    return {
+      status: "available",
+      mediaType: "image/png",
+      bytes: new Uint8Array(contents),
+      width,
+      height,
+    };
   }
 
   /** 安全删除单条已落库 execution，并只清理其受控直属运行产物。 */

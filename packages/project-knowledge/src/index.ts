@@ -16,6 +16,7 @@ export type {
   ExecutionVariableValue,
   ExecutionWithProject,
   ExecutionDeletionResult,
+  ExecutionScreenshotPreviewResult,
   StepLog,
 } from "./types.js";
 export { ProjectKnowledgeRepository } from "./repository.js";
