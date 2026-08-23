@@ -7,7 +7,13 @@ import {
 } from "@flowweave/project-knowledge";
 import { FlowWeaveError } from "@flowweave/shared";
 
-import { readJsonBody } from "./http-utils.js";
+import {
+  HttpBodyTooLargeError,
+  InvalidJsonBodyError,
+  readJsonBody,
+} from "./http-utils.js";
+
+const FLOW_IMPORT_BODY_LIMIT_BYTES = 1024 * 1024;
 
 export interface KnowledgeApiOptions {
   repo?: ProjectKnowledgeRepository;
@@ -19,6 +25,22 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
     "Access-Control-Allow-Origin": "*",
   });
   res.end(JSON.stringify(body));
+}
+
+function sendApiError(
+  res: ServerResponse,
+  status: number,
+  code: string,
+  message: string,
+): void {
+  sendJson(res, status, { code, error: message });
+}
+
+function unwrapFlowImportBody(body: unknown): unknown {
+  if (body && typeof body === "object" && !Array.isArray(body) && "flow" in body) {
+    return (body as { flow?: unknown }).flow;
+  }
+  return body;
 }
 
 function isAllowedOrigin(origin: string | undefined): boolean {
@@ -109,6 +131,29 @@ export async function handleKnowledgeApiRequest(
               ? error.message
               : "保存 Flow 失败";
         sendJson(res, 400, { error: message });
+      }
+      return true;
+    }
+
+    if (segments[3] === "flow-imports" && segments.length === 4 && method === "POST") {
+      try {
+        const body = await readJsonBody(req, {
+          maxBytes: FLOW_IMPORT_BODY_LIMIT_BYTES,
+        });
+        const result = repo.importFlow(projectId, unwrapFlowImportBody(body));
+        sendJson(res, 201, result);
+      } catch (error: unknown) {
+        if (error instanceof HttpBodyTooLargeError) {
+          sendApiError(res, 413, "PAYLOAD_TOO_LARGE", "请求体不能超过 1 MiB");
+        } else if (error instanceof InvalidJsonBodyError) {
+          sendApiError(res, 400, "INVALID_JSON", "请求 JSON 格式无效");
+        } else if (error instanceof FlowWeaveError && error.code === "PROJECT_NOT_FOUND") {
+          sendApiError(res, 404, "PROJECT_NOT_FOUND", "目标项目不存在");
+        } else if (error instanceof FlowWeaveError && error.code === "VALIDATION_FAILED") {
+          sendApiError(res, 400, "INVALID_FLOW", "Flow 文档格式无效");
+        } else {
+          sendApiError(res, 500, "FLOW_IMPORT_FAILED", "导入 Flow 失败");
+        }
       }
       return true;
     }

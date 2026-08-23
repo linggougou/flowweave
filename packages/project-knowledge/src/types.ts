@@ -1,9 +1,14 @@
-import type { FlowDocument } from "@flowweave/flow-dsl";
+import type { FlowDocument, FlowPortabilityWarning } from "@flowweave/flow-dsl";
 
 export type ProjectRef = {
   id: string;
   name: string;
   createdAt: string;
+};
+
+export type FlowImportResult = {
+  flow: FlowDocument;
+  warnings: FlowPortabilityWarning[];
 };
 
 /** Flow 历史版本摘要（列表展示） */

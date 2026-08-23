@@ -2,8 +2,9 @@ import { randomUUID } from "node:crypto";
 import { readdirSync, statSync } from "node:fs";
 
 import type { FlowDocument } from "@flowweave/flow-dsl";
-import { parseFlowDocument } from "@flowweave/flow-dsl";
+import { createPortableFlowDocument, parseFlowDocument } from "@flowweave/flow-dsl";
 import { and, asc, desc, eq, max } from "drizzle-orm";
+import { FlowWeaveError } from "@flowweave/shared";
 
 import {
   closeProjectDatabase,
@@ -20,6 +21,7 @@ import type {
   ExecutionRunContext,
   ExecutionResult,
   ExecutionWithProject,
+  FlowImportResult,
   FlowVersionRecord,
   PageSnapshotRecord,
   ProjectEnvironment,
@@ -417,6 +419,80 @@ export class ProjectKnowledgeRepository {
     } finally {
       closeProjectDatabase(sqlite);
     }
+  }
+
+  /** 将裸 FlowDocument 安全导入目标项目，每次都创建独立副本。 */
+  importFlow(projectId: string, input: unknown): FlowImportResult {
+    const projectExists = this.listProjects().some((project) => project.id === projectId);
+    if (!projectExists) {
+      throw new FlowWeaveError("PROJECT_NOT_FOUND", "目标项目不存在");
+    }
+
+    let portable: ReturnType<typeof createPortableFlowDocument>;
+    try {
+      portable = createPortableFlowDocument(input);
+    } catch {
+      throw new FlowWeaveError("VALIDATION_FAILED", "Flow 文档格式无效");
+    }
+
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
+    try {
+      const importTransaction = sqlite.transaction(() => {
+        const existingNames = new Set(
+          db
+            .select({ name: dbSchema.flows.name })
+            .from(dbSchema.flows)
+            .where(eq(dbSchema.flows.projectId, projectId))
+            .all()
+            .map((row) => row.name),
+        );
+        const name = this.allocateImportedFlowName(portable.document.name, existingNames);
+        const now = new Date().toISOString();
+        const flow: FlowDocument = {
+          ...portable.document,
+          id: randomUUID(),
+          projectId,
+          name,
+          meta: {
+            ...portable.document.meta,
+            createdAt: now,
+            updatedAt: now,
+          },
+        };
+        db.insert(dbSchema.flows)
+          .values({
+            id: flow.id,
+            projectId,
+            name: flow.name,
+            documentJson: JSON.stringify(flow),
+            schemaVersion: flow.schemaVersion,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .run();
+        return flow;
+      });
+
+      return {
+        flow: importTransaction.immediate(),
+        warnings: portable.warnings,
+      };
+    } finally {
+      closeProjectDatabase(sqlite);
+    }
+  }
+
+  private allocateImportedFlowName(sourceName: string, existingNames: Set<string>): string {
+    const firstCandidate = `${sourceName}（导入）`;
+    if (!existingNames.has(firstCandidate)) {
+      return firstCandidate;
+    }
+
+    let sequence = 2;
+    while (existingNames.has(`${sourceName}（导入 ${sequence}）`)) {
+      sequence += 1;
+    }
+    return `${sourceName}（导入 ${sequence}）`;
   }
 
   getFlowInProject(projectId: string, flowId: string): FlowDocument | null {

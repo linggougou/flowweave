@@ -10,6 +10,7 @@ export type {
   ProjectEnvironment,
   PageSnapshotRecord,
   FlowVersionRecord,
+  FlowImportResult,
   ExecutionRunContext,
   ExecutionResult,
   ExecutionVariableValue,
