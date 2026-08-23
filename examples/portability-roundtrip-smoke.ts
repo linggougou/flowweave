@@ -26,6 +26,7 @@ function buildLoginFlow(
   projectId: string,
   passwordLiteral: string,
   uploadFilePath: string,
+  urlCredential: string,
 ): FlowDocument {
   const now = new Date().toISOString();
   return {
@@ -72,7 +73,7 @@ function buildLoginFlow(
       {
         id: "open-login",
         type: "navigate",
-        url: "{{login_url}}",
+        url: `{{login_url}}?token=${encodeURIComponent(urlCredential)}`,
         waitUntil: "domcontentloaded",
       },
       {
@@ -150,8 +151,19 @@ async function main(): Promise<void> {
     assert.deepEqual(repo.listFlows(targetProject.id), [], "目标项目必须从空 Flow 列表开始");
 
     const passwordLiteral = `fixture-${randomUUID()}`;
-    const sourceFlow = buildLoginFlow(sourceProject.id, passwordLiteral, uploadFilePath);
+    const urlCredential = `url-${randomUUID()}`;
+    const sourceFlow = buildLoginFlow(
+      sourceProject.id,
+      passwordLiteral,
+      uploadFilePath,
+      urlCredential,
+    );
     const sourceSnapshot = JSON.parse(JSON.stringify(sourceFlow)) as FlowDocument;
+    assert.equal(
+      JSON.stringify(sourceFlow).includes(urlCredential),
+      true,
+      "来源 Flow 必须真实包含待处理的 URL 明显凭据",
+    );
     repo.saveFlow(sourceProject.id, sourceFlow);
 
     const portable = createPortableFlowDocument(sourceFlow);
@@ -169,9 +181,14 @@ async function main(): Promise<void> {
       portable.warnings.some((warning) => warning.code === "upload-path-variableized"),
       "上传绝对路径必须被变量化",
     );
+    assert.ok(
+      portable.warnings.some((warning) => warning.code === "url-query-variableized"),
+      "URL 明显凭据必须被变量化",
+    );
 
     const exportedJson = JSON.stringify(portable.document, null, 2);
     assert.equal(exportedJson.includes(passwordLiteral), false, "导出 JSON 不得包含密码字面量");
+    assert.equal(exportedJson.includes(urlCredential), false, "导出 JSON 不得包含 URL 明显凭据");
     assert.equal(
       exportedJson.includes(loginFixtureUrl),
       false,
@@ -202,11 +219,16 @@ async function main(): Promise<void> {
       (warning) => warning.code === "upload-path-variableized",
     );
     assert.ok(uploadWarning?.variableName, "上传路径 warning 必须提供运行变量名");
+    const urlWarning = portable.warnings.find(
+      (warning) => warning.code === "url-query-variableized",
+    );
+    assert.ok(urlWarning?.variableName, "URL 凭据 warning 必须提供运行变量名");
     const runtimeVariables = {
       upload_url: uploadFixtureUrl,
       login_url: loginFixtureUrl,
       [passwordWarning.variableName]: passwordLiteral,
       [uploadWarning.variableName]: uploadFilePath,
+      [urlWarning.variableName]: urlCredential,
     };
     const requiredVariableNames = imported.flow.variables
       .filter((variable) => variable.required)
