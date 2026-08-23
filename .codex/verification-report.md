@@ -5211,3 +5211,10 @@
 - DoD 已拆分为“本地 Node 20/24 与安全门禁通过”和“远端双矩阵待会签”，不再用一个未勾选条目混淆本地完成状态。
 - Reviewer 最终复审：PASS，无 P0/P1；原 P1 已关闭，P3/P4、vNext 与破坏性删除未越界。
 - 当前仅等待集成分支与 main 远端双矩阵成功；完成前不归档。
+
+### 集成分支远端会签
+
+- GitHub Actions run `32642660882`：success。
+- Node 20 job `97202040554`：success，`3m33s`。
+- Node 24 job `97202040678`：success，`3m21s`。
+- 两条矩阵均完成冻结安装、Playwright Chromium、lint 和完整 smoke；当前仅等待包含本会签留痕的最终分支提交与 main 双矩阵。

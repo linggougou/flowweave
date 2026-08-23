@@ -7092,3 +7092,4 @@
 - Node 20 首次直接复验因工作区已恢复为 Node 24 native binding，在打开 SQLite 前准确报 ABI `137`/`115` 不匹配；按冻结安装重建 Node 20 依赖后通过。最终再次恢复 Node 24，doctor 与修正后 portability 复验通过。
 - 返工 worktree、临时分支与新增任务 TMPDIR 已回收；TMPDIR 移入既有废纸篓回收目录，可恢复。
 - 最终 Reviewer 复审：PASS，无 P0/P1；确认动态 URL token 从来源、结构化 warning、导出移除、导入变量到真实 `10/10` 运行形成非平凡闭环，且 DoD 与 `.codex` 证据一致。
+- 集成分支远端会签：GitHub Actions run `32642660882` 成功；Node 20 job `97202040554`（`3m33s`）与 Node 24 job `97202040678`（`3m21s`）均完成 install、Playwright、lint 和完整 smoke。
