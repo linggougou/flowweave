@@ -45,10 +45,10 @@
 ## 集成结果
 
 - G1-G5 均按独立 worktree 交付并经独立 Reviewer 复审为 PASS，无剩余 P0/P1。
-- G6 真实往返从含密码、URL 凭据和本机上传绝对路径的来源 Flow 导出，经空项目导入为新副本、补齐输入后运行 `10/10` 步骤成功；JSON 不含密码与原始路径。
+- G6 真实往返从含密码、动态 URL query token 和本机上传绝对路径的来源 Flow 导出，产生 `4` 项结构化 warning，经空项目导入为新副本、补齐输入后运行 `10/10` 步骤成功；JSON 不含密码、token 与原始路径。
 - Web 真实浏览器重命名、刷新持久化和 `375×812` 无横向溢出均通过，验收后恢复原名称。
 - Studio Electron、renderer、本地 API 与原生模块真实启动通过；macOS 锁屏阻止原生文件对话框的人机点击，未绕过锁屏，以 `167/167` 文件边界测试、真实临时文件服务、Electron 启动和签名/原生模块验证作为替代证据。
-- Node 24 完整 smoke、recorded replay `25/25`、官方 registry 审计和 portability 往返通过；Node 20 无缓存 typecheck/test/build、登录 `4/4` 与 portability 往返通过；依赖已恢复到 Node 24 并再次通过 doctor 与往返。
+- Node 24 完整 smoke、recorded replay `25/25`、官方 registry 审计和 portability 往返通过；Node 20 无缓存 typecheck/test/build、登录 `4/4` 与修正后 portability 往返（warnings=`4`）通过；依赖已恢复到 Node 24 并再次通过 doctor 与修正后往返。
 
 ## 工具与替代记录
 

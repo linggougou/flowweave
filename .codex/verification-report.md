@@ -5193,12 +5193,20 @@
 - 功能结果：共享 `schemaVersion: 1` 裸 `FlowDocument` 安全导出合同、导入新副本、local API、Extension 导出、Studio 受控文件导入/导出和 Web 重命名全部完成。
 - 独立审查：G1-G6 各轨最终均为 PASS，无剩余 P0/P1；重要返工覆盖 URL/fragment 凭据、hostile getter/Proxy 与 TOCTOU、规范化重序列化、路径穿越、symlink/FIFO、ghost project 和异步选择污染。
 - 定向测试：flow-dsl `18/18`、project-knowledge `18/18`、local-api `8/8`、Extension `76/76`、Studio `167/167`、Web `21/21`、runtime `47/47`。
-- 可移植 E2E：真实来源 Flow 含密码、URL 明显凭据和本机上传绝对路径；导出产生 `3` 项 warning，JSON 不含密码与原路径；导入为空项目新副本后补齐输入，真实登录/上传 fixture 共 `10/10` 步骤成功，执行记录成功落库并回读。
+- 可移植 E2E：真实来源 Flow 含密码、动态 URL query token 和本机上传绝对路径；导出产生 `4` 项 warning，JSON 不含密码、token 与原路径；导入为空项目新副本后补齐输入，真实登录/上传 fixture 共 `10/10` 步骤成功，执行记录成功落库并回读。
 - Node 24.14.0：完整 `CI=1 pnpm smoke` 通过；recorded replay `25/25`（`49381ms`）；`pnpm e2e:portability` 通过；官方 npm registry 生产依赖审计为 0 个已知漏洞。
-- Node 20.19.6：冻结安装后无缓存 typecheck `21/21`、test `21/21`、build `13/13` 全部通过；真实登录 E2E `4/4`、portability `10/10` 通过。
+- Node 20.19.6：冻结安装后无缓存 typecheck `21/21`、test `21/21`、build `13/13` 全部通过；真实登录 E2E `4/4`、修正后 portability warnings=`4` / steps=`10` 通过。
 - 默认环境恢复：Node 24 强制按 lockfile 恢复依赖；Electron 严格签名和 better-sqlite3 native binding 正常；doctor 与 portability 再次通过。
 - Web 实测：任务重命名后侧栏/标题一致，刷新仍保持；`375×812` 无横向溢出，完成后已恢复原名称。
 - Studio 实测：Electron、renderer、本地 API 与原生模块成功启动。macOS 当时处于锁屏状态，桌面能力明确拒绝操作，未绕过系统锁屏；原生文件对话框的人工点击未执行，以 `167/167` 文件安全/取消/异步合同、真实临时文件服务、Electron 启动和构建签名作为替代证据。
 - 资源状态：开发服务已停止，`3847`、`5173`、`5174` 无监听；功能 Agent 与 worktree 已回收。
 - 本地阶段判断：P2.6 功能、代码复审、本地双版本、真实往返、浏览器和安全门禁通过；远端集成分支与 main Node 20/24 CI 成功后方可归档。
 - 质量评分：95/100。扣分项仅为系统锁屏导致未取得原生文件对话框真实点击证据，未降低已覆盖的文件能力边界判断。
+
+### 最终总审返工补充
+
+- Reviewer 首轮发现 1 个 P1 证据缺口：旧 smoke 未把 URL 凭据真正放进来源 Flow，导致 URL 不存在断言不能支撑文档声明；初审结论为 REVISE。
+- 已按 TDD 增加动态 URL query token 来源、`url-query-variableized` warning、明文移除、导入变量与 runtime 补值合同；先红后绿证据成立。
+- Node 24 与 Node 20 修正后往返均为 warnings=`4`、steps=`10`；最终恢复 Node 24 后 doctor 和往返再次通过。
+- DoD 已拆分为“本地 Node 20/24 与安全门禁通过”和“远端双矩阵待会签”，不再用一个未勾选条目混淆本地完成状态。
+- 当前结论仍为待复审；Reviewer 改判 PASS 且远端双矩阵成功前不归档。

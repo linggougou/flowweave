@@ -7065,7 +7065,7 @@
 ### 2026-08-23 G6 可移植往返与真实界面验收
 
 - 新增根命令 `pnpm e2e:portability`：在真实临时知识库中创建来源/目标项目，将含密码、URL 凭据和真实上传绝对路径的来源 Flow 安全导出，导入目标项目为新副本，补齐变量并由真实 runtime 执行。
-- 往返结果：结构化 warnings `3` 项；导入后 `flowId`、`projectId` 和时间更新且来源不变；导出 JSON 不含密码与原始上传路径；真实登录页和上传 fixture 合计 `10/10` 步骤成功，执行记录可落库并回读。
+- 往返结果：最终结构化 warnings `4` 项；导入后 `flowId`、`projectId` 和时间更新且来源不变；导出 JSON 不含密码、动态 URL token 与原始上传路径；真实登录页和上传 fixture 合计 `10/10` 步骤成功，执行记录可落库并回读。
 - 独立 G6 Reviewer：PASS，无 P0/P1；确认测试不以预先模板化路径绕过可移植处理，随后补真实绝对路径回归并复审通过。
 - Web 应用内浏览器实测：把任务重命名为 `录制流程-P2.6验收` 后侧栏和标题同步，刷新后持久化；`375×812` 下 body/document 宽度均为 `375`、无横向溢出、重命名入口可见；完成后恢复原名称并复验临时名称计数为 `0`。
 - Studio dev 实机：Electron、Vite renderer 和自持有 local API 成功启动，端口 `5173/3847` 可用；Electron Framework 严格签名与 better-sqlite3 native binding 正常。
@@ -7075,11 +7075,19 @@
 ### 2026-08-23 P2.6 本地全量与双版本会签
 
 - Node 24.14.0：`CI=1 pnpm smoke` 通过，包含全仓 typecheck/test/build 与登录 E2E `4/4`；`pnpm e2e:recorded-pages` 为 `25/25`，总耗时 `49381ms`。
-- Node 24.14.0：`pnpm e2e:portability` 通过，warnings=`3`、steps=`10`；官方 npm registry `pnpm audit --prod --audit-level high` 报告 `No known vulnerabilities found`。
+- Node 24.14.0：最终 `pnpm e2e:portability` 通过，warnings=`4`、steps=`10`；官方 npm registry `pnpm audit --prod --audit-level high` 报告 `No known vulnerabilities found`。
 - Node 20.19.6：强制按 lockfile 重建依赖；`pnpm turbo typecheck --force`、`pnpm turbo test --force`、`pnpm turbo build --force` 均为 `21/21`、`21/21`、`13/13` 且 `0 cached`；runtime `47/47`。
-- Node 20.19.6：真实 `pnpm e2e:login` 为 `4/4` success；`pnpm e2e:portability` 为 warnings=`3`、steps=`10`。
+- Node 20.19.6：真实 `pnpm e2e:login` 为 `4/4` success；最终 `pnpm e2e:portability` 为 warnings=`4`、steps=`10`。
 - 环境插曲：首次 Node 20 build 因指定的独立 TMPDIR 尚未创建而在 pnpm 初始化阶段以 `ENOENT` 退出，未进入项目构建；创建该目录后无缓存重跑全绿。
 - 依赖恢复：最终在 Node 24.14.0 下执行 `pnpm install --frozen-lockfile --force`，Electron bundle 修复并 ad-hoc 重签名后严格校验通过；`node scripts/doctor.mjs --smoke` 与 portability 往返再次通过。
 - 临时空间：系统 `/var` 空间不足期间使用 `/Volumes/2T` 下任务专用 TMPDIR；仅回收本任务创建目录，不触碰用户文件。
 - 资源回收：确认仅剩主工作区、无 `3847/5173/5174` 监听；7 个 `flowweave-tmp-p26-*` 任务专用目录已移入 `/Users/ling/.Trash/flowweave-p26-final-20260823/`，可从废纸篓恢复。
 - 当前结论：P2.6 本地功能、稳定性与安全门禁通过，等待集成分支和 main Node 20/24 CI 远端会签。
+
+### 2026-08-23 P2.6 最终总审 P1 返工
+
+- 最终集成 Reviewer 首轮结论为 REVISE：实现无 P0，但 G6 文档声称来源含 URL 凭据，而原 smoke 的 URL 仅使用 fixture 变量；第三条 warning 实际为密码提示清理，旧的 URL 不存在断言属于平凡断言。
+- 返工采用独立 worktree 和先红后绿：先要求 `url-query-variableized` 与动态凭据不出 JSON，在尚未把凭据放入来源 Flow 时准确红灯；随后让来源登录 URL 真实带动态 `token` query，并在运行时补入生成的变量。
+- 修复后 Node 24 与 Node 20 均为 warnings=`4`、steps=`10`；导出 JSON 不含动态 token，导入必填变量由 runtime 精确补齐，上传与登录真实执行保持成功。
+- Node 20 首次直接复验因工作区已恢复为 Node 24 native binding，在打开 SQLite 前准确报 ABI `137`/`115` 不匹配；按冻结安装重建 Node 20 依赖后通过。最终再次恢复 Node 24，doctor 与修正后 portability 复验通过。
+- 返工 worktree、临时分支与新增任务 TMPDIR 已回收；TMPDIR 移入既有废纸篓回收目录，可恢复。
