@@ -10,6 +10,7 @@ import {
 } from "@flowweave/ui";
 import { DiagnosticInspector } from "./DiagnosticInspector.js";
 import { ExecutionRunContextPanel } from "./ExecutionRunContextPanel.js";
+import { ExecutionResultSummary } from "./ExecutionResultSummary.js";
 import { ExecutionCompatibilityNotice } from "./ExecutionCompatibilityNotice.js";
 import { FragilityNotice } from "./FragilityNotice.js";
 import { flowStepsToRows } from "./flow-step-format.js";
@@ -77,6 +78,22 @@ function formatExecutionTime(iso?: string): string {
     });
   } catch {
     return iso;
+  }
+}
+
+function formatBusinessExecutionStatus(status: string): string {
+  switch (status) {
+    case "passed":
+    case "success":
+      return "成功";
+    case "failed":
+      return "失败";
+    case "cancelled":
+      return "已取消";
+    case "running":
+      return "运行中";
+    default:
+      return "等待运行";
   }
 }
 
@@ -453,7 +470,7 @@ export function App() {
     }
     const name = renameDraft.trim();
     if (!name) {
-      setError("Flow 名称不能为空");
+      setError("任务名称不能为空");
       return;
     }
     setRenaming(true);
@@ -676,7 +693,7 @@ export function App() {
       <aside className="sidebar">
         <div className="sidebar-header">
           <h1>{APP_DISPLAY_NAME} Studio</h1>
-          <p>P2 工作台：录制、回放与执行历史</p>
+          <p>录制、运行并查看自动化任务结果</p>
         </div>
         <div className="sidebar-scroll">
           <section className="sidebar-section sidebar-section-projects">
@@ -762,7 +779,7 @@ export function App() {
 
           {selectedProjectId ? (
             <section className="sidebar-section sidebar-section-primary">
-              <h2>Flow 列表</h2>
+              <h2>自动化任务</h2>
               {refreshNotice ? (
                 <p className="sidebar-refresh-notice" role="status">
                   {refreshNotice}
@@ -770,8 +787,8 @@ export function App() {
               ) : null}
               {flows.length === 0 ? (
                 <p className="execution-history-empty sidebar-flow-hint">
-                  本项目尚无 Flow。请用浏览器扩展录制操作，并在扩展侧栏选择<strong>同名项目</strong>
-                  后点击「同步到知识库」。
+                  本项目尚无自动化任务。请打开浏览器扩展开始录制，完成后保存到
+                  <strong>同名项目</strong>。
                 </p>
               ) : (
                 <ul className="execution-history-list flow-list">
@@ -859,7 +876,7 @@ export function App() {
                 onClick={() => setExecutionsExpanded((v) => !v)}
                 aria-expanded={executionsExpanded}
               >
-                <span>最近执行</span>
+                <span>最近运行记录</span>
                 <span className="sidebar-section-toggle-meta">
                   {executionHistory.length > 0 ? `${executionHistory.length} 条` : "无"}
                   <span className="sidebar-chevron">{executionsExpanded ? "▾" : "▸"}</span>
@@ -867,7 +884,7 @@ export function App() {
               </button>
               {executionsExpanded ? (
                 executionHistory.length === 0 ? (
-                  <p className="execution-history-empty">暂无执行记录</p>
+                  <p className="execution-history-empty">暂无运行记录</p>
                 ) : (
                   <>
                     <ul className="execution-history-list">
@@ -883,7 +900,7 @@ export function App() {
                             onClick={() => handleSelectExecution(item.executionId, item.flowId)}
                           >
                             <span className="execution-history-id">
-                              {item.executionId.slice(0, 8)}…
+                              {flows.find((flow) => flow.id === item.flowId)?.name ?? "自动化任务"}
                             </span>
                             <span
                               className={
@@ -894,12 +911,8 @@ export function App() {
                                     : "execution-history-meta"
                               }
                             >
-                              {item.status === "failed"
-                                ? "失败"
-                                : item.status === "passed"
-                                  ? "通过"
-                                  : item.status}{" "}
-                              · {formatExecutionTime(item.startedAt)}
+                              {formatBusinessExecutionStatus(item.status)} ·{" "}
+                              {formatExecutionTime(item.startedAt)}
                             </span>
                           </button>
                         </li>
@@ -914,138 +927,97 @@ export function App() {
         </div>
       </aside>
       <main className="main">
-        <div className="toolbar">
+        <nav className="workspace-breadcrumb" aria-label="当前位置">
+          <span>{selectedProjectName ?? "未选择项目"}</span>
+          <span aria-hidden="true">›</span>
+          <span>{selectedFlowId ? selectedFlowName : "未选择自动化任务"}</span>
+          <span aria-hidden="true">›</span>
+          <strong>
+            {tab === "flow" ? "任务步骤" : tab === "executions" ? "运行记录" : "版本记录"}
+          </strong>
+        </nav>
+        <div className="toolbar" role="tablist" aria-label="任务视图">
           <button
             type="button"
+            role="tab"
+            aria-selected={tab === "flow"}
             className={tab === "flow" ? "tab-btn active" : "tab-btn"}
             onClick={() => setTab("flow")}
           >
-            录制内容
+            任务步骤
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={tab === "executions"}
             className={tab === "executions" ? "tab-btn active" : "tab-btn"}
             onClick={() => setTab("executions")}
           >
-            执行日志
+            运行记录
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={tab === "versions"}
             className={tab === "versions" ? "tab-btn active" : "tab-btn"}
             onClick={() => setTab("versions")}
           >
-            Flow 版本
+            版本记录
           </button>
-          <label className="run-option" title="开启后会弹出 Chromium 窗口，便于确认是否在执行">
-            <input
-              type="checkbox"
-              checked={showBrowser}
-              disabled={loading}
-              onChange={(e) => {
-                const next = e.target.checked;
-                setShowBrowser(next);
-                try {
-                  localStorage.setItem(SHOW_BROWSER_STORAGE_KEY, next ? "1" : "0");
-                } catch {
-                  // ignore
-                }
-              }}
-            />
-            显示浏览器窗口
-          </label>
-          <button
-            type="button"
-            disabled={!selectedProjectId || !selectedFlowId || loading || projectHasNoFlows}
-            title={
-              projectHasNoFlows
-                ? "请先用扩展录制并同步 Flow"
-                : !selectedFlowId
-                  ? "请先在侧栏选择一个 Flow"
-                  : undefined
-            }
-            onClick={() => void handleRun()}
-          >
-            {loading ? "运行中…" : "运行流程"}
-          </button>
-          {projectHasNoFlows ? (
-            <span className="status status-hint">本项目还没有 Flow，无法运行</span>
-          ) : !selectedFlowId && selectedProjectId ? (
-            <span className="status status-hint">请在左侧 Flow 列表中选择一个流程</span>
-          ) : null}
-          <span className="status" title={selectedFlowId ?? undefined}>
-            {selectedFlowId
-              ? `Flow：${selectedFlowName}${currentFlow ? ` · ${currentFlow.steps.length} 步` : ""}`
-              : "未选择 Flow"}
-            {execution ? ` · 执行 ${execution.executionId.slice(0, 8)}… ${execution.status}` : ""}
-          </span>
         </div>
         {error ? (
           <p className="error" role="alert">
             {error}
           </p>
         ) : null}
-        {selectedProjectId ? (
-          <section className="flow-content-panel">
-            <header className="flow-content-header">
-              <h2>运行环境</h2>
-              <p className="flow-content-meta">
-                当前项目环境与运行时变量会在执行时注入到 Studio Runtime
-              </p>
+        {selectedProjectId && currentFlow ? (
+          <section className="run-workspace" aria-labelledby="run-workspace-title">
+            <header className="run-workspace-header">
+              <div>
+                <p className="business-eyebrow">当前自动化任务</p>
+                <h2 id="run-workspace-title">{currentFlow.name}</h2>
+              </div>
+              <button
+                type="button"
+                className="run-primary-btn"
+                disabled={loading || projectHasNoFlows}
+                onClick={() => void handleRun()}
+              >
+                {loading ? "运行中…" : "运行任务"}
+              </button>
             </header>
-            <div className="new-project-form" style={{ maxWidth: "100%" }}>
-              <label>
-                环境
-                <select
-                  value={selectedEnvironmentName}
-                  disabled={loading || availableEnvironments.length === 0}
-                  onChange={(event) => handleSelectEnvironment(event.target.value)}
-                >
-                  {availableEnvironments.length === 0 ? (
-                    <option value="">未配置默认环境</option>
-                  ) : (
-                    availableEnvironments.map((environment) => (
-                      <option key={environment.name} value={environment.name}>
-                        {environment.name}
-                        {environment.isDefault ? "（默认）" : ""}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </label>
-              <label>
-                Base URL
-                <input
-                  type="text"
-                  value={baseUrlDraft}
-                  placeholder="https://example.com"
-                  disabled={loading}
-                  onChange={(event) => setBaseUrlDraft(event.target.value)}
-                />
-              </label>
-              <label>
-                Storage State 路径
-                <input
-                  type="text"
-                  value={storageStatePathDraft}
-                  placeholder="/path/to/storage-state.json"
-                  disabled={loading}
-                  onChange={(event) => setStorageStatePathDraft(event.target.value)}
-                />
-              </label>
-              <p className="execution-history-meta">
-                {selectedEnvironment
-                  ? `当前环境：${selectedEnvironment.name}`
-                  : "当前项目还没有默认环境，运行时将只使用 Flow 自身的绝对地址。"}
-              </p>
-            </div>
-            <section className="flow-preview">
-              <h3>变量注入</h3>
-              {currentFlow && currentFlow.variables.length > 0 ? (
-                <div className="new-project-form" style={{ maxWidth: "100%" }}>
+
+            <dl className="task-facts">
+              <div>
+                <dt>目标站点</dt>
+                <dd>{baseUrlDraft || selectedProject?.baseUrl || "使用任务中的网页地址"}</dd>
+              </div>
+              <div>
+                <dt>步骤</dt>
+                <dd>{currentFlow.steps.length} 个</dd>
+              </div>
+              <div>
+                <dt>最近结果</dt>
+                <dd>
+                  {executionHistory.find((item) => item.flowId === currentFlow.id)
+                    ? formatBusinessExecutionStatus(
+                        executionHistory.find((item) => item.flowId === currentFlow.id)!.status,
+                      )
+                    : "尚未运行"}
+                </dd>
+              </div>
+            </dl>
+
+            <section className="necessary-parameters" aria-labelledby="necessary-parameters-title">
+              <h3 id="necessary-parameters-title">必要参数</h3>
+              {currentFlow.variables.length > 0 ? (
+                <div className="parameter-grid">
                   {currentFlow.variables.map((variable) => (
                     <label key={variable.name}>
-                      {variable.name}（{variable.type}
-                      {variable.required ? "，必填" : "，可选"}）
+                      <span>
+                        {variable.name}
+                        {variable.required ? "（必填）" : "（可选）"}
+                      </span>
                       {variable.type === "boolean" ? (
                         <select
                           value={variableInputs[variable.name] ?? ""}
@@ -1058,8 +1030,8 @@ export function App() {
                           }
                         >
                           {!variable.required ? <option value="">未设置</option> : null}
-                          <option value="true">true</option>
-                          <option value="false">false</option>
+                          <option value="true">是</option>
+                          <option value="false">否</option>
                         </select>
                       ) : (
                         <input
@@ -1092,27 +1064,88 @@ export function App() {
                   ))}
                 </div>
               ) : (
-                <p className="execution-history-empty">当前 Flow 未声明运行变量</p>
+                <p className="execution-history-empty">该任务无需填写参数，可以直接运行。</p>
               )}
             </section>
-            <section className="flow-preview">
-              <h3>运行前检查</h3>
-              {runPreflightIssues.length > 0 ? (
-                <ul className="execution-history-list">
-                  {runPreflightIssues.map((issue) => (
-                    <li key={`${issue.code}-${issue.field}`}>
-                      <p className="error" role="alert">
-                        {issue.message}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
+
+            <details className="advanced-settings">
+              <summary>高级设置</summary>
+              <div className="advanced-settings-content">
+                <label>
+                  运行环境
+                  <select
+                    value={selectedEnvironmentName}
+                    disabled={loading || availableEnvironments.length === 0}
+                    onChange={(event) => handleSelectEnvironment(event.target.value)}
+                  >
+                    {availableEnvironments.length === 0 ? (
+                      <option value="">未配置默认环境</option>
+                    ) : (
+                      availableEnvironments.map((environment) => (
+                        <option key={environment.name} value={environment.name}>
+                          {environment.name}
+                          {environment.isDefault ? "（默认）" : ""}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </label>
+                <label>
+                  Base URL
+                  <input
+                    type="text"
+                    value={baseUrlDraft}
+                    placeholder="https://example.com"
+                    disabled={loading}
+                    onChange={(event) => setBaseUrlDraft(event.target.value)}
+                  />
+                </label>
+                <label>
+                  Storage State 路径
+                  <input
+                    type="text"
+                    value={storageStatePathDraft}
+                    placeholder="/path/to/storage-state.json"
+                    disabled={loading}
+                    onChange={(event) => setStorageStatePathDraft(event.target.value)}
+                  />
+                </label>
+                <label className="run-option" title="开启后会显示浏览器窗口">
+                  <input
+                    type="checkbox"
+                    checked={showBrowser}
+                    disabled={loading}
+                    onChange={(event) => {
+                      const next = event.target.checked;
+                      setShowBrowser(next);
+                      try {
+                        localStorage.setItem(SHOW_BROWSER_STORAGE_KEY, next ? "1" : "0");
+                      } catch {
+                        // 本地偏好不可写时仍允许继续运行。
+                      }
+                    }}
+                  />
+                  显示浏览器窗口
+                </label>
                 <p className="execution-history-meta">
-                  本地 preflight 已通过；点击「运行流程」后还会继续检查 Storage State 文件是否存在。
+                  {selectedEnvironment
+                    ? `当前环境：${selectedEnvironment.name}`
+                    : "当前项目未配置默认环境，将使用任务中的完整网页地址。"}
                 </p>
-              )}
-            </section>
+                <section className="preflight-details">
+                  <h3>preflight 检查</h3>
+                  {runPreflightIssues.length > 0 ? (
+                    <ul>
+                      {runPreflightIssues.map((issue) => (
+                        <li key={`${issue.code}-${issue.field}`}>{issue.message}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>本地 preflight 已通过；运行时还会检查 Storage State 文件。</p>
+                  )}
+                </section>
+              </div>
+            </details>
           </section>
         ) : null}
         {tab === "flow" ? (
@@ -1120,69 +1153,102 @@ export function App() {
             {projectHasNoFlows ? (
               <FlowEmptyGuide projectName={selectedProjectName} />
             ) : flowLoading ? (
-              <p className="execution-history-empty">正在加载 Flow…</p>
+              <p className="execution-history-empty">正在加载自动化任务…</p>
             ) : currentFlow ? (
               <>
                 <header className="flow-content-header">
+                  <p className="business-eyebrow">任务步骤</p>
                   <h2>{currentFlow.name}</h2>
-                  <p className="flow-content-meta">
-                    ID：<code>{currentFlow.id}</code>
-                    {currentFlow.meta?.source ? ` · 来源：${currentFlow.meta.source}` : ""}
-                    {currentFlow.meta?.updatedAt
-                      ? ` · 更新：${formatExecutionTime(currentFlow.meta.updatedAt)}`
-                      : ""}
-                  </p>
                 </header>
                 {currentFlow.steps.length === 0 ? (
                   <p className="flow-steps-empty-hint">
-                    该 Flow 已同步但<strong>没有录制步骤</strong>
-                    。请在扩展中重新录制页面操作后再同步。
+                    该任务已保存但<strong>没有录制步骤</strong>。请在浏览器扩展中重新录制后保存。
                   </p>
-                ) : null}
-                <FragilityNotice warnings={flowFragilityIssues} />
-                <FlowStepsTable
-                  steps={flowStepRows}
-                  emptyMessage="该 Flow 没有步骤，请在扩展中录制后重新同步"
-                />
-                <details className="flow-preview">
-                  <summary>查看原始 JSON</summary>
-                  <pre>{JSON.stringify(currentFlow, null, 2)}</pre>
+                ) : (
+                  <ol className="business-step-list">
+                    {flowStepRows.map((step) => (
+                      <li key={step.stepId}>
+                        <span className="business-step-number">{step.stepIndex + 1}</span>
+                        <span>{step.summary}</span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                <details className="professional-diagnostics">
+                  <summary>专业诊断</summary>
+                  <div className="professional-diagnostics-content">
+                    <p className="flow-content-meta">
+                      任务标识：<code>{currentFlow.id}</code>
+                      {currentFlow.meta?.source ? ` · 来源：${currentFlow.meta.source}` : ""}
+                      {currentFlow.meta?.updatedAt
+                        ? ` · 更新：${formatExecutionTime(currentFlow.meta.updatedAt)}`
+                        : ""}
+                    </p>
+                    <FragilityNotice warnings={flowFragilityIssues} />
+                    <div className="table-scroll">
+                      <FlowStepsTable
+                        steps={flowStepRows}
+                        emptyMessage="该任务没有步骤，请在扩展中重新录制"
+                      />
+                    </div>
+                    <details className="flow-preview">
+                      <summary>查看原始 JSON</summary>
+                      <pre>{JSON.stringify(currentFlow, null, 2)}</pre>
+                    </details>
+                  </div>
                 </details>
               </>
             ) : (
               <p className="execution-history-empty">
-                在左侧「Flow 列表」中选择一个流程，查看录制步骤与定位策略
+                在左侧「自动化任务」中选择一项，查看录制步骤
               </p>
             )}
           </section>
         ) : null}
         {tab === "executions" ? (
-          <>
-            <ExecutionCompatibilityNotice warnings={executionCompatibilityWarnings} />
-            {execution?.fragilityIssues && execution.fragilityIssues.length > 0 ? (
-              <FragilityNotice warnings={execution.fragilityIssues} />
-            ) : null}
-            <ExecutionRunContextPanel runContext={execution?.runContext} />
-            <StepLogTable
-              steps={steps}
-              emptyMessage={
-                selectedFlowId
-                  ? "点击「运行流程」或从左侧选择一条执行记录"
-                  : "请先在侧栏选择一个 Flow"
-              }
-              onOpenScreenshot={openLocalPath}
-              onOpenDiagnostic={openLocalPath}
-              onInspectDiagnostic={inspectDiagnostic}
-            />
-            {execution && diagnosticSteps.length > 0 ? (
-              <DiagnosticInspector
-                steps={execution.steps}
-                selectedStepIndex={selectedDiagnosticStepIndex}
-                onSelectStepIndex={setSelectedDiagnosticStepIndex}
-                onOpenPath={openLocalPath}
-              />
-            ) : null}
-          </>
+          <section className="execution-business-view">
+            {execution ? (
+              <ExecutionResultSummary execution={execution} taskName={selectedFlowName} />
+            ) : (
+              <div className="execution-empty-state">
+                <h2>还没有可查看的运行结果</h2>
+                <p>
+                  {selectedFlowId
+                    ? "点击上方「运行任务」，完成后会在这里展示最近结果。"
+                    : "请先在左侧选择一个自动化任务。"}
+                </p>
+              </div>
+            )}
+            <details className="professional-diagnostics">
+              <summary>专业诊断</summary>
+              <div className="professional-diagnostics-content">
+                <ExecutionCompatibilityNotice warnings={executionCompatibilityWarnings} />
+                {execution?.fragilityIssues && execution.fragilityIssues.length > 0 ? (
+                  <FragilityNotice warnings={execution.fragilityIssues} />
+                ) : null}
+                <ExecutionRunContextPanel runContext={execution?.runContext} />
+                <div className="table-scroll">
+                  <StepLogTable
+                    steps={steps}
+                    emptyMessage={
+                      selectedFlowId ? "运行任务或从左侧选择一条运行记录" : "请先选择一个自动化任务"
+                    }
+                    onOpenScreenshot={openLocalPath}
+                    onOpenDiagnostic={openLocalPath}
+                    onInspectDiagnostic={inspectDiagnostic}
+                  />
+                </div>
+                {execution && diagnosticSteps.length > 0 ? (
+                  <DiagnosticInspector
+                    steps={execution.steps}
+                    selectedStepIndex={selectedDiagnosticStepIndex}
+                    onSelectStepIndex={setSelectedDiagnosticStepIndex}
+                    onOpenPath={openLocalPath}
+                  />
+                ) : null}
+              </div>
+            </details>
+          </section>
         ) : null}
         {tab === "versions" ? (
           <section className="flow-version-panel">
@@ -1201,7 +1267,7 @@ export function App() {
                   restoringId={restoringId}
                   onSelect={(id: string) => void loadVersion(id)}
                   onRestore={(id: string) => void handleRestore(id)}
-                  emptyMessage="暂无历史版本，修改并保存 Flow 后会自动生成"
+                  emptyMessage="暂无历史版本，修改并保存任务后会自动生成"
                 />
                 {previewVersion ? (
                   <details className="flow-preview" open>
@@ -1215,7 +1281,7 @@ export function App() {
             ) : projectHasNoFlows ? (
               <FlowEmptyGuide projectName={selectedProjectName} />
             ) : (
-              <p className="execution-history-empty">请在左侧 Flow 列表中选择一个流程</p>
+              <p className="execution-history-empty">请在左侧自动化任务列表中选择一项</p>
             )}
           </section>
         ) : null}

@@ -212,13 +212,17 @@ describe("Studio layout contract", () => {
     const main = findElementRange(html, 'class="main"');
     const mainHtml = html.slice(main.start, main.end);
 
-    expect(mainHtml.match(/class="flow-content-panel"/g)).toHaveLength(2);
-    expect(mainHtml).toContain("运行环境");
+    expect(mainHtml.match(/class="flow-content-panel"/g)).toHaveLength(1);
+    expect(mainHtml).toContain('class="run-workspace"');
+    expect(mainHtml).toContain("目标站点");
     expect(mainHtml).toContain("布局合同回归");
     expect(mainHtml).toContain('type="password"');
     expect(STYLESHEET).toMatch(/\.main\s*>\s*\*\s*{[^}]*flex-shrink:\s*0;[^}]*}/s);
     expect(STYLESHEET).toMatch(
       /\.flow-content-panel\s*{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*flex:\s*0 0 auto;[^}]*min-height:\s*auto;[^}]*}/s,
+    );
+    expect(STYLESHEET).toMatch(
+      /@media \(max-width:\s*680px\)\s*{[\s\S]*?\.app\s*{[^}]*display:\s*block;[^}]*min-height:\s*100vh;[^}]*}/s,
     );
   });
 });
