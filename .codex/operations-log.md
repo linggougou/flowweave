@@ -7190,3 +7190,13 @@
 - 回收：确认仅剩主工作树且工作区 clean；删除 5 条已并回功能分支与本地集成分支；P2.7 临时基线目录移动至废纸篓 `/Users/ling/.Trash/flowweave-tmp-p27-baseline-20260824`，可恢复；`3847`、`5173`、`5174` 无监听。
 - Agent：G3/G4 Judge 已中断回收，G5 总审已完成；无仍在执行的非主 Agent。
 - 生命周期：P2.7 S7 会签完成，执行计划从 `active` 迁移至 `completed`；post-v1 总路线继续保留 active，但未自动开启下一阶段。P3/P4 与 vNext 继续冻结。
+## 2026-08-24 P2.8 启动、变更分流与开发前基线
+
+- 用户在 P2.7 完成后要求继续开发，并沿用此前“先 plan、各功能依托 worktree 分派 Sub-Agent 并行、验收后回收”的授权。
+- 已阅读项目 `AGENTS.md`、路线锁、架构、Flow DSL、ADR、产品设计、先跑通路线、生命周期、留痕、开发工作流、Skills runtime 与 CodeGraph 协议；工作区起点 `b328ebacf1c5d3314c079f3995329f055e078878`，main 与 origin/main 一致且 clean。
+- 三路只读审计分别覆盖 post-v1 backlog、Studio artifact 调用链与安全文件边界，裁决下一最小阶段为 P2.8“Studio 执行截图受控内嵌预览”；安全审计先给出 REVISE，要求移除现有任意 `openPath`，采用固定 IPC → 有界 PNG bytes → 可回收 Blob URL，并补 sender、sandbox、CSP、导航硬门。计划已按此修订后才允许实施；P3/P4、vNext、Web / Local API 文件服务继续冻结。
+- 使用 CodeGraph `status` / `context`，索引最新（113 files / 1273 nodes / 2669 edges）；结合 `rg` 与源码确认当前截图仍经 renderer `openPath(filePath)` → 主进程 `shell.openPath()`，且主进程只校验非空。
+- 使用 TDD、security-review、verification-loop 与 judge-harness 冻结业务 ID 请求、受控路径推导、PNG / 大小 / symlink / TOCTOU、无路径泄露和异步不串图合同。
+- 缺失工具：Orca CLI。原用途：按 orchestration skill 进行多 Agent / worktree 调度。替代流程：Codex 原生 Sub-Agent + Git worktree + 主代理集成与独立 Judge；替代结果：三路只读审计完成，后续仍按独立 worktree 与审查门禁执行。
+- 开发前基线：Node `24.14.0`、pnpm `9.15.4`；`@flowweave/ui` `14/14`、`@flowweave/app-studio` `184/184`，全部通过。
+- 已更新 `PROJECT_ROUTE_LOCK.md`、post-v1 总路线，创建 P2.8 活跃执行计划与上下文摘要；只允许进入 G1/G2，不允许扩大阶段。

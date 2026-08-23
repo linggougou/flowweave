@@ -6,39 +6,38 @@
 
 ## 2. 当前阶段
 
-- 生命周期阶段：post-v1 产品化 / P2.7 已完成，下一阶段路线评估门禁
-- 里程碑编号：P2.7（已完成）
-- 阶段名称：执行记录安全清理与 Flow 版本只读 Diff（已归档）
-- 阶段目标：在不开放匿名破坏性 HTTP 能力、不解冻 AI、深度页面理解或 vNext 编排模型的前提下，让用户可在 Studio 安全删除单条执行记录及其受控运行产物，并在 Studio / Web 只读理解历史版本与当前任务的差异。
+- 生命周期阶段：post-v1 产品化 / P2.8 S4 计划冻结，准备进入 S5 分轨开发
+- 里程碑编号：P2.8（进行中）
+- 阶段名称：Studio 执行截图受控内嵌预览
+- 阶段目标：在不新增 Web / Local API 文件服务、不解冻 P3/P4 或 vNext 的前提下，让用户可在 Studio 内直接查看所选执行步骤的只读 PNG 截图证据，并关闭 renderer 任意路径打开能力。
 - 可验收交付物：
-  - project / execution 单段 ID 白名单与运行目录 containment 合同
-  - project-knowledge 单条 execution 事务删除、page snapshot 精确关联清理和运行目录原子隔离
-  - Studio 主进程专用删除 IPC、活动执行拒绝、明确确认和异步选择保护
-  - `@flowweave/ui` 共享的有界、确定性、只读 JSON diff
-  - Studio / Web “历史 vN → 当前任务”差异摘要与专业详情
-  - 路径故障注入、真实 UI、Node 20 / 24 与安全审计证据
+  - project / execution 单段 ID、stepIndex 与运行目录 containment 的只读截图解析合同
+  - project-knowledge 精确执行归属、普通文件、非 symlink / hardlink、PNG signature / IHDR、大小 / 像素上限与读取期间身份一致性校验
+  - Studio 主进程固定业务 ID IPC 与 renderer 安全预览模型，不接收或返回本机绝对路径
+  - Studio 只读截图弹层，覆盖加载、成功、缺失、拒绝、关闭与焦点恢复
+  - 项目 / Flow / execution / step 快速切换、删除和关闭期间的独立预览请求竞态保护
+  - 路径故障注入、真实 Electron、Node 20 / 24 与安全审计证据
 - Definition of Done：
-  - `.`、`..`、分隔符、编码分隔符、控制字符、超长 ID 在任何文件或数据库副作用前被拒绝
-  - 删除仅作用于真实项目中的精确 execution；其他 execution、Flow、版本、项目和兄弟目录保持不变
-  - 运行目录仅在通过 symlink、类型和直属文件白名单检查后处理；不使用递归删除
-  - 数据库失败可回滚隔离目录；最终清理失败保留受控 quarantine 并结构化报告
-  - 活动执行不能删除；renderer 永不传入或取得任意文件路径
-  - Diff 只读、有条目上限、敏感值隐藏，快速切换项目 / Flow / 版本不会串线
+  - renderer 只传 `projectId + executionId + stepIndex`，不能传路径、MIME、URL 或任意文件名
+  - 主进程只从真实 execution 与受控 run 目录推导 `step-<N>.png`，不信任 SQLite 中的历史路径
+  - 非法 ID / stepIndex、跨项目、缺失、目录、symlink、非普通文件、伪 PNG、超限与读取期间替换均 fail closed
+  - 返回内容固定为受限 `image/png` bytes，并以可回收 Blob URL 展示；不加载 data URL、`file:`、外部 URL、SVG、HTML、HAR 或原始 DOM
+  - 通用 `openPath` 不再暴露给 renderer；绝对路径不进入 UI title、文本、错误或 IPC 响应
+  - 新 bytes IPC 校验主窗口 main frame / 允许来源；Studio 壳启用 sandbox、CSP、导航与新窗口拒绝
+  - 预览请求迟到时不会覆盖已经切换或关闭的项目、Flow、execution、step
   - Node 24 本地主门禁、Node 20 / 24 CI、recorded replay `25/25` 与安全审计通过
 - 阶段出口：
-  - 用户可在 Studio 明确确认后删除一条已完成执行，成功后列表、详情和后继选择一致
-  - 清理只触及由受控根与两个 ID 推导出的精确目录；异常形态 fail closed
-  - 删除能力不经当前无破坏性授权的 Local API 暴露给 Web、扩展或任意本机调用方
-  - Studio / Web 可查看历史版本相对当前任务的新增、删除、修改摘要和只读详情
-  - 删除与 diff 的慢响应不会污染用户已经切换的项目、Flow、版本或执行记录
+  - 用户从 Studio 运行详情选择某步骤截图，可在应用内看到对应像素证据或明确的不可用原因
+  - 关闭预览后仍停留在原 execution 与步骤，键盘焦点返回触发按钮
+  - 任何异常产物形态都在字节到达 renderer 前被拒绝，且错误不泄露绝对路径
+  - 该能力仅经 Electron 主进程固定 IPC 提供，Web / Local API / 扩展不新增文件读取能力
 - 最小可验收闭环：
-  - Studio 选择一条已完成执行 → 明确确认 → 主进程校验项目、活动状态和路径 → 原子隔离 → 事务删除 → 安全清理 → 刷新并恢复选择
-  - Studio / Web 选择一个历史版本 → 对安全展示副本计算有界只读 diff → 展示“历史 vN → 当前任务”摘要与专业详情
+  - Studio 选择历史执行 → 专业诊断中的步骤截图 → 固定业务 ID IPC → 主进程校验执行归属与受控 PNG → 内嵌只读预览 → 关闭并恢复上下文
 - 明确非目标：
-  - Flow、项目、批量执行记录或版本删除
-  - 通过 Local API / Web 暴露破坏性删除能力
-  - 整棵 `runs/` 递归清理、孤儿目录 sweep 或按数据库任意路径删除
-  - 任意两版本比较、diff 编辑、合并、应用补丁或保存
+  - Web / Local API / 扩展截图预览或二进制文件服务
+  - HAR、页面原始 HTML / DOM、SVG、PDF、诊断 JSON 原文或外部 URL 内嵌
+  - 截图编辑、下载、导出、删除、OCR、标注、缩略图索引或批量浏览
+  - Flow、项目、版本或批量执行维护能力扩展
   - vNext 输入节点、步骤编辑、执行暂停后输入并继续
   - P3 深度 page / network intelligence 扩展
   - P4 AI 编排产品化与相关 UI
@@ -47,13 +46,14 @@
   - P3 深度能力解冻
   - P4 AI 编排接入 Studio / 扩展 / Web
 - 允许进入下一阶段的条件：
-  - P2.7 删除与 Diff 闭环、本地与远端双版本门禁连续通过
+  - P2.8 截图预览闭环、本地与远端双版本门禁连续通过
   - 入口文档与验证证据齐全
   - 若进入其他破坏性删除、vNext 产品模型、P3 或 P4，必须再次更新路线并获得明确确认
 - 变更批准：用户于 2026-07-16 明确批准按首次用户体验评审调整 post-v1 路线。
 - 阶段切换批准：用户于 2026-08-23 在收到“P2.5 已完成、下一阶段需更新路线锁”的交付说明后明确回复“继续”；本授权解释为进入 post-v1 backlog 的 P2.6，不解释为解冻 P3/P4 或 vNext 产品模型。
 - 阶段切换批准补充：用户于 2026-08-23 在收到“P2.6 已完成；下一阶段拟进行路径安全、执行记录删除 / runs 清理与 Flow 版本只读 diff，尚未开启”的交付说明后再次回复“继续”；本授权解释为进入 P2.7，不解释为开放匿名破坏性 HTTP、Flow / 项目删除、P3/P4 或 vNext 产品模型。
-- 当前状态：P2.7 G1-G5、独立总审、本地 Node 20/24、真实 Web/Studio、安全审计、E2E、集成分支与 main 远端双矩阵均已通过并归档。未自动开启下一实施阶段；P3/P4 与 vNext 输入节点继续冻结。
+- 阶段切换批准补充：用户于 2026-08-24 在 P2.7 已归档、候选路线已披露后明确要求“继续开发”，本授权解释为进入已登记低风险 backlog 的 P2.8，不解释为开放 Web / Local API 文件读取、P3/P4 或 vNext。
+- 当前状态：P2.8 已完成变更分流与开发前基线，准备按安全解析、Electron IPC、renderer 预览三轨实施；P3/P4 与 vNext 输入节点继续冻结。
 
 ## 2.1 里程碑路线图
 
@@ -65,6 +65,7 @@
 | P2.5 首次体验产品化   | 非技术用户安全完成首次任务       | 内置连接、敏感输入保护、跨端刷新、录制状态、安全运行       | 首次旅程不依赖开发命令且关键风险有守卫 | 分轨测试 + 首次用户手测 + Node 20/24 CI                                                 | ✅ 完成   |
 | P2.6 本地资产可移植   | 安全迁移与维护自动化任务         | 统一导出合同、导入新副本、Studio 文件交互、Web 重命名      | 导出导入运行往返可证且无静默覆盖       | 分轨测试 + 文件往返 E2E + recorded replay + Node 20/24 CI                               | ✅ 完成   |
 | P2.7 本地资产安全维护 | 单条执行清理与版本差异理解       | 路径安全、Studio 受控删除、共享只读 Diff、双端展示         | 删除无越界且 diff 无编辑/串线          | 故障注入 + 双端 UI + recorded replay + Node 20/24 CI                                    | ✅ 完成   |
+| P2.8 执行证据预览     | Studio 内直接查看步骤截图        | 受控只读解析、固定 IPC、内嵌 PNG 预览、竞态保护            | 无任意路径读取且截图不串线             | 故障注入 + Electron UI + recorded replay + Node 20/24 CI                                | 🟡 进行中 |
 | P3 完整框架扩展       | 深度页面 / 接口理解              | page-intelligence、network-intelligence 深化能力           | 明确场景与回归面后再开放               | 待路线解冻                                                                              | ⏸ 冻结    |
 | P4 产品落地           | AI 编排与智能增强                | ai-orchestrator、AI 产品入口                               | 不影响现有稳定主线                     | 待路线解冻                                                                              | ⏸ 冻结    |
 
@@ -73,7 +74,7 @@
 - PRD：[`docs/superpowers/specs/2026-05-25-web-automation-platform-design.md`](./docs/superpowers/specs/2026-05-25-web-automation-platform-design.md)
 - 当前主路线：[`docs/superpowers/plans/2026-05-26-run-first-roadmap.md`](./docs/superpowers/plans/2026-05-26-run-first-roadmap.md)
 - 用户旅程：[`docs/guides/quickstart.md`](./docs/guides/quickstart.md)、[`docs/guides/manual-qa.md`](./docs/guides/manual-qa.md)
-- 当前执行计划：[`docs/exec-plans/active/post-v1-development-roadmap.md`](./docs/exec-plans/active/post-v1-development-roadmap.md)；当前仅允许下一低风险 backlog 的评估与变更分流，不代表已进入实施
+- 当前执行计划：[`docs/exec-plans/active/p2-8-execution-screenshot-preview.md`](./docs/exec-plans/active/p2-8-execution-screenshot-preview.md)
 - 最近完成计划：[`docs/exec-plans/completed/p2-7-asset-maintenance.md`](./docs/exec-plans/completed/p2-7-asset-maintenance.md)
 - 非目标：AI 智能编排、云端协作、未纳入当前路线的深度分析能力
 
@@ -86,6 +87,7 @@
   - Studio 选择自动化任务后确认运行并查看业务结果或专业诊断
   - Studio 仅通过主进程受控文件对话框导入/导出，不接受 renderer 任意路径
   - Web 查看项目、自动化任务与运行记录，并只读查看版本差异
+  - Studio 运行详情只通过受控业务标识请求截图预览，不展示或提交绝对路径
 
 ## 5. 技术真源
 
@@ -131,10 +133,10 @@
 
 ## 8. 变更入口
 
-- Backlog：`docs/exec-plans/active/post-v1-development-roadmap.md`；P2.7 实施真源已归档至 `docs/exec-plans/completed/p2-7-asset-maintenance.md`
+- Backlog：`docs/exec-plans/active/post-v1-development-roadmap.md`；P2.8 实施真源为 `docs/exec-plans/active/p2-8-execution-screenshot-preview.md`
 - Change Request：新增需求先进入路线计划或专门变更文档，再决定是否实施
 - 当前阶段缺口：
-  - P2.7 无未关闭实现或验收缺口；下一实施阶段尚未选择
+  - Studio 执行截图仍通过 renderer 任意路径调用系统外部应用，缺少应用内受控只读预览
 - 后续阶段需求：
   - 评估下一项低风险 post-v1 backlog，并先更新路线锁与阶段真源
   - Flow 删除或批量资产清理

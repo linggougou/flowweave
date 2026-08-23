@@ -5282,3 +5282,12 @@
 - 资源复核：仅剩主工作树；本地 P2.7 功能/集成分支已删除；临时目录已移至废纸篓；测试服务端口 `3847`、`5173`、`5174` 均无监听；无运行中的非主 Agent。
 - 最终判断：P2.7 功能、独立总审、定向/全量测试、真实 UI、构建、安全审计、E2E、本地 Node 20/24 与远端集成/main 双矩阵全部通过，可以归档。
 - 路线边界：未新增 Local API / Web destructive capability；Flow/项目/批量/版本删除、可编辑 diff、P3/P4 与 vNext 未混入，继续冻结。
+## 2026-08-24 P2.8 开发前基线
+
+- 起点：`b328ebacf1c5d3314c079f3995329f055e078878`；main 与 origin/main 一致，开发前工作区 clean。
+- CodeGraph：索引最新，113 files / 1273 nodes / 2669 edges。
+- Node：`24.14.0`；pnpm：`9.15.4`。
+- `pnpm --filter @flowweave/ui test`：`1` file / `14` tests，全通过。
+- `pnpm --filter @flowweave/app-studio test`：`38` files / `184` tests，全通过。
+- 安全基线：确认现有 `openPath(filePath)` 为 renderer 任意路径能力；安全审计初判 REVISE。P2.8 计划已修订为固定业务 ID IPC、main-frame / 来源校验、sandbox / CSP / 导航硬门、`8 MiB` 与 PNG IHDR / 像素校验、可回收 Blob URL；完成前不得把本地 bytes 开放给 renderer。
+- 阶段判断：基线稳定，路线和安全合同冻结后可进入 G1/G2 分轨 TDD；P3/P4、vNext、Web / Local API 文件服务继续冻结。
