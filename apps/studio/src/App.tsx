@@ -365,6 +365,34 @@ export function App() {
           ? selectedProjectId
           : (projectList[0]?.id ?? null);
       setProjects(projectList);
+
+      if (targetProjectId !== selectedProjectId) {
+        flowSelectionRevisionRef.current += 1;
+        flowLoadRequestIdRef.current += 1;
+        executionHistoryRequestIdRef.current += 1;
+        executionDetailRequestIdRef.current += 1;
+        versionListRequestIdRef.current += 1;
+        versionDetailRequestIdRef.current += 1;
+        selectedProjectIdRef.current = targetProjectId;
+        selectedFlowIdRef.current = null;
+        selectedExecutionIdRef.current = null;
+        selectedVersionIdRef.current = null;
+        setSelectedProjectId(targetProjectId);
+        setSelectedFlowId(null);
+        setSelectedExecutionId(null);
+        setSelectedVersionId(null);
+        setFlows([]);
+        setExecutionHistory([]);
+        setExecution(null);
+        setCurrentFlow(null);
+        setVersions([]);
+        setPreviewVersion(null);
+        setDeletionTarget(null);
+        setRefreshNotice(targetProjectId ? "已切换到仍然存在的项目" : "项目列表已刷新");
+        setError(null);
+        return;
+      }
+
       selectedProjectIdRef.current = targetProjectId;
       setSelectedProjectId(targetProjectId);
 
@@ -398,6 +426,23 @@ export function App() {
       );
       const previousIds = new Set(previousFlows.map((flow) => flow.id));
       const discovered = nextFlows.find((flow) => !previousIds.has(flow.id));
+      const flowChanged = nextSelectedFlowId !== selectedFlowId;
+
+      if (flowChanged) {
+        flowSelectionRevisionRef.current += 1;
+        flowLoadRequestIdRef.current += 1;
+        executionDetailRequestIdRef.current += 1;
+        versionListRequestIdRef.current += 1;
+        versionDetailRequestIdRef.current += 1;
+        selectedExecutionIdRef.current = null;
+        selectedVersionIdRef.current = null;
+        setSelectedExecutionId(null);
+        setSelectedVersionId(null);
+        setExecution(null);
+        setCurrentFlow(null);
+        setVersions([]);
+        setPreviewVersion(null);
+      }
 
       setFlows(nextFlows);
       setExecutionHistory(history);
