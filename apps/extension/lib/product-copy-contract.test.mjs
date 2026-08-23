@@ -64,5 +64,8 @@ describe("扩展首次连接文案", () => {
     expect(exportHandler.indexOf("await persistTaskName()")).toBeLessThan(
       exportHandler.indexOf("MSG_EXPORT_FLOW"),
     );
+    expect(exportHandler).toContain("formatExportSuccessStatus");
+    expect(exportHandler).toContain("catch");
+    expect(exportHandler).not.toMatch(/完全脱敏|完全匿名|绝对安全/);
   });
 });

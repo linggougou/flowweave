@@ -1,4 +1,5 @@
 import type { RecordedEvent } from "@flowweave/shared";
+import type { FlowPortabilityWarning } from "@flowweave/flow-dsl";
 
 export const MSG_RECORD_EVENT = "flowweave:record-event" as const;
 export const MSG_GET_SESSION = "flowweave:get-session" as const;
@@ -93,11 +94,20 @@ export type SessionState = {
   canRestoreCleared: boolean;
 };
 
-export type ExportFlowResponse = {
-  ok: true;
-  json: string;
-  filename: string;
+export type ExportFlowSummary = {
+  warningCount: number;
+  businessTextReviewRequired: true;
 };
+
+export type ExportFlowResponse =
+  | {
+      ok: true;
+      json: string;
+      filename: string;
+      warnings: FlowPortabilityWarning[];
+      summary: ExportFlowSummary;
+    }
+  | { ok: false; error: string };
 
 export type SyncKnowledgeResponse =
   | {

@@ -28,6 +28,7 @@ import {
   type SyncKnowledgeResponse,
 } from "../../lib/messages.js";
 import { STORAGE_SELECTED_PROJECT_KEY } from "../../lib/storage-keys.js";
+import { formatExportSuccessStatus } from "../../lib/export-feedback.js";
 
 const API_BASE_KEY = "flowweave:api-base";
 
@@ -331,22 +332,25 @@ reloadPageBtn?.addEventListener("click", () => {
 
 exportBtn?.addEventListener("click", () => {
   void (async () => {
-    const namedState = await persistTaskName();
-    if (!namedState) return;
-    setStatus("正在生成 Flow JSON…");
-    const message: ExportFlowMessage = { type: MSG_EXPORT_FLOW };
-    const response = (await browser.runtime.sendMessage(message)) as ExportFlowResponse & {
-      ok?: boolean;
-      error?: string;
-    };
+    try {
+      const namedState = await persistTaskName();
+      if (!namedState) return;
+      setStatus("正在生成 Flow JSON…");
+      const message: ExportFlowMessage = { type: MSG_EXPORT_FLOW };
+      const response = (await browser.runtime.sendMessage(message)) as
+        | ExportFlowResponse
+        | undefined;
 
-    if (!response?.ok || !response.json) {
-      setStatus(response?.error ?? "导出失败");
-      return;
+      if (!response?.ok) {
+        setStatus(response?.error ?? "导出失败");
+        return;
+      }
+
+      downloadJson(response.filename, response.json);
+      setStatus(formatExportSuccessStatus(response.summary));
+    } catch (error: unknown) {
+      setStatus(error instanceof Error ? `导出失败：${error.message}` : "导出失败");
     }
-
-    downloadJson(response.filename, response.json);
-    setStatus("已触发下载");
   })();
 });
 

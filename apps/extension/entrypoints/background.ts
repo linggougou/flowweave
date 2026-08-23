@@ -1,4 +1,5 @@
 import { parseRecordedEvent, type RecorderSessionMeta } from "@flowweave/shared";
+import { createPortableFlowDocument } from "@flowweave/flow-dsl";
 import { buildFlowFromEvents } from "../lib/flow-export.js";
 import { DEFAULT_KNOWLEDGE_API_BASE, saveFlowToKnowledge } from "../lib/knowledge-client.js";
 import {
@@ -39,6 +40,7 @@ type BackgroundMessageHandlerDeps = {
   saveClearedSession: (session: StoredSession | undefined) => Promise<void>;
   parseRecordedEvent: typeof parseRecordedEvent;
   buildFlowFromEvents: typeof buildFlowFromEvents;
+  createPortableFlowDocument: typeof createPortableFlowDocument;
   saveFlowToKnowledge: typeof saveFlowToKnowledge;
   getStoredApiBase: () => Promise<string | undefined>;
   defaultKnowledgeApiBase: string;
@@ -127,6 +129,7 @@ function createBackgroundMessageHandlerDeps(): BackgroundMessageHandlerDeps {
     saveClearedSession,
     parseRecordedEvent,
     buildFlowFromEvents,
+    createPortableFlowDocument,
     saveFlowToKnowledge,
     getStoredApiBase,
     defaultKnowledgeApiBase: DEFAULT_KNOWLEDGE_API_BASE,
@@ -232,18 +235,31 @@ export function createBackgroundMessageHandler(
     }
 
     if (message.type === MSG_EXPORT_FLOW) {
-      const session = await deps.loadSession();
-      const flow = deps.buildFlowFromEvents(session.events, {
-        ...session.meta,
-        flowId: `flow-${session.meta.sessionId}`,
-        name: session.taskName ?? "录制流程",
-      });
-      const response: ExportFlowResponse = {
-        ok: true,
-        json: JSON.stringify(flow, null, 2),
-        filename: `flow-${session.meta.sessionId.slice(0, 8)}.json`,
-      };
-      return response;
+      try {
+        const session = await deps.loadSession();
+        const flow = deps.buildFlowFromEvents(session.events, {
+          ...session.meta,
+          flowId: `flow-${session.meta.sessionId}`,
+          name: session.taskName ?? "录制流程",
+        });
+        const portable = deps.createPortableFlowDocument(flow);
+        const response: ExportFlowResponse = {
+          ok: true,
+          json: JSON.stringify(portable.document, null, 2),
+          filename: `flow-${session.meta.sessionId.slice(0, 8)}.json`,
+          warnings: portable.warnings,
+          summary: {
+            warningCount: portable.warnings.length,
+            businessTextReviewRequired: true,
+          },
+        };
+        return response;
+      } catch (error: unknown) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : "导出 Flow 失败",
+        } satisfies ExportFlowResponse;
+      }
     }
 
     if (message.type === MSG_SET_PROJECT) {

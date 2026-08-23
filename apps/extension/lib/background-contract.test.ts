@@ -1,4 +1,5 @@
 import type { RecordedEvent, RecorderSessionMeta } from "@flowweave/shared";
+import type { FlowDocument, PortableFlowDocumentResult } from "@flowweave/flow-dsl";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   MSG_CLEAR_SESSION,
@@ -33,6 +34,7 @@ type BackgroundHandlerDeps = {
   saveClearedSession?: (session: StoredSession | undefined) => Promise<void>;
   parseRecordedEvent?: (event: RecordedEvent) => RecordedEvent;
   buildFlowFromEvents?: (events: RecordedEvent[], meta: Record<string, unknown>) => unknown;
+  createPortableFlowDocument?: (flow: unknown) => PortableFlowDocumentResult;
   saveFlowToKnowledge?: (
     apiBase: string,
     projectId: string,
@@ -537,10 +539,15 @@ describe("background extension contract", () => {
       steps: [{ type: "navigate" }],
     };
     const buildFlowFromEvents = vi.fn().mockReturnValue(flow);
+    const createPortableFlowDocument = vi.fn().mockReturnValue({
+      document: flow,
+      warnings: [],
+    });
 
     const handleMessage = backgroundModule.createBackgroundMessageHandler?.({
       loadSession: vi.fn().mockResolvedValue(session),
       buildFlowFromEvents,
+      createPortableFlowDocument,
     });
 
     const response = (await handleMessage?.({
@@ -552,10 +559,109 @@ describe("background extension contract", () => {
       flowId: `flow-${session.meta.sessionId}`,
       name: "录制流程",
     });
+    expect(createPortableFlowDocument).toHaveBeenCalledWith(flow);
     expect(response).toEqual({
       ok: true,
       json: JSON.stringify(flow, null, 2),
       filename: "flow-session-.json",
+      warnings: [],
+      summary: {
+        warningCount: 0,
+        businessTextReviewRequired: true,
+      },
+    });
+  });
+
+  it("导出 bare FlowDocument 时复用公共合同处理密码、token、上传路径与 URL 凭据", async () => {
+    const backgroundModule = await loadBackgroundModule();
+    const session = createSession({ status: "completed", taskName: "敏感导出" });
+    const sensitiveFlow: FlowDocument = {
+      schemaVersion: 1,
+      id: "flow-sensitive-export",
+      projectId: "project-source",
+      name: "敏感导出",
+      variables: [
+        {
+          name: "secret_api_token",
+          type: "string",
+          required: false,
+          defaultValue: "token-default-value",
+        },
+      ],
+      steps: [
+        {
+          id: "password",
+          type: "fill",
+          target: {
+            strategies: [{ kind: "css", selector: "input[type=password]" }],
+            hints: { inputType: "password", textSample: "hunter2" },
+          },
+          value: "hunter2",
+        },
+        {
+          id: "upload",
+          type: "upload",
+          target: { strategies: [{ kind: "css", selector: "input[type=file]" }] },
+          files: ["/Users/example/private/report.csv"],
+        },
+        {
+          id: "navigate",
+          type: "navigate",
+          url: "https://alice:password@example.com/report?token=url-token&view=summary",
+        },
+      ],
+      meta: {
+        createdAt: "2026-08-23T08:00:00.000Z",
+        updatedAt: "2026-08-23T08:00:00.000Z",
+        source: "recorded",
+      },
+    };
+    const handleMessage = backgroundModule.createBackgroundMessageHandler?.({
+      loadSession: vi.fn().mockResolvedValue(session),
+      buildFlowFromEvents: vi.fn().mockReturnValue(sensitiveFlow),
+    });
+
+    const response = (await handleMessage?.({ type: MSG_EXPORT_FLOW })) as ExportFlowResponse;
+
+    expect(response.ok).toBe(true);
+    if (!response.ok) throw new Error(response.error);
+    const exported = JSON.parse(response.json) as FlowDocument & { warnings?: unknown };
+    expect(exported.schemaVersion).toBe(1);
+    expect(exported).not.toHaveProperty("warnings");
+    expect(response.warnings.map((warning) => warning.code)).toEqual(
+      expect.arrayContaining([
+        "secret-default-removed",
+        "password-value-variableized",
+        "password-hint-removed",
+        "upload-path-variableized",
+        "url-userinfo-removed",
+        "url-query-variableized",
+      ]),
+    );
+    expect(response.summary).toEqual({
+      warningCount: response.warnings.length,
+      businessTextReviewRequired: true,
+    });
+    expect(response.json).not.toContain("token-default-value");
+    expect(response.json).not.toContain("hunter2");
+    expect(response.json).not.toContain("/Users/example/private/report.csv");
+    expect(response.json).not.toContain("alice:password");
+    expect(response.json).not.toContain("url-token");
+  });
+
+  it("公共导出合同失败时返回可判别错误且不伪造成功结果", async () => {
+    const backgroundModule = await loadBackgroundModule();
+    const handleMessage = backgroundModule.createBackgroundMessageHandler?.({
+      loadSession: vi.fn().mockResolvedValue(createSession({ status: "completed" })),
+      buildFlowFromEvents: vi.fn().mockReturnValue({ schemaVersion: 1 }),
+      createPortableFlowDocument: vi.fn(() => {
+        throw new Error("Flow 结构无效");
+      }),
+    });
+
+    await expect(handleMessage?.({ type: MSG_EXPORT_FLOW })).resolves.toEqual({
+      ok: false,
+      error: "Flow 结构无效",
     });
   });
 
