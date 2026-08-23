@@ -342,8 +342,8 @@ exportBtn?.addEventListener("click", () => {
         | undefined;
       const outcome = processExportFlowDownload(response, downloadJson);
       setStatus(outcome.ok ? outcome.status : outcome.error);
-    } catch (error: unknown) {
-      setStatus(error instanceof Error ? `导出失败：${error.message}` : "导出失败");
+    } catch {
+      setStatus("导出失败");
     }
   })();
 });

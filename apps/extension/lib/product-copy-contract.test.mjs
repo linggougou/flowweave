@@ -67,6 +67,7 @@ describe("扩展首次连接文案", () => {
     expect(exportHandler).toContain("processExportFlowDownload(response, downloadJson)");
     expect(exportHandler).not.toContain("downloadJson(response.filename, response.json)");
     expect(exportHandler).toContain("catch");
+    expect(exportHandler).not.toContain("error.message");
     expect(exportHandler).not.toMatch(/完全脱敏|完全匿名|绝对安全/);
   });
 });
