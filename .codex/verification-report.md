@@ -5123,3 +5123,14 @@
 - 结果：通过；smoke 前置自检、全仓 typecheck、test、build 与 `e2e:login` 均成功。
 - 关键证据：Studio `98/98`；local-api `4/4`；Web `3/3`；登录 E2E `4/4` 步骤成功。
 - 判断：并行开发基线可用，允许从 P2.5 进入 Foundation 3-5 实施；P3/P4 继续冻结。
+
+## 2026-08-23 UX Foundation 3 定向验收
+
+- 功能：`idle | recording | paused | completed` 状态机、暂停/完成事件守卫、重启恢复、并发消息串行、步骤预览、任务命名、确认清空与单次恢复。
+- 安全：预览不返回原始输入值；敏感占位符仅显示保护提示，原有 password 保护合同保持通过。
+- Agent 验证：Extension test `33/33`、typecheck/lint/build；recorder test `54/54` 与 typecheck；`git diff --check` 均通过。
+- 主代理复验：Extension `33/33`、typecheck；recorder `54/54`；差异检查通过。
+- 质量评分：94/100。
+- 建议：通过 Track F3 定向验收。
+- 残余风险：尚未在真实 Chrome 中完成侧栏视觉与完整录制旅程，必须在集成验收关闭。
+- 阶段判断：Foundation 3 通过；P2.5 整体仍等待 Foundation 4/5 和跨轨门禁，不允许进入 P3/P4。

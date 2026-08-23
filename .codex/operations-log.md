@@ -6926,3 +6926,13 @@
 - 覆盖：smoke 前置自检、全仓 typecheck/test/build、登录 E2E。
 - 关键结果：Studio `98/98`、local-api `4/4`、Web `3/3`、登录 Flow `4/4` 步骤成功。
 - 结论：当前基线稳定，可创建 worktree 并进入三轨并行实施。
+
+### 2026-08-23 Track F3 验收与回收
+
+- Agent：`/root/ux_foundation_3`；worktree：`flowweave-worktrees/uxf3`。
+- 交付提交：`bf64e97 feat(extension): 完善录制会话与任务命名`；已 cherry-pick 为集成提交 `a83f990`。
+- 独立审查：核对状态迁移、消息串行化、敏感预览、命名校验、确认清空与单次恢复实现，未发现 P0/P1 问题。
+- 主代理复验：Extension `33/33`、typecheck 通过；recorder `54/54`；提交差异 `git diff --check` 通过。
+- 工具替代：`@vitest/coverage-v8` 未安装，原用途为生成覆盖率百分比；遵守“不新增依赖”，以 background/content/session/sidepanel 四层合同、类型检查和生产构建证据替代。
+- 验收结论：Track F3 通过，允许进入集成；真实 Chrome 侧栏旅程保留到跨轨验收。
+- 回收：F3 Agent 已结束，独立 worktree 已移除；本地功能分支暂保留作为审计与回滚引用。
