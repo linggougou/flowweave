@@ -5239,3 +5239,14 @@
 - 冻结删除顺序：严格 ID / 真实项目 / containment / symlink / 直属白名单检查 → 同根原子 quarantine → DB immediate transaction → 白名单逐项清理；异常 fail closed，禁止递归删除。
 - Diff 冻结为 `@flowweave/ui` 共享、500 条上限、敏感安全展示副本、“历史 vN → 当前任务”的双端只读能力。
 - 结论：基线稳定，安全设计完成后才允许进入 G1/G2 分轨 TDD；P3/P4 与 vNext 保持冻结。
+
+## 2026-08-23 P2.7 G3 / G4 集成定向验证
+
+- 集成提交：Studio `5cea046`、`7556a9b`；Web `77efa1a`。
+- Judge：G3 L3 `PASS`（98/100），G4 L2 `PASS`（97/100）；均无 required fixes。
+- Node：`v24.14.0`；pnpm：`9.15.4`。
+- 依赖顺序：先执行 `pnpm --filter @flowweave/project-knowledge build` 与 `pnpm --filter @flowweave/ui build`，均通过。
+- 定向测试：project-knowledge `54/54`、local-api `9/9`、ui `14/14`、Studio `184/184`、Web `31/31`，全部通过。
+- 编译门禁：五个受影响包的 typecheck、lint、build 共 `20/20` Turbo 任务通过；Studio Electron 严格签名、native binding 与 Web client/server 构建通过。
+- 差异门禁：`git diff --check` 通过。
+- 阶段判断：G1-G4 分轨与组合定向门禁通过，进入 G5；真实 UI、无缓存全仓 smoke、recorded replay、portability、安全审计、Node 20/24 和远端 CI 尚未完成，因此 P2.7 仍不可归档。

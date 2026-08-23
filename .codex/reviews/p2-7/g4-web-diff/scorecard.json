@@ -1,0 +1,126 @@
+{
+  "review_id": "p2-7-g4-web-diff-20260823",
+  "task_id": "P2.7-G4",
+  "lane": "g4-web-diff",
+  "review_level": "L2",
+  "rubric_id": "p2-7-web-readonly-diff-v1",
+  "artifact_refs": [
+    "commit:e2b8e15bddd3dcb61be2128ee01d1e0bc3e97e3a",
+    "worktree:/Volumes/2T/CODE/A_Mine/flowweave-worktrees/p27-web-diff",
+    "apps/web/src/App.tsx",
+    "apps/web/src/App.version-diff.test.tsx",
+    "apps/web/src/styles.css"
+  ],
+  "hard_gates": [
+    {
+      "id": "web-no-delete-capability",
+      "status": "pass",
+      "evidence": [
+        "commit e2b8e15 仅修改 apps/web/src/App.tsx、App.version-diff.test.tsx、styles.css",
+        "apps/web/src/App.version-diff.test.tsx 断言无 DELETE、无删除按钮、无 deleteExecution"
+      ]
+    },
+    {
+      "id": "web-readonly-safe-diff",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/App.tsx 通过 createPortableFlowDocument + createJsonDiff + JsonDiffView 展示只读差异",
+        "apps/web/src/App.version-diff.test.tsx 断言敏感值隐藏、无 textarea/contenteditable"
+      ]
+    },
+    {
+      "id": "web-request-guards-pass",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/App.version-diff.test.tsx 覆盖旧版本慢响应、旧 currentFlow、旧 versions、旧 listExecutions、跨项目慢响应",
+        "apps/web/src/App.tsx 对 currentFlow / versions / version preview 请求都设置 requestId 守卫"
+      ]
+    },
+    {
+      "id": "web-flow-version-mismatch-blocked",
+      "status": "pass",
+      "evidence": [
+        "apps/web/src/App.tsx 拒绝 historicalFlow.id 或 projectId 不匹配",
+        "apps/web/src/App.version-diff.test.tsx 断言错误不泄露 foreign-sensitive-flow-id"
+      ]
+    },
+    {
+      "id": "web-build-test-green",
+      "status": "pass",
+      "evidence": [
+        "2026-08-23 pnpm --filter @flowweave/app-web test -> 9 files / 31 tests 全绿",
+        "2026-08-23 pnpm --filter @flowweave/app-web build -> client/server 通过"
+      ]
+    }
+  ],
+  "dimensions": [
+    {
+      "name": "correctness",
+      "score": 25,
+      "max_score": 25,
+      "reason": "历史版本到当前任务的只读 diff、截断统计和 mismatch 拒绝都有直接测试覆盖。",
+      "evidence_refs": ["apps/web/src/App.tsx", "apps/web/src/App.version-diff.test.tsx"]
+    },
+    {
+      "name": "security",
+      "score": 25,
+      "max_score": 25,
+      "reason": "未引入任何删除能力，差异展示基于安全展示副本且错误消息不泄露外部 flow 标识。",
+      "evidence_refs": [
+        "commit:e2b8e15bddd3dcb61be2128ee01d1e0bc3e97e3a",
+        "apps/web/src/App.version-diff.test.tsx"
+      ]
+    },
+    {
+      "name": "async_isolation",
+      "score": 20,
+      "max_score": 20,
+      "reason": "项目、任务、版本和执行记录的慢响应污染都已覆盖到位。",
+      "evidence_refs": ["apps/web/src/App.version-diff.test.tsx"]
+    },
+    {
+      "name": "responsive_readonly_contract",
+      "score": 18,
+      "max_score": 20,
+      "reason": "已补静态 CSS 合同验证 375×812 所需断行与收缩，但真实浏览器窄屏截图仍待 G5。",
+      "evidence_refs": ["apps/web/src/styles.css", "apps/web/src/App.version-diff.test.tsx"]
+    },
+    {
+      "name": "evidence_quality",
+      "score": 9,
+      "max_score": 10,
+      "reason": "源码、测试和构建证据完整；真实浏览器响应式证据延后到 G5。",
+      "evidence_refs": [
+        "2026-08-23 pnpm --filter @flowweave/app-web test",
+        "2026-08-23 pnpm --filter @flowweave/app-web build"
+      ]
+    }
+  ],
+  "penalties": [],
+  "totals": {
+    "raw_score": 97,
+    "penalty_total": 0,
+    "final_score": 97
+  },
+  "verdict": "PASS",
+  "required_fixes": [],
+  "nice_to_have": ["在 G5 浏览器验收中补充 375×812 下的真实截图或自动化证据。"],
+  "reviewers": [
+    {
+      "role": "verifier",
+      "conclusion": "PASS",
+      "summary": "无删除 capability、只读 diff 合同、测试与构建门禁通过。"
+    },
+    {
+      "role": "strict_judge",
+      "conclusion": "PASS",
+      "summary": "异步隔离和安全展示副本实现完整，未发现阻断集成的问题。"
+    },
+    {
+      "role": "chief_reviewer",
+      "conclusion": "PASS",
+      "summary": "允许进入集成与 G5 联合验收。"
+    }
+  ],
+  "reviewed_at": "2026-08-23T23:37:43+0800"
+}

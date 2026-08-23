@@ -7137,3 +7137,16 @@
   - 新建 `docs/exec-plans/active/p2-7-asset-maintenance.md`
   - 更新 `PROJECT_ROUTE_LOCK.md`
   - 更新 `docs/exec-plans/active/post-v1-development-roadmap.md`
+
+### 2026-08-23 P2.7 G3 / G4 分轨验收与集成
+
+- G3 Studio worktree：`flowweave-worktrees/p27-studio-integration`；原提交 `dc8e96e`、`3fee6de`，集成提交 `5cea046`、`7556a9b`。
+- G3 完成 Electron 固定删除 IPC、活动执行拒绝、缓存驱逐、Browser 无删除能力、确认与失败交互、列表补位、版本只读 Diff、请求乱序与刷新旧上下文隔离。
+- G3 独立 Judge：L3 PASS，最终证据校准到两条提交与 Studio `184/184`；无剩余 P0/P1。
+- G4 Web worktree：`flowweave-worktrees/p27-web-diff`；原提交 `e2b8e15`，集成提交 `77efa1a`。
+- G4 完成安全可移植副本上的只读 Diff、项目/任务/版本/执行列表请求守卫与 375px 响应式合同；没有 DELETE、删除按钮或破坏性 API。
+- G4 独立 Judge：L2 PASS，Web `31/31`；无剩余 P0/P1。
+- 集成测试可靠性：Studio / Web 的包级 Vitest 配置显式把 `@flowweave/ui` 指向 workspace 源入口，防止直接执行包级测试时误读旧 `dist`；生产构建仍按 Turborepo 依赖图使用正式 workspace exports。
+- 主代理组合复验：先构建 project-knowledge 与 ui，再通过 knowledge `54/54`、local-api `9/9`、ui `14/14`、Studio `184/184`、Web `31/31`。
+- 受影响包 typecheck、lint、build 共 `20/20` 任务通过；Studio Electron bundle 严格签名与 better-sqlite3 native binding 校验通过。
+- 两名 Judge 写完正式 artifacts 后仍保持运行态，主代理已停止并回收；未接受其对业务代码的任何额外修改。

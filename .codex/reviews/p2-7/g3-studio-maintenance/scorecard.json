@@ -1,0 +1,146 @@
+{
+  "review_id": "p2-7-g3-studio-maintenance-20260823",
+  "task_id": "P2.7-G3",
+  "lane": "g3-studio-maintenance",
+  "review_level": "L3",
+  "rubric_id": "p2-7-studio-asset-maintenance-v1",
+  "artifact_refs": [
+    "commit:dc8e96ec6cef4ee0c05b67c778c61efad57b6baa",
+    "commit:3fee6dedbe87db26b2bd3dbacef45f094a9b4acd",
+    "worktree:/Volumes/2T/CODE/A_Mine/flowweave-worktrees/p27-studio-integration",
+    "apps/studio/electron/main.ts",
+    "apps/studio/electron/preload.ts",
+    "apps/studio/src/App.tsx",
+    "apps/studio/src/ExecutionDeletionConfirmation.tsx"
+  ],
+  "hard_gates": [
+    {
+      "id": "studio-delete-fixed-ipc-only",
+      "status": "pass",
+      "evidence": [
+        "apps/studio/electron/ipc-channels.ts 定义 studio:delete-execution 固定通道",
+        "apps/studio/electron/preload.ts 仅暴露 deleteExecution(projectId, executionId)",
+        "apps/studio/electron/preload.test.ts 验证 renderer 不能传路径"
+      ]
+    },
+    {
+      "id": "studio-active-execution-blocked",
+      "status": "pass",
+      "evidence": [
+        "apps/studio/electron/main.ts 使用 activeExecutions.has(executionId) 拒绝删除",
+        "apps/studio/electron/main.test.ts 覆盖活动执行拒绝与错误掩码"
+      ]
+    },
+    {
+      "id": "studio-browser-fallback-no-delete",
+      "status": "pass",
+      "evidence": [
+        "apps/studio/src/studio-client.ts HTTP fallback nativeExecutionDeletion=false 且 deleteExecution=undefined",
+        "apps/studio/src/App.asset-maintenance.test.tsx 覆盖 Browser fallback 不展示删除 capability"
+      ]
+    },
+    {
+      "id": "studio-version-delete-request-guards",
+      "status": "pass",
+      "evidence": [
+        "apps/studio/src/shared/maintenance-request-guards.ts 守卫 project/flow/version/deletion 响应",
+        "apps/studio/src/App.asset-maintenance.test.tsx 覆盖 v1/v2 慢响应、flowId mismatch、删除后补位"
+      ]
+    },
+    {
+      "id": "studio-tests-build-green",
+      "status": "pass",
+      "evidence": [
+        "2026-08-23 pnpm --filter @flowweave/app-studio test -> 38 files / 184 tests 全绿",
+        "2026-08-23 pnpm --filter @flowweave/app-studio build -> 通过"
+      ]
+    }
+  ],
+  "dimensions": [
+    {
+      "name": "correctness",
+      "score": 25,
+      "max_score": 25,
+      "reason": "删除确认、补位刷新、历史版本只读 diff、乱序守卫与刷新后的旧上下文隔离都已由代码与测试闭环覆盖。",
+      "evidence_refs": [
+        "apps/studio/src/App.tsx",
+        "apps/studio/src/App.asset-maintenance.test.tsx",
+        "apps/studio/src/shared/execution-maintenance.test.ts"
+      ]
+    },
+    {
+      "name": "security",
+      "score": 25,
+      "max_score": 25,
+      "reason": "删除能力仅存在于 Electron 主进程固定 IPC，ID 白名单、活动执行拒绝与 renderer safe error 已接线。",
+      "evidence_refs": [
+        "apps/studio/electron/main.ts",
+        "apps/studio/electron/preload.test.ts",
+        "apps/studio/electron/main.test.ts"
+      ]
+    },
+    {
+      "name": "ux_contract",
+      "score": 19,
+      "max_score": 20,
+      "reason": "对话框默认聚焦取消、Escape 关闭、失败 role=alert、删除后列表补位与空态路径已实现；真实桌面交互仍待 G5 验证。",
+      "evidence_refs": [
+        "apps/studio/src/ExecutionDeletionConfirmation.tsx",
+        "apps/studio/src/ExecutionDeletionConfirmation.test.tsx",
+        "apps/studio/src/App.asset-maintenance.test.tsx"
+      ]
+    },
+    {
+      "name": "regression_safety",
+      "score": 20,
+      "max_score": 20,
+      "reason": "原有 Studio 测试矩阵与构建门禁保持全绿，restore/version 路径未被破坏。",
+      "evidence_refs": [
+        "2026-08-23 pnpm --filter @flowweave/app-studio test",
+        "2026-08-23 pnpm --filter @flowweave/app-studio build"
+      ]
+    },
+    {
+      "name": "evidence_quality",
+      "score": 9,
+      "max_score": 10,
+      "reason": "证据覆盖源码、单测、构建与行为守卫；真实 UI 截图证据留待 G5。",
+      "evidence_refs": [
+        "commit:dc8e96ec6cef4ee0c05b67c778c61efad57b6baa",
+        "commit:3fee6dedbe87db26b2bd3dbacef45f094a9b4acd"
+      ]
+    }
+  ],
+  "penalties": [],
+  "totals": {
+    "raw_score": 98,
+    "penalty_total": 0,
+    "final_score": 98
+  },
+  "verdict": "PASS",
+  "required_fixes": [],
+  "nice_to_have": ["在 G5 真实桌面验收中补充删除确认、失败提示和补位行为的可视化证据。"],
+  "reviewers": [
+    {
+      "role": "verifier",
+      "conclusion": "PASS",
+      "summary": "硬门禁通过：固定 IPC、无 Browser fallback 删除、活动执行拒绝、测试与构建通过。"
+    },
+    {
+      "role": "strict_judge",
+      "conclusion": "PASS",
+      "summary": "实现与 P2.7 Studio 合同一致，未发现会阻断集成的正确性或安全回归。"
+    },
+    {
+      "role": "anti_slop_judge",
+      "conclusion": "PASS",
+      "summary": "无模板化空转；关键状态、错误掩码和只读边界均有具体实现与测试。"
+    },
+    {
+      "role": "chief_reviewer",
+      "conclusion": "PASS",
+      "summary": "允许进入集成与 G5 联合验收。"
+    }
+  ],
+  "reviewed_at": "2026-08-23T23:37:43+0800"
+}
