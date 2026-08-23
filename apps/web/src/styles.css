@@ -525,6 +525,58 @@ summary:focus-visible {
 .fw-step-log-empty {
   color: #94a4b7;
 }
+.version-loading {
+  margin: 1rem 0;
+  color: #a8bad0;
+}
+.version-diff {
+  min-width: 0;
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid #30445e;
+  border-radius: 14px;
+  background: #101923;
+}
+.version-diff-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.45rem 1rem;
+}
+.version-diff-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.version-diff-privacy,
+.version-diff-summary {
+  margin: 0;
+  color: #9fb2c8;
+  font-size: 0.82rem;
+}
+.version-diff-privacy::before {
+  content: "✓ ";
+}
+.version-diff-summary {
+  margin-top: 0.65rem;
+  color: #c3d2e3;
+  font-weight: 650;
+}
+.version-diff-details {
+  margin-top: 0.85rem;
+}
+.json-diff {
+  min-width: 0;
+  padding: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.json-diff code,
+.json-diff pre {
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .fw-step-log-table {
   width: 100%;
   min-width: 820px;
@@ -575,6 +627,15 @@ summary:focus-visible {
   }
   .main-tab {
     flex: 1;
+  }
+  .flow-version-item {
+    flex-direction: column;
+  }
+  .flow-version-restore {
+    min-height: 2.75rem;
+  }
+  .version-diff {
+    padding: 0.75rem;
   }
 }
 

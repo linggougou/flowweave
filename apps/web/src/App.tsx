@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import type { FlowDocument } from "@flowweave/flow-dsl";
+import { createPortableFlowDocument, type FlowDocument } from "@flowweave/flow-dsl";
 import type { ExecutionResult, FlowVersionRecord } from "@flowweave/project-knowledge";
-import { APP_DISPLAY_NAME, FlowVersionList } from "@flowweave/ui";
+import { APP_DISPLAY_NAME, FlowVersionList, JsonDiffView, createJsonDiff } from "@flowweave/ui";
 
 import * as api from "./api.js";
 import type { WebProject } from "./api.js";
@@ -11,6 +11,7 @@ import { ViewSwitcher } from "./ViewSwitcher.js";
 import { createExecutionDetailLoader } from "./execution-detail-loader.js";
 
 type MainTab = "executions" | "versions";
+type VersionPreviewStatus = "idle" | "loading" | "ready";
 
 export function App() {
   const [projects, setProjects] = useState<WebProject[]>([]);
@@ -26,6 +27,8 @@ export function App() {
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [previewFlow, setPreviewFlow] = useState<FlowDocument | null>(null);
   const [currentFlow, setCurrentFlow] = useState<FlowDocument | null>(null);
+  const [versionPreviewStatus, setVersionPreviewStatus] = useState<VersionPreviewStatus>("idle");
+  const [flowRefreshNonce, setFlowRefreshNonce] = useState(0);
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [renamingFlowId, setRenamingFlowId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
@@ -35,9 +38,16 @@ export function App() {
   const latestRenameRequestByFlowRef = useRef(new Map<string, number>());
   const selectedProjectIdRef = useRef(selectedProjectId);
   const selectedFlowIdRef = useRef(selectedFlowId);
+  const selectedVersionIdRef = useRef(selectedVersionId);
+  const flowListRequestIdRef = useRef(0);
+  const executionsRequestIdRef = useRef(0);
+  const currentFlowRequestIdRef = useRef(0);
+  const versionsRequestIdRef = useRef(0);
+  const versionPreviewRequestIdRef = useRef(0);
 
   selectedProjectIdRef.current = selectedProjectId;
   selectedFlowIdRef.current = selectedFlowId;
+  selectedVersionIdRef.current = selectedVersionId;
 
   const selectedProject = projects.find((project) => project.id === selectedProjectId);
   const selectedFlow = flows.find((flow) => flow.id === selectedFlowId);
@@ -46,31 +56,25 @@ export function App() {
     [executions, selectedFlowId],
   );
   const executionDetailLoader = useMemo(() => createExecutionDetailLoader(api.getExecution), []);
+  const selectedVersion = versions.find((version) => version.id === selectedVersionId) ?? null;
+  const versionDiff = useMemo(
+    () =>
+      previewFlow && currentFlow
+        ? createJsonDiff(previewFlow, currentFlow, { maxChanges: 500 })
+        : null,
+    [currentFlow, previewFlow],
+  );
+  const versionDiffCounts = useMemo(() => {
+    const counts = { added: 0, removed: 0, changed: 0 };
+    for (const entry of versionDiff?.entries ?? []) counts[entry.kind] += 1;
+    return counts;
+  }, [versionDiff]);
 
   const refreshProjects = useCallback(async () => {
     const list = await api.listProjects();
     setProjects(list);
     if (list.length > 0 && !selectedProjectId) setSelectedProjectId(list[0]?.id ?? null);
   }, [selectedProjectId]);
-
-  const refreshFlows = useCallback(async (projectId: string) => {
-    const list = await api.listFlows(projectId);
-    setFlows(list);
-    setSelectedFlowId((current) =>
-      current && list.some((item) => item.id === current) ? current : (list[0]?.id ?? null),
-    );
-  }, []);
-
-  const refreshVersions = useCallback(async (projectId: string, flowId: string) => {
-    const [list, flow] = await Promise.all([
-      api.listFlowVersions(projectId, flowId),
-      api.getFlow(projectId, flowId),
-    ]);
-    setVersions(list);
-    setSelectedVersionId(null);
-    setPreviewFlow(null);
-    setCurrentFlow(flow);
-  }, []);
 
   useEffect(() => {
     void refreshProjects().catch((reason: unknown) => {
@@ -79,33 +83,117 @@ export function App() {
   }, [refreshProjects]);
 
   useEffect(() => {
+    const requestId = flowListRequestIdRef.current + 1;
+    flowListRequestIdRef.current = requestId;
     if (!selectedProjectId) {
       setFlows([]);
+      setSelectedFlowId(null);
       setExecutions([]);
       return;
     }
+    const projectId = selectedProjectId;
+    setFlows([]);
+    setSelectedFlowId(null);
     setError(null);
-    void refreshFlows(selectedProjectId).catch((reason: unknown) => {
-      setError(reason instanceof Error ? reason.message : "加载自动化任务失败");
-    });
     void api
-      .listExecutions(selectedProjectId)
-      .then(setExecutions)
+      .listFlows(projectId)
+      .then((list) => {
+        if (
+          flowListRequestIdRef.current !== requestId ||
+          selectedProjectIdRef.current !== projectId
+        ) {
+          return;
+        }
+        setFlows(list);
+        setSelectedFlowId(list[0]?.id ?? null);
+      })
       .catch((reason: unknown) => {
-        setError(reason instanceof Error ? reason.message : "加载运行记录失败");
+        if (
+          flowListRequestIdRef.current === requestId &&
+          selectedProjectIdRef.current === projectId
+        ) {
+          setError(reason instanceof Error ? reason.message : "加载自动化任务失败");
+        }
       });
-  }, [selectedProjectId, refreshFlows]);
+  }, [selectedProjectId]);
 
   useEffect(() => {
+    const currentFlowRequestId = currentFlowRequestIdRef.current + 1;
+    const versionsRequestId = versionsRequestIdRef.current + 1;
+    const executionsRequestId = executionsRequestIdRef.current + 1;
+    currentFlowRequestIdRef.current = currentFlowRequestId;
+    versionsRequestIdRef.current = versionsRequestId;
+    executionsRequestIdRef.current = executionsRequestId;
+    versionPreviewRequestIdRef.current += 1;
+    selectedVersionIdRef.current = null;
+    setSelectedVersionId(null);
+    setPreviewFlow(null);
+    setVersionPreviewStatus("idle");
+    setVersions([]);
+    setCurrentFlow(null);
+    setExecutions([]);
+    setSelectedExecutionId(null);
+
     if (!selectedProjectId || !selectedFlowId) {
-      setVersions([]);
-      setCurrentFlow(null);
       return;
     }
-    void refreshVersions(selectedProjectId, selectedFlowId).catch((reason: unknown) => {
-      setError(reason instanceof Error ? reason.message : "加载版本记录失败");
-    });
-  }, [selectedProjectId, selectedFlowId, refreshVersions]);
+
+    const projectId = selectedProjectId;
+    const flowId = selectedFlowId;
+    const isCurrentFlowSelection = () =>
+      selectedProjectIdRef.current === projectId && selectedFlowIdRef.current === flowId;
+
+    setError(null);
+    void api
+      .getFlow(projectId, flowId)
+      .then((flow) => {
+        if (currentFlowRequestIdRef.current !== currentFlowRequestId || !isCurrentFlowSelection()) {
+          return;
+        }
+        if (flow.id !== flowId || flow.projectId !== projectId) {
+          setError("当前任务数据校验失败，已拒绝展示");
+          return;
+        }
+        setCurrentFlow(createPortableFlowDocument(flow).document);
+      })
+      .catch((reason: unknown) => {
+        if (currentFlowRequestIdRef.current === currentFlowRequestId && isCurrentFlowSelection()) {
+          setError(reason instanceof Error ? reason.message : "加载当前任务失败");
+        }
+      });
+
+    void api
+      .listFlowVersions(projectId, flowId)
+      .then((list) => {
+        if (versionsRequestIdRef.current !== versionsRequestId || !isCurrentFlowSelection()) {
+          return;
+        }
+        if (list.some((item) => item.projectId !== projectId || item.flowId !== flowId)) {
+          setError("版本列表与当前任务不匹配，已拒绝展示");
+          return;
+        }
+        setVersions(list);
+      })
+      .catch((reason: unknown) => {
+        if (versionsRequestIdRef.current === versionsRequestId && isCurrentFlowSelection()) {
+          setError(reason instanceof Error ? reason.message : "加载版本记录失败");
+        }
+      });
+
+    void api
+      .listExecutions(projectId)
+      .then((list) => {
+        if (executionsRequestIdRef.current !== executionsRequestId || !isCurrentFlowSelection()) {
+          return;
+        }
+        setExecutions(list);
+      })
+      .catch((reason: unknown) => {
+        if (executionsRequestIdRef.current === executionsRequestId && isCurrentFlowSelection()) {
+          setError(reason instanceof Error ? reason.message : "加载运行记录失败");
+        }
+      });
+  }, [flowRefreshNonce, selectedProjectId, selectedFlowId]);
 
   useEffect(() => {
     const nextExecutionId = taskExecutions.some(
@@ -139,9 +227,44 @@ export function App() {
   }, [executionDetailLoader, selectedExecutionId]);
 
   const loadVersionPreview = async (versionId: string) => {
-    if (!selectedProjectId) return;
+    if (!selectedProjectId || !selectedFlowId) return;
+    const projectId = selectedProjectId;
+    const flowId = selectedFlowId;
+    const requestId = versionPreviewRequestIdRef.current + 1;
+    versionPreviewRequestIdRef.current = requestId;
+    selectedVersionIdRef.current = versionId;
     setSelectedVersionId(versionId);
-    setPreviewFlow(await api.getFlowVersion(selectedProjectId, versionId));
+    setPreviewFlow(null);
+    setVersionPreviewStatus("loading");
+    setError(null);
+    try {
+      const historicalFlow = await api.getFlowVersion(projectId, versionId);
+      if (
+        versionPreviewRequestIdRef.current !== requestId ||
+        selectedProjectIdRef.current !== projectId ||
+        selectedFlowIdRef.current !== flowId ||
+        selectedVersionIdRef.current !== versionId
+      ) {
+        return;
+      }
+      if (historicalFlow.id !== flowId || historicalFlow.projectId !== projectId) {
+        setVersionPreviewStatus("idle");
+        setError("版本数据与当前任务不匹配，已拒绝展示");
+        return;
+      }
+      setPreviewFlow(createPortableFlowDocument(historicalFlow).document);
+      setVersionPreviewStatus("ready");
+    } catch (reason: unknown) {
+      if (
+        versionPreviewRequestIdRef.current === requestId &&
+        selectedProjectIdRef.current === projectId &&
+        selectedFlowIdRef.current === flowId &&
+        selectedVersionIdRef.current === versionId
+      ) {
+        setVersionPreviewStatus("idle");
+        setError(reason instanceof Error ? reason.message : "加载历史版本失败");
+      }
+    }
   };
 
   const handleRestore = async (versionId: string) => {
@@ -150,7 +273,12 @@ export function App() {
     setError(null);
     try {
       await api.restoreFlowVersion(selectedProjectId, versionId);
-      await refreshVersions(selectedProjectId, selectedFlowId);
+      if (
+        selectedProjectIdRef.current === selectedProjectId &&
+        selectedFlowIdRef.current === selectedFlowId
+      ) {
+        setFlowRefreshNonce((current) => current + 1);
+      }
     } catch (reason: unknown) {
       setError(reason instanceof Error ? reason.message : "恢复失败");
     } finally {
@@ -389,8 +517,12 @@ export function App() {
           </section>
         ) : (
           <section className="panel versions-panel" aria-label="版本记录">
-            {!selectedFlowId || !currentFlow ? (
+            {!selectedFlowId ? (
               <EmptyWorkspaceGuide kind="tasks" projectName={selectedProject?.name} />
+            ) : !currentFlow ? (
+              <p className="version-loading" role="status">
+                正在加载当前任务…
+              </p>
             ) : (
               <>
                 <header className="panel-header">
@@ -406,11 +538,36 @@ export function App() {
                   restoringId={restoringId}
                   emptyMessage="尚无历史版本；再次保存任务后将自动保留版本"
                 />
-                {previewFlow ? (
-                  <details className="professional-details">
-                    <summary>专业详情：版本原始数据</summary>
-                    <pre>{JSON.stringify(previewFlow, null, 2)}</pre>
-                  </details>
+                {versionPreviewStatus === "loading" ? (
+                  <p className="version-loading" role="status">
+                    正在加载历史版本并生成安全差异…
+                  </p>
+                ) : null}
+                {previewFlow && selectedVersion && versionDiff ? (
+                  <section className="version-diff" aria-labelledby="version-diff-title">
+                    <header className="version-diff-header">
+                      <h3 id="version-diff-title">历史 v{selectedVersion.version} → 当前任务</h3>
+                      <p className="version-diff-privacy">敏感值已隐藏</p>
+                    </header>
+                    <p className="version-diff-summary" aria-live="polite">
+                      {versionDiff.truncated
+                        ? `共 ${versionDiff.totalChanges} 处变化；前 ${versionDiff.entries.length} 处中：新增 ${versionDiffCounts.added} · 删除 ${versionDiffCounts.removed} · 修改 ${versionDiffCounts.changed}`
+                        : `新增 ${versionDiffCounts.added} · 删除 ${versionDiffCounts.removed} · 修改 ${versionDiffCounts.changed}`}
+                    </p>
+                    <details className="professional-details version-diff-details">
+                      <summary>专业详情：差异路径与安全值</summary>
+                      <p className="professional-details-intro">
+                        历史版本与当前任务均已生成安全展示副本；此处只能查看，不能编辑或保存。
+                      </p>
+                      <JsonDiffView
+                        before={previewFlow}
+                        after={currentFlow}
+                        beforeLabel={`历史 v${selectedVersion.version}`}
+                        afterLabel="当前任务"
+                        ariaLabel={`历史 v${selectedVersion.version} 与当前任务差异`}
+                      />
+                    </details>
+                  </section>
                 ) : null}
               </>
             )}
