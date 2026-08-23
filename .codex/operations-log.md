@@ -6981,3 +6981,7 @@
 - Node 24：`CI=1 pnpm smoke` 通过；recorded replay `25/25`，总耗时 48333ms；登录 E2E `4/4`。
 - Node 20.19.6：强制按 lockfile 重建依赖后 `CI=1 pnpm smoke` 通过；完成后已在 Node 24.14.0 下再次强制按 lockfile 安装并通过 doctor/audit。
 - 回收状态：F3/F4/F5 与集成 Reviewer 均结束；三个功能 worktree 已移除，无活跃待回收 worktree。
+- 远端集成会签：分支 run `32635905471`，Node 20 / Node 24 均为 success。
+- main 合入：确认 `origin/main=145fafc` 是集成分支祖先后，以 fast-forward 推送至 `14e6a26`，未覆盖并行提交。
+- main 会签：run `32636101584`，Node 20 `97185988481` 与 Node 24 `97185988523` 均为 success。
+- 文档生命周期：`ux-foundation-3-5-development.md` 完成后从 active 迁移至 completed；post-v1 总路线继续保留 active，P3/P4 未解冻。

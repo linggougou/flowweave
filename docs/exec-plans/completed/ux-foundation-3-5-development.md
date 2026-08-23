@@ -137,4 +137,6 @@ Foundation 5 业务视图
 - 安全审计发现并修复 `drizzle-orm <0.45.2` High 漏洞；升级至 `0.45.2` 后官方 registry 审计为 0 个已知漏洞。
 - Node 24：`CI=1 pnpm smoke`、recorded replay `25/25` 通过。
 - Node 20.19.6：`pnpm install --force --frozen-lockfile` 后 `CI=1 pnpm smoke` 通过；随后已恢复 Node 24 依赖基线。
-- 本计划已满足本地完成定义；归档后等待集成分支与 main 的远端 Node 20/24 CI 会签。
+- 集成分支 GitHub Actions run `32635905471` 的 Node 20/24 均成功。
+- `main` 已从 `145fafc` fast-forward 至 `14e6a26`；main run `32636101584` 的 Node 20/24 均成功。
+- 本计划满足完成定义，归档至 `docs/exec-plans/completed/`；P3/P4 保持冻结。

@@ -5180,3 +5180,10 @@
 - Web 真实界面：默认展示最近运行结果与人话建议；375×812 下无横向溢出；业务视图切换与 `aria-pressed` 状态一致。
 - Electron：开发态 renderer 与 Electron 自持有本地 API 均可启动；before-quit 等待取消持久化、API 排空和单次最终 quit 的时序测试通过。因 `orca` 缺失，未取得桌面 AX 树证据。
 - 阶段结论：UX Foundation 3、4、5 与 P2.5 本地门禁通过；P3/P4 继续冻结，待远端集成分支与 main Node 20/24 CI 会签。
+
+### 远端最终会签
+
+- 集成分支：GitHub Actions run `32635905471`，Node 20 job `97185518044`、Node 24 job `97185518171` 均成功。
+- main：从 `145fafc` fast-forward 到 `14e6a26`；GitHub Actions run `32636101584` 成功。
+- main jobs：Node 20 `97185988481`（3m08s）、Node 24 `97185988523`（3m36s）均成功。
+- 最终判断：P2.5 代码、测试、构建、安全审计、本地双版本与远端 main 双矩阵门禁全部通过，可以归档；P3/P4 继续冻结。
