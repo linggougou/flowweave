@@ -6891,3 +6891,38 @@
 - 过程修复：首次 smoke 发现 package 生命周期脚本与 Turbo 并发清理 dist 的竞态，移除门禁任务内重复构建，仅保留 dev/打包显式准备后复验通过。
 - 工具替代：本机缺少 `gh` CLI，原用途为查询 GitHub Actions；改用 GitHub REST API 查询 run 与 jobs，结果一致且未阻塞验证。
 - 远端会签：GitHub Actions run `29499505852`，`verify (node 20)` 与 `verify (node 24)` 均成功。
+
+## 2026-08-23 当前状态只读核对
+
+- 时间：2026-08-23 18:11:38 CST。
+- 用户请求：汇总 FlowWeave 当前状态；任务分级为 L1 只读状态审计，不修改业务代码、配置、路线锁或验收门禁。
+- 路线与生命周期：当前处于 P2.5 post-v1 产品化 / 首次用户体验修复；P0-P2 工程门禁已通过，P3 深度智能与 P4 AI 编排继续冻结。
+- 里程碑真源：`PROJECT_ROUTE_LOCK.md`、`docs/superpowers/plans/2026-05-26-run-first-roadmap.md`、`docs/exec-plans/active/post-v1-development-roadmap.md`。
+- 当前阶段出口：完成 UX Foundation 3-5，使非技术用户能够控制录制边界、安全确认并运行任务、用业务语言理解结果。
+- 已核对状态：工作区审计前洁净；当前分支 `codex/ux-foundation-first-journey` 与同名远端同步；远端分支相对远端 `main` 领先 5 个提交，包含 UX Foundation 1-2；远端实际引用分别为 `main=145fafc`、功能分支 `6ad5ff4`。
+- 已有验证证据：UX Foundation 2 对应 GitHub Actions run `29499505852` 的 Node 20/24 双矩阵成功；Node 24 smoke、recorded replay `25/25` 和打包应用本地 API 生命周期已在 2026-07-16 留痕。本轮未重复运行全量测试。
+- 当前未完成：UX Foundation 3 录制会话与命名、Foundation 4 安全运行与可见进度、Foundation 5 业务视图与 Web 收口；已实现的 Foundation 1-2 尚未合入 `main`。
+- 发布边界：v1 macOS `.app + DMG` 仅为本地/内部预览；Developer ID、Apple 公证与正式 `.icns` 图标仍未完成。
+- 工具与并行：本轮为单一只读状态核对，不存在可独立实施的并行子任务；使用 `rg`、Git、本地真源与既有验收记录完成核对，无工具缺失。
+- 阶段判断：P2 工程门禁保持通过；P2.5 整体产品化体验门禁尚未通过，不允许解冻 P3/P4。
+- 任务状态：已结束。
+
+## 2026-08-23 UX Foundation 3-5 自主并行开发启动
+
+- 用户授权：后续由 Agent 自主规划、持续开发，无需逐项指示；要求先制定完整计划，再以 worktree 分派 Sub-Agent 并行开发，验收合格后回收。
+- 生命周期：S5 开发落地；完成定向验证后进入 S6，完整门禁通过后进入 S7 验收。
+- 路线依据：`PROJECT_ROUTE_LOCK.md` P2.5；阶段出口为非技术用户首次旅程闭环。
+- 里程碑真源：`docs/exec-plans/active/ux-foundation-3-5-development.md`。
+- 最小可验收闭环：录制状态机 → 安全运行/进度/取消 → 业务结果视图 → Extension/Studio/Web 真实旅程 → Node 20/24 双门禁。
+- 并行轨道：F3 录制会话、F4 安全运行、F5 业务视图；使用独立分支与 worktree，文件边界见执行计划。
+- Skills：`tdd-workflow` 约束先红后绿；`security-review` 约束输入、敏感信息、取消与本地接口边界；`frontend-patterns` 约束 React 状态、可访问性和信息分层；`verification-loop` 用于各轨及集成验收。
+- 变更判断：属于路线锁已批准的当前阶段缺口，不改变产品定位、技术栈或验收门禁；P3/P4 保持冻结，不涉及高危路线变更。
+- 基线：从 `6ad5ff4` 创建集成分支 `codex/ux-foundation-3-5-integration`；启动时除上一轮状态核对留痕外无业务代码改动。
+- 当前状态：计划固化中，尚未进入功能实施。
+
+### 2026-08-23 并行开发基线通过
+
+- Node 24 `CI=1 pnpm smoke`：通过。
+- 覆盖：smoke 前置自检、全仓 typecheck/test/build、登录 E2E。
+- 关键结果：Studio `98/98`、local-api `4/4`、Web `3/3`、登录 Flow `4/4` 步骤成功。
+- 结论：当前基线稳定，可创建 worktree 并进入三轨并行实施。

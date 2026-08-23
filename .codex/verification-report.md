@@ -5115,3 +5115,11 @@
 - 最终目录包：`apps/studio/release/mac-arm64/织流 Studio.app`。
 - 结论：UX Foundation 2 退出门禁通过；Foundation 3-5 继续待开发。
 - 远端会签：GitHub Actions run `29499505852` 的 Node 20、Node 24 job 均为 `success`。
+
+## 2026-08-23 UX Foundation 3-5 开发基线验证
+
+- 基线提交：`6ad5ff4`；环境：Node `v24.14.0`、pnpm `9.15.4`。
+- 命令：`CI=1 pnpm smoke`。
+- 结果：通过；smoke 前置自检、全仓 typecheck、test、build 与 `e2e:login` 均成功。
+- 关键证据：Studio `98/98`；local-api `4/4`；Web `3/3`；登录 E2E `4/4` 步骤成功。
+- 判断：并行开发基线可用，允许从 P2.5 进入 Foundation 3-5 实施；P3/P4 继续冻结。
