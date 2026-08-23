@@ -5209,4 +5209,5 @@
 - 已按 TDD 增加动态 URL query token 来源、`url-query-variableized` warning、明文移除、导入变量与 runtime 补值合同；先红后绿证据成立。
 - Node 24 与 Node 20 修正后往返均为 warnings=`4`、steps=`10`；最终恢复 Node 24 后 doctor 和往返再次通过。
 - DoD 已拆分为“本地 Node 20/24 与安全门禁通过”和“远端双矩阵待会签”，不再用一个未勾选条目混淆本地完成状态。
-- 当前结论仍为待复审；Reviewer 改判 PASS 且远端双矩阵成功前不归档。
+- Reviewer 最终复审：PASS，无 P0/P1；原 P1 已关闭，P3/P4、vNext 与破坏性删除未越界。
+- 当前仅等待集成分支与 main 远端双矩阵成功；完成前不归档。
