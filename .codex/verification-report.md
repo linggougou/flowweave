@@ -5227,3 +5227,15 @@
 - 最终判断：P2.6 代码、独立总审、定向/全量测试、构建、安全审计、真实可移植往返、本地 Node 20/24 与远端双矩阵全部通过，可以归档。
 - 残余风险：macOS 锁屏期间未取得原生文件对话框人工点击证据；已有文件能力边界测试、真实临时文件服务与 Electron 启动证据，风险如实保留，不影响 P2.6 归档。
 - 路线边界：P2.7 未开启；P3/P4、vNext 与破坏性删除继续冻结。
+
+## 2026-08-23 P2.7 开发前基线与安全设计审计
+
+- 基线提交：`e8047fedb2f85d8e15560f4c5a474d24c7709da9`，`main` 与 `origin/main` 一致。
+- Node 24 定向测试：flow-dsl `18/18`、project-knowledge `18/18`、local-api `8/8`、Web `21/21`、Studio `167/167`，全部通过。
+- CodeGraph 索引最新；`listExecutions` / `getFlowVersion` 影响面已结合 `rg` 与源码复核。
+- L3 路径审计确认现有 `join()` 允许 `.` / `..` 越界、分配入口可创建 ghost project，不能使用递归删除。
+- 数据一致性审计确认 execution_steps 可 FK cascade，但 page_snapshots 无 executionId；删除必须按精确父目录 + basename 识别关联行，并拒绝 active execution。
+- Transport 审计确认 Local API 无破坏性授权，CORS 不能代替授权；P2.7 采用 Studio 主进程固定 IPC，不新增 HTTP DELETE 或 Web 删除入口。
+- 冻结删除顺序：严格 ID / 真实项目 / containment / symlink / 直属白名单检查 → 同根原子 quarantine → DB immediate transaction → 白名单逐项清理；异常 fail closed，禁止递归删除。
+- Diff 冻结为 `@flowweave/ui` 共享、500 条上限、敏感安全展示副本、“历史 vN → 当前任务”的双端只读能力。
+- 结论：基线稳定，安全设计完成后才允许进入 G1/G2 分轨 TDD；P3/P4 与 vNext 保持冻结。

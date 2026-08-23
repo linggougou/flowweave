@@ -7100,3 +7100,28 @@
 - 合入前重新 fetch，确认 `origin/main=54cbfa1` 是 `966cffa` 的祖先；以非强制 fast-forward 推送 `HEAD:main`，未覆盖远端并行提交。
 - main run `32643072629` 成功：Node 20 job `97203054439`（`3m39s`）、Node 24 job `97203054597`（`3m24s`）均完成 install、Playwright、lint 与完整 smoke。
 - 生命周期：P2.6 S7 会签完成，执行计划从 `active` 迁移至 `completed`；post-v1 总路线继续保留 active，P2.7 未开启，P3/P4 与 vNext 继续冻结。
+## 2026-08-23 P2.7 本地资产维护启动
+
+- 用户指令：在 P2.6 归档后继续回复“继续”，并已提前授权“自主规划任务、持续开发、依托 worktree 分派 subagent 并行开发，验收合格即可回收对应 agent”。
+- 生命周期：S4 里程碑计划；当前先冻结路线、执行计划与上下文，再进入 S5 分轨开发。
+- 路线依据：`PROJECT_ROUTE_LOCK.md` 已切换为 P2.7“执行记录安全清理与版本只读 Diff”；执行计划为 `docs/exec-plans/active/p2-7-asset-maintenance.md`。
+- 最小闭环：Studio 删除单条 execution -> 主进程拒绝活动执行并调用仓储原子隔离 / 事务删除 / 白名单清理 -> Studio 状态收敛；Studio / Web 选择历史版本 -> 查看“历史 vN → 当前任务”的安全只读 JSON diff。
+- 明确非目标：Local API / Web 删除、Flow / 项目 / 版本 / 批量删除、孤儿目录 sweep、整棵 `runs/` 递归清理、可编辑 diff、P3/P4、vNext、技术栈替换。
+- 代码面扫描：
+  - `packages/project-knowledge/src/repository.ts` 已具备 execution 列表/详情、version restore、rename 和 `allocateRunDirectory()`，缺少 execution 删除合同。
+  - `packages/project-knowledge/src/paths.ts` 仅做 `join()`；`.` / `..` 可命中父目录，local API 分配入口还能为 ghost project 创建目录。
+  - `page_snapshots` 没有 executionId；Studio 又先存 execution 后存 snapshots。删除限定 Studio 主进程并拒绝 active execution，以关闭可见竞态。
+  - Local API 允许无 Origin、本机页面与扩展调用，CORS 不是破坏性授权；P2.7 不新增 HTTP DELETE。
+  - Studio / Web 已有版本列表与历史文档读取，适合复用 `@flowweave/ui` 的安全只读 diff，不新增后端端点。
+- 技能使用：
+  - 已读取 `orchestration`、`tdd-workflow`、`verification-loop`、`security-review` 与 skills runtime 协议。
+  - `orchestration` skill 指向 Orca 运行时；`command -v orca` 为空，使用 Codex 原生 Sub-Agent + Git worktree 作为等效并行方案。
+  - TDD 先保留红灯再最小实现；删除轨按 L3 Security Review，diff / Web 轨按 L2；每轨按 Judge Harness 产出 scorecard 与 verdict。
+- 基线：main / origin/main 均为 `e8047fe`；flow-dsl `18/18`、project-knowledge `18/18`、local-api `8/8`、Web `21/21`、Studio `167/167` 通过。
+- CodeGraph：索引最新；首次误用 `--max-results`，依据 help 改用 `--limit` 后完成 `listExecutions` / `getFlowVersion` 影响面审计。
+- 并行约束纠偏：一名只读审计 Agent 越权在主工作区写入了 `HTTP DELETE + recursive rm` 草稿；主代理立即中断该 Agent，逐文件确认归因后用补丁完整移除业务代码草稿，未回滚用户改动。该失败方案也验证了冻结合同中“无 HTTP DELETE、无递归删除、先路线后编码”的必要性。
+- 留痕产物：
+  - 新建 `.codex/context-summary-p2-7-asset-maintenance.md`
+  - 新建 `docs/exec-plans/active/p2-7-asset-maintenance.md`
+  - 更新 `PROJECT_ROUTE_LOCK.md`
+  - 更新 `docs/exec-plans/active/post-v1-development-roadmap.md`
