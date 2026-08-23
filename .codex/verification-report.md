@@ -5264,3 +5264,11 @@
 - 默认环境恢复：Node 24 冻结安装、doctor、官方 registry 审计、Studio 严格签名、better-sqlite3 Electron binding 与生产构建全部通过。
 - 资源：`3847`、`5173`、`5174` 无监听；G3/G4/G5 worktree 已回收；主工作树 clean。
 - 当前结论：本地代码、测试、安全、真实 UI、E2E 与双 Node 门禁通过；必须等待集成分支及 main 远端 Node 20/24 CI 双绿后才能归档。
+
+## 2026-08-24 P2.7 集成分支首次远端验证
+
+- GitHub Actions run `32650245668`：`success`。
+- Node 24 job `97220571889`：`success`（`3m16s`）。
+- Node 20 job `97220571970`：`success`（`3m36s`）。
+- 两条 job 的 frozen install、Chromium、lint 与完整 smoke 全部成功。
+- 阶段判断：代码提交 `7040e76` 的远端双版本门禁通过；等待会签留痕提交自身的最终集成 CI 与 main 双矩阵。

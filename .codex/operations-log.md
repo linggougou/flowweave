@@ -7172,3 +7172,12 @@
 - 环境恢复：Node 24.14.0 下再次按 lockfile 强制安装，doctor、官方 registry 审计、Studio 严格签名、Electron native binding 与生产构建通过。
 - 资源回收：Web/Studio 服务及测试启动的 Electron 进程均已停止，`3847`、`5173`、`5174` 无监听；G3、G4、G5 worktree 均在 clean 后移除。功能分支保留至远端与 main 会签完成。
 - 阶段判断：P2.7 本地 DoD 已通过；远端集成分支与 main Node 20/24 双矩阵仍是归档硬门。
+
+### 2026-08-24 P2.7 集成分支首次远端会签
+
+- 分支：`codex/p2-7-asset-maintenance-integration`；提交：`7040e76`。
+- GitHub Actions run `32650245668`：`success`。
+- Node 24 job `97220571889`：`success`，`3m16s`。
+- Node 20 job `97220571970`：`success`，`3m36s`。
+- 两条矩阵均完成冻结安装、Playwright Chromium、lint 与完整 smoke。
+- 当前仅剩：包含本会签留痕的最终集成提交双绿、main fast-forward 与 main 双矩阵；完成前不归档。
