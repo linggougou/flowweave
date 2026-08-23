@@ -94,20 +94,21 @@ describe("preload 执行控制桥", () => {
 
   it("截图预览桥只允许通过固定业务 ID + stepIndex 取回 PNG bytes", async () => {
     const api = exposeInMainWorldMock.mock.calls[0]?.[1] as {
-      getExecutionScreenshotPreview: (
-        projectId: string,
-        executionId: string,
-        stepIndex: number,
-      ) => Promise<unknown>;
+      nativeExecutionScreenshotPreview: boolean;
+      getExecutionScreenshotPreview: (request: {
+        projectId: string;
+        executionId: string;
+        stepIndex: number;
+      }) => Promise<unknown>;
     };
 
-    await api.getExecutionScreenshotPreview("project_preload", "exec_preload", 2);
+    expect(api.nativeExecutionScreenshotPreview).toBe(true);
+    const request = { projectId: "project_preload", executionId: "exec_preload", stepIndex: 2 };
+    await api.getExecutionScreenshotPreview(request);
 
     expect(invokeMock).toHaveBeenCalledWith(
       IPC_CHANNELS.getExecutionScreenshotPreview,
-      "project_preload",
-      "exec_preload",
-      2,
+      request,
     );
     expect(Object.keys(api)).not.toContain("openPath");
   });

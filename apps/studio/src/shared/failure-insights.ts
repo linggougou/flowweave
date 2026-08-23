@@ -25,7 +25,6 @@ export type FailureInsightCategory =
 export type FailureInsightArtifact = {
   kind: "diagnostic" | "page-snapshot" | "screenshot";
   label: string;
-  path: string;
 };
 
 export type FailureInsight = {
@@ -188,25 +187,22 @@ function resolveFallbackSuccess(
 function buildArtifacts(step: ExecutionStepLog): FailureInsightArtifact[] {
   const artifacts: FailureInsightArtifact[] = [];
 
-  if (step.diagnosticPath) {
+  if (step.hasDiagnostic || step.diagnostic) {
     artifacts.push({
       kind: "diagnostic",
       label: "诊断 JSON",
-      path: step.diagnosticPath,
     });
   }
-  if (step.pageSnapshotPath) {
+  if (step.hasPageSnapshot || step.pageSnapshot) {
     artifacts.push({
       kind: "page-snapshot",
       label: "页面快照",
-      path: step.pageSnapshotPath,
     });
   }
-  if (step.screenshotPath) {
+  if (step.hasScreenshot) {
     artifacts.push({
       kind: "screenshot",
       label: "步骤截图",
-      path: step.screenshotPath,
     });
   }
 
@@ -214,15 +210,15 @@ function buildArtifacts(step: ExecutionStepLog): FailureInsightArtifact[] {
 }
 
 export function formatPageSnapshotSummary(
-  step: Pick<ExecutionStepLog, "pageSnapshot" | "pageSnapshotPath">,
+  step: Pick<ExecutionStepLog, "pageSnapshot" | "hasPageSnapshot">,
 ): string | undefined {
   const snapshot = step.pageSnapshot;
   if (snapshot) {
     const title = snapshot.title?.trim() || snapshot.url;
     return `${title} · 表单 ${snapshot.formCount} · 按钮 ${snapshot.buttonCount} · 链接 ${snapshot.linkCount}`;
   }
-  if (step.pageSnapshotPath) {
-    return "已记录页面快照文件，可直接打开 JSON 查看当前页面结构。";
+  if (step.hasPageSnapshot) {
+    return "已记录页面快照，但当前无法解析结构化摘要。";
   }
   return undefined;
 }
@@ -428,9 +424,9 @@ export function buildFailureInsight(step: ExecutionStepLog): FailureInsight | nu
     !step.message &&
     !step.diagnostic &&
     !step.pageSnapshot &&
-    !step.diagnosticPath &&
-    !step.pageSnapshotPath &&
-    !step.screenshotPath
+    !step.hasDiagnostic &&
+    !step.hasPageSnapshot &&
+    !step.hasScreenshot
   ) {
     return null;
   }

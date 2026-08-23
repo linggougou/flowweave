@@ -2,7 +2,10 @@
 import type { FlowDocument, FlowPortabilityWarning, NormalizedStep } from "@flowweave/flow-dsl";
 import type { FragilityIssue, PageSnapshotSummary } from "@flowweave/page-intelligence";
 import type { ExecutionProgressEvent } from "@flowweave/runtime";
-import type { ExecutionDeletionResult } from "@flowweave/project-knowledge";
+import type {
+  ExecutionDeletionResult,
+  ExecutionScreenshotPreviewResult,
+} from "@flowweave/project-knowledge";
 
 export type RunFlowVariableValue = string | number | boolean;
 
@@ -59,10 +62,10 @@ export type ExecutionStepLog = {
   durationMs?: number;
   startedAt: string;
   finishedAt?: string;
-  screenshotPath?: string;
-  diagnosticPath?: string;
+  hasScreenshot?: boolean;
+  hasDiagnostic?: boolean;
+  hasPageSnapshot?: boolean;
   diagnostic?: StudioStepDiagnostic;
-  pageSnapshotPath?: string;
   pageSnapshot?: PageSnapshotSummary;
 };
 
@@ -411,9 +414,18 @@ export type StudioFlowVersion = {
   changeMessage?: string;
 };
 
+export type StudioExecutionScreenshotPreviewResult = ExecutionScreenshotPreviewResult;
+
+export type StudioExecutionScreenshotPreviewRequest = {
+  projectId: string;
+  executionId: string;
+  stepIndex: number;
+};
+
 export type StudioApi = {
   readonly nativeFilePortability: boolean;
   readonly nativeExecutionDeletion?: boolean;
+  readonly nativeExecutionScreenshotPreview: boolean;
   listProjects: () => Promise<StudioProject[]>;
   createProject: (name: string) => Promise<StudioProject>;
   listFlows: (projectId: string) => Promise<StudioFlowRef[]>;
@@ -426,12 +438,14 @@ export type StudioApi = {
   cancelExecution?: (executionId: string) => Promise<CancelExecutionResult>;
   onExecutionProgress?: (listener: (event: StudioExecutionProgressEvent) => void) => () => void;
   getExecution: (executionId: string) => Promise<StudioExecution | null>;
+  getExecutionScreenshotPreview: (
+    request: StudioExecutionScreenshotPreviewRequest,
+  ) => Promise<StudioExecutionScreenshotPreviewResult>;
   listExecutions: (projectId: string) => Promise<ExecutionSummary[]>;
   deleteExecution?: (projectId: string, executionId: string) => Promise<ExecutionDeletionResult>;
   listFlowVersions: (projectId: string, flowId: string) => Promise<StudioFlowVersion[]>;
   getFlowVersion: (projectId: string, versionId: string) => Promise<FlowDocument | null>;
   restoreFlowVersion: (projectId: string, versionId: string) => Promise<FlowDocument>;
-  openPath: (filePath: string) => Promise<{ ok: true }>;
 };
 
 declare global {

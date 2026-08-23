@@ -12,9 +12,9 @@ function buildStep(overrides?: Partial<ExecutionStepLog>): ExecutionStepLog {
     message: "定位失败",
     startedAt: "2026-06-07T00:02:00.000Z",
     finishedAt: "2026-06-07T00:02:02.000Z",
-    diagnosticPath: "/tmp/step-1-diagnostic.json",
-    screenshotPath: "/tmp/step-1.png",
-    pageSnapshotPath: "/tmp/page-1.json",
+    hasDiagnostic: true,
+    hasScreenshot: true,
+    hasPageSnapshot: true,
     diagnostic: {
       stepId: "s2",
       stepIndex: 1,
@@ -447,10 +447,10 @@ describe("buildFailureInsight", () => {
       buildStep({
         status: "passed",
         message: undefined,
-        diagnosticPath: undefined,
-        screenshotPath: undefined,
+        hasDiagnostic: false,
+        hasScreenshot: false,
         diagnostic: undefined,
-        pageSnapshotPath: "/tmp/page-1.json",
+        hasPageSnapshot: true,
       }),
     );
 

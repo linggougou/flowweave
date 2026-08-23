@@ -13,9 +13,9 @@ function buildStep(overrides?: Partial<ExecutionStepLog>): ExecutionStepLog {
     message: "定位失败",
     startedAt: "2026-06-07T00:01:00.000Z",
     finishedAt: "2026-06-07T00:01:01.000Z",
-    diagnosticPath: "/tmp/step-0-diagnostic.json",
-    screenshotPath: "/tmp/step-0.png",
-    pageSnapshotPath: "/tmp/page-0.json",
+    hasDiagnostic: true,
+    hasScreenshot: true,
+    hasPageSnapshot: true,
     diagnostic: {
       stepId: "s1",
       stepIndex: 0,
@@ -79,7 +79,7 @@ describe("DiagnosticInspector", () => {
         ]}
         selectedStepIndex={2}
         onSelectStepIndex={() => {}}
-        onOpenPath={() => {}}
+        onPreviewScreenshot={() => {}}
       />,
     );
 
@@ -121,7 +121,7 @@ describe("DiagnosticInspector", () => {
         ]}
         selectedStepIndex={3}
         onSelectStepIndex={() => {}}
-        onOpenPath={() => {}}
+        onPreviewScreenshot={() => {}}
       />,
     );
 
@@ -161,7 +161,7 @@ describe("DiagnosticInspector", () => {
         ]}
         selectedStepIndex={4}
         onSelectStepIndex={() => {}}
-        onOpenPath={() => {}}
+        onPreviewScreenshot={() => {}}
       />,
     );
 
@@ -181,7 +181,7 @@ describe("DiagnosticInspector", () => {
         steps={[buildStep()]}
         selectedStepIndex={0}
         onSelectStepIndex={() => {}}
-        onOpenPath={() => {}}
+        onPreviewScreenshot={() => {}}
       />,
     );
 
@@ -237,7 +237,7 @@ describe("DiagnosticInspector", () => {
         ]}
         selectedStepIndex={0}
         onSelectStepIndex={() => {}}
-        onOpenPath={() => {}}
+        onPreviewScreenshot={() => {}}
       />,
     );
 
@@ -333,7 +333,7 @@ describe("DiagnosticInspector", () => {
         ]}
         selectedStepIndex={7}
         onSelectStepIndex={() => {}}
-        onOpenPath={() => {}}
+        onPreviewScreenshot={() => {}}
       />,
     );
 
@@ -402,7 +402,7 @@ describe("DiagnosticInspector", () => {
         ]}
         selectedStepIndex={8}
         onSelectStepIndex={() => {}}
-        onOpenPath={() => {}}
+        onPreviewScreenshot={() => {}}
       />,
     );
 

@@ -1,8 +1,12 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { IPC_CHANNELS } from "./ipc-channels.js";
+import {
+  createStudioContentSecurityPolicy,
+  STUDIO_CSP_PLACEHOLDER,
+} from "../csp-policy.js";
 
 const handlers = new Map<string, (...args: unknown[]) => unknown>();
 const appEventHandlers = new Map<string, (...args: unknown[]) => void>();
@@ -12,6 +16,7 @@ const mockExportFlowToFile = vi.fn();
 const mockImportFlowDocument = vi.fn();
 const mockGetFlowForExport = vi.fn();
 const mockDeleteExecution = vi.fn();
+const mockGetExecutionScreenshotPreview = vi.fn();
 const mockAssertProjectExistsForFileOperation = vi.fn();
 const mockCloseLocalApi = vi.fn(() => Promise.resolve());
 const mockStartLocalApi = vi.fn(() =>
@@ -30,7 +35,6 @@ const mockApp = {
   getAppPath: vi.fn(() => "/tmp/flowweave-app"),
 };
 
-const mockShellOpenPath = vi.fn();
 const mockShowOpenDialog = vi.fn();
 const mockShowSaveDialog = vi.fn();
 const mockLoadURL = vi.fn();
@@ -38,11 +42,18 @@ const mockLoadFile = vi.fn();
 const mockOpenDevTools = vi.fn();
 const mockWindowOn = vi.fn();
 const mockSetWindowOpenHandler = vi.fn();
+const mockWebContentsOn = vi.fn();
 const mockSenderSend = vi.fn();
 const browserWindowOptions: Array<Record<string, unknown>> = [];
 const windowInstances: Array<{
   isDestroyed: ReturnType<typeof vi.fn>;
   focus: ReturnType<typeof vi.fn>;
+  webContents: {
+    mainFrame: { url: string; parent: null };
+    openDevTools: ReturnType<typeof vi.fn>;
+    setWindowOpenHandler: ReturnType<typeof vi.fn>;
+    on: ReturnType<typeof vi.fn>;
+  };
 }> = [];
 
 vi.mock("electron", () => ({
@@ -52,9 +63,16 @@ vi.mock("electron", () => ({
       return windowInstances;
     }
 
+    private readonly mainFrame = {
+      url: "file:///tmp/flowweave-app/dist/index.html",
+      parent: null,
+    };
+
     webContents = {
+      mainFrame: this.mainFrame,
       openDevTools: mockOpenDevTools,
       setWindowOpenHandler: mockSetWindowOpenHandler,
+      on: mockWebContentsOn,
     };
 
     private readonly destroyed = vi.fn(() => false);
@@ -62,10 +80,7 @@ vi.mock("electron", () => ({
 
     constructor(options: Record<string, unknown>) {
       browserWindowOptions.push(options);
-      windowInstances.push({
-        isDestroyed: this.destroyed,
-        focus: this.focusWindow,
-      });
+      windowInstances.push(this);
     }
 
     on = mockWindowOn;
@@ -85,9 +100,6 @@ vi.mock("electron", () => ({
       handlers.set(channel, handler);
     }),
   },
-  shell: {
-    openPath: mockShellOpenPath,
-  },
   dialog: {
     showOpenDialog: mockShowOpenDialog,
     showSaveDialog: mockShowSaveDialog,
@@ -103,6 +115,7 @@ vi.mock("./services.js", () => ({
   assertProjectExistsForFileOperation: mockAssertProjectExistsForFileOperation,
   createProject: vi.fn(),
   getExecution: vi.fn(),
+  getExecutionScreenshotPreview: mockGetExecutionScreenshotPreview,
   getFlow: vi.fn(),
   getFlowForExport: mockGetFlowForExport,
   getFlowRunInput: vi.fn(),
@@ -134,7 +147,7 @@ describe("electron main runFlow IPC", () => {
     mockAssertProjectExistsForFileOperation.mockReset();
     mockAssertProjectExistsForFileOperation.mockResolvedValue(undefined);
     mockDeleteExecution.mockReset();
-    mockShellOpenPath.mockReset();
+    mockGetExecutionScreenshotPreview.mockReset();
     mockShowOpenDialog.mockReset();
     mockShowSaveDialog.mockReset();
     mockLoadURL.mockReset();
@@ -142,6 +155,7 @@ describe("electron main runFlow IPC", () => {
     mockOpenDevTools.mockReset();
     mockWindowOn.mockReset();
     mockSetWindowOpenHandler.mockReset();
+    mockWebContentsOn.mockReset();
     mockSenderSend.mockReset();
     mockCloseLocalApi.mockClear();
     mockStartLocalApi.mockClear();
@@ -532,23 +546,124 @@ describe("electron main runFlow IPC", () => {
     expect((error as Error).stack).toBeUndefined();
   });
 
-  it("截图预览 IPC 只接受业务 ID 与 stepIndex，不向主进程透传 renderer 路径", async () => {
+  it("截图预览 IPC 只接受严格业务对象，不向主进程透传 renderer 路径", async () => {
     const handler = handlers.get(IPC_CHANNELS.getExecutionScreenshotPreview);
+    const window = windowInstances[0]!;
+    mockGetExecutionScreenshotPreview.mockReturnValue({ status: "absent" });
 
     await expect(
       handler?.(
+        { sender: window.webContents, senderFrame: window.webContents.mainFrame },
         {
-          sender: windowInstances[0],
-          senderFrame: { url: "http://127.0.0.1:5173/", parent: null },
+          projectId: "project_ipc",
+          executionId: "exec_ipc",
+          stepIndex: 1,
+          path: "/Users/alice/private/step-1.png",
         },
-        "project_ipc",
-        "exec_ipc",
-        1,
-        "/Users/alice/private/step-1.png",
       ),
-    ).resolves.toBeDefined();
+    ).rejects.toThrow("不支持的字段");
+    expect(mockGetExecutionScreenshotPreview).not.toHaveBeenCalled();
 
-    expect(mockShellOpenPath).not.toHaveBeenCalled();
+    await expect(
+      handler?.(
+        { sender: window.webContents, senderFrame: window.webContents.mainFrame },
+        { projectId: "project_ipc", executionId: "exec_ipc", stepIndex: 1 },
+      ),
+    ).resolves.toEqual({ status: "absent" });
+
+    expect(mockGetExecutionScreenshotPreview).toHaveBeenCalledWith({
+      projectId: "project_ipc",
+      executionId: "exec_ipc",
+      stepIndex: 1,
+    });
+  });
+
+  it.each([
+    ["非对象", "project_ipc"],
+    ["数组", ["project_ipc", "exec_ipc", 1]],
+    ["非法项目", { projectId: "../project", executionId: "exec_ipc", stepIndex: 1 }],
+    ["非法执行", { projectId: "project_ipc", executionId: "exec/path", stepIndex: 1 }],
+    ["超长项目", { projectId: "p".repeat(129), executionId: "exec_ipc", stepIndex: 1 }],
+    ["负数步骤", { projectId: "project_ipc", executionId: "exec_ipc", stepIndex: -1 }],
+    ["小数步骤", { projectId: "project_ipc", executionId: "exec_ipc", stepIndex: 1.5 }],
+  ])("截图预览在 resolver 前拒绝%s请求", async (_label, request) => {
+    const handler = handlers.get(IPC_CHANNELS.getExecutionScreenshotPreview);
+    const window = windowInstances[0]!;
+
+    await expect(
+      handler?.(
+        { sender: window.webContents, senderFrame: window.webContents.mainFrame },
+        request,
+      ),
+    ).rejects.toThrow();
+    expect(mockGetExecutionScreenshotPreview).not.toHaveBeenCalled();
+  });
+
+  it("截图预览拒绝非法原型对象，且彻底移除任意 openPath 频道", async () => {
+    const handler = handlers.get(IPC_CHANNELS.getExecutionScreenshotPreview);
+    const window = windowInstances[0]!;
+    const request = Object.assign(Object.create({ inherited: true }), {
+      projectId: "project_ipc",
+      executionId: "exec_ipc",
+      stepIndex: 1,
+    });
+
+    await expect(
+      handler?.(
+        { sender: window.webContents, senderFrame: window.webContents.mainFrame },
+        request,
+      ),
+    ).rejects.toThrow("请求无效");
+    expect(mockGetExecutionScreenshotPreview).not.toHaveBeenCalled();
+    expect(Object.values(IPC_CHANNELS)).not.toContain("studio:open-path");
+    expect(handlers.has("studio:open-path")).toBe(false);
+  });
+
+  it("截图预览只接受当前主窗口的 mainFrame 与精确文档来源", async () => {
+    const handler = handlers.get(IPC_CHANNELS.getExecutionScreenshotPreview);
+    const window = windowInstances[0]!;
+    const request = { projectId: "project_ipc", executionId: "exec_ipc", stepIndex: 1 };
+    const foreignSender = { ...window.webContents };
+    const iframe = { url: window.webContents.mainFrame.url, parent: {} };
+
+    await expect(
+      handler?.({ sender: foreignSender, senderFrame: window.webContents.mainFrame }, request),
+    ).rejects.toThrow("调用来源无效");
+    await expect(
+      handler?.({ sender: window.webContents, senderFrame: iframe }, request),
+    ).rejects.toThrow("调用来源无效");
+
+    const originalUrl = window.webContents.mainFrame.url;
+    window.webContents.mainFrame.url = "file:///tmp/flowweave-app/dist/other.html";
+    await expect(
+      handler?.(
+        { sender: window.webContents, senderFrame: window.webContents.mainFrame },
+        request,
+      ),
+    ).rejects.toThrow("调用来源无效");
+    window.webContents.mainFrame.url = originalUrl;
+    expect(mockGetExecutionScreenshotPreview).not.toHaveBeenCalled();
+  });
+
+  it("截图 resolver 原始错误会映射为不含路径、errno 和堆栈的稳定错误", async () => {
+    const handler = handlers.get(IPC_CHANNELS.getExecutionScreenshotPreview);
+    const window = windowInstances[0]!;
+    mockGetExecutionScreenshotPreview.mockRejectedValue(
+      new Error("ENOENT /Users/alice/.flowweave/projects/private/step-1.png\n at native.cc:1"),
+    );
+
+    const error = await Promise.resolve(
+      handler?.(
+        { sender: window.webContents, senderFrame: window.webContents.mainFrame },
+        { projectId: "project_ipc", executionId: "exec_ipc", stepIndex: 1 },
+      ),
+    ).catch((reason: unknown) => reason);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toContain("截图预览不可用");
+    expect((error as Error).message).not.toContain("ENOENT");
+    expect((error as Error).message).not.toContain("/Users");
+    expect((error as Error).stack).toBeUndefined();
   });
 
   it("主窗口启用 sandbox 并拒绝新窗口", () => {
@@ -565,5 +680,40 @@ describe("electron main runFlow IPC", () => {
       url: "https://example.com",
     });
     expect(decision).toEqual({ action: "deny" });
+    expect(mockWebContentsOn).toHaveBeenCalledWith("will-navigate", expect.any(Function));
+    const navigationEvent = { preventDefault: vi.fn() };
+    const navigationHandler = mockWebContentsOn.mock.calls.find(
+      ([event]) => event === "will-navigate",
+    )?.[1] as ((event: typeof navigationEvent) => void) | undefined;
+    navigationHandler?.(navigationEvent);
+    expect(navigationEvent.preventDefault).toHaveBeenCalledOnce();
+  });
+
+  it("入口 CSP 禁止主动内容，仅允许受控 Blob 图片、固定本地 API 与开发 HMR", () => {
+    const html = readFileSync("index.html", "utf8");
+    const productionPolicy = createStudioContentSecurityPolicy("production");
+    const developmentPolicy = createStudioContentSecurityPolicy("development");
+
+    expect(html).toContain(STUDIO_CSP_PLACEHOLDER);
+    expect(productionPolicy).toContain("script-src 'self'");
+    expect(productionPolicy).not.toContain("script-src 'self' 'unsafe-inline'");
+    expect(productionPolicy).not.toContain("unsafe-eval");
+    expect(productionPolicy).toContain("img-src 'self' blob:");
+    expect(productionPolicy).toContain("connect-src 'none'");
+    expect(productionPolicy).not.toContain("127.0.0.1");
+    expect(developmentPolicy).toContain(
+      "connect-src 'self' http://127.0.0.1:3847 http://127.0.0.1:5173 ws://127.0.0.1:5173",
+    );
+    expect(developmentPolicy).not.toContain("*");
+    for (const directive of [
+      "object-src 'none'",
+      "frame-src 'none'",
+      "worker-src 'none'",
+      "base-uri 'none'",
+      "form-action 'none'",
+    ]) {
+      expect(productionPolicy).toContain(directive);
+      expect(developmentPolicy).toContain(directive);
+    }
   });
 });

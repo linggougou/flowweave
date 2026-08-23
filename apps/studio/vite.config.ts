@@ -2,12 +2,27 @@ import react from "@vitejs/plugin-react";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
+import {
+  createStudioContentSecurityPolicy,
+  STUDIO_CSP_PLACEHOLDER,
+} from "./csp-policy.js";
 
 const studioDir = path.dirname(fileURLToPath(import.meta.url));
 const packagesDir = path.resolve(studioDir, "../../packages");
 
-export default defineConfig({
-  plugins: [react()],
+export default defineConfig(({ command }) => ({
+  plugins: [
+    react(),
+    {
+      name: "flowweave-studio-csp",
+      transformIndexHtml(html) {
+        const policy = createStudioContentSecurityPolicy(
+          command === "serve" ? "development" : "production",
+        );
+        return html.replace(STUDIO_CSP_PLACEHOLDER, policy);
+      },
+    },
+  ],
   resolve: {
     alias: {
       "@flowweave/ui": path.resolve(packagesDir, "ui/src/index.ts"),
@@ -35,4 +50,4 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
   },
-});
+}));

@@ -11,7 +11,7 @@ import type { ExecutionStepLog, StudioExecution } from "./studio-api-types.js";
 type StoredExecutionStep = ExecutionWithProject["steps"][number] & Partial<ExecutionStepLog>;
 type StudioExecutionStepArtifacts = Pick<
   ExecutionStepLog,
-  "diagnostic" | "pageSnapshot" | "pageSnapshotPath"
+  "diagnostic" | "pageSnapshot" | "hasDiagnostic" | "hasPageSnapshot"
 >;
 
 export type MapStoredExecutionOptions = {
@@ -69,8 +69,8 @@ export function mapStoredExecutionToStudioExecution(
         durationMs: step.durationMs,
         startedAt,
         finishedAt: stored.finishedAt,
-        screenshotPath: step.screenshotPath,
-        diagnosticPath: step.diagnosticPath,
+        hasScreenshot: Boolean(step.screenshotPath),
+        hasDiagnostic: Boolean(step.diagnosticPath),
       };
 
       return {

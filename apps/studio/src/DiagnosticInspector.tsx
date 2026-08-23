@@ -22,7 +22,7 @@ type DiagnosticInspectorProps = {
   steps: ExecutionStepLog[];
   selectedStepIndex: number | null;
   onSelectStepIndex: (stepIndex: number) => void;
-  onOpenPath: (filePath: string) => void;
+  onPreviewScreenshot?: (step: ExecutionStepLog) => void;
 };
 
 function formatCount(value?: number): string {
@@ -302,10 +302,10 @@ export function DiagnosticInspector({
   steps,
   selectedStepIndex,
   onSelectStepIndex,
-  onOpenPath,
+  onPreviewScreenshot,
 }: DiagnosticInspectorProps): ReactNode {
   const diagnosticSteps = steps.filter(
-    (step) => step.diagnosticPath || step.pageSnapshotPath || step.pageSnapshot,
+    (step) => step.hasDiagnostic || step.hasPageSnapshot || step.diagnostic || step.pageSnapshot,
   );
 
   if (diagnosticSteps.length === 0) {
@@ -314,7 +314,7 @@ export function DiagnosticInspector({
 
   const activeStep =
     diagnosticSteps.find((step) => step.stepIndex === selectedStepIndex) ??
-    diagnosticSteps.find((step) => step.diagnosticPath) ??
+    diagnosticSteps.find((step) => step.hasDiagnostic || step.diagnostic) ??
     diagnosticSteps[0]!;
   const diagnostic = activeStep.diagnostic;
   const targetDiagnostic = isTargetResolutionDiagnostic(diagnostic) ? diagnostic : undefined;
@@ -555,9 +555,19 @@ export function DiagnosticInspector({
           <strong>产物入口</strong>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
             {insight.artifacts.map((artifact) => (
-              <button type="button" key={artifact.path} onClick={() => onOpenPath(artifact.path)}>
-                {artifact.label}
-              </button>
+              artifact.kind === "screenshot" && onPreviewScreenshot ? (
+                <button
+                  type="button"
+                  key={artifact.kind}
+                  onClick={() => onPreviewScreenshot(activeStep)}
+                >
+                  {artifact.label}
+                </button>
+              ) : (
+                <span key={artifact.kind} className="flow-content-meta">
+                  {artifact.label}已结构化展示
+                </span>
+              )
             ))}
           </div>
         </div>
@@ -708,9 +718,9 @@ export function DiagnosticInspector({
             </>
           ) : null}
         </>
-      ) : activeStep.diagnosticPath ? (
+      ) : activeStep.hasDiagnostic ? (
         <p className="execution-history-empty">
-          已检测到诊断文件路径，但当前无法解析内容。可以直接打开 JSON 继续排查。
+          已检测到诊断产物，但当前无法安全解析结构化内容。
         </p>
       ) : null}
 

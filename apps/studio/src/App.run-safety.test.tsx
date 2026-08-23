@@ -151,6 +151,7 @@ function createApiHarness(flow: FlowDocument, overrides: Partial<StudioApi> = {}
   const unsubscribe = vi.fn();
   const api: StudioApi = {
     nativeFilePortability: true,
+    nativeExecutionScreenshotPreview: false,
     listProjects: vi.fn().mockResolvedValue([buildProject()]),
     createProject: vi.fn(),
     listFlows: vi.fn().mockResolvedValue([
@@ -182,7 +183,7 @@ function createApiHarness(flow: FlowDocument, overrides: Partial<StudioApi> = {}
     listFlowVersions: vi.fn().mockResolvedValue([]),
     getFlowVersion: vi.fn().mockResolvedValue(null),
     restoreFlowVersion: vi.fn(),
-    openPath: vi.fn().mockResolvedValue({ ok: true }),
+    getExecutionScreenshotPreview: vi.fn().mockResolvedValue({ status: "absent" }),
     ...overrides,
   };
   return {

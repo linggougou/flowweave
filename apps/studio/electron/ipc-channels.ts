@@ -10,11 +10,11 @@ export const IPC_CHANNELS = {
   cancelExecution: "studio:cancel-execution",
   executionProgress: "studio:execution-progress",
   getExecution: "studio:get-execution",
+  getExecutionScreenshotPreview: "studio:get-execution-screenshot-preview",
   createProject: "studio:create-project",
   listExecutions: "studio:list-executions",
   deleteExecution: "studio:delete-execution",
   listFlowVersions: "studio:list-flow-versions",
   getFlowVersion: "studio:get-flow-version",
   restoreFlowVersion: "studio:restore-flow-version",
-  openPath: "studio:open-path",
 } as const;

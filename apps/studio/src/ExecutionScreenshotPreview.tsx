@@ -7,6 +7,7 @@ type ExecutionScreenshotPreviewProps = {
   blobUrl: string | null;
   stepIndex: number;
   stepLabel: string;
+  unavailableMessage?: string;
   onClose: () => void;
 };
 
@@ -19,6 +20,7 @@ export function ExecutionScreenshotPreview({
   blobUrl,
   stepIndex,
   stepLabel,
+  unavailableMessage,
   onClose,
 }: ExecutionScreenshotPreviewProps) {
   const titleId = useId();
@@ -97,7 +99,7 @@ export function ExecutionScreenshotPreview({
             </figure>
           ) : (
             <p className="execution-screenshot-preview-state" role="status">
-              该步骤没有可预览的截图。
+              {unavailableMessage?.trim() || "该步骤没有可预览的截图。"}
             </p>
           )}
         </div>

@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 export type StepLogArtifact = {
   kind: "diagnostic" | "page-snapshot" | "screenshot";
   label: string;
-  path: string;
 };
 
 export type StepLogRow = {
@@ -15,9 +14,9 @@ export type StepLogRow = {
   durationMs?: number;
   startedAt: string;
   finishedAt?: string;
-  screenshotPath?: string;
-  diagnosticPath?: string;
-  pageSnapshotPath?: string;
+  hasScreenshot?: boolean;
+  hasDiagnostic?: boolean;
+  hasPageSnapshot?: boolean;
   insightCategoryLabel?: string;
   insightTitle?: string;
   insightSummary?: string;
@@ -28,8 +27,7 @@ export type StepLogRow = {
 export type StepLogTableProps = {
   steps: StepLogRow[];
   emptyMessage?: string;
-  onOpenScreenshot?: (filePath: string) => void;
-  onOpenDiagnostic?: (filePath: string) => void;
+  onPreviewScreenshot?: (step: StepLogRow) => void;
   onInspectDiagnostic?: (step: StepLogRow) => void;
 };
 
@@ -42,35 +40,47 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 function renderArtifactButton(
+  step: StepLogRow,
   artifact: StepLogArtifact,
-  onOpen?: (filePath: string) => void,
+  onPreviewScreenshot?: (step: StepLogRow) => void,
+  onInspectDiagnostic?: (step: StepLogRow) => void,
 ): ReactNode {
-  if (onOpen) {
+  if (artifact.kind === "screenshot") {
+    if (!onPreviewScreenshot) {
+      return <span key={artifact.kind}>{artifact.label}</span>;
+    }
     return (
       <button
-        key={artifact.path}
+        key={artifact.kind}
         type="button"
         className="fw-step-screenshot-btn"
-        title={artifact.path}
-        onClick={() => onOpen(artifact.path)}
+        onClick={() => onPreviewScreenshot(step)}
       >
         {artifact.label}
       </button>
     );
   }
 
+  if (!onInspectDiagnostic) {
+    return <span key={artifact.kind}>{artifact.label}</span>;
+  }
+
   return (
-    <span key={artifact.path} title={artifact.path}>
+    <button
+      key={artifact.kind}
+      type="button"
+      className="fw-step-screenshot-btn"
+      onClick={() => onInspectDiagnostic(step)}
+    >
       {artifact.label}
-    </span>
+    </button>
   );
 }
 
 export function StepLogTable({
   steps,
   emptyMessage = "暂无步骤日志",
-  onOpenScreenshot,
-  onOpenDiagnostic,
+  onPreviewScreenshot,
   onInspectDiagnostic,
 }: StepLogTableProps): ReactNode {
   if (steps.length === 0) {
@@ -125,7 +135,7 @@ export function StepLogTable({
             <td className="fw-step-screenshot">
               {step.artifacts && step.artifacts.length > 0 ? (
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {onInspectDiagnostic && (step.diagnosticPath || step.pageSnapshotPath) ? (
+                  {onInspectDiagnostic && (step.hasDiagnostic || step.hasPageSnapshot) ? (
                     <button
                       type="button"
                       className="fw-step-screenshot-btn"
@@ -136,43 +146,34 @@ export function StepLogTable({
                   ) : null}
                   {step.artifacts.map((artifact) =>
                     renderArtifactButton(
+                      step,
                       artifact,
-                      artifact.kind === "screenshot" ? onOpenScreenshot : onOpenDiagnostic,
+                      onPreviewScreenshot,
+                      onInspectDiagnostic,
                     ),
                   )}
                 </div>
-              ) : step.diagnosticPath || step.pageSnapshotPath ? (
+              ) : step.hasDiagnostic || step.hasPageSnapshot ? (
                 onInspectDiagnostic ? (
                   <button
                     type="button"
                     className="fw-step-screenshot-btn"
-                    title={step.diagnosticPath ?? step.pageSnapshotPath}
                     onClick={() => onInspectDiagnostic(step)}
                   >
                     诊断台
                   </button>
-                ) : onOpenDiagnostic ? (
-                  <button
-                    type="button"
-                    className="fw-step-screenshot-btn"
-                    title={step.diagnosticPath ?? step.pageSnapshotPath}
-                    onClick={() => onOpenDiagnostic(step.diagnosticPath ?? step.pageSnapshotPath!)}
-                  >
-                    {shortenPath(step.diagnosticPath ?? step.pageSnapshotPath!)}
-                  </button>
                 ) : (
-                  <span title={step.diagnosticPath ?? step.pageSnapshotPath}>
-                    {shortenPath(step.diagnosticPath ?? step.pageSnapshotPath!)}
-                  </span>
+                  <span>诊断产物</span>
                 )
-              ) : step.screenshotPath ? (
+              ) : step.hasScreenshot ? (
                 renderArtifactButton(
+                  step,
                   {
                     kind: "screenshot",
                     label: "步骤截图",
-                    path: step.screenshotPath,
                   },
-                  onOpenScreenshot,
+                  onPreviewScreenshot,
+                  onInspectDiagnostic,
                 )
               ) : (
                 "—"
@@ -195,13 +196,6 @@ function formatDuration(ms?: number): string {
     return `${ms}ms`;
   }
   return `${(ms / 1000).toFixed(2)}s`;
-}
-
-function shortenPath(path: string): string {
-  if (path.length <= 48) {
-    return path;
-  }
-  return `…${path.slice(-44)}`;
 }
 
 function formatTime(iso: string): string {

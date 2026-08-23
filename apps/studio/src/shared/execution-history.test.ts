@@ -128,7 +128,8 @@ describe("mapStoredExecutionToStudioExecution", () => {
               strategyAttempts: [],
             }
           : undefined,
-        pageSnapshotPath: "/tmp/page-1.json",
+        hasDiagnostic: Boolean(step.diagnosticPath),
+        hasPageSnapshot: true,
         pageSnapshot: {
           url: "https://example.com/orders",
           title: "订单页",
@@ -140,10 +141,12 @@ describe("mapStoredExecutionToStudioExecution", () => {
       }),
     });
 
-    expect(execution.steps[1]?.diagnosticPath).toBe("/tmp/diag.json");
+    expect(execution.steps[1]?.hasDiagnostic).toBe(true);
     expect(execution.steps[1]?.diagnostic?.title).toBe("订单页");
-    expect(execution.steps[1]?.pageSnapshotPath).toBe("/tmp/page-1.json");
+    expect(execution.steps[1]?.hasPageSnapshot).toBe(true);
     expect(execution.steps[1]?.pageSnapshot?.buttonCount).toBe(2);
+    expect(execution.steps[1]).not.toHaveProperty("diagnosticPath");
+    expect(execution.steps[1]).not.toHaveProperty("pageSnapshotPath");
   });
 });
 

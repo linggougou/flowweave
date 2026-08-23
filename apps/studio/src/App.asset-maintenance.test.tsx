@@ -83,6 +83,7 @@ function api(overrides: Partial<StudioApi> = {}): StudioApi {
   return {
     nativeFilePortability: true,
     nativeExecutionDeletion: true,
+    nativeExecutionScreenshotPreview: false,
     listProjects: vi.fn().mockResolvedValue([project]),
     createProject: vi.fn(),
     listFlows: vi
@@ -100,7 +101,7 @@ function api(overrides: Partial<StudioApi> = {}): StudioApi {
     listFlowVersions: vi.fn().mockResolvedValue([]),
     getFlowVersion: vi.fn().mockResolvedValue(null),
     restoreFlowVersion: vi.fn(),
-    openPath: vi.fn().mockResolvedValue({ ok: true }),
+    getExecutionScreenshotPreview: vi.fn().mockResolvedValue({ status: "absent" }),
     ...overrides,
   };
 }

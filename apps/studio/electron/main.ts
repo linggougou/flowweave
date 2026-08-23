@@ -1,10 +1,12 @@
 import "./env-setup.js";
-import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from "electron";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import type {
   RunFlowOptions,
   RunFlowVariableValue,
+  StudioExecutionScreenshotPreviewRequest,
   StudioExecutionProgressEvent,
 } from "../src/shared/studio-api-types.js";
 import {
@@ -21,6 +23,7 @@ import {
   createProject,
   deleteExecution,
   getExecution,
+  getExecutionScreenshotPreview,
   getFlow,
   getFlowForExport,
   getFlowRunInput,
@@ -61,6 +64,7 @@ const activeExecutions = new Map<string, ActiveExecution>();
 const cancelledExecutionIds = new Set<string>();
 let shutdownPromise: Promise<void> | null = null;
 let allowFinalQuit = false;
+let allowedRendererDocumentUrl: string | null = null;
 const RUN_FLOW_OPTION_KEYS = new Set([
   "showBrowser",
   "environmentName",
@@ -78,12 +82,91 @@ function assertNonEmptyId(value: unknown, name: string): asserts value is string
 function assertResourceId(value: unknown, name: string): asserts value is string {
   if (
     typeof value !== "string" ||
-    value.length === 0 ||
-    value.length > 512 ||
-    !/^[A-Za-z0-9_-]+$/.test(value)
+    !/^[A-Za-z0-9_-]{1,128}$/.test(value)
   ) {
     throw new Error(`${name} 无效`);
   }
+}
+
+const SCREENSHOT_PREVIEW_REQUEST_KEYS = new Set(["projectId", "executionId", "stepIndex"]);
+
+function normalizeScreenshotPreviewRequest(
+  value: unknown,
+): StudioExecutionScreenshotPreviewRequest {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("截图预览请求无效");
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new Error("截图预览请求无效");
+  }
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  const keys = Object.keys(descriptors);
+  if (
+    keys.length !== SCREENSHOT_PREVIEW_REQUEST_KEYS.size ||
+    keys.some((key) => !SCREENSHOT_PREVIEW_REQUEST_KEYS.has(key)) ||
+    keys.some((key) => descriptors[key]?.get || descriptors[key]?.set)
+  ) {
+    throw new Error("截图预览请求包含不支持的字段");
+  }
+  const record = value as Record<string, unknown>;
+  assertResourceId(record.projectId, "projectId");
+  assertResourceId(record.executionId, "executionId");
+  if (
+    !Number.isSafeInteger(record.stepIndex) ||
+    (record.stepIndex as number) < 0 ||
+    (record.stepIndex as number) > 1_000_000
+  ) {
+    throw new Error("stepIndex 无效");
+  }
+  return {
+    projectId: record.projectId,
+    executionId: record.executionId,
+    stepIndex: record.stepIndex as number,
+  };
+}
+
+function buildRendererSafeScreenshotPreviewError(): Error {
+  const safeError = new Error("截图预览不可用，请确认运行记录仍存在且产物未被修改。");
+  safeError.stack = undefined;
+  return safeError;
+}
+
+function assertTrustedMainFrame(event: IpcMainInvokeEvent): void {
+  const window = mainWindow;
+  const frame = event.senderFrame;
+  if (
+    !window ||
+    window.isDestroyed() ||
+    event.sender !== window.webContents ||
+    !frame ||
+    frame !== window.webContents.mainFrame ||
+    frame.parent !== null ||
+    !allowedRendererDocumentUrl ||
+    frame.url !== allowedRendererDocumentUrl
+  ) {
+    throw new Error("截图预览调用来源无效");
+  }
+}
+
+function resolveRendererDocumentUrl(devServerUrl?: string): string {
+  if (!devServerUrl) {
+    return pathToFileURL(path.join(app.getAppPath(), "dist", "index.html")).href;
+  }
+  const parsed = new URL(devServerUrl);
+  if (
+    parsed.protocol !== "http:" ||
+    parsed.hostname !== "127.0.0.1" ||
+    parsed.port !== "5173" ||
+    parsed.username ||
+    parsed.password ||
+    parsed.pathname !== "/" ||
+    parsed.search ||
+    parsed.hash
+  ) {
+    throw new Error("Studio 开发服务器地址无效");
+  }
+  return `${parsed.origin}/`;
 }
 
 const SAFE_PORTABILITY_ERROR_MESSAGES = new Set([
@@ -369,6 +452,19 @@ function registerIpcHandlers(): void {
     return getExecution(executionId);
   });
 
+  ipcMain.handle(
+    IPC_CHANNELS.getExecutionScreenshotPreview,
+    async (event, request: unknown) => {
+      assertTrustedMainFrame(event);
+      const normalized = normalizeScreenshotPreviewRequest(request);
+      try {
+        return await getExecutionScreenshotPreview(normalized);
+      } catch {
+        throw buildRendererSafeScreenshotPreviewError();
+      }
+    },
+  );
+
   ipcMain.handle(IPC_CHANNELS.listExecutions, (_event, projectId: string) => {
     if (typeof projectId !== "string" || projectId.length === 0) {
       throw new Error("projectId 无效");
@@ -420,16 +516,6 @@ function registerIpcHandlers(): void {
     },
   );
 
-  ipcMain.handle(IPC_CHANNELS.openPath, async (_event, filePath: string) => {
-    if (typeof filePath !== "string" || filePath.length === 0) {
-      throw new Error("路径无效");
-    }
-    const result = await shell.openPath(filePath);
-    if (result) {
-      throw new Error(result);
-    }
-    return { ok: true };
-  });
 }
 
 async function createWindow(): Promise<void> {
@@ -439,6 +525,7 @@ async function createWindow(): Promise<void> {
   }
 
   const devServerUrl = process.env.VITE_DEV_SERVER_URL;
+  allowedRendererDocumentUrl = resolveRendererDocumentUrl(devServerUrl);
 
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -448,15 +535,18 @@ async function createWindow(): Promise<void> {
       preload: path.join(app.getAppPath(), "dist-electron", "preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   });
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  mainWindow.webContents.on("will-navigate", (event) => event.preventDefault());
   mainWindow.on("closed", () => {
     mainWindow = null;
+    allowedRendererDocumentUrl = null;
   });
 
   if (devServerUrl) {
-    await mainWindow.loadURL(devServerUrl);
+    await mainWindow.loadURL(allowedRendererDocumentUrl);
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
     await mainWindow.loadFile(path.join(app.getAppPath(), "dist", "index.html"));

@@ -9,6 +9,7 @@ import type {
 const studioApi: StudioApi = {
   nativeFilePortability: true,
   nativeExecutionDeletion: true,
+  nativeExecutionScreenshotPreview: true,
   listProjects: () => ipcRenderer.invoke(IPC_CHANNELS.listProjects),
   createProject: (name: string) => ipcRenderer.invoke(IPC_CHANNELS.createProject, name),
   listFlows: (projectId: string) => ipcRenderer.invoke(IPC_CHANNELS.listFlows, projectId),
@@ -35,6 +36,8 @@ const studioApi: StudioApi = {
     };
   },
   getExecution: (executionId: string) => ipcRenderer.invoke(IPC_CHANNELS.getExecution, executionId),
+  getExecutionScreenshotPreview: (request) =>
+    ipcRenderer.invoke(IPC_CHANNELS.getExecutionScreenshotPreview, request),
   listExecutions: (projectId: string) => ipcRenderer.invoke(IPC_CHANNELS.listExecutions, projectId),
   deleteExecution: (projectId: string, executionId: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.deleteExecution, projectId, executionId),
@@ -44,7 +47,6 @@ const studioApi: StudioApi = {
     ipcRenderer.invoke(IPC_CHANNELS.getFlowVersion, projectId, versionId),
   restoreFlowVersion: (projectId: string, versionId: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.restoreFlowVersion, projectId, versionId),
-  openPath: (filePath: string) => ipcRenderer.invoke(IPC_CHANNELS.openPath, filePath),
 };
 
 contextBridge.exposeInMainWorld("flowweaveStudio", studioApi);

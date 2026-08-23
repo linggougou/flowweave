@@ -104,6 +104,7 @@ function api(overrides: Partial<StudioApi> = {}): StudioApi {
   return {
     nativeFilePortability: true,
     nativeExecutionDeletion: true,
+    nativeExecutionScreenshotPreview: true,
     listProjects: vi.fn().mockResolvedValue([project]),
     createProject: vi.fn(),
     listFlows: vi
@@ -174,12 +175,19 @@ describe("App 执行截图预览", () => {
 
     act(() => button(host, "最近运行记录1 条▸").click());
     act(() =>
-      (host.querySelector(".execution-history-item") as HTMLButtonElement | null)?.click(),
+      (
+        host.querySelector(
+          ".sidebar-section-executions .execution-history-item",
+        ) as HTMLButtonElement | null
+      )?.click(),
     );
     await flush();
 
     const trigger = button(host, "步骤截图");
-    act(() => trigger.click());
+    act(() => {
+      trigger.focus();
+      trigger.click();
+    });
     expect(host.textContent).toContain("正在加载截图");
 
     await act(async () =>
@@ -193,9 +201,11 @@ describe("App 执行截图预览", () => {
     );
 
     expect(studioApi.getExecutionScreenshotPreview).toHaveBeenCalledWith(
-      project.id,
-      "exec_preview_1",
-      0,
+      {
+        projectId: project.id,
+        executionId: "exec_preview_1",
+        stepIndex: 0,
+      },
     );
     expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
     expect(host.querySelector("img")?.getAttribute("src")).toBe("blob:http://127.0.0.1/preview-1");
@@ -221,7 +231,11 @@ describe("App 执行截图预览", () => {
 
     act(() => button(host, "最近运行记录1 条▸").click());
     act(() =>
-      (host.querySelector(".execution-history-item") as HTMLButtonElement | null)?.click(),
+      (
+        host.querySelector(
+          ".sidebar-section-executions .execution-history-item",
+        ) as HTMLButtonElement | null
+      )?.click(),
     );
     await flush();
 
@@ -250,5 +264,69 @@ describe("App 执行截图预览", () => {
 
     expect(host.querySelector("img")).toBeNull();
     expect(URL.createObjectURL).not.toHaveBeenCalled();
+  });
+
+  it("切换执行时立即关闭预览并回收旧 Blob URL", async () => {
+    const studioApi = api({
+      listExecutions: vi
+        .fn()
+        .mockResolvedValue([summary("exec_preview_1"), summary("exec_preview_2")]),
+      getExecutionScreenshotPreview: vi.fn().mockResolvedValue({
+        status: "available",
+        mediaType: "image/png",
+        bytes: new Uint8Array([137, 80, 78, 71]),
+        width: 2,
+        height: 2,
+      }),
+    });
+    const host = await render(studioApi);
+
+    act(() => button(host, "最近运行记录2 条▸").click());
+    const executionButtons = () =>
+      Array.from(
+        host.querySelectorAll<HTMLButtonElement>(
+          ".sidebar-section-executions .execution-history-item",
+        ),
+      );
+    act(() => executionButtons()[0]?.click());
+    await flush();
+    act(() => button(host, "步骤截图").click());
+    await flush();
+
+    act(() => executionButtons()[1]?.click());
+    await flush();
+
+    expect(host.querySelector("[role='dialog']")).toBeNull();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:http://127.0.0.1/preview-1");
+  });
+
+  it("组件卸载时使请求失效并回收已创建的 Blob URL", async () => {
+    const studioApi = api({
+      getExecutionScreenshotPreview: vi.fn().mockResolvedValue({
+        status: "available",
+        mediaType: "image/png",
+        bytes: new Uint8Array([137, 80, 78, 71]),
+        width: 2,
+        height: 2,
+      }),
+    });
+    const host = await render(studioApi);
+
+    act(() => button(host, "最近运行记录1 条▸").click());
+    act(() =>
+      (
+        host.querySelector(
+          ".sidebar-section-executions .execution-history-item",
+        ) as HTMLButtonElement | null
+      )?.click(),
+    );
+    await flush();
+    act(() => button(host, "步骤截图").click());
+    await flush();
+
+    const root = roots.pop();
+    await act(async () => root?.unmount());
+
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:http://127.0.0.1/preview-1");
   });
 });

@@ -208,7 +208,8 @@ const knowledgeHttpClient: Pick<StudioApi, HttpFallbackMethod> = {
             Partial<ExecutionStepLog>;
           return {
             diagnostic: storedStep.diagnostic,
-            pageSnapshotPath: storedStep.pageSnapshotPath,
+            hasDiagnostic: Boolean(storedStep.diagnostic),
+            hasPageSnapshot: Boolean(storedStep.pageSnapshot),
             pageSnapshot: storedStep.pageSnapshot,
           };
         },
@@ -249,6 +250,7 @@ function createBrowserStudioApi(): StudioApi {
   return {
     nativeFilePortability: false,
     nativeExecutionDeletion: false,
+    nativeExecutionScreenshotPreview: false,
     ...knowledgeHttpClient,
     getFlowRunInput: knowledgeHttpClient.getFlowRunInput,
     runFlow: async (): Promise<RunFlowResult> => {
@@ -260,8 +262,8 @@ function createBrowserStudioApi(): StudioApi {
     exportFlowFile: async () => {
       throw new Error("导出 JSON 仅支持 Electron Studio");
     },
-    openPath: async (): Promise<{ ok: true }> => {
-      throw new Error("打开目录仅支持 Electron Studio");
+    getExecutionScreenshotPreview: async () => {
+      throw new Error("执行截图预览仅支持 Electron Studio");
     },
   };
 }

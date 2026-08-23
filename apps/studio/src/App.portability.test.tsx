@@ -107,6 +107,7 @@ function createApi(
     }));
   return {
     nativeFilePortability: true,
+    nativeExecutionScreenshotPreview: false,
     listProjects: vi.fn().mockResolvedValue(projects),
     createProject: vi.fn(),
     listFlows: vi.fn(async (projectId) => flowRefs(projectId)),
@@ -126,7 +127,7 @@ function createApi(
     listFlowVersions: vi.fn().mockResolvedValue([]),
     getFlowVersion: vi.fn().mockResolvedValue(null),
     restoreFlowVersion: vi.fn(),
-    openPath: vi.fn().mockResolvedValue({ ok: true }),
+    getExecutionScreenshotPreview: vi.fn().mockResolvedValue({ status: "absent" }),
     ...overrides,
   };
 }

@@ -40,6 +40,10 @@ import {
 import { buildRunConfirmationSummary, type RunConfirmationSummary } from "./shared/run-safety.js";
 import { RunSafetyConfirmation } from "./RunSafetyConfirmation.js";
 import { ExecutionDeletionConfirmation } from "./ExecutionDeletionConfirmation.js";
+import {
+  ExecutionScreenshotPreview,
+  type ExecutionScreenshotPreviewStatus,
+} from "./ExecutionScreenshotPreview.js";
 import { ViewSwitcher } from "./ViewSwitcher.js";
 import type {
   ExecutionStepLog,
@@ -94,6 +98,15 @@ function readNativeExecutionDeletion(): boolean {
   }
 }
 
+function readNativeExecutionScreenshotPreview(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return getStudioApi().nativeExecutionScreenshotPreview === true;
+  } catch {
+    return false;
+  }
+}
+
 function formatStudioError(err: unknown): string {
   if (!(err instanceof Error)) {
     return "操作失败";
@@ -138,6 +151,13 @@ function formatBusinessExecutionStatus(status: string): string {
 }
 
 type MainTab = "flow" | "executions" | "versions";
+type ScreenshotPreviewState = {
+  status: ExecutionScreenshotPreviewStatus;
+  blobUrl: string | null;
+  stepIndex: number;
+  stepLabel: string;
+  unavailableMessage?: string;
+};
 const LAYOUT_CONTRACT_STATE_KEY = Symbol.for("flowweave.studio.layout-contract-state");
 
 type LayoutContractRenderState = {
@@ -168,6 +188,7 @@ export function App() {
   const layoutContractRenderState = readLayoutContractRenderState();
   const nativeFilePortability = readNativeFilePortability();
   const nativeExecutionDeletion = readNativeExecutionDeletion();
+  const nativeExecutionScreenshotPreview = readNativeExecutionScreenshotPreview();
   const [tab, setTab] = useState<MainTab>("flow");
   const [projects, setProjects] = useState<StudioProject[]>(
     layoutContractRenderState?.projects ?? [],
@@ -227,6 +248,7 @@ export function App() {
   const [cancelling, setCancelling] = useState(false);
   const [portabilityBusy, setPortabilityBusy] = useState<"import" | "export" | null>(null);
   const [portabilityNotice, setPortabilityNotice] = useState<string | null>(null);
+  const [screenshotPreview, setScreenshotPreview] = useState<ScreenshotPreviewState | null>(null);
   const previousDraftFlowIdRef = useRef<string | null>(null);
   const selectedProjectIdRef = useRef(selectedProjectId);
   const selectedFlowIdRef = useRef(selectedFlowId);
@@ -242,10 +264,40 @@ export function App() {
   const selectedExecutionIdRef = useRef(selectedExecutionId);
   const selectedVersionIdRef = useRef(selectedVersionId);
   const deletionTriggerRef = useRef<HTMLElement | null>(null);
+  const screenshotPreviewGenerationRef = useRef(0);
+  const screenshotPreviewBlobUrlRef = useRef<string | null>(null);
   selectedProjectIdRef.current = selectedProjectId;
   selectedFlowIdRef.current = selectedFlowId;
   selectedExecutionIdRef.current = selectedExecutionId;
   selectedVersionIdRef.current = selectedVersionId;
+
+  const revokeScreenshotPreviewBlobUrl = useCallback(() => {
+    const blobUrl = screenshotPreviewBlobUrlRef.current;
+    screenshotPreviewBlobUrlRef.current = null;
+    if (blobUrl) {
+      URL.revokeObjectURL(blobUrl);
+    }
+  }, []);
+
+  const closeScreenshotPreview = useCallback(() => {
+    screenshotPreviewGenerationRef.current += 1;
+    revokeScreenshotPreviewBlobUrl();
+    setScreenshotPreview(null);
+  }, [revokeScreenshotPreviewBlobUrl]);
+
+  useEffect(() => {
+    screenshotPreviewGenerationRef.current += 1;
+    revokeScreenshotPreviewBlobUrl();
+    setScreenshotPreview(null);
+  }, [selectedProjectId, selectedFlowId, selectedExecutionId, revokeScreenshotPreviewBlobUrl]);
+
+  useEffect(
+    () => () => {
+      screenshotPreviewGenerationRef.current += 1;
+      revokeScreenshotPreviewBlobUrl();
+    },
+    [revokeScreenshotPreviewBlobUrl],
+  );
 
   useEffect(() => {
     const api = getStudioApi();
@@ -641,8 +693,8 @@ export function App() {
       return;
     }
     const firstDiagnosticStep =
-      execution.steps.find((step) => step.diagnosticPath) ??
-      execution.steps.find((step) => step.pageSnapshotPath);
+      execution.steps.find((step) => step.hasDiagnostic || step.diagnostic) ??
+      execution.steps.find((step) => step.hasPageSnapshot || step.pageSnapshot);
     setSelectedDiagnosticStepIndex(firstDiagnosticStep?.stepIndex ?? null);
   }, [execution?.executionId, execution]);
 
@@ -1061,9 +1113,9 @@ export function App() {
       durationMs: step.durationMs,
       startedAt: step.startedAt,
       finishedAt: step.finishedAt,
-      screenshotPath: step.screenshotPath,
-      diagnosticPath: step.diagnosticPath,
-      pageSnapshotPath: step.pageSnapshotPath,
+      hasScreenshot: step.hasScreenshot,
+      hasDiagnostic: step.hasDiagnostic,
+      hasPageSnapshot: step.hasPageSnapshot,
       insightCategoryLabel: insight?.categoryLabel,
       insightTitle: insight?.title,
       insightSummary: insight?.summary,
@@ -1073,7 +1125,7 @@ export function App() {
   });
 
   const diagnosticSteps: ExecutionStepLog[] = (execution?.steps ?? []).filter(
-    (step) => step.diagnosticPath || step.pageSnapshotPath || step.pageSnapshot,
+    (step) => step.hasDiagnostic || step.hasPageSnapshot || step.diagnostic || step.pageSnapshot,
   );
   const executionCompatibilityWarnings = execution
     ? buildExecutionCompatibilityWarnings({
@@ -1082,12 +1134,83 @@ export function App() {
       })
     : [];
 
-  const openLocalPath = (filePath: string) => {
-    void getStudioApi()
-      .openPath(filePath)
-      .catch((err: unknown) => {
-        setError(formatStudioError(err));
+  const previewExecutionScreenshot = async (step: Pick<ExecutionStepLog, "stepIndex" | "label">) => {
+    const projectId = selectedProjectIdRef.current;
+    const executionId = selectedExecutionIdRef.current;
+    const flowId = selectedFlowIdRef.current;
+    const api = getStudioApi();
+    if (
+      !nativeExecutionScreenshotPreview ||
+      !projectId ||
+      !executionId ||
+      execution?.executionId !== executionId
+    ) {
+      return;
+    }
+
+    const generation = ++screenshotPreviewGenerationRef.current;
+    revokeScreenshotPreviewBlobUrl();
+    setScreenshotPreview({
+      status: "loading",
+      blobUrl: null,
+      stepIndex: step.stepIndex,
+      stepLabel: step.label,
+    });
+
+    try {
+      const result = await api.getExecutionScreenshotPreview({
+        projectId,
+        executionId,
+        stepIndex: step.stepIndex,
       });
+      if (
+        generation !== screenshotPreviewGenerationRef.current ||
+        selectedProjectIdRef.current !== projectId ||
+        selectedFlowIdRef.current !== flowId ||
+        selectedExecutionIdRef.current !== executionId
+      ) {
+        return;
+      }
+      if (result.status === "absent") {
+        setScreenshotPreview({
+          status: "unavailable",
+          blobUrl: null,
+          stepIndex: step.stepIndex,
+          stepLabel: step.label,
+        });
+        return;
+      }
+
+      const bytes = new Uint8Array(result.bytes);
+      const blobUrl = URL.createObjectURL(new Blob([bytes], { type: "image/png" }));
+      if (
+        generation !== screenshotPreviewGenerationRef.current ||
+        selectedProjectIdRef.current !== projectId ||
+        selectedFlowIdRef.current !== flowId ||
+        selectedExecutionIdRef.current !== executionId
+      ) {
+        URL.revokeObjectURL(blobUrl);
+        return;
+      }
+      screenshotPreviewBlobUrlRef.current = blobUrl;
+      setScreenshotPreview({
+        status: "available",
+        blobUrl,
+        stepIndex: step.stepIndex,
+        stepLabel: step.label,
+      });
+    } catch (err: unknown) {
+      if (generation !== screenshotPreviewGenerationRef.current) {
+        return;
+      }
+      setScreenshotPreview({
+        status: "unavailable",
+        blobUrl: null,
+        stepIndex: step.stepIndex,
+        stepLabel: step.label,
+        unavailableMessage: formatStudioError(err),
+      });
+    }
   };
 
   const inspectDiagnostic = (step: StepLogRow) => {
@@ -1813,8 +1936,11 @@ export function App() {
                     emptyMessage={
                       selectedFlowId ? "运行任务或从左侧选择一条运行记录" : "请先选择一个自动化任务"
                     }
-                    onOpenScreenshot={openLocalPath}
-                    onOpenDiagnostic={openLocalPath}
+                    onPreviewScreenshot={
+                      nativeExecutionScreenshotPreview
+                        ? (step) => void previewExecutionScreenshot(step)
+                        : undefined
+                    }
                     onInspectDiagnostic={inspectDiagnostic}
                   />
                 </div>
@@ -1823,7 +1949,11 @@ export function App() {
                     steps={execution.steps}
                     selectedStepIndex={selectedDiagnosticStepIndex}
                     onSelectStepIndex={setSelectedDiagnosticStepIndex}
-                    onOpenPath={openLocalPath}
+                    onPreviewScreenshot={
+                      nativeExecutionScreenshotPreview
+                        ? (step) => void previewExecutionScreenshot(step)
+                        : undefined
+                    }
                   />
                 ) : null}
               </div>
@@ -1900,6 +2030,16 @@ export function App() {
           returnFocusTo={deletionTriggerRef.current}
           onConfirm={() => void handleDeleteExecution()}
           onCancel={closeDeletionConfirmation}
+        />
+      ) : null}
+      {screenshotPreview ? (
+        <ExecutionScreenshotPreview
+          status={screenshotPreview.status}
+          blobUrl={screenshotPreview.blobUrl}
+          stepIndex={screenshotPreview.stepIndex}
+          stepLabel={screenshotPreview.stepLabel}
+          unavailableMessage={screenshotPreview.unavailableMessage}
+          onClose={closeScreenshotPreview}
         />
       ) : null}
     </div>

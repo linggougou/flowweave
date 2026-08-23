@@ -1,6 +1,14 @@
 import "./env-setup.js";
 import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import {
+  closeSync,
+  constants as fsConstants,
+  existsSync,
+  fstatSync,
+  lstatSync,
+  openSync,
+  readSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { app } from "electron";
@@ -9,6 +17,8 @@ import type { FlowDocument } from "@flowweave/flow-dsl";
 import type { PageSnapshotSummary } from "@flowweave/page-intelligence";
 import {
   ProjectKnowledgeRepository,
+  getDefaultDataDir,
+  resolveRunDirectory,
   type ExecutionResult as KnowledgeExecutionResult,
   type FlowImportResult,
   type ProjectEnvironment,
@@ -29,6 +39,7 @@ import type {
   StudioStepDiagnostic,
   StudioDiagnosticStrategyAttempt,
   StudioExecution,
+  StudioExecutionScreenshotPreviewRequest,
   StudioExecutionRunContext,
   StudioFlowVersion,
   StudioProject,
@@ -279,14 +290,79 @@ async function resolveFlowForRun(projectId: string, flowId?: string): Promise<Fl
   return flow;
 }
 
-function readJsonArtifact<T>(filePath?: string): T | undefined {
-  if (!filePath || !existsSync(filePath)) {
-    return undefined;
-  }
+const MAX_STRUCTURED_ARTIFACT_BYTES = 1_048_576;
+
+function isSameFileIdentity(
+  left: { dev: number | bigint; ino: number | bigint },
+  right: { dev: number | bigint; ino: number | bigint },
+): boolean {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
+/** 仅读取受控运行目录下的固定 JSON 文件；任何类型、链接或身份异常都 fail closed。 */
+function readStructuredArtifact<T>(runDirectory: string, fileName: string): T | undefined {
+  let descriptor: number | undefined;
   try {
-    return JSON.parse(readFileSync(filePath, "utf-8")) as T;
+    for (const directory of [
+      dirname(dirname(dirname(runDirectory))),
+      dirname(dirname(runDirectory)),
+      dirname(runDirectory),
+      runDirectory,
+    ]) {
+      const stat = lstatSync(directory);
+      if (!stat.isDirectory() || stat.isSymbolicLink()) return undefined;
+    }
+    const target = join(runDirectory, fileName);
+    const pathStat = lstatSync(target);
+    if (
+      !pathStat.isFile() ||
+      pathStat.isSymbolicLink() ||
+      pathStat.nlink !== 1 ||
+      pathStat.size <= 0 ||
+      pathStat.size > MAX_STRUCTURED_ARTIFACT_BYTES
+    ) {
+      return undefined;
+    }
+    descriptor = openSync(
+      target,
+      fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0),
+    );
+    const openedStat = fstatSync(descriptor);
+    if (
+      !openedStat.isFile() ||
+      openedStat.nlink !== 1 ||
+      openedStat.size !== pathStat.size ||
+      !isSameFileIdentity(openedStat, pathStat)
+    ) {
+      return undefined;
+    }
+    const bytes = Buffer.alloc(openedStat.size);
+    let offset = 0;
+    while (offset < bytes.length) {
+      const read = readSync(descriptor, bytes, offset, bytes.length - offset, offset);
+      if (read === 0) return undefined;
+      offset += read;
+    }
+    const afterReadStat = fstatSync(descriptor);
+    const afterPathStat = lstatSync(target);
+    if (
+      afterReadStat.size !== openedStat.size ||
+      !isSameFileIdentity(afterReadStat, openedStat) ||
+      !isSameFileIdentity(afterPathStat, openedStat)
+    ) {
+      return undefined;
+    }
+    return JSON.parse(bytes.toString("utf8")) as T;
   } catch {
     return undefined;
+  } finally {
+    if (descriptor !== undefined) {
+      try {
+        closeSync(descriptor);
+      } catch {
+        // 关闭失败时不向 renderer 暴露底层文件系统信息。
+      }
+    }
   }
 }
 
@@ -297,19 +373,6 @@ function resolveStepLabel(
 ): string {
   const step = flow?.steps[stepIndex];
   return step?.label ?? step?.type ?? fallback;
-}
-
-function inferPageSnapshotPath(step: {
-  stepIndex: number;
-  screenshotPath?: string;
-  diagnosticPath?: string;
-}): string | undefined {
-  const artifactPath = step.diagnosticPath ?? step.screenshotPath;
-  if (!artifactPath) {
-    return undefined;
-  }
-  const candidate = join(dirname(artifactPath), `page-${step.stepIndex}.json`);
-  return existsSync(candidate) ? candidate : undefined;
 }
 
 function isStepType(value: unknown): value is NonNullable<ExecutionStepLog["stepType"]> {
@@ -334,7 +397,7 @@ function normalizeTargetHints(value: unknown): StudioDiagnosticTargetHints | und
 
 function normalizeStepDiagnostic(
   diagnostic: unknown,
-  step: Pick<ExecutionStepLog, "stepId" | "stepIndex" | "stepType" | "message" | "diagnosticPath">,
+  step: Pick<ExecutionStepLog, "stepId" | "stepIndex" | "stepType" | "message">,
 ): StudioStepDiagnostic | undefined {
   if (!diagnostic || typeof diagnostic !== "object") {
     return undefined;
@@ -399,28 +462,74 @@ function normalizeStepDiagnostic(
   };
 }
 
+function normalizePageSnapshotSummary(value: unknown): PageSnapshotSummary | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  const readBoundedString = (field: string, maxLength: number): string | undefined => {
+    const item = record[field];
+    return typeof item === "string" && item.length <= maxLength ? item : undefined;
+  };
+  const readCount = (field: string): number | undefined => {
+    const item = record[field];
+    return Number.isSafeInteger(item) && (item as number) >= 0 && (item as number) <= 1_000_000
+      ? (item as number)
+      : undefined;
+  };
+  const url = readBoundedString("url", 16_384);
+  const title = readBoundedString("title", 4_096);
+  const capturedAt = readBoundedString("capturedAt", 128);
+  const formCount = readCount("formCount");
+  const buttonCount = readCount("buttonCount");
+  const linkCount = readCount("linkCount");
+  if (
+    url === undefined ||
+    title === undefined ||
+    capturedAt === undefined ||
+    formCount === undefined ||
+    buttonCount === undefined ||
+    linkCount === undefined
+  ) {
+    return undefined;
+  }
+  return { url, title, capturedAt, formCount, buttonCount, linkCount };
+}
+
 function readStepArtifacts(
   step: Pick<
     ExecutionStepLog,
-    "stepId" | "stepIndex" | "stepType" | "message" | "screenshotPath" | "diagnosticPath"
+    "stepId" | "stepIndex" | "stepType" | "message"
   >,
-  pageSnapshots = new Map<number, { filePath: string; summary: PageSnapshotSummary }>(),
-): Pick<ExecutionStepLog, "diagnostic" | "pageSnapshot" | "pageSnapshotPath"> {
-  const pageSnapshot = pageSnapshots.get(step.stepIndex);
-  const pageSnapshotPath = pageSnapshot?.filePath ?? inferPageSnapshotPath(step);
+  runDirectory: string,
+  pageSnapshots = new Map<number, PageSnapshotSummary>(),
+): Pick<ExecutionStepLog, "diagnostic" | "pageSnapshot" | "hasDiagnostic" | "hasPageSnapshot"> {
+  const pageSnapshot = normalizePageSnapshotSummary(pageSnapshots.get(step.stepIndex));
+  const diagnostic = normalizeStepDiagnostic(
+    readStructuredArtifact(runDirectory, `step-${step.stepIndex}-diagnostic.json`),
+    step,
+  );
+  const normalizedPageSnapshot =
+    pageSnapshot ??
+    normalizePageSnapshotSummary(
+      readStructuredArtifact(runDirectory, `page-${step.stepIndex}.json`),
+    );
 
   return {
-    diagnostic: normalizeStepDiagnostic(readJsonArtifact(step.diagnosticPath), step),
-    pageSnapshotPath,
-    pageSnapshot: pageSnapshot?.summary ?? readJsonArtifact<PageSnapshotSummary>(pageSnapshotPath),
+    hasDiagnostic: Boolean(diagnostic),
+    diagnostic,
+    hasPageSnapshot: Boolean(normalizedPageSnapshot),
+    pageSnapshot: normalizedPageSnapshot,
   };
 }
 
-function mapRuntimeSteps(result: RuntimeExecutionResult, flow?: FlowDocument): ExecutionStepLog[] {
+function mapRuntimeSteps(
+  result: RuntimeExecutionResult,
+  flow: FlowDocument | undefined,
+  runDirectory: string,
+): ExecutionStepLog[] {
   const pageSnapshots = new Map(
     (result.pageSnapshots ?? []).map((snapshot) => [
       snapshot.stepIndex,
-      { filePath: snapshot.filePath, summary: snapshot.summary },
+      snapshot.summary,
     ]),
   );
 
@@ -436,13 +545,12 @@ function mapRuntimeSteps(result: RuntimeExecutionResult, flow?: FlowDocument): E
       startedAt: step.startedAt,
       finishedAt: step.endedAt,
       durationMs: step.durationMs,
-      screenshotPath: step.screenshotPath,
-      diagnosticPath: step.diagnosticPath,
+      hasScreenshot: Boolean(step.screenshotPath),
     };
 
     return {
       ...mappedStep,
-      ...readStepArtifacts(mappedStep, pageSnapshots),
+      ...readStepArtifacts(mappedStep, runDirectory, pageSnapshots),
     };
   });
 }
@@ -570,7 +678,7 @@ export async function runFlow(
     projectId,
     flowId: flow.id,
     status: mapRuntimeExecutionStatus(runtimeResult.status),
-    steps: mapRuntimeSteps(runtimeResult, flow),
+    steps: mapRuntimeSteps(runtimeResult, flow, artifactDir),
     startedAt,
     finishedAt: new Date().toISOString(),
     environmentName: runContext.environmentName,
@@ -644,12 +752,26 @@ export async function getExecution(executionId: string): Promise<StudioExecution
 
     const record = mapStoredExecutionToStudioExecution(stored, {
       fallbackFlow: flow,
-      decorateStep: (_step, mappedStep) => readStepArtifacts(mappedStep),
+      decorateStep: (_step, mappedStep) =>
+        readStepArtifacts(
+          mappedStep,
+          resolveRunDirectory(getDefaultDataDir(), stored.projectId, stored.executionId),
+        ),
     });
     executions.set(executionId, record);
     return record;
   }
   return executions.get(executionId) ?? null;
+}
+
+export function getExecutionScreenshotPreview(
+  request: StudioExecutionScreenshotPreviewRequest,
+) {
+  return projectKnowledgeRepository.getExecutionScreenshotPreview(
+    request.projectId,
+    request.executionId,
+    request.stepIndex,
+  );
 }
 
 export async function listExecutions(projectId: string): Promise<ExecutionSummary[]> {

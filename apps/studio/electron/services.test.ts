@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -29,11 +29,17 @@ const mockProjectKnowledgeRepositoryCtor = vi.fn();
 const mockRepoGetDefaultEnvironment = vi.fn();
 const mockRepoSaveEnvironment = vi.fn();
 const mockRepoGetLatestExecutionForFlow = vi.fn();
+const mockRepoGetExecutionScreenshotPreview = vi.fn();
 
 type ServicesModule = {
   assertProjectExistsForFileOperation?: (projectId: string) => Promise<void>;
   getFlowRunInput?: (projectId: string, flowId: string) => Promise<unknown>;
   getFlowForExport?: (projectId: string, flowId: string) => Promise<FlowDocument>;
+  getExecutionScreenshotPreview?: (request: {
+    projectId: string;
+    executionId: string;
+    stepIndex: number;
+  }) => unknown;
 };
 
 vi.mock("./env-setup.js", () => ({
@@ -65,7 +71,14 @@ vi.mock("@flowweave/project-knowledge", () => ({
     getLatestExecutionForFlow(...args: unknown[]) {
       return mockRepoGetLatestExecutionForFlow(...args);
     }
+
+    getExecutionScreenshotPreview(...args: unknown[]) {
+      return mockRepoGetExecutionScreenshotPreview(...args);
+    }
   },
+  getDefaultDataDir: () => "/tmp/flowweave-services-tests",
+  resolveRunDirectory: (_dataDir: string, projectId: string, executionId: string) =>
+    join("/tmp/flowweave-services-tests", projectId, "runs", executionId),
 }));
 
 vi.mock("./knowledge-client.js", () => ({
@@ -157,6 +170,7 @@ describe("getExecution 缓存命中策略", () => {
     mockRepoGetDefaultEnvironment.mockReset();
     mockRepoSaveEnvironment.mockReset();
     mockRepoGetLatestExecutionForFlow.mockReset();
+    mockRepoGetExecutionScreenshotPreview.mockReset();
   });
 
   it("默认向知识库仓库注入 Electron 专用 better-sqlite3 nativeBinding 路径", async () => {
@@ -242,6 +256,54 @@ describe("getExecution 缓存命中策略", () => {
 
     expect(mockApiGetExecution).toHaveBeenCalledTimes(1);
     expect(mockApiGetFlow).not.toHaveBeenCalled();
+  });
+
+  it("历史步骤不读取数据库污染的诊断路径，只尝试受控固定文件名", async () => {
+    const externalDirectory = mkdtempSync(join(tmpdir(), "flowweave-services-external-"));
+    const externalDiagnostic = join(externalDirectory, "private-diagnostic.json");
+    writeFileSync(externalDiagnostic, JSON.stringify({ title: "不得读取的外部秘密" }));
+    const stored = buildExecution({
+      executionId: "exec_polluted_artifact_path",
+      flowSnapshot: buildFlow(),
+      steps: [
+        {
+          stepIndex: 0,
+          stepId: "s1",
+          status: "failed",
+          diagnosticPath: externalDiagnostic,
+        },
+      ],
+    });
+    mockApiGetExecution.mockResolvedValue(stored);
+    const { getExecution } = await loadServicesModule();
+
+    try {
+      const result = await getExecution(stored.executionId);
+      expect(result?.steps[0]).toMatchObject({ hasDiagnostic: false });
+      expect(result?.steps[0]).not.toHaveProperty("diagnosticPath");
+      expect(JSON.stringify(result)).not.toContain(externalDiagnostic);
+      expect(JSON.stringify(result)).not.toContain("不得读取的外部秘密");
+    } finally {
+      rmSync(externalDirectory, { recursive: true, force: true });
+    }
+  });
+
+  it("截图预览 service 只把严格业务对象拆给仓库", async () => {
+    mockRepoGetExecutionScreenshotPreview.mockReturnValue({ status: "absent" });
+    const { getExecutionScreenshotPreview } = await loadServicesModule();
+
+    expect(
+      getExecutionScreenshotPreview?.({
+        projectId: "project_preview",
+        executionId: "exec_preview",
+        stepIndex: 2,
+      }),
+    ).toEqual({ status: "absent" });
+    expect(mockRepoGetExecutionScreenshotPreview).toHaveBeenCalledWith(
+      "project_preview",
+      "exec_preview",
+      2,
+    );
   });
 
   it("删除成功后驱逐 execution cache，后续详情必须回源", async () => {
