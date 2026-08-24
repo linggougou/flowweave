@@ -1,0 +1,189 @@
+{
+  "review_id": "vnext-0-design-gate-2026-08-24",
+  "task_id": "vNext-0",
+  "lane": "design-gate",
+  "review_level": "L3",
+  "rubric_id": "vnext-0-design-gate-l3-v1",
+  "artifact_refs": [
+    "baseline:736402edc6145e159bf1394a443f14c462b130db",
+    "reviewed-commit:305e008a5dd01d3aa579fb759d8212a10c126f66",
+    "judge-head:c435bc1ce4c50bb4b8254865030e6476767db9fe",
+    "doc:PROJECT_ROUTE_LOCK.md",
+    "doc:docs/change-requests/2026-08-24-vnext-design-unfreeze.md",
+    "doc:docs/domain/flow-dsl.md",
+    "doc:docs/design-docs/vnext-studio-linear-template-editor.md",
+    "doc:docs/design-docs/vnext-flow-schema-migration.md",
+    "doc:docs/design-docs/vnext-runtime-input-session.md",
+    "doc:docs/design-docs/vnext-implementation-dag.md",
+    "doc:docs/adr/0009-vnext-input-node-and-schema-versioning.md",
+    "doc:docs/adr/0010-vnext-runtime-input-session.md",
+    "doc:docs/adr/README.md",
+    "doc:docs/exec-plans/active/vnext-0-design-gate.md",
+    "doc:docs/exec-plans/active/post-v1-development-roadmap.md",
+    "doc:docs/superpowers/specs/2026-06-10-backoffice-interactive-task-template-design.md",
+    "doc:.codex/context-summary-vnext-0-design-gate.md",
+    "doc:.codex/operations-log.md",
+    "doc:.codex/verification-report.md",
+    "cmd:git diff --name-only 736402edc6145e159bf1394a443f14c462b130db..305e008a5dd01d3aa579fb759d8212a10c126f66",
+    "cmd:git diff --check 736402edc6145e159bf1394a443f14c462b130db..c435bc1ce4c50bb4b8254865030e6476767db9fe",
+    "cmd:node internal-link-check (13 files -> OK)"
+  ],
+  "hard_gates": [
+    {
+      "id": "design-scope-only-no-implementation-diff",
+      "status": "pass",
+      "evidence": [
+        "diff 文件仅覆盖 PROJECT_ROUTE_LOCK、.codex 留痕、设计文档、ADR、计划和规格；未命中 apps/、packages/、examples/、scripts/、config 或迁移实现文件。",
+        "scope 过滤命令对 736402e..305e008 返回空结果。"
+      ]
+    },
+    {
+      "id": "cross-doc-contract-consistency",
+      "status": "pass",
+      "evidence": [
+        "产品规格、Studio 设计、DSL/迁移设计、Runtime/ADR 和实施 DAG 全部使用同一物理名：schemaVersion 2、inputNodeId、fieldId、selectionContext.searchStepId、expectedRevision、resolvedFields、artifactSafety。",
+        "旧词 providedFieldIds 已清理，expectedBaselineVersion 只以禁止同义词的负例文本出现。"
+      ]
+    },
+    {
+      "id": "v1-compatibility-upgrade-and-atomic-rollback",
+      "status": "pass",
+      "evidence": [
+        "docs/domain/flow-dsl.md 明确当前生产真源仍为 schemaVersion 1；vNext-0 仅是设计候选。",
+        "0009 ADR 与迁移设计均要求 v1 默认继续按 v1 读取执行、升级需只读预览+用户确认+expectedRevision+fingerprint、旧 Runtime 在打开浏览器和分配运行目录前以 FLOW_SCHEMA_VERSION_UNSUPPORTED 无副作用拒绝、保存/恢复/升级在单一 immediate transaction 内原子完成。"
+      ]
+    },
+    {
+      "id": "runtime-session-state-and-ipc-closure",
+      "status": "pass",
+      "evidence": [
+        "Runtime 设计与 ADR 一致冻结七状态 idle/running/waitingForInput/cancelling/completed/failed/cancelled。",
+        "身份绑定 executionId/sessionId/inputRequestId/inputNodeId/clientCommandId、sender/main-frame/exact URL 校验、sequence 丢旧事件、15 分钟超时、10 秒 cancel drain、reload/crash/window close/app exit 语义均闭合。"
+      ]
+    },
+    {
+      "id": "sensitive-lifecycle-and-artifact-policy",
+      "status": "pass",
+      "evidence": [
+        "sensitive: true 是唯一判定来源；敏感值不得进入 Flow、日志、错误、普通历史、最近值、步骤诊断或 artifact。",
+        "含敏感字段的 Flow 从启动禁用 HAR；首次接受敏感值后永久禁用后续 screenshot/page/DOM snapshot；artifactSafety 五字段只作交叉校验，最终仍要求独立 canary 扫描。"
+      ]
+    },
+    {
+      "id": "implementation-dag-completeness",
+      "status": "pass",
+      "evidence": [
+        "vnext-implementation-dag.md 对 1A/1B/2A/2B/3A/3B/4 各阶段都给出最小交付、红灯测试、退出门禁与回滚点。",
+        "DAG 顶部规范接口字典与各设计正文保持同名同义。"
+      ]
+    },
+    {
+      "id": "no-critical-todo-and-links-ok",
+      "status": "pass",
+      "evidence": [
+        "TODO/TBD/FIXME 扫描未发现关键待办；唯一命中是“无关键 TODO”表述，不是遗留占位。",
+        "13 个目标文件的相对 Markdown 链接自检全部通过。"
+      ]
+    },
+    {
+      "id": "current-implementation-remains-schema-v1",
+      "status": "pass",
+      "evidence": [
+        "packages/shared/src/constants.ts 仍导出 FLOW_SCHEMA_VERSION = 1。",
+        "apps/studio/electron/main.ts 与 flow-portability-files.ts 继续拒绝 schemaVersion 2；设计文档明确 v2 尚未实现、不得当作已支持能力。"
+      ]
+    }
+  ],
+  "dimensions": [
+    {
+      "name": "correctness",
+      "score": 25,
+      "max_score": 25,
+      "reason": "产品 UX、DSL v2、迁移/版本/存储、Runtime/Electron 会话合同和实施 DAG 在关键术语、状态机和错误边界上保持一致，没有互相打架的说明。",
+      "evidence_refs": [
+        "doc:docs/superpowers/specs/2026-06-10-backoffice-interactive-task-template-design.md",
+        "doc:docs/design-docs/vnext-studio-linear-template-editor.md",
+        "doc:docs/design-docs/vnext-flow-schema-migration.md",
+        "doc:docs/design-docs/vnext-runtime-input-session.md",
+        "doc:docs/design-docs/vnext-implementation-dag.md"
+      ]
+    },
+    {
+      "name": "security",
+      "score": 25,
+      "max_score": 25,
+      "reason": "敏感值生命周期采用 fail-closed 默认，HAR/截图/DOM 门禁、artifactSafety 交叉校验和 canary 独立扫描要求完整，且文档明确不承诺内容级脱敏或物理零化。",
+      "evidence_refs": [
+        "doc:docs/design-docs/vnext-runtime-input-session.md",
+        "doc:docs/adr/0010-vnext-runtime-input-session.md",
+        "doc:docs/design-docs/vnext-flow-schema-migration.md",
+        "doc:docs/adr/0009-vnext-input-node-and-schema-versioning.md"
+      ]
+    },
+    {
+      "name": "regression_safety",
+      "score": 20,
+      "max_score": 20,
+      "reason": "文档持续强调当前生产实现仍是 schema v1，v2 只在后续重新解冻并经测试后才能进入实现，降低了把设计候选误读为已上线能力的风险。",
+      "evidence_refs": [
+        "doc:docs/domain/flow-dsl.md",
+        "cmd:git diff --name-only 736402edc6145e159bf1394a443f14c462b130db..305e008a5dd01d3aa579fb759d8212a10c126f66"
+      ]
+    },
+    {
+      "name": "route_discipline",
+      "score": 10,
+      "max_score": 10,
+      "reason": "变更严格停留在 vNext-0 设计门禁与留痕，没有借机解冻实现、数据库迁移、P3/P4 或其它路线外功能。",
+      "evidence_refs": [
+        "doc:PROJECT_ROUTE_LOCK.md",
+        "doc:docs/exec-plans/active/vnext-0-design-gate.md",
+        "doc:docs/exec-plans/active/post-v1-development-roadmap.md"
+      ]
+    },
+    {
+      "name": "evidence_quality",
+      "score": 20,
+      "max_score": 20,
+      "reason": "审查基于 fresh diff、静态范围核验、关键合同词扫描、TODO/TBD 扫描、diff --check 和内部链接自检，而不是依赖生成者自述。",
+      "evidence_refs": [
+        "cmd:git diff --check 736402edc6145e159bf1394a443f14c462b130db..c435bc1ce4c50bb4b8254865030e6476767db9fe",
+        "cmd:node internal-link-check (13 files -> OK)"
+      ]
+    }
+  ],
+  "penalties": [],
+  "totals": {
+    "raw_score": 100,
+    "penalty_total": 0,
+    "final_score": 100
+  },
+  "verdict": "PASS",
+  "required_fixes": [],
+  "nice_to_have": [
+    "进入 vNext-1 之前，可把本次 13 文件内部链接自检脚本固化为仓库级文档验证命令，减少后续设计文档回归。"
+  ],
+  "reviewers": [
+    {
+      "role": "verifier",
+      "conclusion": "PASS",
+      "summary": "所有硬门通过：范围仍是设计/留痕，状态机、安全门禁和 v1 兼容边界闭合，当前实现未被误报为 v2。"
+    },
+    {
+      "role": "strict_judge",
+      "conclusion": "PASS",
+      "summary": "设计合同具体、可测、可回滚，且跨文档物理命名一致，没有关键歧义或自相矛盾。"
+    },
+    {
+      "role": "anti_slop_judge",
+      "conclusion": "PASS",
+      "summary": "内容不是模板化空话，包含明确状态、字段、错误码边界、拒绝条件和 canary 验收要求。"
+    },
+    {
+      "role": "chief_reviewer",
+      "conclusion": "PASS",
+      "summary": "修复格式尾差后的设计包可完成 vNext-0 归档；vNext-1 实现仍需新的路线解冻与授权。"
+    }
+  ],
+  "reviewed_at": "2026-08-24T14:21:42+08:00"
+}
