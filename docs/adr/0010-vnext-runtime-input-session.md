@@ -24,9 +24,10 @@
 3. **严格身份绑定。** 输入命令同时绑定 sessionId、executionId、inputRequestId、inputNodeId 与 clientCommandId；inputNodeId 等于 DSL step.id，values 仅以 fieldId 为键。每个请求只接受一次，sequence 是事件顺序真源。
 4. **严格 Electron 边界。** 所有新命令校验 owner window、webContents、main frame 和精确文档 URL；无动态 IPC channel，不把 Browser/Page、文件路径、session 恢复 token 或原始 ipcRenderer 暴露给 renderer。
 5. **第一版单活跃会话。** 每个 Studio 应用最多一个活跃 session、每个 session 一个 pending input request；第二次 start fail closed。Local API/Web 不开放控制能力。
-6. **不做持久化恢复。** 同一受信 webContents 的 renderer reload 可用不含输入值的安全 snapshot 重连；窗口关闭、renderer crash/OOM/killed、clean-exit 重连超时、应用退出或主进程崩溃都取消/失败。session、input request、Page 和输入值不落盘，关闭 Studio 后不能恢复。
+6. **不做持久化恢复。** 同一受信 webContents 的 renderer reload 可用安全 snapshot 重连；waiting snapshot 只可携带当前请求按字段策略获准的非敏感初始值，不得携带敏感值、编辑草稿或已提交值。窗口关闭、renderer crash/OOM/killed、clean-exit 重连超时、应用退出或主进程崩溃都取消/失败。session、input request、Page、renderer 草稿与请求投影不落盘；只有独立的非敏感 `remember:lastValue` 可按字段保存最近值，它不能恢复关闭前会话。
 7. **敏感值 fail closed。** `sensitive: true` 是唯一判定来源；敏感值不得进入 Flow、日志、错误、普通历史、最近值、步骤诊断或 artifact。Flow 声明任一敏感字段即从启动禁用 HAR；首次接受敏感值后永久禁用后续 screenshot、DOM/page snapshot。错误/诊断不得含插值后的 step、locator、URL 或输入值。Runtime 终态必须提供物理字段 `artifactSafety`（policyVersion、flowHasSensitiveFields、sensitiveValueAccepted、harCaptured、可选 sensitiveAcceptedAtStepIndex）；它只是可与 Flow 和实际 artifact refs 交叉校验的策略声明，不是内容无秘密的证明。声明或引用矛盾时 project-knowledge 拒绝落盘，最终仍以 canary 泄露扫描验收。
 8. **只承诺逻辑清理。** renderer、preload、main 和 runtime 在 ACK/终态尽快删除引用并关闭 context；不宣称 V8/structured clone 的底层内存已物理覆写。
+9. **非敏感初始值是显式安全投影。** 主进程在 `input-required` 时按合法 `remember:lastValue` → DSL `defaultValue` → absent 的固定优先级生成 `initialValue/initialValueSource`；敏感字段永远不得生成。`placeholder` 只作为 UI 提示元数据。main 合并省略字段后，Runtime 仍独立校验最终值；ACK、取消、超时或终态删除请求投影。
 
 完整协议、故障矩阵和测试合同见 [`vnext-runtime-input-session.md`](../design-docs/vnext-runtime-input-session.md)。
 
@@ -78,6 +79,7 @@
 ## 实施门禁
 
 - Runtime、Electron、Studio、persistence 和 E2E 测试合同全部通过；
+- 非敏感 initialValue 的 lastValue → defaultValue → absent 优先级、reload 安全投影与 ACK/终态清理均有测试，敏感字段预填为零；
 - canary secret 对 SQLite/WAL、run artifacts、日志、错误、API、最近值和导出全扫描零命中；
 - 子 frame、错误 origin、旧 renderer、跨窗口、重复/迟到提交全部 fail closed；
 - renderer crash、窗口关闭、app quit 与 main crash 故障注入无敏感持久化；main crash 后无 Chromium 孤儿；

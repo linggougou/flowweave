@@ -173,6 +173,14 @@ type SubmitExecutionInputAck = {
   acceptedSequence: number;
 };
 
+// Electron main 校验并合并初始值后交给 Runtime 的内部合同；renderer 不能构造 sources。
+type RuntimeInputSubmission = {
+  inputNodeId: string;
+  inputRequestId: string;
+  values: Record<string /* fieldId */, InputSubmissionValue>;
+  sources: Record<string /* fieldId */, "provided" | "default" | "lastValue">;
+};
+
 type CancelExecutionSessionRequest = {
   protocolVersion: 1;
   sessionId: string;
@@ -224,7 +232,10 @@ type ExecutionSessionEventEnvelope = {
         inputRequestId: string;
         inputNodeId: string;
         stepIndex: number;
-        providedFieldIds: string[];
+        resolvedFields: Array<{
+          fieldId: string;
+          source: "provided" | "default" | "lastValue";
+        }>;
       }
     | {
         type: "step-finished";
@@ -244,15 +255,29 @@ type SafeInputNodeProjection = {
     fieldId: string;
     label: string;
     description?: string;
+    placeholder?: string; // 仅 UI 提示元数据，不参与取值或提交
     type: "string" | "number" | "boolean";
     required: boolean;
     sensitive: boolean;
-    defaultValue?: string | number | boolean; // 仅 sensitive=false 时可能存在
+    initialValue?: string | number | boolean;
+    initialValueSource?: "default" | "lastValue";
   }>;
 };
 ```
 
-安全投影可以携带当前已编译 Flow 中的非敏感 `defaultValue`，使 renderer reload 后即使尚未重新加载完整 Flow，也能重建同一输入表单；它不得携带任何最近值、已收集值或其他执行实例的值。主进程仍独立校验最终提交，renderer 不能修改默认值定义。敏感字段在 DSL 层已禁止默认值，因此其投影永远没有 `defaultValue`。
+`placeholder` 来自当前已校验 Flow，只是可持久化的 UI 提示元数据，不能作为字段值、required 判定或 Runtime fallback。
+
+主进程在登记 `input-required` 时为每个字段生成一次安全初始值投影，优先级固定为：
+
+1. 字段 `sensitive=false`、`remember="lastValue"`，且 project-knowledge 存在同 fieldId、同类型、通过当前字段 schema 的最近值时，使用该值并标记 `initialValueSource="lastValue"`；
+2. 否则字段 `sensitive=false` 且当前编译 Flow 有合法 `defaultValue` 时，使用该值并标记 `initialValueSource="default"`；
+3. 否则不携带 `initialValue` 与 `initialValueSource`。
+
+两字段必须同时出现或同时缺失；敏感字段无论本地数据中是否存在异常旧记录，都永远不得出现两字段，主进程还应清理/隔离该非法最近值记录。无效或类型不匹配的普通最近值不参与预填，并按损坏数据处理后回退到合法 default 或 absent。`initialValue` 是作者通过 DSL 策略明确允许的**非敏感候选输入**，不是已提交值。
+
+renderer 提交时可覆盖初始值；省略字段时，主进程只可合并本次 request 投影中仍有效的 initialValue。主进程生成内部 `RuntimeInputSubmission` 后，Runtime 再按当前 inputNodeId/fieldId/type/required/default 独立校验 values，并核对 sources：敏感或 `remember:never` 字段不得标 lastValue、无 DSL default 的字段不得标 default、sources 与 values 的 fieldId 集合必须完全一致。Runtime 不信任 renderer 声明来源，也不读取 project-knowledge。来源判定只看提交 DTO 是否显式含该 fieldId：省略并合并 initialValue 时保持 `default` 或 `lastValue`，显式提交时一律记为 `provided`，即使值恰好相同。
+
+waiting 状态的安全 snapshot 可以重放同一 request 的 `placeholder/initialValue/initialValueSource`，使 renderer reload 恢复获准的非敏感预填。它不得包含用户尚未提交的编辑草稿、任何敏感值、其他执行实例中未获 `remember:lastValue` 授权的值或已经接受的提交值。input ACK、取消、超时或任一终态后，主进程删除该请求的初始值投影，renderer 同步清空控件；reload 后只会恢复规范初始值，不恢复 reload 前的手工编辑。
 
 ### 5.4 顺序、幂等与迟到响应
 
@@ -281,7 +306,7 @@ type SafeInputNodeProjection = {
 1. DTO 仅允许白名单字段、plain object、无 getter/setter；sessionId/inputRequestId/clientCommandId 必须是规范 UUID，executionId 使用现有 execution resource validator，inputNodeId/fieldId 必须同时匹配当前已编译 Flow 与 DSL v2 的 `input_` / `field_` 身份规则。IPC 不另造一套与 DSL 冲突的 ID 正则。
 2. `values` 最多 50 项，与 DSL 单输入节点上限一致；每个 key 必须是当前请求 fields 中的 fieldId，禁止额外字段、重复语义或按 name 提交。
 3. string 单字段最多 16 KiB，所有 string 总计最多 64 KiB；number 必须 finite；boolean 必须是真布尔值；禁止对象、数组、null、BigInt、NaN 和 Infinity。
-4. required 字段必须存在；第一版 required string 经 trim 后必须非空。合法省略的非敏感可选字段由 Runtime 使用已编译 DSL 的同类型 defaultValue，renderer 不能提交或覆盖 DSL 之外的默认值；敏感字段从结构上没有默认值。
+4. required 字段的最终有效值必须存在；第一版 required string 经 trim 后必须非空。主进程只能用当前 input request 的获准 `initialValue` 合并省略字段，Runtime 再以已编译 DSL 独立校验最终值；renderer 不能提交或覆盖 DSL 之外的默认定义。敏感字段从结构上没有默认值或最近值，必须由用户本次显式提供。
 5. 敏感字段只能绑定 `fill.value`；Runtime 编译阶段若发现它绑定 navigate/url、target、wait、selector、文件路径或其他面，整条 Flow 在浏览器启动前以 `FLOW_SENSITIVE_BINDING_FORBIDDEN` 拒绝。
 6. Runtime 根据当前已编译节点的 fieldId/type/required 再校验一次；主进程投影和 Runtime 定义不一致时 fail closed 为 `INPUT_CONTRACT_MISMATCH`。
 7. 用户可见错误只含字段 label 或 fieldId 与稳定错误码，不回显值、不拼接底层异常和 stack。
@@ -290,14 +315,14 @@ type SafeInputNodeProjection = {
 
 ### 7.1 生命周期表
 
-| 阶段          | 允许行为                                                              | 禁止行为                                                                                   | 清理时点                                                                  |
-| ------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| Studio 控件   | 密码型遮罩；本次请求内 React 局部 state；仅显示“已提供”摘要           | defaultValue、最近值回填、剪贴板自动复制、local/sessionStorage、URL、全局 store、调试日志  | invoke 获得 accepted ACK 后立即清空；取消、超时、unmount、reload 同样清空 |
-| preload       | 固定函数接收 plain DTO，经 structured clone invoke 一次               | 缓存、日志、事件回发正文、通用 IPC、DevTools bridge                                        | invoke settle 后删除局部引用；不做重试队列                                |
-| Electron main | 来源校验、schema 校验、一次性转交 Runtime                             | stringify、console、crash sentinel、错误 cause、telemetry、去重正文缓存、project-knowledge | Runtime 接受后删除 DTO 引用；终态/取消/窗口关闭清整个会话 store           |
-| Runtime       | 内存 `Map<fieldId, value>`；仅在执行绑定点即时解析                    | 构造可持久化 resolved Flow、在错误/诊断中记录 resolved step/locator/url、跨 session 复用   | 字段最后一个消费节点完成后可提前 delete；最迟终态 finally 全清            |
-| Playwright    | 仅在 `fill.value` 调用期间把值交给页面                                | console 采集、trace、HAR、含值截图/DOM snapshot、把值写入 target/url                       | Playwright action 返回后释放局部引用；context 终态关闭                    |
-| persistence   | 只保存字段定义、fieldId、input node step 状态和非敏感 remember 许可值 | 敏感 fieldId→值映射、占位符值、输入请求正文、等待会话恢复数据                              | 不适用；敏感值从未进入持久层                                              |
+| 阶段          | 允许行为                                                                                         | 禁止行为                                                                                                               | 清理时点                                                                                                          |
+| ------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Studio 控件   | 密码型遮罩；本次请求内 React 局部 state；按策略预填获准的非敏感 initialValue；仅显示“已提供”摘要 | 敏感默认/最近值、未经 `remember:lastValue` 许可的回填、剪贴板自动复制、local/sessionStorage、URL、全局 store、调试日志 | invoke 获得 accepted ACK 后立即清空；取消、超时、unmount 同样清空；reload 只恢复规范 initialValue，不恢复编辑草稿 |
+| preload       | 固定函数接收 plain DTO，经 structured clone invoke 一次                                          | 缓存、日志、事件回发正文、通用 IPC、DevTools bridge                                                                    | invoke settle 后删除局部引用；不做重试队列                                                                        |
+| Electron main | 来源校验、schema 校验、一次性转交 Runtime                                                        | stringify、console、crash sentinel、错误 cause、telemetry、去重正文缓存、project-knowledge                             | Runtime 接受后删除 DTO 引用；终态/取消/窗口关闭清整个会话 store                                                   |
+| Runtime       | 内存 `Map<fieldId, value>`；仅在执行绑定点即时解析                                               | 构造可持久化 resolved Flow、在错误/诊断中记录 resolved step/locator/url、跨 session 复用                               | 字段最后一个消费节点完成后可提前 delete；最迟终态 finally 全清                                                    |
+| Playwright    | 仅在 `fill.value` 调用期间把值交给页面                                                           | console 采集、trace、HAR、含值截图/DOM snapshot、把值写入 target/url                                                   | Playwright action 返回后释放局部引用；context 终态关闭                                                            |
+| persistence   | 只保存字段定义、fieldId、input node step 状态和非敏感 remember 许可值                            | 敏感 fieldId→值映射、占位符值、输入请求正文、等待会话恢复数据                                                          | 不适用；敏感值从未进入持久层                                                                                      |
 
 ### 7.2 artifact policy
 
@@ -328,7 +353,7 @@ type RuntimeArtifactSafety = {
 
 ### 7.3 普通历史与最近值
 
-- `project-knowledge` 接收前由可信主进程基于当前 Flow 字段定义构造 allowlist。敏感字段的**值映射**必须完全 omit，不能写 `[已隐藏]` 键值占位。执行历史可以保存无值来源元数据 `{inputNodeId, fieldId, source: "provided" | "defaulted"}` 与 input 节点 step 状态，用于解释输入来自何处；它不能保存值、值摘要、长度、哈希或是否等于最近值。
+- `project-knowledge` 接收前由可信主进程基于当前 Flow 字段定义构造 allowlist。敏感字段的**值映射**必须完全 omit，不能写 `[已隐藏]` 键值占位。执行历史可以保存无值来源元数据 `{inputNodeId, fieldId, source: "provided" | "default" | "lastValue"}` 与 input 节点 step 状态，用于解释输入来自何处；它不能保存值、值摘要、长度、哈希、最近值记录 ID 或值比较细节。
 - `remember: "never"` 的非敏感值同样不进最近值；`remember: "lastValue"` 的非敏感值才可进入专用最近值投影。普通执行详情默认只显示“某输入节点已完成、字段数”，不显示值。
 - Flow snapshot 可以保存 `sensitive` 元数据和绑定 token `{{<fieldId>}}`，但绝不保存运行值。
 - storageStatePath、baseUrl 等现有上下文继续按既有策略处理；若未来允许输入字段影响它们，必须另行安全设计，第一版禁止该绑定面。
@@ -349,31 +374,31 @@ V8 字符串不可变，Electron invoke 会 structured-clone，浏览器页面�
 - 合法提交被 Runtime 接受后，依次发 `input-accepted`、input 节点 `step-finished(success)`、状态回到 running；`completedSteps` 加一，从 `stepIndex + 1` 继续，不重跑此前步骤。
 - 等待超时：input 节点 step log 为 failed，只含 `INPUT_WAIT_TIMEOUT`；取消：该节点为 skipped/cancelled 投影，不含字段和值。
 - `currentAction` 只能使用固定安全文案，例如“等待你填写输入节点”“正在继续执行”；不得拼接 node description、field label 之外的网页数据。
-- 输入字段是否已收集的 UI 摘要只用 `providedFieldIds` 与字段定义重建“已提供”，不携带值。最终普通历史若保存该状态，也只能使用上一节的 fieldId/source 无值元数据。
+- 输入字段是否已收集的 UI 摘要只用 `resolvedFields` 与字段定义重建“已提供”，不携带值。最终普通历史若保存该状态，也只能使用上一节的 fieldId/source 无值元数据。
 - session 的 sequence 是 UI 状态顺序真源；时间戳不参与覆盖判断。
 
 ## 9. 生命周期与故障矩阵
 
-| 场景                              | 裁决                                       | 用户结果                                  | 清理与持久化                                                                                                       |
-| --------------------------------- | ------------------------------------------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| 重复点击提交，同 clientCommandId  | 幂等接受一次                               | 第二次显示已处理，不再继续第二次          | 不复制 values；只保留去重 ID/ACK                                                                                   |
-| 同请求不同 clientCommandId 再提交 | 拒绝                                       | 输入请求已处理                            | 不修改 runtime store                                                                                               |
-| 迟到提交                          | 拒绝 `INPUT_REQUEST_EXPIRED`               | 提示请求已过期，运行已失败                | 清控件与请求，不恢复                                                                                               |
-| inputNodeId / inputRequestId 不符 | fail closed                                | 请求不再有效                              | 不说明正确 ID，不触碰会话                                                                                          |
-| 其他窗口/iframe 提交              | `SESSION_CALLER_REJECTED`                  | 通用拒绝                                  | 不泄露 session 存在性                                                                                              |
-| 运行中取消                        | 进入 cancelling                            | 显示取消中→已取消                         | Abort 当前 action、10s drain、关闭 context、清值                                                                   |
-| 等待输入时取消                    | 失效 request 后取消                        | 面板关闭并显示已取消                      | 清 renderer 与 main/runtime 值、关闭 context                                                                       |
-| input 等待 15 分钟                | failed                                     | 输入等待超时                              | 无值历史；关闭资源                                                                                                 |
-| page 在等待时被用户关闭           | 继续前检测失败                             | 页面已关闭，运行失败                      | `RUNTIME_PAGE_LOST_WHILE_WAITING`，清 session                                                                      |
-| renderer reload                   | 同一 webContents 的受信 URL 重载时会话继续 | 重新显示安全 snapshot；等待字段为空需重填 | 不回放值；registry 继续占位，旧 renderer 事件可丢失                                                                |
-| renderer crash / OOM / killed     | 立即取消                                   | 重开后显示上一运行意外中止                | Abort + close；不允许新 renderer 接管旧 session                                                                    |
-| renderer clean-exit 后未重载      | 5 秒受控重连窗口到期后取消                 | 显示 renderer 已断开                      | 只允许同 webContents + 受信 main frame 重连；超时走同一 cancel path                                                |
-| Studio 窗口关闭                   | 阻止关闭，先取消并 drain；完成后关闭       | 不支持稍后恢复                            | 10s 后强制 close；终态 cancelled                                                                                   |
-| app quit                          | 拒绝新 start，取消并等待活跃会话           | 正常退出                                  | drain 最多 10s，停止本地服务后退出                                                                                 |
-| Electron 主进程崩溃               | 会话丢失，不恢复                           | 下次启动标记“上次运行意外中止”            | 非 detached Playwright 应随 pipe 断开退出；下次启动核对 crash sentinel、清受控临时 profile并写 `MAIN_PROCESS_LOST` |
-| 浏览器/context 自行崩溃           | failed                                     | 浏览器会话中断                            | 关闭剩余资源，清值，安全错误码                                                                                     |
-| project-knowledge 保存终态失败    | failed 且告知记录未保存                    | 运行结果无法完整保存                      | 仍必须先清敏感值与浏览器，不以重试缓存保存正文                                                                     |
-| 事件发送失败                      | session 继续                               | reload 后从 snapshot 恢复安全状态         | 不缓存输入值；终态照常清理                                                                                         |
+| 场景                              | 裁决                                       | 用户结果                                    | 清理与持久化                                                                                                       |
+| --------------------------------- | ------------------------------------------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 重复点击提交，同 clientCommandId  | 幂等接受一次                               | 第二次显示已处理，不再继续第二次            | 不复制 values；只保留去重 ID/ACK                                                                                   |
+| 同请求不同 clientCommandId 再提交 | 拒绝                                       | 输入请求已处理                              | 不修改 runtime store                                                                                               |
+| 迟到提交                          | 拒绝 `INPUT_REQUEST_EXPIRED`               | 提示请求已过期，运行已失败                  | 清控件与请求，不恢复                                                                                               |
+| inputNodeId / inputRequestId 不符 | fail closed                                | 请求不再有效                                | 不说明正确 ID，不触碰会话                                                                                          |
+| 其他窗口/iframe 提交              | `SESSION_CALLER_REJECTED`                  | 通用拒绝                                    | 不泄露 session 存在性                                                                                              |
+| 运行中取消                        | 进入 cancelling                            | 显示取消中→已取消                           | Abort 当前 action、10s drain、关闭 context、清值                                                                   |
+| 等待输入时取消                    | 失效 request 后取消                        | 面板关闭并显示已取消                        | 清 renderer 与 main/runtime 值、关闭 context                                                                       |
+| input 等待 15 分钟                | failed                                     | 输入等待超时                                | 无值历史；关闭资源                                                                                                 |
+| page 在等待时被用户关闭           | 继续前检测失败                             | 页面已关闭，运行失败                        | `RUNTIME_PAGE_LOST_WHILE_WAITING`，清 session                                                                      |
+| renderer reload                   | 同一 webContents 的受信 URL 重载时会话继续 | 重新显示安全 snapshot；恢复获准非敏感初始值 | 不恢复编辑草稿、敏感值或已提交值；registry 继续占位，旧 renderer 事件可丢失                                        |
+| renderer crash / OOM / killed     | 立即取消                                   | 重开后显示上一运行意外中止                  | Abort + close；不允许新 renderer 接管旧 session                                                                    |
+| renderer clean-exit 后未重载      | 5 秒受控重连窗口到期后取消                 | 显示 renderer 已断开                        | 只允许同 webContents + 受信 main frame 重连；超时走同一 cancel path                                                |
+| Studio 窗口关闭                   | 阻止关闭，先取消并 drain；完成后关闭       | 不支持稍后恢复                              | 10s 后强制 close；终态 cancelled                                                                                   |
+| app quit                          | 拒绝新 start，取消并等待活跃会话           | 正常退出                                    | drain 最多 10s，停止本地服务后退出                                                                                 |
+| Electron 主进程崩溃               | 会话丢失，不恢复                           | 下次启动标记“上次运行意外中止”              | 非 detached Playwright 应随 pipe 断开退出；下次启动核对 crash sentinel、清受控临时 profile并写 `MAIN_PROCESS_LOST` |
+| 浏览器/context 自行崩溃           | failed                                     | 浏览器会话中断                              | 关闭剩余资源，清值，安全错误码                                                                                     |
+| project-knowledge 保存终态失败    | failed 且告知记录未保存                    | 运行结果无法完整保存                        | 仍必须先清敏感值与浏览器，不以重试缓存保存正文                                                                     |
+| 事件发送失败                      | session 继续                               | reload 后从 snapshot 恢复安全状态           | 不缓存输入值；终态照常清理                                                                                         |
 
 ### 9.1 crash sentinel
 
@@ -438,7 +463,7 @@ sequenceDiagram
   X->>B: 顺序执行普通步骤
   X-->>M: 到达 inputNodeId
   M->>M: 生成 inputRequestId + deadline
-  M-->>R: input-required(sequence, 安全字段定义)
+  M-->>R: input-required(sequence, 安全字段投影/获准非敏感初始值)
   R->>U: 阻塞式输入面板
   U->>R: 提交并继续
   R->>P: submit(session/request/node, fieldId→value)
@@ -459,7 +484,7 @@ sequenceDiagram
 
 ### 12.1 renderer reload
 
-reload 不等于关闭 Studio。主进程保持 session；新 renderer 订阅固定事件后读取 `ExecutionSessionSnapshot`。快照包含 session/execution id、state、lastSequence、进度、当前安全 input node 投影和 deadline，不含任何输入值或“最近填写内容”。若正在 waiting，所有字段重新为空；若刚提交成功则显示 running。
+reload 不等于关闭 Studio。主进程保持 session；新 renderer 订阅固定事件后读取 `ExecutionSessionSnapshot`。快照包含 session/execution id、state、lastSequence、进度、当前安全 input node 投影和 deadline。若正在 waiting，它可以恢复本次 request 明确获准的非敏感 `initialValue` 与 `initialValueSource`，但不含敏感值、renderer 编辑草稿或已经接受的提交值；若刚提交成功则显示 running 且不再带 input projection。
 
 实现必须区分正常 reload 与 renderer 异常退出：
 
@@ -476,7 +501,7 @@ reload 不等于关闭 Studio。主进程保持 session；新 renderer 订阅固
 
 ### 12.3 明确不支持的恢复
 
-关闭窗口、退出 Studio、renderer crash/OOM/killed、clean-exit 重连超时或主进程崩溃后，等待输入会话一律不能恢复。不会把 sessionId、inputRequestId、page 状态、输入值或 continuation token 落盘。用户只能重新启动执行实例；此前终态记录为 cancelled 或 failed。
+关闭窗口、退出 Studio、renderer crash/OOM/killed、clean-exit 重连超时或主进程崩溃后，等待输入会话一律不能恢复。不会为恢复目的把 sessionId、inputRequestId、page 状态、renderer 草稿、请求投影或 continuation token 落盘。只有独立的非敏感 `remember:lastValue` 策略可以按字段保存最近值，它不能恢复原 session、request 或页面。用户只能重新启动执行实例；此前终态记录为 cancelled 或 failed。
 
 ## 13. 测试合同
 
@@ -490,8 +515,9 @@ reload 不等于关闭 Studio。主进程保持 session；新 renderer 订阅固
 6. 敏感字段绑定到非 `fill.value` 在浏览器启动前拒绝。
 7. 含 sensitive Flow 时 HAR 从启动禁用；首次敏感值接受后后续截图/page/DOM snapshot 为零；`artifactSafety` 的五个字段与 Flow、harPath、step refs 一致。
 8. 失败诊断 JSON、StepLog、ExecutionResult 和 emitted events 对 canary secret 全仓断言不包含明文、编码值、resolved locator/url。
-9. 进度：waiting 时 completedSteps 不增加；input accepted 后增加一次；sequence 严格递增。
-10. page 在等待时关闭、browser crash、Abort 和 close 失败故障注入均释放资源。
+9. main 合并 initialValue 后，Runtime 仍拒绝缺失 required、类型错误、额外 fieldId 和敏感字段默认/最近来源；Runtime 不访问 project-knowledge。
+10. 进度：waiting 时 completedSteps 不增加；input accepted 后增加一次；sequence 严格递增。
+11. page 在等待时关闭、browser crash、Abort 和 close 失败故障注入均释放资源。
 
 ### 13.2 Electron main / preload 测试
 
@@ -499,15 +525,17 @@ reload 不等于关闭 Studio。主进程保持 session；新 renderer 订阅固
 2. preload 表面快照测试证明只有五个具名能力，无原始 ipcRenderer 和动态 channel。
 3. 单活跃会话并发 start 只有一个成功；占位在浏览器 async 初始化前完成。
 4. clientCommandId 幂等缓存不持有 values；同 ID 不同正文被忽略。
-5. renderer reload 的 listener+snapshot 竞态按 sequence 收敛；不回显旧输入。
-6. `render-process-gone`、window close、before-quit 触发同一 cancel path，10 秒强制清理可测试。
-7. 发送事件失败、窗口 destroyed 不影响终态持久化和 finally。
-8. normalize DTO 覆盖额外 key、原型、getter、超长字符串、字段数量、NaN/Infinity/对象等攻击输入。
-9. Local API 不存在 session start/submit/cancel route；Web fallback 不能获得这些方法。
+5. initialValue 固定按合法 lastValue → defaultValue → absent；未授权 remember、类型损坏或任何 sensitive 字段都不会预填；placeholder 永不参与取值。
+6. renderer reload 的 listener+snapshot 竞态按 sequence 收敛；waiting 只恢复规范 initialValue，不恢复编辑草稿、敏感值或已提交值。
+7. input ACK、取消、超时、终态均从 main snapshot 与 renderer state 删除 initialValue；下一 input request 不继承上一请求投影。
+8. `render-process-gone`、window close、before-quit 触发同一 cancel path，10 秒强制清理可测试。
+9. 发送事件失败、窗口 destroyed 不影响终态持久化和 finally。
+10. normalize DTO 覆盖额外 key、原型、getter、超长字符串、字段数量、NaN/Infinity/对象等攻击输入。
+11. Local API 不存在 session start/submit/cancel route；Web fallback 不能获得这些方法。
 
 ### 13.3 persistence 与泄露回归
 
-先用构造结果验证持久化门禁：篡改 policyVersion、把 sensitive Flow 声明成无敏感、把 harCaptured 设为 true、缺少 cutoff stepIndex、或在 cutoff 当步及之后注入任一 screenshot/page/DOM ref 时，project-knowledge 必须整条拒绝且不留下半条执行记录。
+先用构造结果验证持久化门禁：篡改 policyVersion、把 sensitive Flow 声明成无敏感、把 harCaptured 设为 true、缺少 cutoff stepIndex、或在 cutoff 当步及之后注入任一 screenshot/page/DOM ref 时，project-knowledge 必须整条拒绝且不留下半条执行记录。最近值存储还必须证明每个非敏感 `remember:lastValue` 字段最多一行、类型按当前 schema 复核，sensitive 或 remember:never 字段永远无值行。
 
 使用唯一 canary secret 贯穿一次成功、失败、取消、超时、renderer crash、main crash 故障流程，递归扫描：
 
@@ -522,10 +550,11 @@ reload 不等于关闭 Studio。主进程保持 session；新 renderer 订阅固
 ### 13.4 真机/E2E
 
 1. 线性 Flow → input → 填敏感值 → fill → 后续步骤成功，浏览器/page 未重建。
-2. 同一模板开头输入与中途输入均可执行。
-3. 等待时用户关闭 page、关闭 Studio、退出 app、reload renderer、强杀 renderer 的行为与矩阵一致。
-4. 主进程 crash 故障注入后无 Chromium 孤儿；下次启动正确消费 sentinel，不能恢复输入。
-5. headed 与 headless 都通过；Node 20/24 矩阵保留。
+2. 同一模板开头输入与中途输入均可执行；普通字段分别验证 lastValue、defaultValue 和 absent 预填优先级，敏感字段始终为空。
+3. waiting 时 reload renderer 只恢复规范 initialValue；用户 reload 前编辑但未提交的值丢弃，已接受提交不回显。
+4. 等待时用户关闭 page、关闭 Studio、退出 app、reload renderer、强杀 renderer 的行为与矩阵一致。
+5. 主进程 crash 故障注入后无 Chromium 孤儿；下次启动正确消费 sentinel，不能恢复输入。
+6. headed 与 headless 都通过；Node 20/24 矩阵保留。
 
 ## 14. 后续实施拆分与门禁
 
@@ -566,7 +595,7 @@ vNext-4 纵向 E2E 与泄露扫描
 - 关闭 Studio 后恢复等待节点；
 - 多窗口接管、跨设备继续、云会话或 Local API 远程提交；
 - 多活跃会话、并行分支、循环、子流程；
-- 敏感值托管、钥匙串保存、默认值或最近值；
+- 敏感值托管、钥匙串保存、敏感默认值或敏感最近值；
 - 内容级 HAR/screenshot/DOM 脱敏；
 - renderer 直接控制 Browser/Page；
 - 任意表达式、混合插值或敏感 locator/url 参数化。
