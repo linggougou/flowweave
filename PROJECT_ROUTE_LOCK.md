@@ -2,58 +2,54 @@
 
 ## 1. 当前路线一句话
 
-以“先跑通、再稳定、再让业务用户独立完成首次任务、再实现本地资产可移植、再补齐本地资产维护、最后智能”为唯一主线，在 Node 24 默认稳定基线下，把现有录制回放闭环收敛为安全、可理解、可连续操作且可迁移、可维护的本地产品，并保留 Node 20 兼容。
+在 v1 本地录制回放闭环与 P2.8 产品化基线保持稳定的前提下，先完成 vNext“后台管理网站交互式任务模板”的产品、数据、交互、执行会话与安全协议设计；设计门禁通过前不进入业务实现，也不解冻 P3/P4。
 
 ## 2. 当前阶段
 
-- 生命周期阶段：post-v1 产品化 / P2.8 S7 会签完成，下一阶段未开启
-- 里程碑编号：P2.8（已完成）
-- 阶段名称：Studio 执行截图受控内嵌预览
-- 阶段目标：在不新增 Web / Local API 文件服务、不解冻 P3/P4 或 vNext 的前提下，让用户可在 Studio 内直接查看所选执行步骤的只读 PNG 截图证据，并关闭 renderer 任意路径打开能力。
+- 生命周期阶段：vNext S1-S4 产品定义、体验设计与技术设计
+- 里程碑编号：vNext-0（设计门禁，进行中）
+- 阶段名称：交互式任务模板设计冻结
+- 阶段目标：基于现有线性 Flow、Studio 与 Runtime 真实能力，冻结“输入节点 + 有限变量绑定 + 暂停输入后继续”的产品与技术合同，形成可拆分、可回滚、可验收的后续实施 DAG。
 - 可验收交付物：
-  - project / execution 单段 ID、stepIndex 与运行目录 containment 的只读截图解析合同
-  - project-knowledge 精确执行归属、普通文件、非 symlink / hardlink、PNG signature / IHDR、大小 / 像素上限与读取期间身份一致性校验
-  - Studio 主进程固定业务 ID IPC 与 renderer 安全预览模型，不接收或返回本机绝对路径
-  - Studio 只读截图弹层，覆盖加载、成功、缺失、拒绝、关闭与焦点恢复
-  - 项目 / Flow / execution / step 快速切换、删除和关闭期间的独立预览请求竞态保护
-  - 路径故障注入、真实 Electron、Node 20 / 24 与安全审计证据
+  - 产品与 UX 规格：目标用户、线性模板编辑、输入节点、变量来源/消费、搜索后选择与运行态反馈
+  - Flow DSL vNext 结构与迁移规格：版本边界、旧 Flow 兼容、导入导出、回滚和拒绝策略
+  - Runtime / Electron 会话协议：启动、运行、等待输入、继续、取消、失败、退出清理与幂等语义
+  - 敏感输入生命周期：采集、传输、内存、日志、错误、历史记录、最近值与清理边界
+  - ADR、验收合同、风险台账与后续分阶段实施 DAG
+  - 独立 Judge 的结构化 scorecard 与最终裁决
 - Definition of Done：
-  - renderer 只传 `projectId + executionId + stepIndex`，不能传路径、MIME、URL 或任意文件名
-  - 主进程只从真实 execution 与受控 run 目录推导 `step-<N>.png`，不信任 SQLite 中的历史路径
-  - 非法 ID / stepIndex、跨项目、缺失、目录、symlink、非普通文件、伪 PNG、超限与读取期间替换均 fail closed
-  - 返回内容固定为受限 `image/png` bytes，并以可回收 Blob URL 展示；不加载 data URL、`file:`、外部 URL、SVG、HTML、HAR 或原始 DOM
-  - 通用 `openPath` 不再暴露给 renderer；绝对路径不进入 UI title、文本、错误或 IPC 响应
-  - 新 bytes IPC 校验主窗口 main frame / 允许来源；Studio 壳启用 sandbox、CSP、导航与新窗口拒绝
-  - 预览请求迟到时不会覆盖已经切换或关闭的项目、Flow、execution、step
-  - Node 24 本地主门禁、Node 20 / 24 CI、recorded replay `25/25` 与安全审计通过
+  - 所有规格与当前 schema、执行 for-loop、IPC、取消、进度、知识库持久化和 Studio 状态模型逐项映射
+  - 输入节点及变量定义只有一个规范真源，生产者/消费者、作用域、类型、默认值和敏感性无歧义
+  - 明确 schema version、旧 Flow 读取、v1→vNext 迁移、不可逆边界、导出兼容与失败回滚
+  - 明确会话状态机、事件顺序、一次性 token/请求标识、重复提交、迟到响应、取消与应用退出语义
+  - 敏感值默认不写日志、错误、步骤快照、普通执行历史或最近值；任何例外必须显式建模并有用户控制
+  - Studio 第一版保持顺序步骤流，不引入画布、条件、循环、子流程、批量、协作或 AI
+  - 每个后续实施阶段都有最小闭环、测试先行合同、回滚点、依赖关系和独立验收门
+  - 独立 Judge 对一致性、安全性、可实施性和范围控制给出 PASS，且无未关闭 P0/P1
 - 阶段出口：
-  - 用户从 Studio 运行详情选择某步骤截图，可在应用内看到对应像素证据或明确的不可用原因
-  - 关闭预览后仍停留在原 execution 与步骤，键盘焦点返回触发按钮
-  - 任何异常产物形态都在字节到达 renderer 前被拒绝，且错误不泄露绝对路径
-  - 该能力仅经 Electron 主进程固定 IPC 提供，Web / Local API / 扩展不新增文件读取能力
+  - 设计真源、ADR 与实施 DAG 已冻结且互不矛盾
+  - 关键未决策项为零；非阻塞探索项明确进入 backlog
+  - 独立 Judge PASS，验证报告记录文档链接、静态检查与范围复核
+  - 用户收到设计阶段交付；是否进入 vNext-1 实施需再次更新路线锁
 - 最小可验收闭环：
-  - Studio 选择历史执行 → 专业诊断中的步骤截图 → 固定业务 ID IPC → 主进程校验执行归属与受控 PNG → 内嵌只读预览 → 关闭并恢复上下文
+  - 录制所得线性 Flow → Studio 插入输入节点并绑定后续字段 → Runtime 会话到节点暂停 → Studio 安全提交 → 从下一节点继续 → 取消/失败可诊断且敏感值不落盘；本阶段仅冻结该闭环合同，不实现代码
 - 明确非目标：
-  - Web / Local API / 扩展截图预览或二进制文件服务
-  - HAR、页面原始 HTML / DOM、SVG、PDF、诊断 JSON 原文或外部 URL 内嵌
-  - 截图编辑、下载、导出、删除、OCR、标注、缩略图索引或批量浏览
-  - Flow、项目、版本或批量执行维护能力扩展
-  - vNext 输入节点、步骤编辑、执行暂停后输入并继续
+  - 本阶段修改 `apps/*`、`packages/*` 或数据库 migration 等业务实现
+  - 条件、循环、子流程、批量数据集、多人协作、模板市场或云同步
+  - 自动抽取变量、任意表达式、任意 CSS/XPath 参数化或通用编排画布
+  - 关闭 Studio 后恢复等待输入的长会话
   - P3 深度 page / network intelligence 扩展
   - P4 AI 编排产品化与相关 UI
-  - 云端协作、多用户同步、全新技术栈替换
 - 禁止提前进入的阶段：
+  - vNext-1 业务实现
   - P3 深度能力解冻
   - P4 AI 编排接入 Studio / 扩展 / Web
 - 允许进入下一阶段的条件：
-  - P2.8 截图预览闭环、本地与远端双版本门禁连续通过
-  - 入口文档与验证证据齐全
-  - 若进入其他破坏性删除、vNext 产品模型、P3 或 P4，必须再次更新路线并获得明确确认
-- 变更批准：用户于 2026-07-16 明确批准按首次用户体验评审调整 post-v1 路线。
-- 阶段切换批准：用户于 2026-08-23 在收到“P2.5 已完成、下一阶段需更新路线锁”的交付说明后明确回复“继续”；本授权解释为进入 post-v1 backlog 的 P2.6，不解释为解冻 P3/P4 或 vNext 产品模型。
-- 阶段切换批准补充：用户于 2026-08-23 在收到“P2.6 已完成；下一阶段拟进行路径安全、执行记录删除 / runs 清理与 Flow 版本只读 diff，尚未开启”的交付说明后再次回复“继续”；本授权解释为进入 P2.7，不解释为开放匿名破坏性 HTTP、Flow / 项目删除、P3/P4 或 vNext 产品模型。
-- 阶段切换批准补充：用户于 2026-08-24 在 P2.7 已归档、候选路线已披露后明确要求“继续开发”，本授权解释为进入已登记低风险 backlog 的 P2.8，不解释为开放 Web / Local API 文件读取、P3/P4 或 vNext。
-- 当前状态：P2.8 G1-G4、本地 Node 20/24、真实 Electron、recorded replay、可移植性、安全审计，以及远端集成分支与 `main` 双矩阵全部通过，计划已归档；下一阶段尚未开启。P3/P4 与 vNext 输入节点继续冻结。
+  - vNext-0 全部设计真源与独立 Judge 通过
+  - 后续实施 DAG 已拆为可独立回滚的最小阶段
+  - 更新路线锁并再次确认具体实现阶段；本次授权不自动延伸到编码
+- 阶段切换批准：用户于 2026-08-24 在收到“P2.8 已完成、vNext 尚冻结”的状态与下一步计划后明确回复“可以，解冻 vNext 设计阶段”。本授权仅开放 vNext-0 设计门禁，不开放业务代码、P3 或 P4。
+- 当前状态：vNext-0 G0 路线与计划真源已开启；准备并行冻结产品/UX、DSL 迁移、Runtime/Electron 会话与安全设计。
 
 ## 2.1 里程碑路线图
 
@@ -66,6 +62,7 @@
 | P2.6 本地资产可移植   | 安全迁移与维护自动化任务         | 统一导出合同、导入新副本、Studio 文件交互、Web 重命名      | 导出导入运行往返可证且无静默覆盖       | 分轨测试 + 文件往返 E2E + recorded replay + Node 20/24 CI                               | ✅ 完成 |
 | P2.7 本地资产安全维护 | 单条执行清理与版本差异理解       | 路径安全、Studio 受控删除、共享只读 Diff、双端展示         | 删除无越界且 diff 无编辑/串线          | 故障注入 + 双端 UI + recorded replay + Node 20/24 CI                                    | ✅ 完成 |
 | P2.8 执行证据预览     | Studio 内直接查看步骤截图        | 受控只读解析、固定 IPC、内嵌 PNG 预览、竞态保护            | 无任意路径读取且截图不串线             | 故障注入 + Electron UI + recorded replay + Node 20/24 CI                                | ✅ 完成 |
+| vNext-0 设计门禁      | 冻结交互式任务模板合同           | 产品/UX、DSL 迁移、会话协议、安全模型、实施 DAG            | 设计一致、可实施、可回滚且无关键未决项 | 文档静态检查 + 源码映射 + 独立 Judge                                                    | 🟡 进行中 |
 | P3 完整框架扩展       | 深度页面 / 接口理解              | page-intelligence、network-intelligence 深化能力           | 明确场景与回归面后再开放               | 待路线解冻                                                                              | ⏸ 冻结  |
 | P4 产品落地           | AI 编排与智能增强                | ai-orchestrator、AI 产品入口                               | 不影响现有稳定主线                     | 待路线解冻                                                                              | ⏸ 冻结  |
 
@@ -74,13 +71,14 @@
 - PRD：[`docs/superpowers/specs/2026-05-25-web-automation-platform-design.md`](./docs/superpowers/specs/2026-05-25-web-automation-platform-design.md)
 - 当前主路线：[`docs/superpowers/plans/2026-05-26-run-first-roadmap.md`](./docs/superpowers/plans/2026-05-26-run-first-roadmap.md)
 - 用户旅程：[`docs/guides/quickstart.md`](./docs/guides/quickstart.md)、[`docs/guides/manual-qa.md`](./docs/guides/manual-qa.md)
-- 当前执行计划：[`docs/exec-plans/active/post-v1-development-roadmap.md`](./docs/exec-plans/active/post-v1-development-roadmap.md)
+- 当前执行计划：[`docs/exec-plans/active/vnext-0-design-gate.md`](./docs/exec-plans/active/vnext-0-design-gate.md)
 - 最近完成计划：[`docs/exec-plans/completed/p2-8-execution-screenshot-preview.md`](./docs/exec-plans/completed/p2-8-execution-screenshot-preview.md)
-- 非目标：AI 智能编排、云端协作、未纳入当前路线的深度分析能力
+- vNext 产品基线：[`docs/superpowers/specs/2026-06-10-backoffice-interactive-task-template-design.md`](./docs/superpowers/specs/2026-06-10-backoffice-interactive-task-template-design.md)
+- 非目标：当前阶段业务实现、AI 智能编排、云端协作、未纳入当前路线的深度分析能力
 
 ## 4. 设计真源
 
-- UI / 原型来源：产品设计文档与当前 `apps/studio`、`apps/web` 已并回实现
+- UI / 原型来源：vNext 产品规格、当前 `apps/studio` 已并回实现与本阶段待冻结的线性编辑设计
 - 高保真或截图证据：`.codex/verification-report.md` 中的当前验收记录
 - 不允许偏离的页面 / 交互：
   - 扩展录制并将自动化任务同步到知识库
@@ -130,17 +128,18 @@
 - 禁止删除：smoke、recorded replay、Electron 完整性相关门禁与 `.codex` 验收留痕；不得新增 Flow / 项目 / 批量删除，不得经 Local API 开放 execution 删除，不得执行递归资产清理
 - 禁止替换：Playwright、Electron、SQLite、pnpm workspace / Turbo 主技术栈
 - 禁止新增：AI 产品入口、云协作、与当前稳定主线无关的大范围功能
+- vNext-0 额外禁止：业务代码、数据库迁移、schema 版本发布、生产 IPC 变更；设计内容不得伪装为已实现或已验证能力
 
 ## 8. 变更入口
 
-- Backlog：`docs/exec-plans/active/post-v1-development-roadmap.md`；P2.8 实施真源已归档为 `docs/exec-plans/completed/p2-8-execution-screenshot-preview.md`
+- 当前阶段：`docs/exec-plans/active/vnext-0-design-gate.md`；post-v1 backlog 继续保留为历史与候选路线
 - Change Request：新增需求先进入路线计划或专门变更文档，再决定是否实施
 - 当前阶段缺口：
-  - 无；下一阶段尚未开启，进入前须先从 post-v1 backlog 选择最小闭环并更新路线锁
+  - 输入节点、变量绑定、schema 迁移、运行会话和敏感输入生命周期尚未形成统一设计真源
 - 后续阶段需求：
   - 评估下一项低风险 post-v1 backlog，并先更新路线锁与阶段真源
   - Flow 删除或批量资产清理
-  - vNext 任务模板输入节点、编辑模型与暂停/继续协议
+  - vNext-1 按已冻结 DAG 实施任务模板输入节点、编辑模型与暂停/继续协议
   - P3 深度 page / network intelligence
   - P4 AI 编排、建议与自动修复
 - 已拒绝需求：

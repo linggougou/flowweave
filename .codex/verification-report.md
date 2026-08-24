@@ -5348,3 +5348,13 @@
 - 资源复核：仅剩 main 工作树；P2.8 review / integration 本地分支与远端集成分支已删除；`3847`、`5173`、`5174` 无监听；无 FlowWeave / Electron / Vite 残留进程；G4 Agent 已停止。
 - 最终判断：P2.8 功能、安全边界、分轨 Judge、G4 总审、真实 Electron、Node 20/24、本地矩阵、recorded replay、可移植性、依赖审计及远端集成/main 矩阵全部通过，可以归档。
 - 路线边界：未新增 Web / Local API / 扩展文件读取能力，未混入 HAR / DOM 主动内容、P3/P4、vNext 或破坏性资产操作。
+
+## 2026-08-24 vNext-0 G0 设计基线验证
+
+- Git 起点：`main` / `origin/main` 均为 `736402edc6145e159bf1394a443f14c462b130db`；切分支前工作区 clean。
+- 路线授权：用户明确回复“可以,解冻vNext 设计阶段”；路线锁已限定为设计门禁，禁止自动进入编码。
+- 真源覆盖：路线锁、变更单、vNext 活跃计划、上下文摘要和 post-v1 roadmap 已同步。
+- 事实映射：现有 schema v1、runtime 顺序执行、Studio 运行前变量、Electron invoke 模式、取消/进度和 execution variables 原样持久化均已纳入设计硬门。
+- 静态检查：`git diff --check` 通过。
+- 范围检查：G0 未修改 `apps/`、`packages/`、数据库 migration、构建配置、P3 或 P4。
+- 当前判断：G0 路线与计划允许提交；G1-G3 尚未产出，vNext-0 不可验收或归档。

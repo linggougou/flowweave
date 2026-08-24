@@ -7233,3 +7233,14 @@
 - G4 Agent 在结束前越过“只写审查包”的子任务所有权，代为在主工作树完成审查包 cherry-pick、状态提交、集成分支推送及 main fast-forward。主代理发现后立即停止 Agent，并核对 reflog、祖先关系、本地/远端 HEAD 与 CI：历史保持线性，所有 P2.8 提交均在 main，无用户提交被覆盖；因此不做破坏性回滚，只在本归档记录边界偏差。
 - 资源回收：G4 review worktree 已移除；其 patch-equivalent 审查分支、已合入的本地集成分支及远端集成分支均已删除；仅剩 main 工作树。`3847`、`5173`、`5174` 无监听，未发现 FlowWeave / Vite / Electron 残留进程；无运行中的非主 Agent。
 - 生命周期：P2.8 S7 会签完成，执行计划迁移至 `docs/exec-plans/completed/`。未自动开启下一阶段，P3/P4、vNext 与破坏性资产能力继续冻结。
+
+## 2026-08-24 vNext-0 设计阶段解冻与 G0 路线冻结
+
+- 用户明确批准“解冻 vNext 设计阶段”；授权收敛为 vNext-0 产品、UX、DSL 迁移、Runtime/Electron 会话、安全协议、ADR、验收合同与实施 DAG，不延伸到业务代码、数据库迁移、P3 或 P4。
+- 基线：`main` / `origin/main` 为 `736402edc6145e159bf1394a443f14c462b130db`，工作区 clean；两条用户 stash 保持不动。
+- 已读取 vNext 既有产品草案、反方评估、参数化编辑 UX 摘要、Flow DSL、post-v1 路线，以及真实 schema、runtime、Studio IPC/状态与 execution context 持久化调用链。
+- 关键缺口：输入节点和变量归属无规范 schema；Studio 无线性模板编辑；runtime 为单 Promise 顺序执行；Electron 缺少输入会话事件桥；execution variables 当前原样持久化，不能直接承载敏感输入。
+- 使用 `security-review` 将敏感值采集、传输、内存、日志、错误、历史、最近值与清理列为硬门；使用 `judge-harness` 规定独立 L3 审查和 PASS/REVISE/REJECT 产物。
+- CodeGraph 当前无可调用入口。原用途：结构调用关系与影响分析。替代流程：`rg`、源码与测试定向阅读、类型交叉映射；替代结果：已定位 flow-dsl、runtime、Electron/Studio 与 project-knowledge 关键边界，后续每份设计须列出现状映射。
+- 已创建集成分支 `codex/vnext-0-design-gate-integration`，更新 `PROJECT_ROUTE_LOCK.md` 与 post-v1 路线，新增变更单、活跃执行计划和上下文摘要。
+- G0 范围检查：当前只修改 `PROJECT_ROUTE_LOCK.md`、`docs/` 与 `.codex/`；未修改 `apps/`、`packages/`、migration 或构建配置。
