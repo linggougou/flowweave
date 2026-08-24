@@ -1,0 +1,277 @@
+{
+  "review_id": "vnext-0-design-gate-final-r3-2026-08-24",
+  "task_id": "vNext-0",
+  "lane": "design-gate-final-r3",
+  "review_level": "L3",
+  "rubric_id": "vnext-0-design-gate-l3-v1",
+  "reviewed_sha": "9deb5199a5c624e01a333d9aeeb207f1ff9bf866",
+  "artifact_refs": [
+    "baseline:736402edc6145e159bf1394a443f14c462b130db",
+    "reviewed-commit:9deb5199a5c624e01a333d9aeeb207f1ff9bf866",
+    "doc:PROJECT_ROUTE_LOCK.md",
+    "doc:docs/exec-plans/active/vnext-0-design-gate.md",
+    "doc:docs/superpowers/specs/2026-06-10-backoffice-interactive-task-template-design.md",
+    "doc:docs/design-docs/vnext-studio-linear-template-editor.md",
+    "doc:docs/design-docs/vnext-flow-schema-migration.md",
+    "doc:docs/design-docs/vnext-runtime-input-session.md",
+    "doc:docs/design-docs/vnext-implementation-dag.md",
+    "doc:docs/adr/0009-vnext-input-node-and-schema-versioning.md",
+    "doc:docs/adr/0010-vnext-runtime-input-session.md",
+    "doc:docs/domain/flow-dsl.md",
+    "code:packages/shared/src/constants.ts",
+    "code:packages/flow-dsl/src/schema.ts",
+    "code:packages/recorder/src/normalize.ts",
+    "code:packages/runtime/src/playwright-runner.ts"
+  ],
+  "command_results": [
+    {
+      "cmd": "git status --short",
+      "status": "pass",
+      "result": "写审查包前无输出，worktree clean。"
+    },
+    {
+      "cmd": "git diff --name-only 736402edc6145e159bf1394a443f14c462b130db..9deb5199a5c624e01a333d9aeeb207f1ff9bf866",
+      "status": "pass",
+      "result": "差异仅命中 PROJECT_ROUTE_LOCK、docs/ 与 .codex；无业务实现或构建配置文件。"
+    },
+    {
+      "cmd": "git diff --name-only 736402edc6145e159bf1394a443f14c462b130db..9deb5199a5c624e01a333d9aeeb207f1ff9bf866 | rg '^(apps|packages)/'",
+      "status": "pass",
+      "result": "无输出；baseline..candidate 没有 apps/ 或 packages/ 变更。"
+    },
+    {
+      "cmd": "git diff --check 736402edc6145e159bf1394a443f14c462b130db..9deb5199a5c624e01a333d9aeeb207f1ff9bf866",
+      "status": "pass",
+      "result": "无输出。"
+    },
+    {
+      "cmd": "pnpm exec prettier --check PROJECT_ROUTE_LOCK.md .codex/context-summary-vnext-0-design-gate.md .codex/operations-log.md .codex/verification-report.md docs/change-requests/2026-08-24-vnext-design-unfreeze.md docs/exec-plans/active/vnext-0-design-gate.md docs/exec-plans/active/post-v1-development-roadmap.md docs/superpowers/specs/2026-06-10-backoffice-interactive-task-template-design.md docs/design-docs/vnext-studio-linear-template-editor.md docs/design-docs/vnext-flow-schema-migration.md docs/design-docs/vnext-runtime-input-session.md docs/design-docs/vnext-implementation-dag.md docs/adr/0009-vnext-input-node-and-schema-versioning.md docs/adr/0010-vnext-runtime-input-session.md docs/adr/README.md docs/domain/flow-dsl.md",
+      "status": "pass",
+      "result": "All matched files use Prettier code style!；本地可执行版本为 3.8.3。"
+    },
+    {
+      "cmd": "node relative-link-check over 14 target files",
+      "status": "pass",
+      "result": "checkedFiles=14, filesWithLinks=9, totalLinks=36, broken=[]。"
+    },
+    {
+      "cmd": "rg -n '^(TODO|TBD|FIXME)(\\\\b|:)|^<<<<<<<|^=======$|^>>>>>>>' over 14 target files",
+      "status": "pass",
+      "result": "无输出。"
+    },
+    {
+      "cmd": "rg -n 'FLOW_SCHEMA_VERSION|schemaVersion: 1|scroll' docs/domain/flow-dsl.md packages/shared/src/constants.ts packages/flow-dsl/src/schema.ts packages/recorder/src/normalize.ts packages/runtime/src/playwright-runner.ts",
+      "status": "pass",
+      "result": "确认当前生产实现仍为 FLOW_SCHEMA_VERSION=1，且 v1 真源明确包含 scroll，并与 schema/recorder/runtime 对齐。"
+    },
+    {
+      "cmd": "rg -n 'expectedBaselineVersion|providedFieldIds|项目内唯一|lastSequence' over target docs",
+      "status": "pass",
+      "result": "设计真源未残留旧同义字段或旧唯一性口径；命中仅为 ADR 对旧模型的说明、runtime 对禁止 lastSequence 的约束，以及 operations-log/verification-report 的历史审查留痕。"
+    }
+  ],
+  "hard_gates": [
+    {
+      "id": "design-scope-only-no-implementation-diff",
+      "status": "pass",
+      "evidence": [
+        "baseline..candidate 只改 PROJECT_ROUTE_LOCK、docs/ 与 .codex。",
+        "git diff --name-only baseline..candidate | rg '^(apps|packages)/' 无输出。"
+      ]
+    },
+    {
+      "id": "cross-doc-contract-consistency",
+      "status": "pass",
+      "evidence": [
+        "Studio 设计把 fieldId 统一为“当前任务模板（Flow）内全局唯一，不同 Flow 可重复，持久层按 flowId + fieldId 复合定位”。",
+        "迁移设计把 fieldId 定义为“Flow 内全局唯一”，最近值表主键为 (flow_id, field_id)。",
+        "ExecutionSessionSnapshot、expectedRevision、artifactSafety、remember 默认与命名在产品/DSL/Runtime/ADR/DAG 间一致。"
+      ]
+    },
+    {
+      "id": "runtime-session-state-and-ipc-closure",
+      "status": "pass",
+      "evidence": [
+        "vnext-runtime-input-session.md:282-404 给出 strict ExecutionSessionSnapshot 联合类型与 exact/strict 约束。",
+        "ADR-0010:24-29 与之对齐，覆盖 session 绑定、单活跃会话、不做持久化恢复、敏感值 fail closed。"
+      ]
+    },
+    {
+      "id": "v1-compatibility-upgrade-and-atomic-rollback",
+      "status": "pass",
+      "evidence": [
+        "flow-dsl.md:168-186 明确当前生产仍是 schemaVersion 1，v2 只是冻结候选。",
+        "ADR-0009:23-26 与迁移设计 vnext-flow-schema-migration.md:359-440 明确只读预览、expectedRevision、fingerprint、旧 runtime 副作用前拒绝、单一 immediate transaction 原子保存/恢复/升级。"
+      ]
+    },
+    {
+      "id": "sensitive-lifecycle-and-artifact-policy",
+      "status": "pass",
+      "evidence": [
+        "runtime 设计 vnext-runtime-input-session.md:471-482 要求 sensitive Flow 从启动禁 HAR、首次敏感接受后禁 screenshot/page/DOM、普通历史只保留无值元数据。",
+        "迁移设计 vnext-flow-schema-migration.md:506-508 与 ADR-0010:28 要求 artifactSafety 声明交叉校验 + 独立 canary 扫描双门禁。"
+      ]
+    },
+    {
+      "id": "dag-completeness-and-route-discipline",
+      "status": "pass",
+      "evidence": [
+        "vnext-implementation-dag.md:35-58 明确 1A/1B/2A/2B/3A/3B/4 依赖图。",
+        "同文件 60-227 为每阶段给出最小交付、红灯合同、退出门禁与回滚点。",
+        "PROJECT_ROUTE_LOCK.md 与 vnext-0 执行计划继续把本阶段限制为设计冻结，不授权实现。"
+      ]
+    },
+    {
+      "id": "static-doc-hygiene",
+      "status": "pass",
+      "evidence": [
+        "git diff --check 通过。",
+        "14 文件相对内部链接检查 broken=[]。",
+        "TODO/TBD/FIXME/冲突标记检查无输出。",
+        "Prettier 本地 check 通过。"
+      ]
+    },
+    {
+      "id": "current-implementation-remains-schema-v1",
+      "status": "pass",
+      "evidence": [
+        "packages/shared/src/constants.ts 仍导出 FLOW_SCHEMA_VERSION = 1。",
+        "packages/flow-dsl/src/schema.ts、packages/recorder/src/normalize.ts、packages/runtime/src/playwright-runner.ts 仍对应 v1 与 scroll 现状。",
+        "baseline..candidate 未改实现层文件。"
+      ]
+    },
+    {
+      "id": "r1-r2-regressions-closed",
+      "status": "pass",
+      "evidence": [
+        "R1: strict ExecutionSessionSnapshot 已冻结。",
+        "R1: remember 默认已统一为 never，只有非敏感字段可显式改为 lastValue。",
+        "R1: v1 scroll 真源已写回 flow-dsl 并与实现对齐。",
+        "R2: fieldId 唯一性与 flowId+fieldId 持久层口径已统一。",
+        "R2: 本轮已在本地依赖 worktree fresh verify Prettier。"
+      ]
+    }
+  ],
+  "regression_checks": [
+    {
+      "item": "R1 / ExecutionSessionSnapshot 固定结构",
+      "previous_required_fix": true,
+      "status": "closed",
+      "evidence_refs": [
+        "docs/design-docs/vnext-runtime-input-session.md:282-404",
+        "docs/adr/0010-vnext-runtime-input-session.md:24-29"
+      ]
+    },
+    {
+      "item": "R1 / remember 默认冲突",
+      "previous_required_fix": true,
+      "status": "closed",
+      "evidence_refs": [
+        "docs/superpowers/specs/2026-06-10-backoffice-interactive-task-template-design.md:119-121",
+        "docs/design-docs/vnext-studio-linear-template-editor.md:151-153",
+        "docs/design-docs/vnext-flow-schema-migration.md:359-360",
+        "docs/domain/flow-dsl.md:176-178"
+      ]
+    },
+    {
+      "item": "R1 / v1 scroll 真源",
+      "previous_required_fix": true,
+      "status": "closed",
+      "evidence_refs": [
+        "docs/domain/flow-dsl.md:42-45",
+        "docs/domain/flow-dsl.md:168-186",
+        "packages/shared/src/constants.ts:2",
+        "packages/flow-dsl/src/schema.ts:91,139",
+        "packages/recorder/src/normalize.ts:433-445,681",
+        "packages/runtime/src/playwright-runner.ts:1946-1990"
+      ]
+    },
+    {
+      "item": "R2 / fieldId 唯一性与存储定位",
+      "previous_required_fix": true,
+      "status": "closed",
+      "evidence_refs": [
+        "docs/design-docs/vnext-studio-linear-template-editor.md:153",
+        "docs/design-docs/vnext-flow-schema-migration.md:260",
+        "docs/design-docs/vnext-flow-schema-migration.md:478-483"
+      ]
+    },
+    {
+      "item": "R2 / 本地 Prettier 门禁 fresh verify",
+      "previous_required_fix": true,
+      "status": "closed",
+      "evidence_refs": [
+        "node_modules/.bin/prettier -> 3.8.3",
+        "pnpm exec prettier --check -> All matched files use Prettier code style!"
+      ]
+    }
+  ],
+  "findings": [],
+  "p0_count": 0,
+  "p1_count": 0,
+  "p2_count": 0,
+  "dimensions": [
+    {
+      "name": "correctness",
+      "score": 25,
+      "max_score": 25,
+      "reason": "设计合同、命名、唯一性和回滚/升级语义已统一，无剩余正确性缺口。"
+    },
+    {
+      "name": "security",
+      "score": 25,
+      "max_score": 25,
+      "reason": "敏感生命周期、artifactSafety 交叉校验和 canary 双门禁保持 fail-closed。"
+    },
+    {
+      "name": "regression_safety",
+      "score": 20,
+      "max_score": 20,
+      "reason": "R1/R2 全部 required fixes 已 fresh verify closed，当前实现仍停留在 schema v1。"
+    },
+    {
+      "name": "route_discipline",
+      "score": 10,
+      "max_score": 10,
+      "reason": "候选严格停留在设计与留痕范围，DAG 和路线锁也没有偷渡实现授权。"
+    },
+    {
+      "name": "evidence_quality",
+      "score": 20,
+      "max_score": 20,
+      "reason": "diff-check、相对链接、冲突标记、命名残留、Prettier 和 v1 实现映射都已 fresh verify。"
+    }
+  ],
+  "penalties": [],
+  "totals": {
+    "raw_score": 100,
+    "penalty_total": 0,
+    "final_score": 100
+  },
+  "verdict": "PASS",
+  "required_fixes": [],
+  "nice_to_have": [],
+  "reviewers": [
+    {
+      "role": "verifier",
+      "conclusion": "PASS",
+      "summary": "hard gates 全部通过；范围、兼容、会话、安全、格式和回归证据完整。"
+    },
+    {
+      "role": "strict_judge",
+      "conclusion": "PASS",
+      "summary": "设计质量达到冻结门槛，R1/R2 遗留问题全部闭合，没有新的合同冲突。"
+    },
+    {
+      "role": "anti_slop_judge",
+      "conclusion": "PASS",
+      "summary": "文档具体、约束可执行、证据可定位，没有模板化空话或用审查包掩盖缺口。"
+    },
+    {
+      "role": "chief_reviewer",
+      "conclusion": "PASS",
+      "summary": "vNext-0 设计候选已满足最终独立终审放行条件，可作为设计阶段 PASS 归档。"
+    }
+  ],
+  "reviewed_at": "2026-08-24T14:59:06+08:00"
+}
