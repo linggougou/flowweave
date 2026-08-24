@@ -15,7 +15,7 @@ vNext 需要在线性流程中显式表达“运行到此处收集字段”，�
 1. vNext 使用 `schemaVersion: 2`。
 2. `steps[]` 增加 `type: "input"` 的线性输入节点。
 3. 输入步骤的 `id` 是其稳定身份，会话协议中规范称为 `inputNodeId`；文档不重复保存第二个 `inputNodeId` 字段。
-4. 输入字段定义只存在于 `input.fields[]`。字段包含稳定 `fieldId`、唯一人类可读名称 `label`、仅作 UI 提示的可选 `placeholder`、类型、必填、默认值、显式敏感性与记忆策略。v2 不再保存字段 name；placeholder 不参与求值，不得从录制 DOM、历史输入或 default 推导。
+4. 输入字段定义只存在于 `input.fields[]`。字段包含稳定 `fieldId`、人类可读名称 `label`、仅作 UI 提示的可选 `placeholder`、类型、必填、默认值、显式敏感性与记忆策略。label 只要求在同一 input 节点内规范化唯一，不同 input 节点可重复，UI 始终以“节点名 / label”消歧。v2 不再保存字段 name；placeholder 不参与求值，不得从录制 DOM、历史输入或 default 推导。
 5. v2 删除顶层 `variables[]`，strict schema 拒绝该字段，禁止双重定义。
 6. 绑定保留双大括号外观，但只允许白名单槽位中的完整 `{{fieldId}}`；不按 name 绑定、不允许混合模板、不引入结构表达式。
 7. `sensitive:true` 强制 string、`remember:never`、无 default，且第一版只允许消费到 `fill.value`。敏感值不进入 Flow、版本、导出、普通执行历史、最近值、错误、日志或未脱敏诊断产物。
@@ -94,6 +94,7 @@ v1 variable name 是作者可理解、可能修改的语义名称，不适合作
 - 新 v2 文档从结构上禁止敏感 default/lastValue。
 - 显式升级必须清除已识别敏感默认值和相关历史值；安全清理不可恢复，也不能清理用户控制的外部备份。
 - Flow 结构回滚保存的是安全化 v1 快照，不复制已识别秘密。
+- Runtime 的结构化 artifact policy attestation 只能供 knowledge 与会话状态、步骤时序和 artifact refs 交叉校验，不能证明产物内容无秘密；发布门禁必须另做 canary 内容扫描。attestation 物理字段以 Runtime 会话规范最终稿为准。
 - 实施时只要 v2 feature gate 未开启，v1 recorder、parser 与 Runtime 应保持原路径；已保存 v2 资产不能交给旧 Runtime 执行。
 
 ## 验收条件
@@ -102,5 +103,5 @@ v1 variable name 是作者可理解、可能修改的语义名称，不适合作
 2. v1 默认不升级；同一升级预览稳定；阻塞迁移零写入。
 3. 老 Runtime 在任何副作用前拒绝 v2。
 4. 保存、升级、恢复经故障注入证明原子。
-5. 哨兵敏感值不出现在 Flow、版本、导出、最近值、execution detail、日志、错误与诊断产物。
+5. artifact policy 声明交叉校验通过，且独立 canary 扫描证明哨兵敏感值不出现在 Flow、版本、导出、最近值、execution detail、日志、错误与诊断产物。
 6. v1 单测、录制同步、导入导出和执行回归保持通过。

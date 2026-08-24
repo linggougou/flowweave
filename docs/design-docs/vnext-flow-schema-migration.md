@@ -56,7 +56,7 @@ v2 **移除顶层 `variables[]`**。每个变量只定义在一个 `input` 节�
 FlowDocumentV2.steps[].type=input
 └── fields[]                 ← 定义唯一真源
     ├── fieldId             ← 稳定机器身份
-    ├── label               ← 唯一的人类可读名称
+    ├── label               ← 输入节点内唯一的人类可读名称
     ├── type / required
     └── sensitive / remember / defaultValue
 
@@ -203,7 +203,7 @@ const inputStepV2Schema = z.object({
   name: z.string().trim().min(1).max(80),
   description: z.string().trim().max(500).optional(),
   fields: z.array(inputFieldV2Schema).min(1).max(50),
-}).strict();
+}).strict().superRefine(validateInputNodeLabelUniqueness);
 
 const selectionContextSchema = z.object({
   searchStepId: legacyOpaqueId,
@@ -242,7 +242,7 @@ const flowDocumentV2Schema = z.object({
 | 输入步骤 `id` | 必须以 `input_` 开头；会话中称 `inputNodeId` | 创建后不可变 | 输入请求身份 |
 | `fieldId` | Flow 内全局唯一，必须以 `field_` 开头 | 创建后不可变 | 绑定、提交、最近值键 |
 | 输入节点 `name` | 1-80 字符的用户可见名称 | 可修改 | Studio 卡片与运行态标题 |
-| 字段 `label` | 1-80 字符的唯一人类可读名称；不承担机器寻址 | 可修改 | 表单标签与“节点名 / 字段标签”来源选择器 |
+| 字段 `label` | 1-80 字符；按 `trim + Unicode NFKC + lowercase` 后在同一 input 节点内唯一，不同 input 节点可重复；不承担机器寻址 | 可修改 | 表单标签；UI 始终以“节点名 / 字段标签”展示来源并消歧 |
 | 字段 `placeholder` | 可选，1-200 字符的作者提示 | 可修改 | 仅作输入 UI 提示，不参与求值 |
 
 新建 v2 身份使用不可预测 UUID/ULID 后缀，例如 `input_<uuid>`、`field_<uuid>`。新建浏览器步骤也应使用安全生成器，但 parser 不用新的格式偏好拒绝历史 ID。迁移身份使用 `SHA-256(flowId + variableIndex + originalName)` 的前 20 个小写十六进制字符，确保重复预览得到同一候选；哈希仅用于稳定身份，不用于安全鉴权。
@@ -265,6 +265,7 @@ v1→v2 默认不改 `flowId`、`projectId` 或既有浏览器 `step.id`。历�
 5. `required: false` 的字段若被消费，必须有 `defaultValue`；否则执行前编译失败。未消费的可选字段允许保存，但 Studio 给出“未被使用”警告。
 6. `remember: lastValue` 只允许非敏感字段，表示项目知识库最多保存一份最近接受值，不表示保存每次执行的值。
 7. `placeholder` 是可持久化的展示元数据，不是默认值、最近值或提交值；Runtime 不把它放入字段值映射。敏感字段可以有不含秘密的作者提示，但不得从录制 DOM、历史输入或 default 推导，也不得包含字段引用。Studio 必须把它标注为“提示文字”，不能预填到输入框 value。
+8. `label` 的唯一性作用域仅是其所属 input 节点。比较键为 `label.trim().normalize("NFKC").toLowerCase()`；同节点碰撞拒绝保存，跨节点同名合法。任何来源选择器、错误反馈和绑定摘要都同时显示节点名与字段标签，不能只显示 label。
 
 ## 5. 绑定与搜索选择合同
 
@@ -350,7 +351,7 @@ Studio 因而能区分“搜索词已参数化”和“结果选择仍是静态�
 
 - 在第一个浏览器步骤前插入一个 `input_<hash>` 节点，名称为“运行前输入”。
 - 每个 v1 `variables[index]` 生成唯一 `field_<hash>`。
-- v1 variable `name` 只用于生成稳定 fieldId、建立旧引用映射并初始化 `label`；label 去除首尾空白后最多保留 80 字符，截断时产生不含原值之外附加数据的结构化告警，作者可在确认页修改。v2 不保存第二个字段 name。
+- v1 variable `name` 只用于生成稳定 fieldId、建立旧引用映射并初始化 `label`；label 去除首尾空白后最多保留 80 字符，截断时产生不含原值之外附加数据的结构化告警。截断或 Unicode 规范化若在迁移输入节点内造成 label 冲突，预览按原变量顺序追加 `（2）`、`（3）` 等确定性后缀并保持 80 字符上限，作者可在确认页修改。v2 不保存第二个字段 name。
 - v1 没有规范 placeholder；迁移结果一律不从 target hints、DOM 样本、default 或历史输入推导 placeholder，作者可在确认页手动填写安全提示。
 - 所有完整 `{{v1Name}}` 引用改写为对应 `{{fieldId}}`。
 - 非敏感变量默认 `sensitive:false`；显式升级为了保持现有回填心智，将其 `remember` 设为 `lastValue`，Studio 必须展示这一策略，用户可改为 `never` 后再提交。
@@ -483,7 +484,9 @@ v2 的 `ExecutionRunContext` 不再保存原始输入映射。允许持久化：
 - IPC payload、运行时内存对象的 JSON dump；
 - 含输入值的错误、步骤快照、DOM/HAR 诊断或日志。
 
-Flow 只要声明任一敏感字段，Runtime 整个会话就必须关闭 HAR。首次敏感提交被原子接受后，会话进入不可逆敏感作用域，后续 screenshot、page snapshot 与 DOM 诊断全部关闭；错误与诊断始终不得携带 resolved step、locator、URL 或输入。Runtime 持久化结果必须附 `artifactSafety` 无值证明；knowledge 若发现禁用期产物引用、证明缺失或状态矛盾就拒绝整条执行落盘，而不是盲信调用方或尝试记录后补脱敏。
+Flow 只要声明任一敏感字段，Runtime 整个会话就必须关闭 HAR。首次敏感提交被原子接受后，会话进入不可逆敏感作用域，后续 screenshot、page snapshot 与 DOM 诊断全部关闭；错误与诊断始终不得携带 resolved step、locator、URL 或输入。Runtime 持久化结果必须附结构化 artifact policy 声明（attestation），其物理字段与枚举以 G3 Runtime 会话规范最终稿为准。knowledge 只能把该声明与会话敏感状态、步骤时序和 artifact refs 交叉校验：禁用期出现产物引用、声明缺失或状态矛盾时拒绝整条执行落盘。
+
+artifact policy 声明只证明调用方声称执行了哪项策略，**不能证明文件内容中没有秘密**。因此安全验收还必须对数据库、运行目录、导出文件、错误和日志注入唯一 canary 敏感值并做独立扫描；策略声明校验与 canary 内容扫描任一失败都不得通过发布门禁。
 
 ## 10. 错误分类
 
@@ -492,6 +495,7 @@ Flow 只要声明任一敏感字段，Runtime 整个会话就必须关闭 HAR。
 | `FLOW_SCHEMA_VERSION_UNSUPPORTED` | 版本分派 | 仅返回收到/支持的版本号 |
 | `FLOW_V2_STRUCTURE_INVALID` | Zod 结构校验 | 返回 JSON path 与规则，不回显值 |
 | `FLOW_DUPLICATE_ID` | 步骤或 fieldId 重复 | 返回冲突路径与 ID；不返回字段值 |
+| `FLOW_DUPLICATE_LABEL` | 同一 input 节点内规范化 label 重复 | 返回节点与冲突字段路径；不同节点同名不报错 |
 | `FLOW_FIELD_REFERENCE_UNKNOWN` | 引用不存在 | 返回消费路径与 fieldId |
 | `FLOW_FIELD_REFERENCE_FUTURE` | 消费早于输入节点 | 返回消费步骤与 inputNodeId |
 | `FLOW_BINDING_TARGET_FORBIDDEN` | 禁止槽位出现引用 | 返回槽位路径 |
@@ -513,13 +517,14 @@ Flow 只要声明任一敏感字段，Runtime 整个会话就必须关闭 HAR。
 1. 最小 v2、多个输入节点、同字段多消费可 parse。
 2. v2 顶层出现 `variables` 被 strict schema 拒绝。
 3. inputNodeId、fieldId 和步骤 ID 重复分别拒绝。
-4. 字段 label 改名后 `{{fieldId}}` 绑定保持不变。
-5. 未知、未来、跨 Flow、按旧 name 引用分别拒绝。
-6. 所有允许绑定面按类型通过；所有禁止面拒绝。
-7. 混合模板、多个模板、缺失可选值拒绝进入可执行计划。
-8. sensitive + default、sensitive + lastValue、sensitive 非 fill 消费拒绝。
-9. `selectionContext.searchStepId` 的顺序、步骤类型和字段来源校验。
-10. v1 与 v2 版本分派正确，未知版本不 strip、不降级。
+4. 同一 input 节点的规范化 label 重复被拒绝；不同 input 节点同 label 通过，展示合同为“节点名 / label”。
+5. 字段 label 改名后 `{{fieldId}}` 绑定保持不变。
+6. 未知、未来、跨 Flow、按旧 name 引用分别拒绝。
+7. 所有允许绑定面按类型通过；所有禁止面拒绝。
+8. 混合模板、多个模板、缺失可选值拒绝进入可执行计划。
+9. sensitive + default、sensitive + lastValue、sensitive 非 fill 消费拒绝。
+10. `selectionContext.searchStepId` 的顺序、步骤类型和字段来源校验。
+11. v1 与 v2 版本分派正确，未知版本不 strip、不降级。
 
 ### 11.2 迁移测试
 
@@ -541,7 +546,7 @@ Flow 只要声明任一敏感字段，Runtime 整个会话就必须关闭 HAR。
 6. 导入 v1/v2 创建独立副本；无效版本、超限、非法敏感 default 无副作用。
 7. v2 导出往返同构；最近值、执行输入和项目本地路径不在文件中。
 8. sensitive 或 remember=never 的提交不产生最近值/variables_json；策略收紧立即清理旧值。
-9. 错误、日志、HTTP 响应和诊断文件中不存在哨兵 secret。
+9. artifact policy 声明与会话敏感状态、步骤时序、artifact refs 一致；另以唯一 canary 扫描数据库、运行目录、导出、错误、日志和 HTTP 响应，二者独立通过。
 10. Local API 路径身份、文档身份、version 归属和 revision 均做负向测试。
 
 ### 11.4 性质与模糊测试
