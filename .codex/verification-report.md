@@ -5358,3 +5358,15 @@
 - 静态检查：`git diff --check` 通过。
 - 范围检查：G0 未修改 `apps/`、`packages/`、数据库 migration、构建配置、P3 或 P4。
 - 当前判断：G0 路线与计划允许提交；G1-G3 尚未产出，vNext-0 不可验收或归档。
+
+## 2026-08-24 vNext-0 G1-G3 集成验证
+
+- 范围：从基线 `736402e` 至当前集成只涉及 `PROJECT_ROUTE_LOCK.md`、`docs/` 与 `.codex/`；无 `apps/`、`packages/`、migration、构建配置、P3 或 P4 实现改动。
+- 分轨范围：G1/G2/G3 每条源分支均只修改计划授权的两份文档，`git diff --check` 通过；主代理交叉校准后再集成。
+- 规范一致：`schemaVersion:2`、`inputNodeId=step.id`、`fieldId`、整值 `{{fieldId}}`、`selectionContext.searchStepId`、`expectedRevision`、七状态、`input-required/input-accepted`、`resolvedFields`、`initialValue/initialValueSource` 和 `artifactSafety` 已统一。
+- 安全一致：显式 sensitive 是唯一 v2 判定；无敏感 default/lastValue；只允许 `fill.value`；敏感 Flow 无 HAR；首次敏感接受后无后续 screenshot/page/DOM；历史与事件只保存无值元数据；canary 扫描是独立发布硬门。
+- 格式：全部新建/重写的 vNext 规格、ADR、变更单、执行计划和上下文经 Prettier check 通过。
+- 链接：自定义只读链接检查覆盖路线锁、计划、产品规格、四份 design-doc、ADR、Flow DSL 共 `13` 个文件，全部相对路径存在。
+- 静态：`git diff --check` 通过；无冲突标记，无关键 TODO/TBD。
+- 资源：G1/G2/G3 worktree 与临时分支已回收，仅剩主集成工作树；用户 stash 未触碰。
+- 当前判断：G1-G3 与主代理 Verifier 通过，可提交统一设计候选并进入独立 L3 Judge；Judge 尚未执行，因此 vNext-0 暂不可归档。

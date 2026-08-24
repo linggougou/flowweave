@@ -94,7 +94,7 @@ v1 variable name 是作者可理解、可能修改的语义名称，不适合作
 - 新 v2 文档从结构上禁止敏感 default/lastValue。
 - 显式升级必须清除已识别敏感默认值和相关历史值；安全清理不可恢复，也不能清理用户控制的外部备份。
 - Flow 结构回滚保存的是安全化 v1 快照，不复制已识别秘密。
-- Runtime 的结构化 artifact policy attestation 只能供 knowledge 与会话状态、步骤时序和 artifact refs 交叉校验，不能证明产物内容无秘密；发布门禁必须另做 canary 内容扫描。attestation 物理字段以 Runtime 会话规范最终稿为准。
+- Runtime 的 `artifactSafety` 结构化声明（`policyVersion / flowHasSensitiveFields / sensitiveValueAccepted / harCaptured / sensitiveAcceptedAtStepIndex?`）只能供 knowledge 与会话状态、步骤时序和 artifact refs 交叉校验，不能证明产物内容无秘密；发布门禁必须另做 canary 内容扫描。完整类型见 [`vnext-runtime-input-session.md`](../design-docs/vnext-runtime-input-session.md#72-artifact-policy)。
 - 实施时只要 v2 feature gate 未开启，v1 recorder、parser 与 Runtime 应保持原路径；已保存 v2 资产不能交给旧 Runtime 执行。
 
 ## 验收条件

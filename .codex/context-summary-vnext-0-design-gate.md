@@ -40,3 +40,14 @@
 
 - 当前会话未提供可调用 CodeGraph 工具。原用途：结构调用关系与影响分析。
 - 替代：使用 `rg`、源码定向阅读、类型与测试文件交叉映射；结果必须写入各设计的“现状映射”。
+
+## 已集成设计产物
+
+- 产品规格：`docs/superpowers/specs/2026-06-10-backoffice-interactive-task-template-design.md`
+- Studio UX：`docs/design-docs/vnext-studio-linear-template-editor.md`
+- DSL / 迁移 / 存储：`docs/design-docs/vnext-flow-schema-migration.md`
+- Runtime / Electron / 安全：`docs/design-docs/vnext-runtime-input-session.md`
+- 实施拆分：`docs/design-docs/vnext-implementation-dag.md`
+- ADR：`docs/adr/0009-vnext-input-node-and-schema-versioning.md`、`docs/adr/0010-vnext-runtime-input-session.md`
+
+上述内容均为设计冻结候选，不代表代码已实现。下一门禁是独立 L3 Judge；只有 PASS 且 required fixes 为空才允许归档 vNext-0。

@@ -23,16 +23,16 @@
 
 ## 2. 当前事实基线
 
-| 边界 | 当前实现事实 | vNext 设计影响 |
-| --- | --- | --- |
-| Flow schema | `schemaVersion` 固定为 `1`；顶层 `variables[]`；步骤是浏览器动作与等待 | 加入输入节点并移除顶层变量属于破坏性变更 |
-| 模板引用 | shared 使用 `{{token}}` 提取/插值；当前 token 可为点号、连字符或中文 | v2 可保留可读定界符，但不能继续按可变名称寻址 |
-| recorder | 从步骤内引用反推 `variables[]`，变量默认是必填 string | recorder 不能同时再为 v2 生成第二份变量定义 |
-| portability | v1 会按 `secret_*`、密码目标、上传路径和敏感 URL 启发式清理 | 这些规则只用于 v1 迁移/导出防护，不能代替 v2 的显式 `sensitive` |
-| knowledge | `flows.document_json` 与 `flow_versions.document_json` 保存完整文档；保存前快照与当前更新尚未包在同一事务 | v2 保存、升级、恢复需要一个原子事务与并发修订号 |
-| execution context | `variables_json` 当前原样持久化并被最近执行回填 | v2 不得复用该无策略序列化路径 |
-| import | 先安全化，再用 SQLite immediate transaction 创建独立副本 | 保留“新副本、不覆盖”，增加版本分派与 v2 策略校验 |
-| Local API | 录制同步 POST 会直接 parse/save；版本恢复无乐观并发参数 | v2 编辑保存与升级需要独立的 revision-aware 命令边界 |
+| 边界              | 当前实现事实                                                                                              | vNext 设计影响                                                  |
+| ----------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Flow schema       | `schemaVersion` 固定为 `1`；顶层 `variables[]`；步骤是浏览器动作与等待                                    | 加入输入节点并移除顶层变量属于破坏性变更                        |
+| 模板引用          | shared 使用 `{{token}}` 提取/插值；当前 token 可为点号、连字符或中文                                      | v2 可保留可读定界符，但不能继续按可变名称寻址                   |
+| recorder          | 从步骤内引用反推 `variables[]`，变量默认是必填 string                                                     | recorder 不能同时再为 v2 生成第二份变量定义                     |
+| portability       | v1 会按 `secret_*`、密码目标、上传路径和敏感 URL 启发式清理                                               | 这些规则只用于 v1 迁移/导出防护，不能代替 v2 的显式 `sensitive` |
+| knowledge         | `flows.document_json` 与 `flow_versions.document_json` 保存完整文档；保存前快照与当前更新尚未包在同一事务 | v2 保存、升级、恢复需要一个原子事务与并发修订号                 |
+| execution context | `variables_json` 当前原样持久化并被最近执行回填                                                           | v2 不得复用该无策略序列化路径                                   |
+| import            | 先安全化，再用 SQLite immediate transaction 创建独立副本                                                  | 保留“新副本、不覆盖”，增加版本分派与 v2 策略校验                |
+| Local API         | 录制同步 POST 会直接 parse/save；版本恢复无乐观并发参数                                                   | v2 编辑保存与升级需要独立的 revision-aware 命令边界             |
 
 ## 3. 核心裁决
 
@@ -176,7 +176,8 @@ FlowDocumentV2.steps[].type=input
 const legacyOpaqueId = z.string().min(1);
 
 // 只有 v2 新建的身份采用收紧格式。
-const v2GeneratedId = z.string()
+const v2GeneratedId = z
+  .string()
   .min(9)
   .max(128)
   .regex(/^[A-Za-z][A-Za-z0-9._:-]*$/);
@@ -185,65 +186,81 @@ const inputNodeId = v2GeneratedId.regex(/^input_/);
 const fieldId = v2GeneratedId.regex(/^field_/);
 const scalar = z.union([z.string(), z.number().finite(), z.boolean()]);
 
-const inputFieldV2Schema = z.object({
-  fieldId,
-  label: z.string().trim().min(1).max(80),
-  description: z.string().trim().max(500).optional(),
-  placeholder: z.string().trim().min(1).max(200).optional(),
-  type: z.enum(["string", "number", "boolean"]),
-  required: z.boolean(),
-  sensitive: z.boolean(),
-  remember: z.enum(["never", "lastValue"]),
-  defaultValue: scalar.optional(),
-}).strict().superRefine(validateFieldPolicy);
+const inputFieldV2Schema = z
+  .object({
+    fieldId,
+    label: z.string().trim().min(1).max(80),
+    description: z.string().trim().max(500).optional(),
+    placeholder: z.string().trim().min(1).max(200).optional(),
+    type: z.enum(["string", "number", "boolean"]),
+    required: z.boolean(),
+    sensitive: z.boolean(),
+    remember: z.enum(["never", "lastValue"]),
+    defaultValue: scalar.optional(),
+  })
+  .strict()
+  .superRefine(validateFieldPolicy);
 
-const inputStepV2Schema = z.object({
-  id: inputNodeId,
-  type: z.literal("input"),
-  name: z.string().trim().min(1).max(80),
-  description: z.string().trim().max(500).optional(),
-  fields: z.array(inputFieldV2Schema).min(1).max(50),
-}).strict().superRefine(validateInputNodeLabelUniqueness);
+const inputStepV2Schema = z
+  .object({
+    id: inputNodeId,
+    type: z.literal("input"),
+    name: z.string().trim().min(1).max(80),
+    description: z.string().trim().max(500).optional(),
+    fields: z.array(inputFieldV2Schema).min(1).max(50),
+  })
+  .strict()
+  .superRefine(validateInputNodeLabelUniqueness);
 
-const selectionContextSchema = z.object({
-  searchStepId: legacyOpaqueId,
-}).strict();
+const selectionContextSchema = z
+  .object({
+    searchStepId: legacyOpaqueId,
+  })
+  .strict();
 
-const flowDocumentV2Schema = z.object({
-  schemaVersion: z.literal(2),
-  id: legacyOpaqueId,
-  projectId: legacyOpaqueId,
-  name: z.string().trim().min(1).max(120),
-  description: z.string().trim().max(2000).optional(),
-  steps: z.array(z.discriminatedUnion("type", [
-    inputStepV2Schema,
-    navigateV2Schema,
-    clickV2Schema,
-    fillV2Schema,
-    selectV2Schema,
-    setCheckedV2Schema,
-    pressV2Schema,
-    scrollV2Schema,
-    uploadV2Schema,
-    waitV2Schema,
-  ])).min(1).max(1000),
-  meta: flowMetaSchema,
-}).strict().superRefine(validateFlowV2References);
+const flowDocumentV2Schema = z
+  .object({
+    schemaVersion: z.literal(2),
+    id: legacyOpaqueId,
+    projectId: legacyOpaqueId,
+    name: z.string().trim().min(1).max(120),
+    description: z.string().trim().max(2000).optional(),
+    steps: z
+      .array(
+        z.discriminatedUnion("type", [
+          inputStepV2Schema,
+          navigateV2Schema,
+          clickV2Schema,
+          fillV2Schema,
+          selectV2Schema,
+          setCheckedV2Schema,
+          pressV2Schema,
+          scrollV2Schema,
+          uploadV2Schema,
+          waitV2Schema,
+        ]),
+      )
+      .min(1)
+      .max(1000),
+    meta: flowMetaSchema,
+  })
+  .strict()
+  .superRefine(validateFlowV2References);
 ```
 
 实际实现应把结构校验与跨字段校验分开，以便错误能精确定位到 JSON path；不得把所有问题折叠成“Flow 格式无效”。
 
 ### 4.3 身份与名称规则
 
-| 字段 | 规则 | 是否可修改 | 用途 |
-| --- | --- | --- | --- |
-| `Flow.id` / `projectId` | 延续 v1 的非空 opaque string；读写边界另做业务归属校验 | 升级时不改 | 资产与项目身份 |
-| 既有浏览器 `steps[].id` | 延续 v1 的非空 opaque string，但 v2 Flow 内必须全局唯一 | 升级时不改 | 进度、日志、版本 diff |
-| 输入步骤 `id` | 必须以 `input_` 开头；会话中称 `inputNodeId` | 创建后不可变 | 输入请求身份 |
-| `fieldId` | Flow 内全局唯一，必须以 `field_` 开头 | 创建后不可变 | 绑定、提交、最近值键 |
-| 输入节点 `name` | 1-80 字符的用户可见名称 | 可修改 | Studio 卡片与运行态标题 |
-| 字段 `label` | 1-80 字符；按 `trim + Unicode NFKC + lowercase` 后在同一 input 节点内唯一，不同 input 节点可重复；不承担机器寻址 | 可修改 | 表单标签；UI 始终以“节点名 / 字段标签”展示来源并消歧 |
-| 字段 `placeholder` | 可选，1-200 字符的作者提示 | 可修改 | 仅作输入 UI 提示，不参与求值 |
+| 字段                    | 规则                                                                                                             | 是否可修改   | 用途                                                 |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------ | ---------------------------------------------------- |
+| `Flow.id` / `projectId` | 延续 v1 的非空 opaque string；读写边界另做业务归属校验                                                           | 升级时不改   | 资产与项目身份                                       |
+| 既有浏览器 `steps[].id` | 延续 v1 的非空 opaque string，但 v2 Flow 内必须全局唯一                                                          | 升级时不改   | 进度、日志、版本 diff                                |
+| 输入步骤 `id`           | 必须以 `input_` 开头；会话中称 `inputNodeId`                                                                     | 创建后不可变 | 输入请求身份                                         |
+| `fieldId`               | Flow 内全局唯一，必须以 `field_` 开头                                                                            | 创建后不可变 | 绑定、提交、最近值键                                 |
+| 输入节点 `name`         | 1-80 字符的用户可见名称                                                                                          | 可修改       | Studio 卡片与运行态标题                              |
+| 字段 `label`            | 1-80 字符；按 `trim + Unicode NFKC + lowercase` 后在同一 input 节点内唯一，不同 input 节点可重复；不承担机器寻址 | 可修改       | 表单标签；UI 始终以“节点名 / 字段标签”展示来源并消歧 |
+| 字段 `placeholder`      | 可选，1-200 字符的作者提示                                                                                       | 可修改       | 仅作输入 UI 提示，不参与求值                         |
 
 新建 v2 身份使用不可预测 UUID/ULID 后缀，例如 `input_<uuid>`、`field_<uuid>`。新建浏览器步骤也应使用安全生成器，但 parser 不用新的格式偏好拒绝历史 ID。迁移身份使用 `SHA-256(flowId + variableIndex + originalName)` 的前 20 个小写十六进制字符，确保重复预览得到同一候选；哈希仅用于稳定身份，不用于安全鉴权。
 
@@ -271,15 +288,15 @@ v1→v2 默认不改 `flowId`、`projectId` 或既有浏览器 `step.id`。历�
 
 ### 5.1 白名单绑定面
 
-| 消费槽位 | 允许字段类型 | 敏感字段 | 附加规则 |
-| --- | --- | --- | --- |
-| `fill.value` | string、number | 允许 | number 在执行边界显式格式化为十进制字符串 |
-| `select.values[0]` | string | 禁止 | 有字段引用时 `values` 必须恰好一项 |
-| `setChecked.checked` | boolean | 禁止 | schema 允许 boolean 字面量或完整字段引用 |
-| `navigate.url` | string | 禁止 | 引用值必须是完整 URL 或现有 baseUrl 可解析的完整相对 URL |
-| `wait.urlIncludes` | string | 禁止 | 仅在 `condition=urlIncludes` 时允许 |
-| `target.strategies[kind=role].name` | string | 禁止 | `role` 本身不可绑定 |
-| `target.strategies[kind=text].text` | string | 禁止 | `exact` 保持字面 boolean |
+| 消费槽位                            | 允许字段类型   | 敏感字段 | 附加规则                                                 |
+| ----------------------------------- | -------------- | -------- | -------------------------------------------------------- |
+| `fill.value`                        | string、number | 允许     | number 在执行边界显式格式化为十进制字符串                |
+| `select.values[0]`                  | string         | 禁止     | 有字段引用时 `values` 必须恰好一项                       |
+| `setChecked.checked`                | boolean        | 禁止     | schema 允许 boolean 字面量或完整字段引用                 |
+| `navigate.url`                      | string         | 禁止     | 引用值必须是完整 URL 或现有 baseUrl 可解析的完整相对 URL |
+| `wait.urlIncludes`                  | string         | 禁止     | 仅在 `condition=urlIncludes` 时允许                      |
+| `target.strategies[kind=role].name` | string         | 禁止     | `role` 本身不可绑定                                      |
+| `target.strategies[kind=text].text` | string         | 禁止     | `exact` 保持字面 boolean                                 |
 
 明确禁止绑定：CSS selector、XPath、testId、target hints、上传文件、`press.key`、滚动坐标、等待毫秒、步骤 ID、节点/字段名称和描述。
 
@@ -317,18 +334,18 @@ Studio 因而能区分“搜索词已参数化”和“结果选择仍是静态�
 
 ## 6. v1 / v2 兼容矩阵
 
-| 操作方 / 操作 | v1 | v2 |
-| --- | --- | --- |
-| v1 Studio / Runtime | 正常读取与执行 | 在打开浏览器和分配运行目录前以 `FLOW_SCHEMA_VERSION_UNSUPPORTED` 拒绝 |
-| vNext 通用读取 | 版本分派读取 | 版本分派读取 |
-| vNext Studio 编辑 | 只读；提示显式升级 | 可编辑 |
-| vNext Runtime | 保留 legacy v1 执行路径 | 使用输入会话执行路径 |
-| recorder 同步 | 继续生成/保存 v1 | 不直接生成 v2；由 Studio 升级 |
-| 新版导入 | 按 v1 规则安全化后创建 v1 新副本 | 按 v2 显式敏感策略校验后创建 v2 新副本 |
-| 新版导出 | 保持 v1 | 保持 v2；无运行值 |
-| 导出为旧格式 | 原样 v1 | 不支持自动降级，返回 `FLOW_DOWNGRADE_UNSUPPORTED` |
-| 版本恢复 | 恢复为 v1，编辑器回到只读升级态 | 恢复为 v2 |
-| 未知 `schemaVersion > 2` | 不适用 | 全部入口只读拒绝，不猜测兼容 |
+| 操作方 / 操作            | v1                               | v2                                                                    |
+| ------------------------ | -------------------------------- | --------------------------------------------------------------------- |
+| v1 Studio / Runtime      | 正常读取与执行                   | 在打开浏览器和分配运行目录前以 `FLOW_SCHEMA_VERSION_UNSUPPORTED` 拒绝 |
+| vNext 通用读取           | 版本分派读取                     | 版本分派读取                                                          |
+| vNext Studio 编辑        | 只读；提示显式升级               | 可编辑                                                                |
+| vNext Runtime            | 保留 legacy v1 执行路径          | 使用输入会话执行路径                                                  |
+| recorder 同步            | 继续生成/保存 v1                 | 不直接生成 v2；由 Studio 升级                                         |
+| 新版导入                 | 按 v1 规则安全化后创建 v1 新副本 | 按 v2 显式敏感策略校验后创建 v2 新副本                                |
+| 新版导出                 | 保持 v1                          | 保持 v2；无运行值                                                     |
+| 导出为旧格式             | 原样 v1                          | 不支持自动降级，返回 `FLOW_DOWNGRADE_UNSUPPORTED`                     |
+| 版本恢复                 | 恢复为 v1，编辑器回到只读升级态  | 恢复为 v2                                                             |
+| 未知 `schemaVersion > 2` | 不适用                           | 全部入口只读拒绝，不猜测兼容                                          |
 
 `parseFlowDocument` 必须改成版本分派器，分别返回 `FlowDocumentV1 | FlowDocumentV2`。任何写入口先分派再使用对应严格 schema；不得把 v2 丢给 v1 schema，也不得 strip 掉未知字段后继续。
 
@@ -441,14 +458,14 @@ saveFlowRevision({
 
 ### 8.5 Local API 边界候选
 
-| 命令 | 作用 | 核心防护 |
-| --- | --- | --- |
-| 既有 `POST /projects/:id/flows` | recorder v1 同步 | 只接受 v1；维持兼容 |
-| `PUT /projects/:id/flows/:flowId` | Studio v2 保存 | 规范字段 `expectedRevision`、严格身份匹配、原子版本 |
-| `POST /projects/:id/flows/:flowId/upgrade-previews` | 生成迁移预览 | 只读、无副作用 |
-| `POST /projects/:id/flows/:flowId/upgrades` | 提交升级 | revision + fingerprint + 用户确认 |
-| `POST /projects/:id/flow-versions/:versionId/restore` | 恢复版本 | 增加 expectedRevision；原子快照/恢复 |
-| 既有 `POST /projects/:id/flow-imports` | 导入独立副本 | 版本分派、大小上限、失败无写入 |
+| 命令                                                  | 作用             | 核心防护                                            |
+| ----------------------------------------------------- | ---------------- | --------------------------------------------------- |
+| 既有 `POST /projects/:id/flows`                       | recorder v1 同步 | 只接受 v1；维持兼容                                 |
+| `PUT /projects/:id/flows/:flowId`                     | Studio v2 保存   | 规范字段 `expectedRevision`、严格身份匹配、原子版本 |
+| `POST /projects/:id/flows/:flowId/upgrade-previews`   | 生成迁移预览     | 只读、无副作用                                      |
+| `POST /projects/:id/flows/:flowId/upgrades`           | 提交升级         | revision + fingerprint + 用户确认                   |
+| `POST /projects/:id/flow-versions/:versionId/restore` | 恢复版本         | 增加 expectedRevision；原子快照/恢复                |
+| 既有 `POST /projects/:id/flow-imports`                | 导入独立副本     | 版本分派、大小上限、失败无写入                      |
 
 所有写命令只接受 JSON，校验 Origin 之外还需沿用 Electron/本地服务的既有可信调用边界；不得为了 v2 开放 renderer 任意数据库路径。
 
@@ -484,29 +501,29 @@ v2 的 `ExecutionRunContext` 不再保存原始输入映射。允许持久化：
 - IPC payload、运行时内存对象的 JSON dump；
 - 含输入值的错误、步骤快照、DOM/HAR 诊断或日志。
 
-Flow 只要声明任一敏感字段，Runtime 整个会话就必须关闭 HAR。首次敏感提交被原子接受后，会话进入不可逆敏感作用域，后续 screenshot、page snapshot 与 DOM 诊断全部关闭；错误与诊断始终不得携带 resolved step、locator、URL 或输入。Runtime 持久化结果必须附结构化 artifact policy 声明（attestation），其物理字段与枚举以 G3 Runtime 会话规范最终稿为准。knowledge 只能把该声明与会话敏感状态、步骤时序和 artifact refs 交叉校验：禁用期出现产物引用、声明缺失或状态矛盾时拒绝整条执行落盘。
+Flow 只要声明任一敏感字段，Runtime 整个会话就必须关闭 HAR。首次敏感提交被原子接受后，会话进入不可逆敏感作用域，后续 screenshot、page snapshot 与 DOM 诊断全部关闭；错误与诊断始终不得携带 resolved step、locator、URL 或输入。Runtime 持久化结果必须附物理字段 `artifactSafety`，包含 `policyVersion / flowHasSensitiveFields / sensitiveValueAccepted / harCaptured / sensitiveAcceptedAtStepIndex?`。完整类型以 [Runtime 输入会话规范](./vnext-runtime-input-session.md#72-artifact-policy) 为准。knowledge 只能把该声明与会话敏感状态、步骤时序和 artifact refs 交叉校验：禁用期出现产物引用、声明缺失或状态矛盾时拒绝整条执行落盘。
 
 artifact policy 声明只证明调用方声称执行了哪项策略，**不能证明文件内容中没有秘密**。因此安全验收还必须对数据库、运行目录、导出文件、错误和日志注入唯一 canary 敏感值并做独立扫描；策略声明校验与 canary 内容扫描任一失败都不得通过发布门禁。
 
 ## 10. 错误分类
 
-| 错误码候选 | 时机 | 对外安全信息 |
-| --- | --- | --- |
-| `FLOW_SCHEMA_VERSION_UNSUPPORTED` | 版本分派 | 仅返回收到/支持的版本号 |
-| `FLOW_V2_STRUCTURE_INVALID` | Zod 结构校验 | 返回 JSON path 与规则，不回显值 |
-| `FLOW_DUPLICATE_ID` | 步骤或 fieldId 重复 | 返回冲突路径与 ID；不返回字段值 |
-| `FLOW_DUPLICATE_LABEL` | 同一 input 节点内规范化 label 重复 | 返回节点与冲突字段路径；不同节点同名不报错 |
-| `FLOW_FIELD_REFERENCE_UNKNOWN` | 引用不存在 | 返回消费路径与 fieldId |
-| `FLOW_FIELD_REFERENCE_FUTURE` | 消费早于输入节点 | 返回消费步骤与 inputNodeId |
-| `FLOW_BINDING_TARGET_FORBIDDEN` | 禁止槽位出现引用 | 返回槽位路径 |
-| `FLOW_BINDING_MIXED_TEMPLATE_FORBIDDEN` | 混合或多个引用 | 返回槽位路径 |
-| `FLOW_BINDING_TYPE_MISMATCH` | 类型不匹配 | 返回期望/实际类型与 fieldId |
-| `FLOW_SENSITIVE_POLICY_INVALID` | sensitive/default/remember/消费冲突 | 返回规则与 fieldId，不回显值 |
-| `FLOW_SELECTION_CONTEXT_INVALID` | 搜索选择依赖无效 | 返回选择步骤与 searchStepId |
-| `FLOW_UPGRADE_BLOCKED` | 迁移存在阻塞项 | 返回结构化 issues 与报告 fingerprint |
-| `FLOW_REVISION_CONFLICT` | 保存/恢复/升级竞态 | 返回 expected/current revision |
-| `FLOW_DOWNGRADE_UNSUPPORTED` | 请求 v2→v1 | 说明不能无损降级 |
-| `FLOW_PERSISTENCE_FAILED` | 原子事务失败 | 通用失败信息；内部日志也不得含值 |
+| 错误码候选                              | 时机                                | 对外安全信息                               |
+| --------------------------------------- | ----------------------------------- | ------------------------------------------ |
+| `FLOW_SCHEMA_VERSION_UNSUPPORTED`       | 版本分派                            | 仅返回收到/支持的版本号                    |
+| `FLOW_V2_STRUCTURE_INVALID`             | Zod 结构校验                        | 返回 JSON path 与规则，不回显值            |
+| `FLOW_DUPLICATE_ID`                     | 步骤或 fieldId 重复                 | 返回冲突路径与 ID；不返回字段值            |
+| `FLOW_DUPLICATE_LABEL`                  | 同一 input 节点内规范化 label 重复  | 返回节点与冲突字段路径；不同节点同名不报错 |
+| `FLOW_FIELD_REFERENCE_UNKNOWN`          | 引用不存在                          | 返回消费路径与 fieldId                     |
+| `FLOW_FIELD_REFERENCE_FUTURE`           | 消费早于输入节点                    | 返回消费步骤与 inputNodeId                 |
+| `FLOW_BINDING_TARGET_FORBIDDEN`         | 禁止槽位出现引用                    | 返回槽位路径                               |
+| `FLOW_BINDING_MIXED_TEMPLATE_FORBIDDEN` | 混合或多个引用                      | 返回槽位路径                               |
+| `FLOW_BINDING_TYPE_MISMATCH`            | 类型不匹配                          | 返回期望/实际类型与 fieldId                |
+| `FLOW_SENSITIVE_POLICY_INVALID`         | sensitive/default/remember/消费冲突 | 返回规则与 fieldId，不回显值               |
+| `FLOW_SELECTION_CONTEXT_INVALID`        | 搜索选择依赖无效                    | 返回选择步骤与 searchStepId                |
+| `FLOW_UPGRADE_BLOCKED`                  | 迁移存在阻塞项                      | 返回结构化 issues 与报告 fingerprint       |
+| `FLOW_REVISION_CONFLICT`                | 保存/恢复/升级竞态                  | 返回 expected/current revision             |
+| `FLOW_DOWNGRADE_UNSUPPORTED`            | 请求 v2→v1                          | 说明不能无损降级                           |
+| `FLOW_PERSISTENCE_FAILED`               | 原子事务失败                        | 通用失败信息；内部日志也不得含值           |
 
 错误对象禁止包含 Flow 全文、输入 payload、defaultValue 原值、SQLite SQL 文本或绝对数据库路径。
 

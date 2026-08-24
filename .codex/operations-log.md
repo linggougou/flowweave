@@ -7244,3 +7244,16 @@
 - CodeGraph 当前无可调用入口。原用途：结构调用关系与影响分析。替代流程：`rg`、源码与测试定向阅读、类型交叉映射；替代结果：已定位 flow-dsl、runtime、Electron/Studio 与 project-knowledge 关键边界，后续每份设计须列出现状映射。
 - 已创建集成分支 `codex/vnext-0-design-gate-integration`，更新 `PROJECT_ROUTE_LOCK.md` 与 post-v1 路线，新增变更单、活跃执行计划和上下文摘要。
 - G0 范围检查：当前只修改 `PROJECT_ROUTE_LOCK.md`、`docs/` 与 `.codex/`；未修改 `apps/`、`packages/`、migration 或构建配置。
+
+## 2026-08-24 vNext-0 G1-G3 并行设计、校准与集成
+
+- G1 产品/UX worktree：`flowweave-worktrees/vnext0-product-ux`；源提交 `0147801`、安全收紧 `59856d6`，集成为 `9e33af6`、`f6cb7ce`。
+- G1 冻结线性步骤编辑、input 节点/字段、来源消费者、白名单 binding、`selectionContext.searchStepId`、脏状态/撤销、15 分钟等待、取消、可访问性与敏感 UX。主代理退回修订普通字段值回显，最终 ACK 后所有值清空，只保留无值状态。
+- G2 DSL/迁移 worktree：`flowweave-worktrees/vnext0-dsl-migration`；源提交 `c8fe42b`、校准 `0359a0f`，集成为 `508eded`、`776eb53`。
+- G2 冻结 schema v2、`input.fields[]` 唯一真源、删除顶层 variables、稳定 fieldId、整值 `{{fieldId}}`、placeholder UI 元数据、expectedRevision/fingerprint 显式升级、原子版本/回滚、独立最近值与敏感历史清理。主代理要求保留旧 flow/project/browser-step 身份、删除冗余 field name，并明确 label 仅节点内唯一。
+- G3 Runtime/Electron/security worktree：`flowweave-worktrees/vnext0-runtime-session`；源提交 `50d414e`、初始值校准 `0806423`，集成为 `57accd2`、`e3ccd60`。
+- G3 冻结主进程单活跃会话、七状态、固定 IPC/event、安全 owner 校验、request/node/field/command 身份与幂等、15 分钟 timeout、10 秒取消 drain、reload/进程/窗口/app/main 故障语义、无持久化恢复，以及完整敏感值生命周期。
+- 安全交叉校准：敏感 Flow 从启动禁用 HAR；首次敏感值接受后禁用后续 screenshot/page/DOM；`artifactSafety` 只是可与 Flow/refs 交叉校验的声明，不能取代 canary 内容扫描；JavaScript/structured clone 不承诺物理清零。
+- 初始值交叉校准：仅非敏感字段可在 input-required 投影中携带 `initialValue/initialValueSource`，优先级为合法 lastValue → defaultValue → absent；reload 不恢复手工草稿，ACK/取消/终态删除投影。
+- 主代理统一 `resolvedFields`、artifactSafety 物理字段与 reload 语义，更新 ADR 索引和 Flow DSL 未来状态，并新增 `docs/design-docs/vnext-implementation-dag.md`，将后续工作拆成 vNext-1A/1B/2A/2B/3A/3B/4。
+- 三个功能 Agent 完成后均确认 worktree clean；提交 patch-equivalent 集成后已移除 worktree 与临时分支，仅剩主集成工作树。

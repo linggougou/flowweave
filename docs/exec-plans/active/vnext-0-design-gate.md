@@ -18,6 +18,8 @@
 
 ## 3. 并行设计轨
 
+状态：G1-G3 已完成并集成；等待统一验证与独立 Judge。
+
 ### G1 产品与 UX
 
 所有者只修改：
@@ -71,7 +73,7 @@ vNext-1A ──> vNext-3A Studio 线性模板编辑 ├──> vNext-3B 运行�
                                          └──> vNext-4 纵向 E2E、迁移/回滚与发布门禁
 ```
 
-设计阶段必须为每一节点定义红灯测试、最小交付、回滚点和退出门禁。
+设计阶段必须为每一节点定义红灯测试、最小交付、回滚点和退出门禁。冻结结果见 [`docs/design-docs/vnext-implementation-dag.md`](../../design-docs/vnext-implementation-dag.md)。
 
 ## 6. 验收合同
 
