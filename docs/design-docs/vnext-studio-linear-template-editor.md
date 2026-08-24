@@ -276,7 +276,7 @@ CSS、XPath、testId、target hints、scope、按键、文件和等待时长保�
 
 ### 11.1 打开条件与身份
 
-仅当当前活动执行实例发出规范 `waitingForInput` 事件时打开。Studio 必须以 `executionId`、`sessionId`、`inputRequestId` 和 `inputNodeId` 校验事件属于当前执行、内存会话和一次输入请求；提交值只按 `fieldId` 发送，并用 `clientCommandId` 实现命令幂等。跨窗口、过期或已取消请求不得覆盖当前 UI。
+仅当当前活动执行实例收到规范 `input-required` 事件、且 session 进入 `waitingForInput` 状态时打开。Studio 必须以 `executionId`、`sessionId`、`inputRequestId` 和 `inputNodeId` 校验事件属于当前执行、内存会话和一次输入请求；提交值只按 `fieldId` 发送，并用 `clientCommandId` 实现命令幂等。跨窗口、过期或已取消请求不得覆盖当前 UI。
 
 ### 11.2 面板结构
 
@@ -291,7 +291,7 @@ CSS、XPath、testId、target hints、scope、按键、文件和等待时长保�
 7. “提交并继续”；
 8. “取消运行”。
 
-已收集摘要中，普通字段显示标签和本次提交值，单值最多展示 80 个字符，超出时省略；敏感字段始终显示“已提供”。这些值不进入 `aria-live` 公告。面板不得展示 executionId、sessionId、inputRequestId 或内部字段 ID 给普通用户。
+已收集摘要中，普通与敏感字段都只显示字段标签和“已提供”，不回显本次提交值。ACK 后所有字段值均从 renderer 与事件数据面清空，摘要只由 `providedFieldIds` 驱动；`aria-live` 也只公告提供状态。面板不得展示 executionId、sessionId、inputRequestId 或内部字段 ID 给普通用户。
 
 每个输入请求固定等待 15 分钟。面板持续显示倒计时，并在剩余 5 分钟和 1 分钟时以 `role="status"` 提醒；提醒不抢焦点、不清空输入。倒计时结束后关闭面板，执行以 `INPUT_WAIT_TIMEOUT` 进入 `failed`，输入节点显示“等待输入超时”，并提供“重新运行”；不显示为取消，也不提供继续或恢复。
 
@@ -309,7 +309,7 @@ CSS、XPath、testId、target hints、scope、按键、文件和等待时长保�
 
 - 主按钮文案“提交并继续”。
 - 点击后立即进入“正在继续…”，禁用字段、提交和重复取消；这是 `waitingForInput` 下等待命令确认的 UI 忙碌反馈，不新增会话状态。
-- Runtime 接受提交后，Studio 立即把所有字段值从控件、组件状态和本地草稿中清空；敏感字段只留下“已提供”。
+- Runtime 接受提交后，Studio 立即把所有字段值从控件、组件状态和本地草稿中清空；普通与敏感字段都只通过 `providedFieldIds` 留下“已提供”。
 - 若提交在 IPC/Runtime 接受前失败，可保留 renderer 当前值供修正；错误对象和 UI 文案不得包含值。
 - 重复、过期、跨会话或取消后的提交显示“本次输入请求已结束，未继续运行”，不自动创建新执行。
 
