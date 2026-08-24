@@ -18,7 +18,7 @@
 
 ## 3. 并行设计轨
 
-状态：G1-G3 已完成并集成；独立终审首轮 `REVISE` 的四项 required fixes 已闭合，等待复审。
+状态：G1-G3 已完成并集成；独立终审首轮四项 required fixes 已闭合；R2 的 fieldId P2 已统一，等待具备本地依赖的 R3 最终复审。
 
 ### G1 产品与 UX
 
@@ -109,7 +109,8 @@ vNext-1A ──> vNext-3A Studio 线性模板编辑 ├──> vNext-3B 运行�
 - `.codex/reviews/vnext-0/design-gate/scorecard.json`
 - `.codex/reviews/vnext-0/design-gate/verdict.md`
 - `.codex/reviews/vnext-0/design-gate-final/scorecard.json`（有效首轮独立终审，`REVISE`）
-- 最终复审使用新的 `design-gate-final-r2/` 目录，保留前轮证据不覆盖。
+- `.codex/reviews/vnext-0/design-gate-final-r2/scorecard.json`（R2，`REVISE`）
+- 最终复审使用新的 `design-gate-final-r3/` 目录，保留前轮证据不覆盖。
 
 PASS 条件：总分达到门槛、无 P0/P1、required fixes 为空、所有设计门禁有可定位证据。
 

@@ -5381,3 +5381,10 @@
 - P2 格式：`.codex/operations-log.md` 与 `.codex/verification-report.md` 各补一个缺失空行；本阶段 17 份目标文档的本地 Prettier check 全部通过。
 - 静态验证：工作区与 `736402e..HEAD` 的 `git diff --check` 通过；14 个目标文件相对链接全部存在；范围仍只包含 `PROJECT_ROUTE_LOCK.md`、`docs/` 与 `.codex/`；无关键 TODO/TBD、冲突标记或 `providedFieldIds`；当前 `FLOW_SCHEMA_VERSION = 1`。
 - 当前判断：四项 required fixes 均有可定位证据，允许提交复审候选；新的独立 Judge PASS 前仍不可归档。
+
+## 2026-08-24 vNext-0 R2 复审验证
+
+- R2 结论：`REVISE 93/100`，`P0=0 / P1=0 / P2=2`；上一轮 snapshot、remember、scroll 三项已 fresh verify closed，Prettier 因隔离 worktree 缺本地依赖而未验证。
+- fieldId 修订：Studio、DSL/迁移与存储现统一为 Flow 内全局唯一；不同 Flow 可复用 ID，所有持久化与最近值查找以 `flowId + fieldId` 定位。
+- 主工作树本地 Prettier、diff-check 与范围检查仍通过，但该结果只作主代理 verifier，不替代 R3 Judge 在预装冻结依赖 worktree 的 fresh verification。
+- 当前判断：允许创建 R3 候选；R3 PASS 且 required fixes 为空前仍不可归档。

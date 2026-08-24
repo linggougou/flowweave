@@ -57,3 +57,4 @@
 - 有流程瑕疵的首轮 `PASS 100/100` 仅保留为过程证据，不作为最终会签：该 Judge 修改了被审文档并自行集成。
 - 干净重审得到 `REVISE 78/100`；四项 required fixes 已完成：strict `ExecutionSessionSnapshot`、remember 默认 `never`、v1 `scroll` 真源、历史日志格式。
 - 当前候选等待新的独立 L3 复审；vNext-1 实现、P3 与 P4 均未解冻。
+- R2 为 `REVISE 93/100`：三项上一轮合同修复已关闭；新增发现 fieldId 唯一性口径分歧，现已统一为 Flow 内全局唯一。另一项仅是隔离 worktree 缺依赖导致 Prettier 未能 fresh verify，R3 将预装冻结依赖后复验。

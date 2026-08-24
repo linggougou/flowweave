@@ -7267,3 +7267,10 @@
 - DSL/产品修订 worktree 提交 `7cf8d42`，集成为 `a70c9f5`：新建与迁移字段统一默认 `remember:never`，仅非敏感字段可逐项显式开启 `lastValue`；补齐迁移确认、历史不播种与回滚语义；v1 真源补入已实现的 `scroll`。
 - 两条修订均确认修改范围、格式与 diff-check 后 patch-equivalent 集成，并回收 Agent、worktree 与临时分支；主代理只对 `.codex/operations-log.md` 和 `.codex/verification-report.md` 各补一个格式空行，未重排历史留痕。
 - 当前状态：四项 required fixes 已闭合并通过主代理静态交叉验证；等待新的独立 L3 复审，不提前归档。
+
+## 2026-08-24 vNext-0 R2 独立复审与 P2 收敛
+
+- R2 在独立 worktree 对候选 `ac38032` fresh review，结论 `REVISE 93/100`，无 P0/P1、2 个 P2；审查包提交 `f6394e6` patch-equivalent 集成为 `1b37033`，随后回收 Agent、worktree 与临时分支。
+- 真实 P2：Studio 设计把 `fieldId` 写为“项目内唯一”，迁移/存储合同写为“Flow 内全局唯一”，且最近值使用 `(flow_id, field_id)` 复合键。主代理统一为“当前任务模板（Flow）内全局唯一，不同 Flow 可重复，持久层按 flowId + fieldId 定位”。
+- 环境 P2：R2 worktree 无本地 `node_modules`，因此 `pnpm exec prettier --check` 无法 fresh verify；这不是格式失败，也不包装为通过。R3 worktree 将先按 lockfile 安装依赖，再由 Judge 亲自复验。
+- 当前状态：R2 的合同 P2 已修复；等待提交 R3 候选与最终独立会签。
