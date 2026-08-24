@@ -215,7 +215,7 @@ type ExecutionSessionEventEnvelope = {
         stepType: string;
         completedSteps: number;
         totalSteps: number;
-        currentAction: string;
+        currentAction: SafeCurrentStepProjection["currentAction"];
       }
     | {
         type: "input-required";
@@ -279,10 +279,134 @@ renderer 提交时可覆盖初始值；省略字段时，主进程只可合并�
 
 waiting 状态的安全 snapshot 可以重放同一 request 的 `placeholder/initialValue/initialValueSource`，使 renderer reload 恢复获准的非敏感预填。它不得包含用户尚未提交的编辑草稿、任何敏感值、其他执行实例中未获 `remember:lastValue` 授权的值或已经接受的提交值。input ACK、取消、超时或任一终态后，主进程删除该请求的初始值投影，renderer 同步清空控件；reload 后只会恢复规范初始值，不恢复 reload 前的手工编辑。
 
-### 5.4 顺序、幂等与迟到响应
+### 5.4 `ExecutionSessionSnapshot` 固定合同
+
+main、preload、renderer 与 reload 恢复必须共享下列同一份严格 DTO schema，不能各自维护可选字段对象。所有对象使用 exact/strict 解析（等价于 JSON Schema `additionalProperties: false`）；伪接口中的 `never` 表示字段必须缺席，不是传 `null` 或 `undefined`。`sequence` 与事件 envelope 共用同一 session 单调计数器，表示生成快照前最后一次已提交的规范状态变更；不得再引入 `lastSequence`、renderer 本地序号或时间戳覆盖它。
+
+```typescript
+type SnapshotIdentity = {
+  protocolVersion: 1;
+  sequence: number; // 非负安全整数；与事件使用同一计数器
+  sessionId: string;
+  executionId: string;
+};
+
+type ExecutionProgressSnapshot = {
+  completedSteps: number;
+  totalSteps: number;
+};
+
+type SafeCurrentStepProjection = {
+  stepIndex: number;
+  stepId: string;
+  stepType: string; // 仅当前已编译 DSL 的类型标识
+  currentAction: "正在启动" | "正在执行步骤" | "等待你填写输入节点" | "正在继续执行" | "正在取消";
+};
+
+type SafeWaitingInputProjection = {
+  inputRequestId: string;
+  inputNodeId: string;
+  deadlineAt: string; // ISO 8601，仅展示；裁决仍使用 main 单调时钟
+  node: SafeInputNodeProjection;
+};
+
+type SafeCompletedTerminalOutcome = {
+  status: "completed";
+  finishedAt: string;
+  reasonCode?: never;
+  artifactSafety: RuntimeArtifactSafety;
+};
+
+type SafeFailedTerminalOutcome = {
+  status: "failed";
+  finishedAt: string;
+  reasonCode: SafeSessionReasonCode;
+  artifactSafety: RuntimeArtifactSafety;
+};
+
+type SafeCancelledTerminalOutcome = {
+  status: "cancelled";
+  finishedAt: string;
+  reasonCode?: SafeSessionReasonCode;
+  artifactSafety: RuntimeArtifactSafety;
+};
+
+type IdleExecutionSessionSnapshot = SnapshotIdentity & {
+  state: "idle";
+  progress: null;
+  currentStep?: never;
+  waitingInput?: never;
+  cancellationDeadlineAt?: never;
+  terminalOutcome?: never;
+};
+
+type RunningExecutionSessionSnapshot = SnapshotIdentity & {
+  state: "running";
+  progress: ExecutionProgressSnapshot;
+  currentStep: SafeCurrentStepProjection | null; // 两个步骤的原子交界可为 null
+  waitingInput?: never;
+  cancellationDeadlineAt?: never;
+  terminalOutcome?: never;
+};
+
+type WaitingExecutionSessionSnapshot = SnapshotIdentity & {
+  state: "waitingForInput";
+  progress: ExecutionProgressSnapshot;
+  currentStep: SafeCurrentStepProjection;
+  waitingInput: SafeWaitingInputProjection;
+  cancellationDeadlineAt?: never;
+  terminalOutcome?: never;
+};
+
+type CancellingExecutionSessionSnapshot = SnapshotIdentity & {
+  state: "cancelling";
+  progress: ExecutionProgressSnapshot;
+  currentStep: SafeCurrentStepProjection | null;
+  waitingInput?: never;
+  cancellationDeadlineAt: string; // ISO 8601 展示值；10s drain 仍由 main 裁决
+  terminalOutcome?: never;
+};
+
+type TerminalSnapshotBase = SnapshotIdentity & {
+  progress: ExecutionProgressSnapshot;
+  currentStep?: never;
+  waitingInput?: never;
+  cancellationDeadlineAt?: never;
+};
+
+type TerminalExecutionSessionSnapshot = TerminalSnapshotBase &
+  (
+    | { state: "completed"; terminalOutcome: SafeCompletedTerminalOutcome }
+    | { state: "failed"; terminalOutcome: SafeFailedTerminalOutcome }
+    | { state: "cancelled"; terminalOutcome: SafeCancelledTerminalOutcome }
+  );
+
+type ExecutionSessionSnapshot =
+  | IdleExecutionSessionSnapshot
+  | RunningExecutionSessionSnapshot
+  | WaitingExecutionSessionSnapshot
+  | CancellingExecutionSessionSnapshot
+  | TerminalExecutionSessionSnapshot;
+```
+
+字段组合约束固定如下：
+
+| 快照类别          | 必需字段                                                     | 必须缺席                                                    | 额外不变量                                                                                                                                                                                                                                                            |
+| ----------------- | ------------------------------------------------------------ | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `running`         | identity、`state`、`progress`、`currentStep`（允许 `null`）  | `waitingInput`、`cancellationDeadlineAt`、`terminalOutcome` | `0 <= completedSteps <= totalSteps`；有当前步骤时其 index/id/type 只来自未插值的编译节点                                                                                                                                                                              |
+| `waitingForInput` | identity、`state`、`progress`、`currentStep`、`waitingInput` | `cancellationDeadlineAt`、`terminalOutcome`                 | `currentStep.stepId === waitingInput.inputNodeId`，对应 input 节点尚未计入 `completedSteps`；只有这一类允许 input deadline 与安全节点投影                                                                                                                             |
+| 任一终态          | identity、`state`、`progress`、`terminalOutcome`             | `currentStep`、`waitingInput`、所有 deadline                | `terminalOutcome.status === state`；`completed` 时 `completedSteps === totalSteps`，其他终态满足 `completedSteps <= totalSteps`；`failed` 必须有稳定 `reasonCode`，`completed` 禁止 reason，`cancelled` 仅可选稳定 reason；`artifactSafety` 必须通过第 7.2 节交叉校验 |
+
+`idle` 只允许 `progress: null`，不能伪造当前步骤；`cancelling` 必须带 10 秒 drain 的展示 deadline，但输入请求已先失效，所以不能再带 `waitingInput`。进入终态的 compare-and-set 完成后可在 registry 驱逐前产生一次终态快照，以覆盖查询竞态；它仅供展示，不能提交、继续或恢复。registry 驱逐后 `getActiveExecutionSession()` 返回 `null`，renderer 只能从普通执行记录读取无值终态投影，不能复活 session。
+
+快照字段是完整 allowlist。除 `SafeInputNodeProjection.initialValue` 中按第 5.3 节明确获准的非敏感候选预填外，任何分支都不得携带提交 `values`、Runtime value store、已接受值、renderer 手工草稿、值摘要/长度/哈希、敏感值、continuation/recovery token、可恢复 session secret、Playwright 引用、文件路径、resolved locator/target/URL、网页文本、事件历史、底层 cause/stack 或未过滤错误。`sessionId/inputRequestId` 只是同一受信 owner 内的路由身份，不是认证凭据，快照不得被持久化或用于跨 `webContents` 转移所有权。
+
+main 在同一临界区内先更新状态与安全快照、分配 `sequence`，再发送对应事件；事件发送失败不回滚快照。preload 只做严格 schema 校验和 structured clone，不补字段；renderer 先注册 listener、再拉 snapshot，并只接受同 session 下更大 `sequence` 的状态。reload 必须丢弃 renderer 手工草稿，只可从 waiting 快照重新应用本次请求中获准的非敏感 `initialValue/initialValueSource`；敏感控件始终为空，终态快照永远不可恢复。
+
+### 5.5 顺序、幂等与迟到响应
 
 1. 主进程在改变规范状态后分配 sequence，再发送事件；事件发送失败不回滚状态。
-2. renderer reducer 只接受同 session 且 `sequence > lastSequence` 的事件。事件丢失时，以 `getActiveExecutionSession()` 的安全快照重新同步；事件 envelope 不是审计日志。
+2. renderer reducer 只接受同 session 且 `sequence > lastAppliedSequence` 的事件。事件丢失时，以 `getActiveExecutionSession()` 的安全快照重新同步；事件 envelope 不是审计日志。
 3. 每个 inputRequestId 只允许一次**不同 clientCommandId 的首次接受**。主进程在调用 Runtime 前原子标记请求为 `accepting`，因此双击、并发 invoke 只有一个能写 value store。
 4. 同一 `clientCommandId` 的重试只返回首次 ACK，`duplicate: true`；去重缓存只存 ID、请求结果和 sequence，不存 values、序列化正文或值摘要。使用同一 ID 发送不同正文仍按重复处理并忽略新正文。
 5. 首次请求已接受后，新的 clientCommandId 返回 `INPUT_REQUEST_ALREADY_RESOLVED`；超时返回 `INPUT_REQUEST_EXPIRED`；inputRequestId/inputNodeId/sessionId 任一不匹配均拒绝且不泄露正确值。
@@ -291,7 +415,7 @@ waiting 状态的安全 snapshot 可以重放同一 request 的 `placeholder/ini
 
 一个输入节点的关键事件顺序固定为：`step-started` → `input-required`（该事件本身原子表示状态已变为 `waitingForInput`）→ `input-accepted` → `step-finished(success)` → `state-changed(running)` → 下一节点的 `step-started`。取消时先发 `state-changed(cancelling)`，资源清理完成后再发唯一 `state-changed(cancelled)`；等待超时时先发 input 节点的 `step-finished(failed)`，再发唯一 `state-changed(failed, INPUT_WAIT_TIMEOUT)`。启动使用 `session-started` 原子表示已进入 `running`，不再为同一转移另发重复状态事件。
 
-### 5.5 backpressure
+### 5.6 backpressure
 
 - 第一版全应用只允许一个活跃 session、每个 session 一个 pending input request；第二次 start 返回 `SESSION_BUSY`。
 - renderer 在 `submitExecutionInput()` Promise 未决时禁用“提交并继续”，主进程仍必须独立防重复。
@@ -373,7 +497,7 @@ V8 字符串不可变，Electron invoke 会 structured-clone，浏览器页面�
 - 到达 input 节点发 `step-started`，随后发 `input-required` 并进入 waiting；此时 `completedSteps` 不增加。
 - 合法提交被 Runtime 接受后，依次发 `input-accepted`、input 节点 `step-finished(success)`、状态回到 running；`completedSteps` 加一，从 `stepIndex + 1` 继续，不重跑此前步骤。
 - 等待超时：input 节点 step log 为 failed，只含 `INPUT_WAIT_TIMEOUT`；取消：该节点为 skipped/cancelled 投影，不含字段和值。
-- `currentAction` 只能使用固定安全文案，例如“等待你填写输入节点”“正在继续执行”；不得拼接 node description、field label 之外的网页数据。
+- `currentAction` 只能使用第 5.4 节联合类型中的固定安全文案；不得拼接 node description、field label、网页数据或已解析动作参数。
 - 输入字段是否已收集的 UI 摘要只用 `resolvedFields` 与字段定义重建“已提供”，不携带值。最终普通历史若保存该状态，也只能使用上一节的 fieldId/source 无值元数据。
 - session 的 sequence 是 UI 状态顺序真源；时间戳不参与覆盖判断。
 
@@ -484,7 +608,7 @@ sequenceDiagram
 
 ### 12.1 renderer reload
 
-reload 不等于关闭 Studio。主进程保持 session；新 renderer 订阅固定事件后读取 `ExecutionSessionSnapshot`。快照包含 session/execution id、state、lastSequence、进度、当前安全 input node 投影和 deadline。若正在 waiting，它可以恢复本次 request 明确获准的非敏感 `initialValue` 与 `initialValueSource`，但不含敏感值、renderer 编辑草稿或已经接受的提交值；若刚提交成功则显示 running 且不再带 input projection。
+reload 不等于关闭 Studio。主进程保持 session；新 renderer 订阅固定事件后读取第 5.4 节的严格 `ExecutionSessionSnapshot`，并以其 `sequence` 与同一计数器上的事件收敛。若正在 waiting，它可以恢复本次 request 明确获准的非敏感 `initialValue` 与 `initialValueSource`，但不含敏感值、renderer 编辑草稿或已经接受的提交值；若刚提交成功则显示 running 且 `waitingInput` 必须缺席。终态查询竞态即使返回终态快照也只供展示，不能恢复会话。
 
 实现必须区分正常 reload 与 renderer 异常退出：
 
@@ -532,6 +656,8 @@ reload 不等于关闭 Studio。主进程保持 session；新 renderer 订阅固
 9. 发送事件失败、窗口 destroyed 不影响终态持久化和 finally。
 10. normalize DTO 覆盖额外 key、原型、getter、超长字符串、字段数量、NaN/Infinity/对象等攻击输入。
 11. Local API 不存在 session start/submit/cancel route；Web fallback 不能获得这些方法。
+12. `ExecutionSessionSnapshot` 对五个状态分支执行 strict schema 测试：running/waiting/terminal 的必需字段缺失会拒绝，任一禁止字段或未知字段出现也会拒绝；事件与 snapshot 共用 sequence，查询竞态只接受较新状态。
+13. 快照泄露测试注入提交值、敏感 canary、renderer 草稿、recovery token、resolved locator/URL、底层 cause/stack 与伪造 terminal reason，证明全部被 schema 或安全投影拒绝；waiting reload 只重放获准非敏感 initialValue，终态不可恢复。
 
 ### 13.3 persistence 与泄露回归
 
