@@ -1,0 +1,282 @@
+{
+  "review_id": "vnext-0-design-gate-final-r2-2026-08-24",
+  "task_id": "vNext-0",
+  "lane": "design-gate-final-r2",
+  "review_level": "L3",
+  "rubric_id": "vnext-0-design-gate-l3-v1",
+  "reviewed_sha": "ac38032dca3064870bb1c8f93960363579fbc02c",
+  "artifact_refs": [
+    "baseline:736402edc6145e159bf1394a443f14c462b130db",
+    "reviewed-commit:ac38032dca3064870bb1c8f93960363579fbc02c",
+    "doc:PROJECT_ROUTE_LOCK.md",
+    "doc:docs/superpowers/specs/2026-06-10-backoffice-interactive-task-template-design.md",
+    "doc:docs/design-docs/vnext-studio-linear-template-editor.md",
+    "doc:docs/design-docs/vnext-flow-schema-migration.md",
+    "doc:docs/design-docs/vnext-runtime-input-session.md",
+    "doc:docs/design-docs/vnext-implementation-dag.md",
+    "doc:docs/adr/0009-vnext-input-node-and-schema-versioning.md",
+    "doc:docs/adr/0010-vnext-runtime-input-session.md",
+    "doc:docs/domain/flow-dsl.md",
+    "code:packages/shared/src/constants.ts",
+    "code:packages/flow-dsl/src/schema.ts",
+    "code:packages/recorder/src/normalize.ts",
+    "code:packages/runtime/src/playwright-runner.ts"
+  ],
+  "command_results": [
+    {
+      "cmd": "git status --short",
+      "status": "pass",
+      "result": "无输出，worktree 在写审查包前为 clean。"
+    },
+    {
+      "cmd": "git diff --name-only 736402edc6145e159bf1394a443f14c462b130db ac38032dca3064870bb1c8f93960363579fbc02c",
+      "status": "pass",
+      "result": "diff 只命中文档、ADR、计划与 .codex 留痕；未命中 apps/ 或 packages/。"
+    },
+    {
+      "cmd": "git diff --name-only 736402edc6145e159bf1394a443f14c462b130db ac38032dca3064870bb1c8f93960363579fbc02c | rg '^(apps|packages)/'",
+      "status": "pass",
+      "result": "无输出。"
+    },
+    {
+      "cmd": "git diff --check 736402edc6145e159bf1394a443f14c462b130db ac38032dca3064870bb1c8f93960363579fbc02c",
+      "status": "pass",
+      "result": "无输出。"
+    },
+    {
+      "cmd": "pnpm exec prettier --check PROJECT_ROUTE_LOCK.md ... docs/superpowers/specs/2026-06-10-backoffice-interactive-task-template-design.md",
+      "status": "blocked",
+      "result": "命令返回 ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL: Command \"prettier\" not found；仓库 package.json 已声明 prettier，但当前 worktree 缺少 node_modules/.bin/prettier。"
+    },
+    {
+      "cmd": "node link-check over 14 files",
+      "status": "pass",
+      "result": "checkedFiles=14, filesWithLinks=10, totalLinks=46, broken=[]。"
+    },
+    {
+      "cmd": "rg -n '^TODO|^TBD|^FIXME|^<<<<<<<|^=======$|^>>>>>>>' ...",
+      "status": "pass",
+      "result": "无输出。"
+    },
+    {
+      "cmd": "rg -n 'FLOW_SCHEMA_VERSION|schemaVersion|scroll' docs/domain/flow-dsl.md packages/shared/src/constants.ts packages/flow-dsl/src/schema.ts packages/recorder/src/normalize.ts packages/runtime/src/playwright-runner.ts",
+      "status": "pass",
+      "result": "确认 FLOW_SCHEMA_VERSION=1，且 v1 真源已纳入 scroll，并与 schema/recorder/runtime 对齐。"
+    }
+  ],
+  "hard_gates": [
+    {
+      "id": "design-scope-only-no-implementation-diff",
+      "status": "pass",
+      "evidence": [
+        "baseline..candidate 未命中 apps/ 或 packages/ 变更。",
+        "改动范围限定在设计文档、ADR、计划与 .codex 留痕。"
+      ]
+    },
+    {
+      "id": "previous-required-fixes-regression",
+      "status": "fail",
+      "evidence": [
+        "ExecutionSessionSnapshot 固定合同已补齐。",
+        "remember 默认策略已统一为新建与 v1->v2 升级候选默认 never。",
+        "docs/domain/flow-dsl.md 已把 scroll 纳入 v1 真源。",
+        "但本轮要求的本地 prettier 硬门禁无法 fresh verify，且设计真源新增了 fieldId 唯一性范围分歧。"
+      ]
+    },
+    {
+      "id": "cross-doc-contract-consistency",
+      "status": "fail",
+      "evidence": [
+        "docs/design-docs/vnext-studio-linear-template-editor.md:153 写 fieldId 为“项目内唯一”。",
+        "docs/design-docs/vnext-flow-schema-migration.md:260 与 :478-485 又以“Flow 内全局唯一”与 (flow_id, field_id) 复合主键为真源。",
+        "该差异会直接影响字段冲突校验、最近值索引键与实现测试口径。"
+      ]
+    },
+    {
+      "id": "runtime-session-state-and-ipc-closure",
+      "status": "pass",
+      "evidence": [
+        "docs/design-docs/vnext-runtime-input-session.md:282-406 现已给出 strict ExecutionSessionSnapshot 合同，覆盖 idle/running/waitingForInput/cancelling/terminal。",
+        "sequence、禁止字段、reload 仅恢复安全 initialValue、终态不可恢复与泄露 allowlist 均已明确。"
+      ]
+    },
+    {
+      "id": "v1-compatibility-upgrade-and-atomic-rollback",
+      "status": "pass",
+      "evidence": [
+        "docs/design-docs/vnext-flow-schema-migration.md:339, 362, 424-452 明确 old runtime 在任何浏览器/运行目录副作用前拒绝 v2，并要求 immediate transaction 原子保存/恢复/升级。",
+        "docs/adr/0009-vnext-input-node-and-schema-versioning.md:25-26,104-106 与之对齐。"
+      ]
+    },
+    {
+      "id": "sensitive-lifecycle-and-artifact-policy",
+      "status": "pass",
+      "evidence": [
+        "docs/design-docs/vnext-runtime-input-session.md:471-476, 666-674 与 docs/design-docs/vnext-flow-schema-migration.md:506-508 要求 HAR、截图、DOM 与 artifactSafety/canary 双门禁。",
+        "敏感值不播种最近值、不进普通历史、不做会话恢复。"
+      ]
+    },
+    {
+      "id": "static-doc-hygiene",
+      "status": "skipped",
+      "evidence": [
+        "git diff --check 通过。",
+        "内部链接、TODO/TBD/FIXME/冲突标记检查通过。",
+        "但本地 prettier 检查受当前 worktree 缺少 node_modules 阻塞，无法对格式门禁给出 pass/fail 结论。"
+      ]
+    },
+    {
+      "id": "current-implementation-remains-schema-v1",
+      "status": "pass",
+      "evidence": [
+        "packages/shared/src/constants.ts 仍导出 FLOW_SCHEMA_VERSION = 1。",
+        "baseline..candidate 没有任何实现层 diff，把 v2 伪装成已实现的风险未出现。"
+      ]
+    }
+  ],
+  "regression_checks": [
+    {
+      "item": "ExecutionSessionSnapshot 固定结构",
+      "previous_required_fix": true,
+      "status": "closed",
+      "evidence_refs": [
+        "docs/design-docs/vnext-runtime-input-session.md:282-406",
+        "docs/adr/0010-vnext-runtime-input-session.md:27-30"
+      ]
+    },
+    {
+      "item": "remember 默认冲突",
+      "previous_required_fix": true,
+      "status": "closed",
+      "evidence_refs": [
+        "docs/superpowers/specs/2026-06-10-backoffice-interactive-task-template-design.md:119-121",
+        "docs/design-docs/vnext-studio-linear-template-editor.md:151",
+        "docs/design-docs/vnext-flow-schema-migration.md:359-377"
+      ]
+    },
+    {
+      "item": "v1 scroll 真源缺口",
+      "previous_required_fix": true,
+      "status": "closed",
+      "evidence_refs": [
+        "docs/domain/flow-dsl.md:32-43,147-149,168-186",
+        "packages/flow-dsl/src/schema.ts:91,139",
+        "packages/recorder/src/normalize.ts:433-445,681",
+        "packages/runtime/src/playwright-runner.ts:1946-1990"
+      ]
+    },
+    {
+      "item": "本地 Prettier 门禁",
+      "previous_required_fix": true,
+      "status": "not_verified",
+      "evidence_refs": [
+        "package.json:12-13,36",
+        "pnpm exec prettier --check -> Command \"prettier\" not found",
+        "node_modules/.bin/prettier missing"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "severity": "P2",
+      "title": "fieldId 唯一性范围在设计真源内不一致",
+      "summary": "Studio 设计写“项目内唯一”，迁移/存储设计写“Flow 内全局唯一”并以 (flow_id, field_id) 建键，足以把实现与测试导向两套不同约束。",
+      "evidence_refs": [
+        "docs/design-docs/vnext-studio-linear-template-editor.md:153",
+        "docs/design-docs/vnext-flow-schema-migration.md:260",
+        "docs/design-docs/vnext-flow-schema-migration.md:478-485"
+      ]
+    },
+    {
+      "severity": "P2",
+      "title": "本地 prettier 硬门禁本轮无法 fresh verify",
+      "summary": "本轮按要求使用 pnpm exec prettier --check 时，当前 worktree 缺少本地 prettier 可执行文件，导致上一轮的格式 required fix 无法在本次独立复核中闭合验证。",
+      "evidence_refs": [
+        "package.json:12-13,36",
+        "pnpm exec prettier --check -> ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL",
+        "node_modules/.bin/prettier missing"
+      ]
+    }
+  ],
+  "p0_count": 0,
+  "p1_count": 0,
+  "p2_count": 2,
+  "dimensions": [
+    {
+      "name": "correctness",
+      "score": 24,
+      "max_score": 25,
+      "reason": "上一轮三项实质设计缺口已补齐，但 fieldId 作用域仍有跨文档分歧。"
+    },
+    {
+      "name": "security",
+      "score": 25,
+      "max_score": 25,
+      "reason": "remember 默认、敏感生命周期、artifactSafety 与 canary 门禁都保持 fail-closed。"
+    },
+    {
+      "name": "regression_safety",
+      "score": 19,
+      "max_score": 20,
+      "reason": "v1 schemaVersion=1、old runtime 副作用前拒绝、原子回滚都写清，但 fieldId 范围分歧会影响最近值与唯一性回归口径。"
+    },
+    {
+      "name": "route_discipline",
+      "score": 10,
+      "max_score": 10,
+      "reason": "候选严格停留在设计与留痕范围。"
+    },
+    {
+      "name": "evidence_quality",
+      "score": 19,
+      "max_score": 20,
+      "reason": "diff-check、内部链接、冲突标记、v1 真源映射都完成，但 prettier 本地硬门禁因缺少已安装依赖未能完成。"
+    }
+  ],
+  "penalties": [
+    {
+      "severity": "P2",
+      "deduction": 2,
+      "reason": "fieldId 唯一性作用域分歧会影响约束实现、最近值键模型与测试口径。"
+    },
+    {
+      "severity": "P2",
+      "deduction": 2,
+      "reason": "本地 prettier 硬门禁无法在当前 worktree fresh verify，导致 required fix 闭合证据缺口。"
+    }
+  ],
+  "totals": {
+    "raw_score": 97,
+    "penalty_total": 4,
+    "final_score": 93
+  },
+  "verdict": "REVISE",
+  "required_fixes": [
+    "统一 fieldId 的唯一性真源：明确到底是“Flow 内全局唯一”还是“项目内唯一”，并同步修正 Studio 设计、迁移/存储设计以及最近值键模型描述，避免实现与测试分叉。",
+    "在具备仓库本地依赖的验证环境中重新执行 `pnpm exec prettier --check` 覆盖本次评审范围文件，并把通过结果作为重新送审的硬证据；在该证据补齐前，本轮不能把上一轮的 Prettier required fix 视为已闭合。"
+  ],
+  "nice_to_have": [],
+  "reviewers": [
+    {
+      "role": "verifier",
+      "conclusion": "REVISE",
+      "summary": "范围、旧问题中的三项设计闭环、v1 兼容与敏感策略都通过，但 cross-doc fieldId 约束分歧和 prettier 硬门禁未验证阻止放行。"
+    },
+    {
+      "role": "strict_judge",
+      "conclusion": "REVISE",
+      "summary": "设计质量整体高，ExecutionSessionSnapshot/remember/scroll 的回归都已修复，但仍有一个新的合同分歧和一个未完成的本地格式证据缺口。"
+    },
+    {
+      "role": "anti_slop_judge",
+      "conclusion": "PASS",
+      "summary": "正文具体、边界清晰、没有模板化空话或偷渡实现。"
+    },
+    {
+      "role": "chief_reviewer",
+      "conclusion": "REVISE",
+      "summary": "本次候选比上一轮显著收口，但在统一 fieldId 真源并补齐本地 prettier 通过证据前，不建议作为 vNext-0 设计闸门最终 PASS 归档。"
+    }
+  ],
+  "reviewed_at": "2026-08-24T15:25:00+08:00"
+}
