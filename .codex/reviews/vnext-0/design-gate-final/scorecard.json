@@ -1,0 +1,243 @@
+{
+  "review_id": "vnext-0-design-gate-final-2026-08-24",
+  "task_id": "vNext-0",
+  "lane": "design-gate-final",
+  "review_level": "L3",
+  "rubric_id": "vnext-0-design-gate-l3-v1",
+  "artifact_refs": [
+    "baseline:736402edc6145e159bf1394a443f14c462b130db",
+    "reviewed-commit:305e008856782ee23984c0c92b4551648367b392",
+    "worktree-head-at-start:326516688d1df18623685456f8f339bd267923a6",
+    "doc:PROJECT_ROUTE_LOCK.md",
+    "doc:docs/change-requests/2026-08-24-vnext-design-unfreeze.md",
+    "doc:docs/domain/flow-dsl.md",
+    "doc:docs/design-docs/vnext-studio-linear-template-editor.md",
+    "doc:docs/design-docs/vnext-flow-schema-migration.md",
+    "doc:docs/design-docs/vnext-runtime-input-session.md",
+    "doc:docs/design-docs/vnext-implementation-dag.md",
+    "doc:docs/adr/0009-vnext-input-node-and-schema-versioning.md",
+    "doc:docs/adr/0010-vnext-runtime-input-session.md",
+    "doc:docs/adr/README.md",
+    "doc:docs/exec-plans/active/vnext-0-design-gate.md",
+    "doc:docs/superpowers/specs/2026-06-10-backoffice-interactive-task-template-design.md",
+    "doc:.codex/context-summary-vnext-0-design-gate.md",
+    "doc:.codex/operations-log.md",
+    "doc:.codex/verification-report.md",
+    "code:packages/shared/src/constants.ts",
+    "code:packages/flow-dsl/src/schema.ts",
+    "code:packages/recorder/src/normalize.ts",
+    "code:packages/runtime/src/playwright-runner.ts",
+    "code:packages/runtime/src/types.ts",
+    "code:apps/studio/src/shared/run-input-state.ts",
+    "code:apps/studio/src/shared/execution-progress.ts",
+    "code:apps/studio/electron/preload.ts",
+    "code:apps/studio/electron/main.ts",
+    "cmd:git diff --name-only 736402edc6145e159bf1394a443f14c462b130db 305e008856782ee23984c0c92b4551648367b392",
+    "cmd:git diff --check 736402edc6145e159bf1394a443f14c462b130db 305e008856782ee23984c0c92b4551648367b392 -> pass",
+    "cmd:pnpm dlx prettier --check ... -> fail: docs/design-docs/vnext-runtime-input-session.md, .codex/operations-log.md, .codex/verification-report.md",
+    "cmd:node internal-link-check -> OK 13 files",
+    "cmd:rg TODO/TBD/FIXME/conflict markers -> no unresolved hits in reviewed design files"
+  ],
+  "hard_gates": [
+    {
+      "id": "design-scope-only-no-implementation-diff",
+      "status": "pass",
+      "evidence": [
+        "736402ed..305e008 的改动仅覆盖设计文档、ADR、路线锁、计划和 .codex 留痕。",
+        "范围过滤未命中 apps/、packages/、migration、config、lockfile 或构建实现文件。"
+      ]
+    },
+    {
+      "id": "cross-doc-contract-consistency",
+      "status": "fail",
+      "evidence": [
+        "产品规格与 Studio UX 明确写“记住上次输入”默认关闭，但迁移规格又把所有非敏感 v1 变量升级为 remember=lastValue，形成升级路径上的持久化语义冲突。",
+        "Runtime 会话 API 依赖 getActiveExecutionSession() 的 ExecutionSessionSnapshot，但该快照结构未在任何设计文档中定义，reload/snapshot 真源不完整。"
+      ]
+    },
+    {
+      "id": "v1-compatibility-upgrade-and-atomic-rollback",
+      "status": "pass",
+      "evidence": [
+        "docs/domain/flow-dsl.md 明确当前生产真源仍为 schemaVersion 1，v2 仅是设计候选。",
+        "迁移设计与 ADR 要求显式预览 + reportFingerprint + expectedRevision，旧 Runtime 在浏览器、运行目录和数据库副作用前拒绝 v2，保存/恢复/升级要求单事务原子回滚。"
+      ]
+    },
+    {
+      "id": "runtime-session-state-and-ipc-closure",
+      "status": "fail",
+      "evidence": [
+        "七状态、身份绑定、幂等、timeout、cancel、crash、reload 等语义大体齐全。",
+        "但 reload 关键真源 ExecutionSessionSnapshot 只被引用和口头描述，没有给出固定字段 schema，主进程、preload、renderer 无法据此共享一个不可分叉的快照合同。"
+      ]
+    },
+    {
+      "id": "sensitive-lifecycle-and-artifact-policy",
+      "status": "pass",
+      "evidence": [
+        "sensitive:true 是唯一敏感判定来源；含敏感字段即禁 HAR，首次接受敏感值后禁后续 screenshot/page/DOM snapshot。",
+        "artifactSafety 只作为声明并要求与实际 refs 交叉校验，最终仍要求独立 canary 泄露扫描。"
+      ]
+    },
+    {
+      "id": "implementation-dag-completeness",
+      "status": "pass",
+      "evidence": [
+        "vnext-implementation-dag.md 对 1A/1B/2A/2B/3A/3B/4 都给出最小交付、红灯合同、退出门禁和回滚点。",
+        "DAG 接口字典与设计正文对 schemaVersion、inputNodeId、fieldId、selectionContext.searchStepId、expectedRevision、artifactSafety 的命名一致。"
+      ]
+    },
+    {
+      "id": "static-doc-hygiene",
+      "status": "fail",
+      "evidence": [
+        "Prettier 静态检查失败：docs/design-docs/vnext-runtime-input-session.md、.codex/operations-log.md、.codex/verification-report.md。",
+        "docs/domain/flow-dsl.md 当前 v1 真源遗漏 scroll 步骤，而当前 schema、recorder 和 runtime 均真实支持 scroll。"
+      ]
+    },
+    {
+      "id": "current-implementation-remains-schema-v1",
+      "status": "pass",
+      "evidence": [
+        "packages/shared/src/constants.ts 仍导出 FLOW_SCHEMA_VERSION = 1。",
+        "当前 Studio preload/main 与 run-input-state 仍是 v1 一次性运行模型，设计文档没有把 v2 写成已实现能力。"
+      ]
+    }
+  ],
+  "dimensions": [
+    {
+      "name": "correctness",
+      "score": 20,
+      "max_score": 25,
+      "reason": "设计主体已经把 v2 字段、升级、会话、敏感策略和 DAG 主线冻结出来，但 ExecutionSessionSnapshot 缺失、升级 remember 默认策略冲突，以及当前 DSL 真源遗漏 scroll，仍会让实现与验收出现分叉。",
+      "evidence_refs": [
+        "doc:docs/design-docs/vnext-runtime-input-session.md",
+        "doc:docs/design-docs/vnext-flow-schema-migration.md",
+        "doc:docs/domain/flow-dsl.md",
+        "code:packages/flow-dsl/src/schema.ts"
+      ]
+    },
+    {
+      "name": "security",
+      "score": 22,
+      "max_score": 25,
+      "reason": "敏感值生命周期本身设计得很严，但升级时把非敏感字段默认迁成 remember:lastValue，会让值持久化策略偏离产品侧的显式开启合同，留下不必要的数据保留风险。",
+      "evidence_refs": [
+        "doc:docs/superpowers/specs/2026-06-10-backoffice-interactive-task-template-design.md",
+        "doc:docs/design-docs/vnext-studio-linear-template-editor.md",
+        "doc:docs/design-docs/vnext-flow-schema-migration.md",
+        "doc:docs/design-docs/vnext-runtime-input-session.md"
+      ]
+    },
+    {
+      "name": "regression_safety",
+      "score": 18,
+      "max_score": 20,
+      "reason": "v1 兼容、旧 Runtime 拒绝和原子回滚边界写得清楚，但当前 DSL 真源对已支持步骤的描述不准确，升级 remember 语义也可能把 v1 习惯无意带进 v2 的最近值存储。",
+      "evidence_refs": [
+        "doc:docs/domain/flow-dsl.md",
+        "doc:docs/design-docs/vnext-flow-schema-migration.md",
+        "code:packages/runtime/src/playwright-runner.ts",
+        "code:apps/studio/src/shared/run-input-state.ts"
+      ]
+    },
+    {
+      "name": "route_discipline",
+      "score": 10,
+      "max_score": 10,
+      "reason": "提交严格停留在设计门禁范围，没有偷渡任何实现层改动。",
+      "evidence_refs": [
+        "doc:PROJECT_ROUTE_LOCK.md",
+        "cmd:git diff --name-only 736402edc6145e159bf1394a443f14c462b130db 305e008856782ee23984c0c92b4551648367b392"
+      ]
+    },
+    {
+      "name": "evidence_quality",
+      "score": 20,
+      "max_score": 20,
+      "reason": "本次复核基于 fresh diff、源码映射、diff-check、Prettier、链接检查和关键词扫描，而不是沿用旧审查包。",
+      "evidence_refs": [
+        "cmd:git diff --check 736402edc6145e159bf1394a443f14c462b130db 305e008856782ee23984c0c92b4551648367b392 -> pass",
+        "cmd:pnpm dlx prettier --check ... -> fail: docs/design-docs/vnext-runtime-input-session.md, .codex/operations-log.md, .codex/verification-report.md",
+        "cmd:node internal-link-check -> OK 13 files"
+      ]
+    }
+  ],
+  "penalties": [
+    {
+      "severity": "P1",
+      "deduction": 5,
+      "reason": "ExecutionSessionSnapshot 被当作 reload/snapshot 真源反复引用，但未定义结构，后续实现会被迫在 main/preload/renderer 各自发明字段。",
+      "evidence_refs": [
+        "doc:docs/design-docs/vnext-runtime-input-session.md"
+      ]
+    },
+    {
+      "severity": "P1",
+      "deduction": 4,
+      "reason": "产品与 UX 合同要求 remember 默认关闭，但迁移设计把所有非敏感 v1 变量默认升级成 remember:lastValue，导致升级路径的持久化语义与产品合同冲突。",
+      "evidence_refs": [
+        "doc:docs/superpowers/specs/2026-06-10-backoffice-interactive-task-template-design.md",
+        "doc:docs/design-docs/vnext-studio-linear-template-editor.md",
+        "doc:docs/design-docs/vnext-flow-schema-migration.md"
+      ]
+    },
+    {
+      "severity": "P2",
+      "deduction": 2,
+      "reason": "docs/domain/flow-dsl.md 当前 v1 真源遗漏 scroll，和 schema/recorder/runtime 的真实支持面不一致，会误导迁移与回归基线。",
+      "evidence_refs": [
+        "doc:docs/domain/flow-dsl.md",
+        "code:packages/flow-dsl/src/schema.ts",
+        "code:packages/recorder/src/normalize.ts",
+        "code:packages/runtime/src/playwright-runner.ts"
+      ]
+    },
+    {
+      "severity": "P2",
+      "deduction": 1,
+      "reason": "Prettier 静态检查未通过，当前设计包没有满足显式要求的格式门禁。",
+      "evidence_refs": [
+        "cmd:pnpm dlx prettier --check ... -> fail: docs/design-docs/vnext-runtime-input-session.md, .codex/operations-log.md, .codex/verification-report.md"
+      ]
+    }
+  ],
+  "totals": {
+    "raw_score": 90,
+    "penalty_total": 12,
+    "final_score": 78
+  },
+  "verdict": "REVISE",
+  "required_fixes": [
+    "在 Runtime 会话设计中补齐 ExecutionSessionSnapshot 的固定结构定义，并明确 waiting/running/terminal 三类快照各自允许携带的字段，避免 main/preload/renderer 各自解释 reload 真源。",
+    "统一 remember 策略：要么把 v1->v2 迁移后的非敏感字段默认改为 never，要么在产品规格、Studio UX 与迁移规格里显式写明升级例外，并把最近值持久化变成用户清楚确认的行为。",
+    "修正 docs/domain/flow-dsl.md 的当前 v1 步骤真源，把 scroll 纳入已实现支持面，并据此保持与 v2 迁移/测试基线一致。",
+    "让显式静态格式门禁恢复通过，至少修复 docs/design-docs/vnext-runtime-input-session.md、.codex/operations-log.md、.codex/verification-report.md 的 Prettier --check 失败。"
+  ],
+  "nice_to_have": [
+    "把 13 个设计文件的内部链接检查脚本固化为仓库命令，避免后续设计包重复手工自检。"
+  ],
+  "reviewers": [
+    {
+      "role": "verifier",
+      "conclusion": "REVISE",
+      "summary": "范围约束、v1 兼容、旧 Runtime 拒绝和 DAG 完整性都通过，但 reload 快照合同缺失、remember 升级语义冲突和静态门禁失败阻止 PASS。"
+    },
+    {
+      "role": "strict_judge",
+      "conclusion": "REVISE",
+      "summary": "设计主体质量高，但仍有会影响实现一致性与数据保留语义的 P1 缺口，不能以 PASS 放行。"
+    },
+    {
+      "role": "anti_slop_judge",
+      "conclusion": "PASS",
+      "summary": "正文不是模板化空话，关键状态、字段、错误边界和 canary 门禁都具体可测。"
+    },
+    {
+      "role": "chief_reviewer",
+      "conclusion": "REVISE",
+      "summary": "本包可修可收，但在补齐快照合同、统一 remember 语义并恢复静态格式门禁前，不应作为 vNext-0 最终 PASS 归档。"
+    }
+  ],
+  "reviewed_at": "2026-08-24T14:34:40+08:00"
+}
