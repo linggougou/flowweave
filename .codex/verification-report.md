@@ -5282,6 +5282,7 @@
 - 资源复核：仅剩主工作树；本地 P2.7 功能/集成分支已删除；临时目录已移至废纸篓；测试服务端口 `3847`、`5173`、`5174` 均无监听；无运行中的非主 Agent。
 - 最终判断：P2.7 功能、独立总审、定向/全量测试、真实 UI、构建、安全审计、E2E、本地 Node 20/24 与远端集成/main 双矩阵全部通过，可以归档。
 - 路线边界：未新增 Local API / Web destructive capability；Flow/项目/批量/版本删除、可编辑 diff、P3/P4 与 vNext 未混入，继续冻结。
+
 ## 2026-08-24 P2.8 开发前基线
 
 - 起点：`b328ebacf1c5d3314c079f3995329f055e078878`；main 与 origin/main 一致，开发前工作区 clean。
@@ -5370,3 +5371,13 @@
 - 静态：`git diff --check` 通过；无冲突标记，无关键 TODO/TBD。
 - 资源：G1/G2/G3 worktree 与临时分支已回收，仅剩主集成工作树；用户 stash 未触碰。
 - 当前判断：G1-G3 与主代理 Verifier 通过，可提交统一设计候选并进入独立 L3 Judge；Judge 尚未执行，因此 vNext-0 暂不可归档。
+
+## 2026-08-24 vNext-0 独立终审 REVISE 整改验证
+
+- 有效独立终审：`REVISE 78/100`，2 个 P1、2 个 P2；审查包提交经 patch-id 核对后集成为 `690867e`。较早的 `PASS 100/100` 因 Judge 修改被审对象和自行集成而不作为最终会签。
+- P1 snapshot：`ExecutionSessionSnapshot` 现为 strict 联合类型，覆盖 idle/running/waitingForInput/cancelling/terminal；明确必需/禁止字段、sequence 真源、safe current step、waiting deadline、terminal outcome、artifactSafety、reload 只恢复获准非敏感 initialValue，以及终态不可恢复。
+- P1 remember：产品、Studio UX、迁移和 Flow DSL 统一为新建/迁移默认 `remember:never`；仅非敏感字段可由作者逐项显式改为 `lastValue`，敏感字段永远 never；不从 v1 默认值或历史播种最近值，确认结果参与 fingerprint。
+- P2 v1 真源：`docs/domain/flow-dsl.md` 已补入当前 schema/recorder/runtime 实现支持的 `scroll`，并明确当前 v1 共 9 类步骤、v2 仍未实现。
+- P2 格式：`.codex/operations-log.md` 与 `.codex/verification-report.md` 各补一个缺失空行；本阶段 17 份目标文档的本地 Prettier check 全部通过。
+- 静态验证：工作区与 `736402e..HEAD` 的 `git diff --check` 通过；14 个目标文件相对链接全部存在；范围仍只包含 `PROJECT_ROUTE_LOCK.md`、`docs/` 与 `.codex/`；无关键 TODO/TBD、冲突标记或 `providedFieldIds`；当前 `FLOW_SCHEMA_VERSION = 1`。
+- 当前判断：四项 required fixes 均有可定位证据，允许提交复审候选；新的独立 Judge PASS 前仍不可归档。

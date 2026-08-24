@@ -51,3 +51,9 @@
 - ADR：`docs/adr/0009-vnext-input-node-and-schema-versioning.md`、`docs/adr/0010-vnext-runtime-input-session.md`
 
 上述内容均为设计冻结候选，不代表代码已实现。下一门禁是独立 L3 Judge；只有 PASS 且 required fixes 为空才允许归档 vNext-0。
+
+## 独立审查迭代
+
+- 有流程瑕疵的首轮 `PASS 100/100` 仅保留为过程证据，不作为最终会签：该 Judge 修改了被审文档并自行集成。
+- 干净重审得到 `REVISE 78/100`；四项 required fixes 已完成：strict `ExecutionSessionSnapshot`、remember 默认 `never`、v1 `scroll` 真源、历史日志格式。
+- 当前候选等待新的独立 L3 复审；vNext-1 实现、P3 与 P4 均未解冻。

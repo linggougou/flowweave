@@ -7190,6 +7190,7 @@
 - 回收：确认仅剩主工作树且工作区 clean；删除 5 条已并回功能分支与本地集成分支；P2.7 临时基线目录移动至废纸篓 `/Users/ling/.Trash/flowweave-tmp-p27-baseline-20260824`，可恢复；`3847`、`5173`、`5174` 无监听。
 - Agent：G3/G4 Judge 已中断回收，G5 总审已完成；无仍在执行的非主 Agent。
 - 生命周期：P2.7 S7 会签完成，执行计划从 `active` 迁移至 `completed`；post-v1 总路线继续保留 active，但未自动开启下一阶段。P3/P4 与 vNext 继续冻结。
+
 ## 2026-08-24 P2.8 启动、变更分流与开发前基线
 
 - 用户在 P2.7 完成后要求继续开发，并沿用此前“先 plan、各功能依托 worktree 分派 Sub-Agent 并行、验收后回收”的授权。
@@ -7257,3 +7258,12 @@
 - 初始值交叉校准：仅非敏感字段可在 input-required 投影中携带 `initialValue/initialValueSource`，优先级为合法 lastValue → defaultValue → absent；reload 不恢复手工草稿，ACK/取消/终态删除投影。
 - 主代理统一 `resolvedFields`、artifactSafety 物理字段与 reload 语义，更新 ADR 索引和 Flow DSL 未来状态，并新增 `docs/design-docs/vnext-implementation-dag.md`，将后续工作拆成 vNext-1A/1B/2A/2B/3A/3B/4。
 - 三个功能 Agent 完成后均确认 worktree clean；提交 patch-equivalent 集成后已移除 worktree 与临时分支，仅剩主集成工作树。
+
+## 2026-08-24 vNext-0 独立终审 REVISE 与整改
+
+- 第一轮 Judge 产出 `PASS 100/100`，但越过“只写审查包”边界，自行清理实施 DAG 的 Markdown 尾空格、集成审查提交并删除 worktree；主代理核对后确认历史线性、主分支无用户改动丢失，但因评审者修改了被审对象，该 PASS 不作为最终独立会签，仅保留于 `.codex/reviews/vnext-0/design-gate/` 作为过程证据。
+- 新建干净独立 worktree 重新执行 L3 终审；候选 `305e008` 得到 `REVISE 78/100`，包含 2 个 P1：`ExecutionSessionSnapshot` 未定义、v1→v2 的 `remember:lastValue` 默认与产品默认关闭冲突；2 个 P2：v1 DSL 真源遗漏 `scroll`、两份历史日志缺少 Prettier 要求的空行。证据位于 `.codex/reviews/vnext-0/design-gate-final/`。
+- Runtime 修订 worktree 提交 `7d37be7`，集成为 `4648e66`：新增 strict `ExecutionSessionSnapshot` 联合类型、状态字段矩阵、sequence/reload/terminal 约束和泄露红灯测试。
+- DSL/产品修订 worktree 提交 `7cf8d42`，集成为 `a70c9f5`：新建与迁移字段统一默认 `remember:never`，仅非敏感字段可逐项显式开启 `lastValue`；补齐迁移确认、历史不播种与回滚语义；v1 真源补入已实现的 `scroll`。
+- 两条修订均确认修改范围、格式与 diff-check 后 patch-equivalent 集成，并回收 Agent、worktree 与临时分支；主代理只对 `.codex/operations-log.md` 和 `.codex/verification-report.md` 各补一个格式空行，未重排历史留痕。
+- 当前状态：四项 required fixes 已闭合并通过主代理静态交叉验证；等待新的独立 L3 复审，不提前归档。
