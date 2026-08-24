@@ -7274,3 +7274,11 @@
 - 真实 P2：Studio 设计把 `fieldId` 写为“项目内唯一”，迁移/存储合同写为“Flow 内全局唯一”，且最近值使用 `(flow_id, field_id)` 复合键。主代理统一为“当前任务模板（Flow）内全局唯一，不同 Flow 可重复，持久层按 flowId + fieldId 定位”。
 - 环境 P2：R2 worktree 无本地 `node_modules`，因此 `pnpm exec prettier --check` 无法 fresh verify；这不是格式失败，也不包装为通过。R3 worktree 将先按 lockfile 安装依赖，再由 Judge 亲自复验。
 - 当前状态：R2 的合同 P2 已修复；等待提交 R3 候选与最终独立会签。
+
+## 2026-08-24 vNext-0 R3 最终会签、归档与资源回收
+
+- R3 独立 worktree 基于候选 `9deb519`，先执行 `pnpm install --frozen-lockfile`，复用本地 store 安装 801 个依赖并确认 Prettier `3.8.3` 可执行；未修改 lockfile 或业务文件。
+- R3 fresh L3 Judge 结论：`PASS 100/100`，`P0/P1/P2=0/0/0`，`required_fixes=[]`。fieldId、strict ExecutionSessionSnapshot、remember 默认 never、v1 scroll、格式、链接、范围、v1 兼容、旧 Runtime 拒绝、敏感生命周期与实施 DAG 全部通过。
+- 审查包源提交 `f5d2f0e` patch-equivalent 集成为 `57eb4ef`，位于 `.codex/reviews/vnext-0/design-gate-final-r3/`。确认 worktree clean 后回收 R3 Agent、worktree、本地依赖目录与临时分支。
+- 全阶段资源：G1-G3、两条整改 Agent、有效 REVISE Judge、R2/R3 Judge 均已完成或中断回收；仅剩主集成工作树。所有用户 stash 保持不动。
+- 生命周期：vNext-0 S7 会签完成，执行计划迁移至 `docs/exec-plans/completed/vnext-0-design-gate.md`；下一实施阶段未开启，vNext-1、P3、P4 继续冻结。

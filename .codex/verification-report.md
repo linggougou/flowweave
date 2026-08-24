@@ -5388,3 +5388,12 @@
 - fieldId 修订：Studio、DSL/迁移与存储现统一为 Flow 内全局唯一；不同 Flow 可复用 ID，所有持久化与最近值查找以 `flowId + fieldId` 定位。
 - 主工作树本地 Prettier、diff-check 与范围检查仍通过，但该结果只作主代理 verifier，不替代 R3 Judge 在预装冻结依赖 worktree 的 fresh verification。
 - 当前判断：允许创建 R3 候选；R3 PASS 且 required fixes 为空前仍不可归档。
+
+## 2026-08-24 vNext-0 R3 最终验证
+
+- 独立结论：`PASS 100/100`，`P0=0 / P1=0 / P2=0`，`required_fixes=[]`；被审候选为 `9deb5199a5c624e01a333d9aeeb207f1ff9bf866`。
+- 环境：R3 worktree 按冻结 lockfile 安装依赖，Prettier `3.8.3`；Judge 亲自运行仓库本地 `pnpm exec prettier --check`，结果 `All matched files use Prettier code style!`。
+- 回归矩阵：strict `ExecutionSessionSnapshot`、remember 默认 never、v1 `scroll`、fieldId Flow 内唯一/flowId+fieldId 定位全部 Closed。
+- 静态：`git diff --check 736402e..9deb519` 无输出；14 个目标文件、36 个相对内部链接 `broken=[]`；TODO/TBD/FIXME/冲突标记无未解决命中；范围无 `apps/`、`packages/`、migration 或构建配置；当前 `FLOW_SCHEMA_VERSION=1`。
+- 安全与兼容：显式升级、expectedRevision/fingerprint、旧 Runtime 副作用前拒绝、原子回滚、HAR/截图/DOM 门禁、artifactSafety 交叉校验与独立 canary 扫描均通过跨文档核对。
+- 当前判断：vNext-0 设计 DoD 全部通过，可归档；这不授权 vNext-1 实现。
