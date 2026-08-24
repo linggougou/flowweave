@@ -111,7 +111,7 @@ FlowDocumentV2.steps[].type=input
           "type": "string",
           "required": true,
           "sensitive": false,
-          "remember": "lastValue"
+          "remember": "never"
         },
         {
           "fieldId": "field_admin_password_01",
@@ -356,9 +356,9 @@ Studio 因而能区分“搜索词已参数化”和“结果选择仍是静态�
 升级分为“预览”和“提交”，预览无写入：
 
 1. Studio 请求迁移预览，携带 `flowId` 与当前 `revision`。
-2. DSL 生成 v2 候选、字段/引用映射、警告、阻塞项和 `reportFingerprint`。
-3. Studio 展示新增输入节点、字段敏感性、被移除默认值、无法迁移的位置与历史清理范围。
-4. 只有 `blockingIssues=[]` 且用户确认后，提交同一 fingerprint 与 `expectedRevision`。
+2. DSL 生成 v2 候选、字段/引用映射、警告和阻塞项；所有迁移字段先显式写为 `remember: never`，不从 v1 历史生成最近值。
+3. Studio 展示新增输入节点、字段敏感性、最终 `remember` 策略、被移除默认值、无法迁移的位置与历史清理范围；作者可逐字段把非敏感字段显式改为 `remember: lastValue`，敏感字段无此入口。
+4. DSL 对包含作者最终策略选择的完整候选生成 `reportFingerprint`。只有 `blockingIssues=[]` 且用户确认逐字段摘要后，提交同一 fingerprint 与 `expectedRevision`；任何选择变化都必须重新预览并生成新 fingerprint。
 5. knowledge 在一个 immediate transaction 内复核 revision、重算 fingerprint、清理敏感历史、写入可回滚版本并替换当前文档。
 6. 任一步失败整笔回滚；不能留下 v2 当前文档、v1 版本或清理一半的历史。
 
@@ -371,8 +371,9 @@ Studio 因而能区分“搜索词已参数化”和“结果选择仍是静态�
 - v1 variable `name` 只用于生成稳定 fieldId、建立旧引用映射并初始化 `label`；label 去除首尾空白后最多保留 80 字符，截断时产生不含原值之外附加数据的结构化告警。截断或 Unicode 规范化若在迁移输入节点内造成 label 冲突，预览按原变量顺序追加 `（2）`、`（3）` 等确定性后缀并保持 80 字符上限，作者可在确认页修改。v2 不保存第二个字段 name。
 - v1 没有规范 placeholder；迁移结果一律不从 target hints、DOM 样本、default 或历史输入推导 placeholder，作者可在确认页手动填写安全提示。
 - 所有完整 `{{v1Name}}` 引用改写为对应 `{{fieldId}}`。
-- 非敏感变量默认 `sensitive:false`；显式升级为了保持现有回填心智，将其 `remember` 设为 `lastValue`，Studio 必须展示这一策略，用户可改为 `never` 后再提交。
+- 非敏感变量默认 `sensitive:false`、`remember:never`。Studio 可在升级预览中允许作者逐字段显式改为 `remember:lastValue`，并把最终选择写入候选和确认摘要；不得批量预选、沿用旧回填偏好或静默开启。
 - v1 `secret_*`、密码目标引用、上传位置引用、敏感 URL 参数引用按现有 portability 规则标记为迁移敏感候选：最终写为 `sensitive:true`、`remember:never`，移除默认值。
+- 即使作者为非敏感字段显式选择 `remember:lastValue`，迁移也不把 v1 默认值、`executions.variables_json` 或其他历史输入复制到最近值表；最近值只能来自升级成功后被当前 v2 会话接受的新输入。
 - 命名启发式只用于 v1 迁移告警；v2 运行和持久化只相信字段的显式 `sensitive`。
 
 ### 7.3 阻塞而不是猜测
@@ -398,6 +399,7 @@ Studio 因而能区分“搜索词已参数化”和“结果选择仍是静态�
 3. 同一事务清除当前 Flow 对应历史版本和执行记录中已识别字段的值；只记录清理条数和字段身份，不记录原值。
 4. 任一历史 JSON 无法安全重写时整次升级失败，不留下部分清理。
 5. 应用无法清理用户自行复制的数据库备份或外部导出；确认界面必须明确这个边界。
+6. 升级预览与提交都不得从 v1 非敏感执行历史播种最近值；作者显式开启 `remember:lastValue` 只建立未来写入策略。
 
 这是显式升级的一部分，不是后台静默清理。安全清理不可恢复；Flow 结构仍可通过安全化 v1 快照回滚。
 
@@ -437,7 +439,7 @@ saveFlowRevision({
 - 恢复前验证 version 同属 `projectId + flowId`。
 - 恢复也要求 `expectedRevision`，并在同一事务先快照当前安全文档，再写目标版本。
 - 恢复 v1 不自动升级；当前 Flow 回到 v1，vNext 编辑器只读。
-- 恢复导致字段删除或敏感策略收紧时，同一事务清除对应最近值。
+- 恢复导致字段删除或敏感策略收紧时，同一事务清除对应最近值；恢复为 v1 等价于删除全部 v2 字段，必须清除该 Flow 的全部字段最近值。
 - 恢复失败时当前 Flow、版本序号与最近值全部不变。
 
 ### 8.3 导入
@@ -552,6 +554,7 @@ artifact policy 声明只证明调用方声称执行了哪项策略，**不能�
 5. 敏感 default/历史值被清理，报告仅含计数与身份。
 6. v1 默认不升级；导入和 recorder 同步后仍是 v1。
 7. 老 Runtime 在任何浏览器/目录副作用前拒绝 v2。
+8. 所有迁移字段候选默认 `remember:never`；只有非敏感字段可逐项显式改为 `lastValue`，最终选择改变会改变 fingerprint，且不从 v1 历史播种最近值。
 
 ### 11.3 knowledge / API 测试
 
@@ -565,6 +568,7 @@ artifact policy 声明只证明调用方声称执行了哪项策略，**不能�
 8. sensitive 或 remember=never 的提交不产生最近值/variables_json；策略收紧立即清理旧值。
 9. artifact policy 声明与会话敏感状态、步骤时序、artifact refs 一致；另以唯一 canary 扫描数据库、运行目录、导出、错误、日志和 HTTP 响应，二者独立通过。
 10. Local API 路径身份、文档身份、version 归属和 revision 均做负向测试。
+11. 取消或失败的升级不写最近值；成功升级只保存最终 remember 策略，恢复 v1 在同一事务清除该 Flow 全部字段最近值。
 
 ### 11.4 性质与模糊测试
 

@@ -39,6 +39,7 @@ interface FlowDocument {
 | `select`     | 下拉选择                                 | `target`, `values`         |
 | `setChecked` | 设置 checkbox / radio 勾选状态           | `target`, `checked`        |
 | `press`      | 键盘操作                                 | `key`, `target?`           |
+| `scroll`     | 滚动页面或指定容器到非负坐标             | `x`, `y`, `target?`        |
 | `upload`     | 文件上传                                 | `target`, `files`          |
 | `wait`       | 显式等待                                 | `ms` 或 `condition`        |
 
@@ -143,8 +144,9 @@ ExecutablePlan **不**作为用户手改格式长期存储；可缓存于执行�
 
 ## 8. 当前边界
 
-- 上表中的 8 类步骤是 `schemaVersion: 1` 当前真实支持的 DSL 范围。
+- 上表中的 9 类步骤是 `schemaVersion: 1` 当前真实支持的 DSL 范围；其中 `scroll` 已由当前 schema、recorder 和 runtime 支持，不是 vNext v2 候选能力。
 - `press` 的 `target` 为可选；未提供时，后续 runtime 可按页面级键盘操作解释。
+- `scroll` 的 `target` 为可选；未提供时滚动页面，提供时滚动目标容器，`x`、`y` 都必须是非负数。
 - `upload.files` 当前约定为本地文件路径数组，后续由 runtime 负责映射到 Playwright `setInputFiles`。
 - 变量插值、`baseUrl` 拼接、登录态注入与诊断落盘由 runtime / environment 轨道承接，本文件只冻结数据契约。
 
@@ -173,6 +175,7 @@ ExecutablePlan **不**作为用户手改格式长期存储；可缓存于执行�
 4. 绑定只允许白名单槽位中的完整 `{{fieldId}}`，不再递归插值整个 step，不允许混合字符串或表达式。
 5. v1 默认继续按 v1 读取和执行；升级必须预览、确认、携带 `expectedRevision` 并原子保存，不能静默升级。
 6. 老 Runtime 必须在浏览器、运行目录或数据库副作用前拒绝 v2。
+7. v2 新建字段与 v1→v2 迁移字段的 `remember` 候选都显式默认为 `never`；只有作者逐字段确认的非敏感字段可改为 `lastValue`，敏感字段永远为 `never`。
 
 设计真源：
 
