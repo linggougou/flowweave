@@ -15,6 +15,12 @@ import { closeProjectDatabase, openProjectDatabase, resolveProjectStorePath } fr
 import { ProjectKnowledgeRepository } from "./repository.js";
 
 const SECRET_CANARY = 'FLOWWEAVE_SECRET_CANARY_vnext_1b_7f4c1e"\\line\nnext';
+const HISTORY_DELETED_CANARY = 'FLOWWEAVE_HISTORY_DELETED_vnext_1_91e2"\\line\nnext';
+const HISTORY_RENAMED_CANARY = "FLOWWEAVE_HISTORY_RENAMED_vnext_1_3c7a";
+const HISTORY_PASSWORD_LITERAL = "FLOWWEAVE_HISTORY_PASSWORD_LITERAL_vnext_1_62bd";
+const HISTORY_UPLOAD_LITERAL = "/private/FLOWWEAVE_HISTORY_UPLOAD_vnext_1_807a.pdf";
+const HISTORY_URL_LITERAL = 'FLOWWEAVE_HISTORY_URL_vnext_1_b1d4"\\line\nnext';
+const HISTORY_URL_ENCODED = encodeURIComponent(HISTORY_URL_LITERAL);
 
 function assertNoCanaryBytes(storePath: string): void {
   const escapedCanary = JSON.stringify(SECRET_CANARY).slice(1, -1);
@@ -91,6 +97,17 @@ function prepareUpgrade(flow: FlowDocumentV1) {
     accountFieldId,
     secretFieldId,
     rememberSelections,
+    preview: preview as typeof preview & { candidate: FlowDocumentV2 },
+  };
+}
+
+function prepareUpgradeWithoutRecentValues(flow: FlowDocumentV1) {
+  const preview = previewFlowV1Upgrade(flow);
+  if (!preview.candidate) {
+    throw new Error("测试迁移候选生成失败");
+  }
+  return {
+    rememberSelections: {},
     preview: preview as typeof preview & { candidate: FlowDocumentV2 },
   };
 }
@@ -307,6 +324,7 @@ describe("vNext-1B Knowledge 数据基础", () => {
     "upgrade:after-safe-version",
     "upgrade:after-recent-cleanup",
     "upgrade:after-cas",
+    "upgrade:after-physical-erasure-check",
   ])("事务故障点 %s 不会留下半版本、半清理或 revision 漂移", (faultStep) => {
     class FaultRepository extends ProjectKnowledgeRepository {
       protected override beforeVNextPersistenceStep(step: string): void {
@@ -341,14 +359,215 @@ describe("vNext-1B Knowledge 数据基础", () => {
       }),
     ).toThrowError(expect.objectContaining({ code: "FLOW_PERSISTENCE_FAILED" }));
 
-    expect(repo.getFlowRevision(project.id, flow.id)).toMatchObject({
+    const afterFailure = repo.getFlowRevision(project.id, flow.id);
+    expect(afterFailure).toMatchObject({
       revision: 1,
       document: { schemaVersion: FLOW_SCHEMA_VERSION },
     });
+    expect(afterFailure?.document).toEqual(flow);
     expect(repo.listFlowVersions(project.id, flow.id)).toEqual([]);
     expect(repo.getExecution("exec_before_upgrade_fault")?.runContext?.variables).toEqual({
       secret_password: SECRET_CANARY,
     });
+  });
+
+  it("历史已删除或改名的敏感字段、密码字面量、上传与 URL 会统一从历史和 execution 清除", () => {
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-vnext-history-sensitive-union-"));
+    const repo = new ProjectKnowledgeRepository({ dataDir });
+    const project = repo.createProject("历史敏感识别并集");
+    const base = buildV1(project.id, "flow_history_sensitive_union");
+    const historical = {
+      ...base,
+      variables: [
+        base.variables[0]!,
+        {
+          name: "legacy_password",
+          type: "string" as const,
+          required: true,
+          defaultValue: HISTORY_DELETED_CANARY,
+        },
+      ],
+      steps: [
+        base.steps[0]!,
+        {
+          id: "fill_legacy_password",
+          type: "fill" as const,
+          target: {
+            strategies: [{ kind: "css" as const, selector: "input[type=password]" }],
+            hints: { inputType: "password" },
+          },
+          value: "{{legacy_password}}",
+        },
+        {
+          id: "fill_literal_password",
+          type: "fill" as const,
+          target: {
+            strategies: [{ kind: "css" as const, selector: "#literal-password" }],
+            hints: { inputType: "password" },
+          },
+          value: HISTORY_PASSWORD_LITERAL,
+        },
+        {
+          id: "upload_private_file",
+          type: "upload" as const,
+          target: {
+            strategies: [{ kind: "css" as const, selector: "input[type=file]" }],
+          },
+          files: [HISTORY_UPLOAD_LITERAL],
+        },
+        {
+          id: "navigate_sensitive_url",
+          type: "navigate" as const,
+          url: `https://example.test/callback?access_token=${HISTORY_URL_ENCODED}`,
+        },
+      ],
+    } satisfies FlowDocumentV1;
+    repo.saveFlow(project.id, historical);
+    repo.saveExecution(project.id, {
+      executionId: "exec_history_sensitive_union",
+      flowId: historical.id,
+      status: "success",
+      flowSnapshot: historical,
+      runContext: {
+        variables: {
+          legacy_password: HISTORY_DELETED_CANARY,
+          renamed_password: HISTORY_RENAMED_CANARY,
+        },
+      },
+      steps: [],
+    });
+
+    const renamed = {
+      ...historical,
+      variables: [
+        historical.variables[0]!,
+        {
+          name: "renamed_password",
+          type: "string" as const,
+          required: true,
+          defaultValue: HISTORY_RENAMED_CANARY,
+        },
+      ],
+      steps: historical.steps.map((step) =>
+        step.id === "fill_legacy_password" ? { ...step, value: "{{renamed_password}}" } : step,
+      ),
+    } satisfies FlowDocumentV1;
+    repo.saveFlowRevision({
+      projectId: project.id,
+      flowId: historical.id,
+      document: renamed,
+      expectedRevision: 1,
+    });
+
+    const current = {
+      ...base,
+      id: historical.id,
+      variables: [base.variables[0]!],
+      steps: [base.steps[0]!],
+    } satisfies FlowDocumentV1;
+    repo.saveFlowRevision({
+      projectId: project.id,
+      flowId: historical.id,
+      document: current,
+      expectedRevision: 2,
+    });
+    const prepared = prepareUpgradeWithoutRecentValues(current);
+
+    const upgraded = repo.upgradeFlowToV2({
+      projectId: project.id,
+      flowId: historical.id,
+      expectedRevision: 3,
+      reportFingerprint: prepared.preview.reportFingerprint,
+      rememberSelections: prepared.rememberSelections,
+    });
+    expect(upgraded).toMatchObject({ revision: 4, document: { schemaVersion: 2 } });
+
+    const canaries = [
+      HISTORY_DELETED_CANARY,
+      HISTORY_RENAMED_CANARY,
+      HISTORY_PASSWORD_LITERAL,
+      HISTORY_UPLOAD_LITERAL,
+      HISTORY_URL_LITERAL,
+      HISTORY_URL_ENCODED,
+    ];
+    const versions = repo.listFlowVersions(project.id, historical.id);
+    const apiEvidence = JSON.stringify({
+      versions,
+      versionDocuments: versions.map((version) =>
+        repo.getFlowVersionInFlow(project.id, historical.id, version.id),
+      ),
+      execution: repo.getExecution("exec_history_sensitive_union"),
+    });
+    for (const canary of canaries) {
+      expect(apiEvidence).not.toContain(canary);
+    }
+
+    const storePath = resolveProjectStorePath(project.id, dataDir);
+    for (const path of [storePath, `${storePath}-wal`, `${storePath}-shm`]) {
+      if (!existsSync(path)) {
+        continue;
+      }
+      const bytes = readFileSync(path);
+      for (const canary of canaries) {
+        const escaped = JSON.stringify(canary).slice(1, -1);
+        expect(bytes.includes(Buffer.from(canary)), `${path} 含 raw ${canary}`).toBe(false);
+        expect(bytes.includes(Buffer.from(escaped)), `${path} 含 escaped ${canary}`).toBe(false);
+      }
+    }
+  });
+
+  it("物理扫描失败发生在可回滚边界内且 current/version/recent/revision 全部不变", () => {
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-vnext-physical-scan-rollback-"));
+    const repo = new ProjectKnowledgeRepository({ dataDir });
+    const project = repo.createProject(`扫描探针 ${SECRET_CANARY}`);
+    const flow = buildV1(project.id, "flow_physical_scan_rollback");
+    repo.saveFlow(project.id, flow);
+    const prepared = prepareUpgrade(flow);
+    const storePath = resolveProjectStorePath(project.id, dataDir);
+    const sqlite = new Database(storePath);
+    sqlite
+      .prepare(
+        `INSERT INTO flow_field_recent_values (flow_id, field_id, value_json, updated_at)
+         VALUES (?, ?, ?, ?)`,
+      )
+      .run(flow.id, "preexisting_recent", JSON.stringify("keep-me"), flow.meta.updatedAt);
+    const beforeRecent = sqlite
+      .prepare(
+        "SELECT flow_id, field_id, value_json, updated_at FROM flow_field_recent_values WHERE flow_id = ?",
+      )
+      .all(flow.id);
+    sqlite.close();
+
+    let thrown: unknown;
+    try {
+      repo.upgradeFlowToV2({
+        projectId: project.id,
+        flowId: flow.id,
+        expectedRevision: 1,
+        reportFingerprint: prepared.preview.reportFingerprint,
+        rememberSelections: prepared.rememberSelections,
+      });
+    } catch (error: unknown) {
+      thrown = error;
+    }
+    expect(thrown).toEqual(expect.objectContaining({ code: "FLOW_PERSISTENCE_FAILED" }));
+    expect(JSON.stringify(thrown)).not.toContain(SECRET_CANARY);
+    const unchanged = repo.getFlowRevision(project.id, flow.id);
+    expect(unchanged).toMatchObject({
+      revision: 1,
+      document: { schemaVersion: FLOW_SCHEMA_VERSION },
+    });
+    expect(unchanged?.document).toEqual(flow);
+    expect(repo.listFlowVersions(project.id, flow.id)).toEqual([]);
+
+    const verify = new Database(storePath, { readonly: true });
+    const afterRecent = verify
+      .prepare(
+        "SELECT flow_id, field_id, value_json, updated_at FROM flow_field_recent_values WHERE flow_id = ?",
+      )
+      .all(flow.id);
+    verify.close();
+    expect(afterRecent).toEqual(beforeRecent);
   });
 
   it("升级与跨版本恢复都原子递增 revision 并记录安全版本元数据", () => {

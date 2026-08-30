@@ -34,7 +34,12 @@ import {
   previewFlowV1Upgrade,
 } from "@flowweave/flow-dsl";
 import { and, asc, desc, eq, max } from "drizzle-orm";
-import { FLOW_SCHEMA_VERSION, FlowWeaveError } from "@flowweave/shared";
+import {
+  FLOW_SCHEMA_VERSION,
+  FlowWeaveError,
+  extractTemplateVariables,
+  getSingleTemplateVariableName,
+} from "@flowweave/shared";
 
 import {
   closeProjectDatabase,
@@ -195,6 +200,163 @@ function collectStringValues(value: unknown, target: Set<string>): void {
   if (value && typeof value === "object") {
     for (const entry of Object.values(value)) {
       collectStringValues(entry, target);
+    }
+  }
+}
+
+const HISTORY_SENSITIVE_URL_KEYS = new Set([
+  "token",
+  "accesstoken",
+  "refreshtoken",
+  "idtoken",
+  "sessiontoken",
+  "bearertoken",
+  "apikey",
+  "key",
+  "secret",
+  "clientsecret",
+  "password",
+  "passwd",
+  "auth",
+  "authorization",
+]);
+
+function decodeUrlPart(value: string): string {
+  try {
+    return decodeURIComponent(value.replace(/\+/g, " "));
+  } catch {
+    return value;
+  }
+}
+
+function normalizeSensitiveUrlKey(value: string): string {
+  return decodeUrlPart(value).trim().toLowerCase().replace(/[._-]/g, "");
+}
+
+function collectSensitiveUrlParameterValues(value: string, target: Set<string>): void {
+  for (const part of value.split("&")) {
+    const separator = part.indexOf("=");
+    if (separator <= 0) {
+      continue;
+    }
+    const rawKey = part.slice(0, separator);
+    if (!HISTORY_SENSITIVE_URL_KEYS.has(normalizeSensitiveUrlKey(rawKey))) {
+      continue;
+    }
+    const rawValue = part.slice(separator + 1);
+    const decodedValue = decodeUrlPart(rawValue);
+    if (getSingleTemplateVariableName(decodedValue)) {
+      continue;
+    }
+    if (rawValue.length > 0) {
+      target.add(rawValue);
+    }
+    if (decodedValue.length > 0) {
+      target.add(decodedValue);
+    }
+  }
+}
+
+function collectSensitiveUrlLiterals(value: string, target: Set<string>): void {
+  const authorityMatch = /^[a-z][a-z\d+.-]*:\/\/([^/?#]*)/i.exec(value);
+  const authority = authorityMatch?.[1];
+  if (authority) {
+    const userInfoEnd = authority.lastIndexOf("@");
+    if (userInfoEnd >= 0) {
+      for (const credential of authority.slice(0, userInfoEnd).split(":")) {
+        if (credential.length > 0) {
+          target.add(credential);
+          target.add(decodeUrlPart(credential));
+        }
+      }
+    }
+  }
+
+  const hashStart = value.indexOf("#");
+  const beforeHash = hashStart >= 0 ? value.slice(0, hashStart) : value;
+  const queryStart = beforeHash.indexOf("?");
+  if (queryStart >= 0) {
+    collectSensitiveUrlParameterValues(beforeHash.slice(queryStart + 1), target);
+  } else if (
+    HISTORY_SENSITIVE_URL_KEYS.has(normalizeSensitiveUrlKey(beforeHash.split("=", 1)[0] ?? ""))
+  ) {
+    collectSensitiveUrlParameterValues(beforeHash, target);
+  }
+
+  if (hashStart < 0) {
+    return;
+  }
+  const hash = value.slice(hashStart + 1);
+  const hashQueryStart = hash.indexOf("?");
+  collectSensitiveUrlParameterValues(
+    hashQueryStart >= 0 ? hash.slice(hashQueryStart + 1) : hash,
+    target,
+  );
+}
+
+function collectV1SensitiveMaterial(
+  document: FlowDocumentV1,
+  sensitiveVariableNames: Set<string>,
+  sensitiveValues: Set<string>,
+): void {
+  const preview = previewFlowV1Upgrade(document);
+  for (const mapping of preview.fieldMappings) {
+    if (mapping.sensitive) {
+      sensitiveVariableNames.add(mapping.variableName);
+    }
+  }
+  for (const issue of preview.blockingIssues) {
+    if (issue.code !== "SENSITIVE_LITERAL") {
+      continue;
+    }
+    const match = /^steps\[(\d+)]\.value$/.exec(issue.path);
+    const step = match ? document.steps[Number(match[1])] : undefined;
+    if (step?.type === "fill" && step.value.length > 0) {
+      sensitiveValues.add(step.value);
+    }
+  }
+  for (const warning of createPortableFlowDocument(document).warnings) {
+    if (warning.code !== "password-value-variableized") {
+      continue;
+    }
+    const match = /^steps\[(\d+)]\.value$/.exec(warning.path);
+    const step = match ? document.steps[Number(match[1])] : undefined;
+    if (step?.type !== "fill" || step.value.length === 0) {
+      continue;
+    }
+    for (const variableName of extractTemplateVariables(step.value)) {
+      sensitiveVariableNames.add(variableName);
+    }
+    if (!getSingleTemplateVariableName(step.value)) {
+      sensitiveValues.add(step.value);
+    }
+  }
+  for (const step of document.steps) {
+    if (step.type === "upload") {
+      for (const file of step.files) {
+        for (const variableName of extractTemplateVariables(file)) {
+          sensitiveVariableNames.add(variableName);
+        }
+        if (file.length > 0 && !getSingleTemplateVariableName(file)) {
+          sensitiveValues.add(file);
+        }
+      }
+    } else if (step.type === "navigate") {
+      collectSensitiveUrlLiterals(step.url, sensitiveValues);
+    } else if (step.type === "wait" && step.condition === "urlIncludes" && step.urlIncludes) {
+      collectSensitiveUrlLiterals(step.urlIncludes, sensitiveValues);
+    }
+  }
+}
+
+function assertNoSensitiveBytes(bytes: Buffer, sensitiveValues: ReadonlySet<string>): void {
+  for (const sensitiveValue of sensitiveValues) {
+    if (!sensitiveValue) {
+      continue;
+    }
+    const escaped = JSON.stringify(sensitiveValue).slice(1, -1);
+    if (bytes.includes(Buffer.from(sensitiveValue)) || bytes.includes(Buffer.from(escaped))) {
+      throw new FlowWeaveError("FLOW_PERSISTENCE_FAILED", "Flow 升级后的物理存储安全验证失败");
     }
   }
 }
@@ -1119,6 +1281,7 @@ export class ProjectKnowledgeRepository {
       this.dataDir,
       this.databaseOptions,
     );
+    let result: FlowRevisionRecord;
     try {
       sqlite.pragma("busy_timeout = 0");
       const checkpoint = sqlite.pragma("wal_checkpoint(TRUNCATE)") as Array<{
@@ -1234,19 +1397,25 @@ export class ProjectKnowledgeRepository {
           });
         }
         this.beforeVNextPersistenceStep("upgrade:after-cas");
-        return {
-          record: { document: candidate, revision: nextRevision, updatedAt: now },
-          sensitiveValues: cleanup.sensitiveValues,
-        };
+        this.assertPhysicalSecretErasure(input.projectId, sqlite, cleanup.sensitiveValues);
+        this.beforeVNextPersistenceStep("upgrade:after-physical-erasure-check");
+        return { document: candidate, revision: nextRevision, updatedAt: now };
       });
-      const result = upgradeTransaction.exclusive();
-      this.assertPhysicalSecretErasure(input.projectId, result.sensitiveValues);
-      return result.record;
+      result = upgradeTransaction.exclusive();
     } catch (error: unknown) {
+      try {
+        closeProjectDatabase(sqlite);
+      } catch {
+        // 保留原始失败；安全扫描与事务错误不得被资源释放错误覆盖。
+      }
       persistenceFailure(error);
-    } finally {
-      closeProjectDatabase(sqlite);
     }
+    try {
+      closeProjectDatabase(sqlite);
+    } catch {
+      // 提交后的资源释放不得把成功升级改写成失败响应。
+    }
+    return result;
   }
 
   /** 跨 v1/v2 原子恢复；恢复本身也产生新的单调 revision。 */
@@ -1757,11 +1926,12 @@ export class ProjectKnowledgeRepository {
     current: FlowDocumentV1,
     sensitiveVariableNames: ReadonlySet<string>,
   ): { safeCurrent: FlowDocumentV1; sensitiveValues: ReadonlySet<string> } {
+    const mergedSensitiveVariableNames = new Set(sensitiveVariableNames);
     const sensitiveValues = new Set<string>();
     const collectDefaults = (document: FlowDocumentV1) => {
       for (const variable of document.variables) {
         if (
-          sensitiveVariableNames.has(variable.name) &&
+          mergedSensitiveVariableNames.has(variable.name) &&
           typeof variable.defaultValue === "string" &&
           variable.defaultValue.length > 0
         ) {
@@ -1769,8 +1939,6 @@ export class ProjectKnowledgeRepository {
         }
       }
     };
-    collectDefaults(current);
-
     const versionRows = db
       .select()
       .from(dbSchema.flowVersions)
@@ -1784,9 +1952,6 @@ export class ProjectKnowledgeRepository {
     const parsedVersions = versionRows.map((row) => {
       const document = parseStoredFlow(row.documentJson);
       assertFlowIdentity(document, projectId, flowId);
-      if (document.schemaVersion === FLOW_SCHEMA_VERSION) {
-        collectDefaults(document);
-      }
       return { row, document };
     });
 
@@ -1815,10 +1980,6 @@ export class ProjectKnowledgeRepository {
             "历史执行上下文不可安全清理",
           );
         }
-        for (const name of sensitiveVariableNames) {
-          const value = variables[name];
-          collectStringValues(value, sensitiveValues);
-        }
       }
 
       let flowSnapshot: FlowDocumentV1 | undefined;
@@ -1830,15 +1991,38 @@ export class ProjectKnowledgeRepository {
             "vNext-2 前不允许清理 v2 execution 快照",
           );
         }
-        collectDefaults(snapshot);
         flowSnapshot = snapshot;
       }
       return { row, variables, flowSnapshot };
     });
 
+    const historicalV1Documents = [
+      current,
+      ...parsedVersions
+        .filter((entry) => entry.document.schemaVersion === FLOW_SCHEMA_VERSION)
+        .map((entry) => entry.document as FlowDocumentV1),
+      ...parsedExecutions
+        .map((entry) => entry.flowSnapshot)
+        .filter((snapshot): snapshot is FlowDocumentV1 => snapshot !== undefined),
+    ];
+    for (const document of historicalV1Documents) {
+      collectV1SensitiveMaterial(document, mergedSensitiveVariableNames, sensitiveValues);
+    }
+    for (const document of historicalV1Documents) {
+      collectDefaults(document);
+    }
+    for (const entry of parsedExecutions) {
+      if (!entry.variables) {
+        continue;
+      }
+      for (const name of mergedSensitiveVariableNames) {
+        collectStringValues(entry.variables[name], sensitiveValues);
+      }
+    }
+
     const safeCurrent = parseFlowDocumentV1(
       scrubSensitiveStructure(
-        sanitizeV1Document(current, sensitiveVariableNames),
+        sanitizeV1Document(current, mergedSensitiveVariableNames),
         sensitiveValues,
       ),
     );
@@ -1847,7 +2031,7 @@ export class ProjectKnowledgeRepository {
     for (const entry of parsedVersions) {
       const withoutSensitiveDefaults =
         entry.document.schemaVersion === FLOW_SCHEMA_VERSION
-          ? sanitizeV1Document(entry.document, sensitiveVariableNames)
+          ? sanitizeV1Document(entry.document, mergedSensitiveVariableNames)
           : entry.document;
       const safeDocument = parseFlowDocument(
         scrubSensitiveStructure(withoutSensitiveDefaults, sensitiveValues),
@@ -1867,7 +2051,7 @@ export class ProjectKnowledgeRepository {
     for (const entry of parsedExecutions) {
       const variables = entry.variables === undefined ? undefined : { ...entry.variables };
       if (variables) {
-        for (const name of sensitiveVariableNames) {
+        for (const name of mergedSensitiveVariableNames) {
           delete variables[name];
         }
       }
@@ -1881,7 +2065,7 @@ export class ProjectKnowledgeRepository {
           ? undefined
           : parseFlowDocumentV1(
               scrubSensitiveStructure(
-                sanitizeV1Document(entry.flowSnapshot, sensitiveVariableNames),
+                sanitizeV1Document(entry.flowSnapshot, mergedSensitiveVariableNames),
                 sensitiveValues,
               ),
             );
@@ -1940,29 +2124,16 @@ export class ProjectKnowledgeRepository {
 
   private assertPhysicalSecretErasure(
     projectId: string,
+    sqlite: ReturnType<typeof openProjectDatabase>["sqlite"],
     sensitiveValues: ReadonlySet<string>,
   ): void {
+    assertNoSensitiveBytes(sqlite.serialize(), sensitiveValues);
     const storePath = resolveProjectStorePath(projectId, this.dataDir);
-    for (const path of [storePath, `${storePath}-wal`, `${storePath}-shm`]) {
+    for (const path of [`${storePath}-wal`, `${storePath}-shm`]) {
       if (!existsSync(path)) {
         continue;
       }
-      const bytes = readFileSync(path);
-      for (const sensitiveValue of sensitiveValues) {
-        if (!sensitiveValue) {
-          continue;
-        }
-        const escaped = JSON.stringify(sensitiveValue).slice(1, -1);
-        if (
-          bytes.includes(Buffer.from(sensitiveValue)) ||
-          bytes.includes(Buffer.from(escaped))
-        ) {
-          throw new FlowWeaveError(
-            "FLOW_PERSISTENCE_FAILED",
-            "Flow 升级后的物理存储安全验证失败",
-          );
-        }
-      }
+      assertNoSensitiveBytes(readFileSync(path), sensitiveValues);
     }
   }
 
