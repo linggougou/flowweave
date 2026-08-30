@@ -7316,3 +7316,12 @@
 - G1B 功能/审查工作树在确认 apps/packages 与集成分支 patch-equivalent 且工作区 clean 后回收；临时分支删除，用户 stash 未触碰。
 - 覆盖率工具 `@vitest/coverage-v8` 未安装；原用途为生成覆盖率报告。替代流程：定向红灯/攻击测试、全仓 663 项测试、强制无缓存 typecheck/lint/build 与独立 Judge；未为追求报告擅自新增依赖。
 - 阶段判断：G1B 与 Studio guard 已独立通过；进入 G1-I Node 20/24、recorded replay、portability、依赖与安全 canary 总验收，尚不归档 vNext-1。
+
+## 2026-08-30 vNext-1 G1-I 本地总验收与 R5 终审
+
+- G1-I Node20 独立证据已完成：在 `/Users/ling/.nvm/versions/node/v20.19.6/bin/node` 下执行 `CI=1 pnpm install --frozen-lockfile --force`、`pnpm turbo typecheck test build --force --output-logs=errors-only`、`pnpm turbo test --force --output-logs=full` 与 `pnpm e2e:login`；结果为 `39/39`、`0 cached`，全仓 `759/759` 测试与 v1 登录 `4/4 success`。
+- 当前候选 `e25ce40` 相对 `cccd818` 只修复 `packages/flow-dsl/src/sensitivity.ts` 的 malformed-percent userinfo 敏感识别，并新增 DSL / Knowledge 攻击回归；未漂移到 Runtime、Studio、Local API、lockfile、路线锁或项目日志。
+- clean Node24 复验确认：flow-dsl `74/74`、runtime targeted `47/47`、studio targeted `14/14` 通过；主工作树同一候选的 project-knowledge `50/50` 与 local-api `14/14` 也通过，未发现新的 preview/candidate/export/import/API/SQLite canary 泄漏。
+- 独立 R5 Judge 包已在 review-only worktree 形成并以 `3a73cdd` 提交，随后 patch-equivalent 回收到集成分支为 `994ce9f`；裁决 `PASS 100/100`，`P0/P1/P2=0/0/0`，`required_fixes=[]`。
+- 环境注记：同一 review worktree 先执行 Node20 force install 后直接切回 Node24 跑 SQLite 原生测试，会命中 `better-sqlite3` ABI mismatch（115→137）。这是双 Node 共用原生依赖的环境现象，不是产品回归；clean Node24 主工作树复验与独立 Node24 安全 worktree 已闭环证明候选行为正常。
+- 当前状态：vNext-1 本地总验收与最终集成 Judge 已通过；下一步推送 `codex/vnext-1a-1b-integration` 跑远端 Node 20/24 CI，通过后再快进 `main`、补最终会签、归档计划并评估是否开放 vNext-2A 规划。

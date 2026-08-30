@@ -5429,3 +5429,33 @@
 - 兼容：legacy v1 getter 对 v2 继续 fail closed；v1 restore 回归通过；Studio run guard 未被跨层 revision 修订覆盖，v2 当前 Flow 仍不可执行/编辑。
 - 主集成分支在 cherry-pick 后再次执行 `pnpm test && pnpm typecheck && pnpm lint && pnpm build`，21/21、21/21、13/13、13/13 全部通过；结果命中与 R3 候选代码相同的本地 Turbo cache，fresh/0-cache 证据以独立 R3 为准。
 - 结论：G1B 通过，可以进入 G1-I 总验收；vNext-1 尚未完成 Node 20/24、recorded replay、portability 与最终集成 Judge。
+
+## 2026-08-30 vNext-1 G1-I 本地总验收
+
+- 集成候选：`e25ce4093456907715aae098973af6110729b135`；R5 终审证据提交：`.codex/reviews/vnext-1/g1i-final-l3-r5/`，集成提交 `994ce9f`。
+- 最终独立裁决：`PASS 100/100`，`P0/P1/P2=0/0/0`，`required_fixes=[]`。
+
+### Node 20.19.6
+
+- PATH 显式置顶 `/Users/ling/.nvm/versions/node/v20.19.6/bin`；`node -v`=`v20.19.6`；`process.execPath` 指向同一路径。
+- `CI=1 pnpm install --frozen-lockfile --force`：通过；Electron bundle 重新解压、ad-hoc 重签名与严格签名校验成功。
+- `pnpm turbo typecheck test build --force --output-logs=errors-only`：`39/39` successful、`0 cached`、`1m25.312s`。
+- `pnpm turbo test --force --output-logs=full`：`21/21` successful、`0 cached`、`759/759` tests 通过。
+- 逐包测试计数：shared `7`、ui `14`、network-intelligence `1`、flow-dsl `109`、ai-orchestrator `1`、page-intelligence `22`、recorder `54`、extension `79`、project-knowledge `154`、runtime `52`、local-api `14`、web `33`、studio `219`。
+- `CI=1 pnpm e2e:login`：v1 `flow_e2e_login`，`4/4` steps success。
+
+### Node 24 与安全复验
+
+- clean Node24 targeted rerun：flow-dsl `74/74`、runtime targeted `47/47`、studio targeted `14/14`。
+- clean Node24 主工作树同一候选：project-knowledge `50/50`、local-api `14/14`。
+- 独立 Node24 安全证据继续成立：`CI=1 TURBO_FORCE=true pnpm smoke`、`pnpm lint`、`pnpm e2e:recorded-pages` `25/25`、`pnpm e2e:portability` `10` steps、`pnpm e2e:login` `4/4`、`pnpm audit --prod --audit-level high --registry=https://registry.npmjs.org` 无高危漏洞。
+- 公开边界与攻击矩阵：raw、一/两层编码、malformed percent、invalid UTF-8、第三层编码 fail-closed，以及 preview/candidate/export/import/API/SQLite/WAL/SHM canary 零命中要求全部满足。
+
+### 环境注记
+
+- 同一 review worktree 在 Node20 force install 后直接切回 Node24 跑 SQLite 原生测试，会命中 `better-sqlite3` ABI mismatch（`115 -> 137`）。该现象经比对被判定为双 Node 共用原生依赖的环境问题，不是当前候选产品缺陷；因此 Node24 采用 clean 主工作树复验与既有独立安全 worktree 证据闭环。
+
+### 结论
+
+- 本地总验收：通过。
+- 剩余门禁：推送集成分支与 `main`，等待 GitHub Actions Node 20 / 24 双矩阵会签，然后归档 vNext-1 执行计划并更新路线锁。
