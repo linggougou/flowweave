@@ -98,6 +98,45 @@ describe("executeFlow launch options", () => {
     expect(launchPersistentContextMock).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["对象", { secret: "top-secret", nested: { token: "abc" } }, "invalid"],
+    ["数组", [2, "top-secret"], "invalid"],
+    ["字符串", "top-secret", "invalid"],
+    ["缺失", undefined, "missing"],
+  ])("安全归一化%s schemaVersion 且保持零副作用", async (_label, schemaVersion, expected) => {
+    testWorkspaceDir = mkdtempSync(join(tmpdir(), "fw-runtime-schema-guard-"));
+    const artifactDir = join(testWorkspaceDir, "artifacts");
+    const progressMock = vi.fn();
+    const malformedFlow = {
+      ...buildEmptyFlow(),
+      schemaVersion,
+    } as unknown as FlowDocument;
+
+    let receivedError: unknown;
+    try {
+      await executeFlow(malformedFlow, { artifactDir, onProgress: progressMock });
+    } catch (error) {
+      receivedError = error;
+    }
+
+    expect(receivedError).toEqual(
+      expect.objectContaining<Partial<FlowWeaveError>>({
+        name: "FlowWeaveError",
+        code: "FLOW_SCHEMA_MISMATCH",
+        details: {
+          expectedVersion: FLOW_SCHEMA_VERSION,
+          receivedVersion: expected,
+        },
+      }),
+    );
+    expect(JSON.stringify(receivedError)).not.toContain("top-secret");
+    expect(JSON.stringify(receivedError)).not.toContain("abc");
+    expect(existsSync(artifactDir)).toBe(false);
+    expect(progressMock).not.toHaveBeenCalled();
+    expect(launchMock).not.toHaveBeenCalled();
+    expect(launchPersistentContextMock).not.toHaveBeenCalled();
+  });
+
   it("headed 模式会用禁用翻译的临时浏览器 profile", async () => {
     newPageMock.mockResolvedValue({
       setDefaultTimeout: setDefaultTimeoutMock,

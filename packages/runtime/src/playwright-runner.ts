@@ -2232,12 +2232,18 @@ export async function executeFlow(
 ): Promise<ExecutionResult> {
   const receivedSchemaVersion = (flow as { schemaVersion?: unknown }).schemaVersion;
   if (receivedSchemaVersion !== FLOW_SCHEMA_VERSION) {
+    const safeReceivedVersion =
+      typeof receivedSchemaVersion === "number" && Number.isFinite(receivedSchemaVersion)
+        ? receivedSchemaVersion
+        : receivedSchemaVersion === undefined
+          ? "missing"
+          : "invalid";
     throw new FlowWeaveError(
       "FLOW_SCHEMA_MISMATCH",
       `当前 Runtime 仅支持 Flow Schema v${FLOW_SCHEMA_VERSION}`,
       {
         expectedVersion: FLOW_SCHEMA_VERSION,
-        receivedVersion: receivedSchemaVersion,
+        receivedVersion: safeReceivedVersion,
       },
     );
   }
