@@ -4,7 +4,7 @@ import { basename, join } from "node:path";
 
 import type { FlowDocument, NormalizedStep, Target } from "@flowweave/flow-dsl";
 import { buildPageSnapshotSummary } from "@flowweave/page-intelligence";
-import { FlowWeaveError, interpolateTemplateString } from "@flowweave/shared";
+import { FLOW_SCHEMA_VERSION, FlowWeaveError, interpolateTemplateString } from "@flowweave/shared";
 
 type LocatorStrategy = Target["strategies"][number];
 import { chromium, type BrowserContext, type ElementHandle, type Locator, type Page } from "playwright";
@@ -2230,6 +2230,17 @@ export async function executeFlow(
   flow: FlowDocument,
   options: ExecutionOptions = {},
 ): Promise<ExecutionResult> {
+  const receivedSchemaVersion = (flow as { schemaVersion?: unknown }).schemaVersion;
+  if (receivedSchemaVersion !== FLOW_SCHEMA_VERSION) {
+    throw new FlowWeaveError(
+      "FLOW_SCHEMA_MISMATCH",
+      `当前 Runtime 仅支持 Flow Schema v${FLOW_SCHEMA_VERSION}`,
+      {
+        expectedVersion: FLOW_SCHEMA_VERSION,
+        receivedVersion: receivedSchemaVersion,
+      },
+    );
+  }
   const headless = options.headless ?? true;
   const timeoutMs = options.timeoutMs ?? 30_000;
   const executionId = options.executionId ?? crypto.randomUUID();

@@ -1,7 +1,9 @@
-import { readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
+import type { FlowWeaveError } from "@flowweave/shared";
 import type { FlowDocument } from "@flowweave/flow-dsl";
 
 const launchMock = vi.fn();
@@ -13,6 +15,7 @@ const waitForTimeoutMock = vi.fn();
 const closeContextMock = vi.fn();
 const closeBrowserMock = vi.fn();
 let capturedPreferences = "";
+let testWorkspaceDir: string | undefined;
 
 vi.mock("playwright", () => ({
   chromium: {
@@ -59,6 +62,40 @@ describe("executeFlow launch options", () => {
     closeContextMock.mockReset();
     closeBrowserMock.mockReset();
     capturedPreferences = "";
+    if (testWorkspaceDir) {
+      rmSync(testWorkspaceDir, { recursive: true, force: true });
+      testWorkspaceDir = undefined;
+    }
+  });
+
+  it("在任何运行副作用前拒绝当前 Runtime 不支持的 v2 Flow", async () => {
+    testWorkspaceDir = mkdtempSync(join(tmpdir(), "fw-runtime-schema-guard-"));
+    const artifactDir = join(testWorkspaceDir, "artifacts");
+    const progressMock = vi.fn();
+    const v2Flow = {
+      ...buildEmptyFlow(),
+      schemaVersion: 2,
+    } as unknown as FlowDocument;
+
+    const execution = executeFlow(v2Flow, {
+      artifactDir,
+      onProgress: progressMock,
+    });
+
+    await expect(execution).rejects.toEqual(
+      expect.objectContaining<Partial<FlowWeaveError>>({
+        name: "FlowWeaveError",
+        code: "FLOW_SCHEMA_MISMATCH",
+        details: {
+          expectedVersion: FLOW_SCHEMA_VERSION,
+          receivedVersion: 2,
+        },
+      }),
+    );
+    expect(existsSync(artifactDir)).toBe(false);
+    expect(progressMock).not.toHaveBeenCalled();
+    expect(launchMock).not.toHaveBeenCalled();
+    expect(launchPersistentContextMock).not.toHaveBeenCalled();
   });
 
   it("headed 模式会用禁用翻译的临时浏览器 profile", async () => {
