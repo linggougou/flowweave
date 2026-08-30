@@ -150,9 +150,15 @@ export const flowDocumentSchema = z.object({
   }),
 });
 
+/** v1 显式名称；旧 flowDocumentSchema 继续保留兼容含义。 */
+export const flowDocumentV1Schema = flowDocumentSchema;
+export const normalizedStepV1Schema = normalizedStepSchema;
+
 type FlowDocumentBase = z.infer<typeof flowDocumentSchema>;
 export type NormalizedStep = z.infer<typeof normalizedStepBaseSchema>;
 export type FlowDocument = Omit<FlowDocumentBase, "steps"> & {
   steps: NormalizedStep[];
 };
+export type NormalizedStepV1 = NormalizedStep;
+export type FlowDocumentV1 = FlowDocument;
 export type Target = z.infer<typeof targetSchema>;
