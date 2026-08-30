@@ -9,7 +9,7 @@ import {
   ProjectKnowledgeRepository,
   resolveProjectStorePath,
 } from "@flowweave/project-knowledge";
-import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
+import { FLOW_SCHEMA_VERSION, FLOW_SCHEMA_VERSION_V2 } from "@flowweave/shared";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createKnowledgeApiServer } from "./index.js";
@@ -141,6 +141,48 @@ describe("本地知识库 API", () => {
       projectId: project.id,
     });
     expect(flows).toContainEqual(expect.objectContaining({ id: flow.id, name: flow.name }));
+  });
+
+  it("旧 recorder 同步入口明确拒绝 v2 且数据库零写入", async () => {
+    const project = repo.createProject("v1 同步边界项目");
+    const v2Flow = {
+      schemaVersion: FLOW_SCHEMA_VERSION_V2,
+      id: "flow_v2_not_recorded",
+      projectId: project.id,
+      name: "不得经旧入口保存",
+      steps: [
+        {
+          id: "input_name_01",
+          type: "input",
+          name: "运行输入",
+          fields: [
+            {
+              fieldId: "field_name_01",
+              label: "名称",
+              type: "string",
+              required: true,
+              sensitive: false,
+              remember: "never",
+            },
+          ],
+        },
+      ],
+      meta: {
+        createdAt: "2026-08-30T00:00:00.000Z",
+        updatedAt: "2026-08-30T00:00:00.000Z",
+        source: "manual",
+      },
+    };
+
+    const response = await fetch(`${baseUrl}/api/projects/${project.id}/flows`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ flow: v2Flow }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(repo.listFlows(project.id)).toEqual([]);
+    expect(repo.getFlowInProject(project.id, v2Flow.id)).toBeNull();
   });
 
   it("通过专用 endpoint 将裸 Flow 导入为安全新副本并返回 warnings", async () => {

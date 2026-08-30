@@ -1,4 +1,4 @@
-import { parseFlowDocument, type FlowDocument } from "@flowweave/flow-dsl";
+import { parseFlowDocumentV1, type FlowDocument } from "@flowweave/flow-dsl";
 import { FlowWeaveError } from "@flowweave/shared";
 
 import { buildHeuristicFlow } from "./heuristic.js";
@@ -33,6 +33,6 @@ export async function generateFlowFromPrompt(
     baseUrl: options.baseUrl,
   });
 
-  const flow = parseFlowDocument(draft);
+  const flow = parseFlowDocumentV1(draft);
   return { flow, source: "heuristic" };
 }

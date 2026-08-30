@@ -4,7 +4,7 @@ import { extname } from "node:path";
 
 import {
   createPortableFlowDocument,
-  parseFlowDocument,
+  parseFlowDocumentV1,
   type FlowDocument,
 } from "@flowweave/flow-dsl";
 import type { FlowImportResult } from "@flowweave/project-knowledge";
@@ -96,7 +96,7 @@ function parseBareFlowDocument(contents: Buffer): FlowDocument {
     throw new Error("Flow JSON 仅支持 schemaVersion 1");
   }
   try {
-    return parseFlowDocument(input);
+    return parseFlowDocumentV1(input);
   } catch {
     throw new Error("Flow JSON 必须是有效的 schemaVersion 1 裸 FlowDocument");
   }

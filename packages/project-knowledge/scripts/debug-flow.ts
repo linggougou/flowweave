@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-import { parseFlowDocument } from "@flowweave/flow-dsl";
+import { parseFlowDocumentV1 } from "@flowweave/flow-dsl";
 import { executeFlow } from "@flowweave/runtime";
 import Database from "better-sqlite3";
 
@@ -25,7 +25,7 @@ if (!row) {
   process.exit(1);
 }
 
-const flow = parseFlowDocument(JSON.parse(row.document_json));
+const flow = parseFlowDocumentV1(JSON.parse(row.document_json));
 const artifactDir = join(homedir(), ".flowweave", "debug-run", flowId);
 mkdirSync(artifactDir, { recursive: true });
 writeFileSync(join(artifactDir, "flow.json"), JSON.stringify(flow, null, 2));

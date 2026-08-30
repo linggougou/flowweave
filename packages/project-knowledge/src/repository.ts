@@ -18,7 +18,7 @@ import {
 import { basename, dirname, join, resolve } from "node:path";
 
 import type { FlowDocument } from "@flowweave/flow-dsl";
-import { createPortableFlowDocument, parseFlowDocument } from "@flowweave/flow-dsl";
+import { createPortableFlowDocument, parseFlowDocumentV1 } from "@flowweave/flow-dsl";
 import { and, asc, desc, eq, max } from "drizzle-orm";
 import { FlowWeaveError } from "@flowweave/shared";
 
@@ -398,7 +398,7 @@ function parseExecutionFlowSnapshot(
   }
 
   try {
-    return parseFlowDocument(JSON.parse(flowSnapshotJson));
+    return parseFlowDocumentV1(JSON.parse(flowSnapshotJson));
   } catch {
     return undefined;
   }
@@ -704,7 +704,7 @@ export class ProjectKnowledgeRepository {
   }
 
   saveFlow(projectId: string, flow: FlowDocument, changeMessage?: string): void {
-    const parsed = parseFlowDocument(flow);
+    const parsed = parseFlowDocumentV1(flow);
     const document = {
       ...parsed,
       projectId,
@@ -834,7 +834,7 @@ export class ProjectKnowledgeRepository {
       if (!row) {
         return null;
       }
-      return parseFlowDocument(JSON.parse(row.documentJson));
+      return parseFlowDocumentV1(JSON.parse(row.documentJson));
     } finally {
       closeProjectDatabase(sqlite);
     }
@@ -877,7 +877,7 @@ export class ProjectKnowledgeRepository {
       if (!row) {
         return null;
       }
-      return parseFlowDocument(JSON.parse(row.documentJson));
+      return parseFlowDocumentV1(JSON.parse(row.documentJson));
     } finally {
       closeProjectDatabase(sqlite);
     }
@@ -925,7 +925,7 @@ export class ProjectKnowledgeRepository {
   private toFlowVersionRecord(
     row: typeof dbSchema.flowVersions.$inferSelect,
   ): FlowVersionRecord {
-    const doc = parseFlowDocument(JSON.parse(row.documentJson));
+    const doc = parseFlowDocumentV1(JSON.parse(row.documentJson));
     return {
       id: row.id,
       flowId: row.flowId,
@@ -1465,7 +1465,7 @@ export class ProjectKnowledgeRepository {
         throw new Error("Flow 不存在");
       }
 
-      const document = parseFlowDocument(JSON.parse(row.documentJson));
+      const document = parseFlowDocumentV1(JSON.parse(row.documentJson));
       const now = new Date().toISOString();
       const updated: FlowDocument = {
         ...document,
@@ -1515,7 +1515,7 @@ export class ProjectKnowledgeRepository {
           .where(eq(dbSchema.flows.id, flowId))
           .get();
         if (row) {
-          return parseFlowDocument(JSON.parse(row.documentJson));
+          return parseFlowDocumentV1(JSON.parse(row.documentJson));
         }
       } finally {
         closeProjectDatabase(sqlite);

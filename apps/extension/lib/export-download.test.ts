@@ -1,5 +1,5 @@
 import {
-  parseFlowDocument,
+  parseFlowDocumentV1,
   type FlowDocument,
   type FlowPortabilityWarning,
 } from "@flowweave/flow-dsl";
@@ -96,7 +96,7 @@ describe("扩展导出响应运行时校验", () => {
     expect(result.ok).toBe(true);
     expect(download).toHaveBeenCalledWith(
       "flow-session-.json",
-      JSON.stringify(parseFlowDocument(rawDocument), null, 2),
+      JSON.stringify(parseFlowDocumentV1(rawDocument), null, 2),
     );
     const downloadedJson = download.mock.calls[0]?.[1] as string;
     const downloaded = JSON.parse(downloadedJson) as Record<string, unknown>;
@@ -171,6 +171,7 @@ describe("扩展导出响应运行时校验", () => {
     ["非法 JSON", "not-json"],
     ["包装 payload", JSON.stringify({ document, warnings: [] })],
     ["非法 FlowDocument", JSON.stringify({ schemaVersion: 1 })],
+    ["v2 FlowDocument", JSON.stringify({ ...document, schemaVersion: 2, variables: undefined })],
   ])("拒绝%s且不下载", (_label, json) => {
     const download = vi.fn();
 

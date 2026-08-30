@@ -1,5 +1,5 @@
 import {
-  parseFlowDocument,
+  parseFlowDocumentV1,
   type FlowDocument,
   type FlowPortabilityWarning,
   type FlowPortabilityWarningCode,
@@ -82,7 +82,7 @@ function parseBareFlowDocumentJson(json: string): FlowDocument | null {
   if (Object.keys(input).some((key) => !bareFlowDocumentKeys.has(key))) return null;
 
   try {
-    return parseFlowDocument(input);
+    return parseFlowDocumentV1(input);
   } catch {
     return null;
   }

@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 
-import { parseFlowDocument } from "@flowweave/flow-dsl";
+import { parseFlowDocumentV1 } from "@flowweave/flow-dsl";
 import {
   ProjectKnowledgeRepository,
   type ExecutionResult,
@@ -120,7 +120,7 @@ export async function handleKnowledgeApiRequest(
     if (segments[3] === "flows" && segments.length === 4 && method === "POST") {
       try {
         const body = (await readJsonBody(req)) as { flow?: unknown; changeMessage?: string };
-        const flow = parseFlowDocument(body.flow ?? body);
+        const flow = parseFlowDocumentV1(body.flow ?? body);
         repo.saveFlow(projectId, flow, body.changeMessage ?? "扩展录制同步");
         sendJson(res, 200, { flowId: flow.id, name: flow.name, projectId });
       } catch (error: unknown) {

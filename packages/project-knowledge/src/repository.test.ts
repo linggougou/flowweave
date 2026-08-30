@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 import Database from "better-sqlite3";
-import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
+import { FLOW_SCHEMA_VERSION, FLOW_SCHEMA_VERSION_V2 } from "@flowweave/shared";
 import { describe, expect, it, afterEach } from "vitest";
 
 import { ProjectKnowledgeRepository } from "./repository.js";
@@ -64,6 +64,28 @@ describe("ProjectKnowledgeRepository", () => {
     expect(flows).toHaveLength(1);
     expect(flows[0]?.id).toBe(flowId);
     expect(flows[0]?.createdAt).toBeTruthy();
+  });
+
+  it("legacy saveFlow 拒绝 v2 且不创建 Flow", () => {
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-pk-"));
+    const repo = new ProjectKnowledgeRepository({ dataDir });
+    const project = repo.createProject("v1 repository 边界");
+    const v2Flow = {
+      schemaVersion: FLOW_SCHEMA_VERSION_V2,
+      id: "flow_v2_rejected",
+      projectId: project.id,
+      name: "v2",
+      steps: [{ id: "open", type: "navigate", url: "https://example.com" }],
+      meta: {
+        createdAt: "2026-08-30T00:00:00.000Z",
+        updatedAt: "2026-08-30T00:00:00.000Z",
+        source: "manual",
+      },
+    };
+
+    expect(() => repo.saveFlow(project.id, v2Flow as never)).toThrow();
+    expect(repo.listFlows(project.id)).toEqual([]);
+    expect(repo.getFlowInProject(project.id, v2Flow.id)).toBeNull();
   });
 
   it("renameFlow 更新名称且不新增版本", () => {
