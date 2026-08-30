@@ -1,0 +1,260 @@
+{
+  "review_id": "vnext-1-g1i-final-l3-r4-2026-08-30",
+  "task_id": "vNext-1-G1-I-R4",
+  "lane": "g1i-final-l3-r4",
+  "review_level": "L3",
+  "rubric_id": "vnext-1-integration-security-final-v1",
+  "candidate_sha": "fc571530d6224af04c24874591bed62d04845a07",
+  "implementation_sha": "fc571530d6224af04c24874591bed62d04845a07",
+  "plan_baseline_sha": "8f83604",
+  "artifact_refs": [
+    "doc:PROJECT_ROUTE_LOCK.md",
+    "doc:docs/exec-plans/active/vnext-1a-1b-data-foundation.md",
+    "doc:docs/design-docs/vnext-flow-schema-migration.md",
+    "review:.codex/reviews/vnext-1/g1i-final-l3/scorecard.json",
+    "review:.codex/reviews/vnext-1/g1i-final-l3-r2/scorecard.json",
+    "review:.codex/reviews/vnext-1/g1i-final-l3-r3/scorecard.json",
+    "evidence:.codex/reviews/vnext-1/g1i-r3-fix-userinfo/report.md",
+    "code:packages/flow-dsl/src/sensitivity.ts",
+    "code:packages/flow-dsl/src/portability.ts",
+    "code:packages/flow-dsl/src/upgrade.ts",
+    "code:packages/project-knowledge/src/repository.ts"
+  ],
+  "command_results": [
+    {
+      "cmd": "git status --short --branch && git rev-parse HEAD && git branch --show-current",
+      "status": "pass",
+      "result": "开始时工作树 clean；分支 codex/vnext-1-g1i-final-r4；HEAD=fc571530d6224af04c24874591bed62d04845a07。"
+    },
+    {
+      "cmd": "CI=1 pnpm install --frozen-lockfile",
+      "status": "pass",
+      "result": "Node24.14.0 下安装 801 个包；Electron bundle 修复、重签名及严格签名检查成功；lockfile 未变化。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/flow-dsl --filter @flowweave/project-knowledge --filter @flowweave/local-api test",
+      "status": "pass",
+      "result": "Flow DSL 92/92、Knowledge 151/151、Local API 14/14，共 257/257；现有六类 P1 回归用例全绿。"
+    },
+    {
+      "cmd": "修改包 typecheck / lint / build",
+      "status": "pass",
+      "result": "Flow DSL、Knowledge、Local API 的 typecheck、lint、build 全通过。"
+    },
+    {
+      "cmd": "独立攻击：encoded userinfo 同片段混入 malformed percent",
+      "status": "fail",
+      "result": "navigate 单层编码 username + %ZZ password 与 wait 双层编码 password + %ZZ username 均得到 variableNames=[]；portability 保留 credential default，upgrade mapping sensitive=false、blockingIssues=[]，candidate/report 含 canary。"
+    },
+    {
+      "cmd": "独立攻击：ProjectKnowledgeRepository v1 malformed-userinfo export/import/upgrade",
+      "status": "fail",
+      "result": "exportFlow 与 importFlow 返回值均含复杂 canary；导入目标 store.sqlite raw=false、JSON-escaped=true，WAL/SHM 不存在。actual upgrade 由历史敏感材料兜底返回 FLOW_UPGRADE_BLOCKED，错误无 canary且 current 保持 revision=1/schema1；这不消除 preview/export/import 泄漏。"
+    },
+    {
+      "cmd": "git diff --check / scope / lockfile hash / credential pattern scan",
+      "status": "pass",
+      "result": "7b7180f..fc57153 仅修改 Flow DSL、Knowledge 对应测试及修复报告；Runtime、Studio、Local API、配置、lockfile、路线锁和项目日志无漂移。lockfile 两端 SHA-256 均为 b3416f39ff5fa8413c8503130028e3e0f9c833a627115a2fd16b0781aabcfb9a；常见真实凭据模式零命中。"
+    },
+    {
+      "cmd": "Node20.19.6 frozen force install 与 39/39 full gate",
+      "status": "skipped",
+      "result": "尚未进入 Node20 前已确认新的公开路径 P1；按任务明确例外停止长门禁。未执行、未虚报 execPath、39/39、0 cache、739 tests、DSL92、Knowledge151、Local14、Runtime52、Studio219 或 v1 login 结果。"
+    }
+  ],
+  "hard_gates": [
+    {
+      "id": "candidate-integrity-and-scope",
+      "status": "pass",
+      "evidence": [
+        "指定 worktree、branch、HEAD 正确且开始时 clean。",
+        "候选产品 diff 只涉及 Flow DSL userinfo helper/消费者及测试；Knowledge 仅增加公开 import/export 回归测试。",
+        "无依赖、lockfile、Runtime、Studio、Local API、路线锁或项目日志改动。"
+      ]
+    },
+    {
+      "id": "previous-six-p1-regression",
+      "status": "pass",
+      "evidence": [
+        "本候选 Flow DSL 92/92、Knowledge 151/151、Local API 14/14，包含前三轮六类 P1 的冻结回归。",
+        "历史清理、事务/物理扫描、orphan execution、v2 URL key 与统一策略的产品代码相对 R3 未变化。",
+        "raw、合法一/两轮 encoded userinfo 的新增固定矩阵通过；新失败来自未被矩阵覆盖的 malformed-percent 组合。"
+      ]
+    },
+    {
+      "id": "userinfo-helper-no-literal-output-and-normal-cases",
+      "status": "pass",
+      "evidence": [
+        "helper 返回类型只有安全 URL、removed 与变量名，不返回 username/password 字面值。",
+        "navigate/wait、username/password、单/多变量、raw 与合法一/两轮编码，以及普通 query 非敏感对照均通过现有 92 项 DSL 测试。"
+      ]
+    },
+    {
+      "id": "malformed-percent-userinfo-fail-closed",
+      "status": "fail",
+      "evidence": [
+        "sensitivity.ts:32-45 对整个 userinfo 调用 decodeURIComponent；任一非法 percent 使整轮解码直接终止。",
+        "sensitivity.ts:83-88 随后返回 removed=true 但 variableNames=[]，没有可供 portability/upgrade 识别不确定状态的 fail-closed 信号。",
+        "navigate/wait 独立探针均稳定泄漏 default 到 portability、preview、export/import 与目标 SQLite。"
+      ]
+    },
+    {
+      "id": "actual-upgrade-secondary-defense",
+      "status": "pass",
+      "evidence": [
+        "同一攻击的 actual upgrade 返回固定 FLOW_UPGRADE_BLOCKED，message/details 无 canary。",
+        "失败后 current 仍为 revision=1/schema1，未把 candidate 提交为 v2。",
+        "该后置兜底不覆盖只读 preview 与 v1 export/import 的泄漏，不能使总门禁通过。"
+      ]
+    },
+    {
+      "id": "node24-modified-packages",
+      "status": "pass",
+      "evidence": [
+        "本 worktree Node24 修改包与直接消费者测试 257/257。",
+        "三包 typecheck、lint、build 全通过。"
+      ]
+    },
+    {
+      "id": "v1-positive-v2-side-effect-guard-and-full-regression",
+      "status": "skipped",
+      "evidence": [
+        "Runtime、Studio 与 Local API 产品代码相对 R3 未变化，候选报告及主集成证据声明 Node24 52/52。",
+        "因新的 P1 已满足任务允许的提前停止条件，本轮未重新执行 Runtime/Studio/v1 login 或全仓 52/52，未把转述冒充本地重放。"
+      ]
+    },
+    {
+      "id": "node20-combined-candidate",
+      "status": "skipped",
+      "evidence": [
+        "发现新 P1 时尚未开始 Node20 frozen force install。",
+        "R4 修复后最终复审必须在同一组合候选真实完成 Node20.19.6 39/39、0 cache 及全部指定计数。"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "P1-MALFORMED-PERCENT-USERINFO-DECODE-BYPASS",
+      "severity": "P1",
+      "title": "userinfo 中一个非法 percent 转义可关闭相邻编码模板变量的敏感识别",
+      "location": [
+        "packages/flow-dsl/src/sensitivity.ts:32",
+        "packages/flow-dsl/src/sensitivity.ts:66",
+        "packages/flow-dsl/src/sensitivity.ts:83",
+        "packages/flow-dsl/src/portability.ts:183",
+        "packages/flow-dsl/src/portability.ts:474",
+        "packages/flow-dsl/src/upgrade.ts:128",
+        "packages/project-knowledge/src/repository.ts:1587",
+        "packages/project-knowledge/src/repository.ts:1603"
+      ],
+      "impact": "攻击者只需在 authority userinfo 的另一侧或同侧加入 %ZZ 等非法转义，就能让合法一/两轮编码的 {{credential}} 不再被标敏感。安全导出与导入会保留其 defaultValue，导入把秘密写入目标 SQLite；升级预览以 sensitive:false 和 blockingIssues=[] 返回含秘密 candidate/report。actual commit 虽被另一层历史敏感扫描拦住，但只读预览和导入导出硬门已经失守。",
+      "evidence": "navigate 单层编码与 wait 双层编码两个独立组合均得到 inspect variableNames=[]、portableContainsCanary=true、mapping sensitive=false、candidate/report contains canary=true。公开 repository 探针为 exportContainsCanary=true、importContainsCanary=true、target store.sqlite escaped=true；actual upgrade 为 FLOW_UPGRADE_BLOCKED 且 revision/schema 保持 1/1。",
+      "required_fix": "不要让整个 userinfo 的一次 decodeURIComponent 失败静默退回为无变量。统一 helper 必须对 malformed percent 明确 fail closed：可采用不会被无关坏转义连坐的有限模板识别，或返回显式 unsafe/ambiguous 状态并让 portability、preview、export/import 拒绝；不得返回 removed=true + variableNames=[] 后继续保留 defaults。覆盖 navigate/wait、username/password 两侧、单/多变量、raw/一/两轮编码、非法转义位于变量前后/另一侧及复杂值；preview/candidate/report、warnings/errors、export/import/API 与 SQLite/WAL/SHM raw+escaped 均须零 canary，actual upgrade 失败必须零写。"
+    }
+  ],
+  "p0_count": 0,
+  "p1_count": 1,
+  "p2_count": 0,
+  "dimensions": [
+    {
+      "name": "dsl_and_version_contract",
+      "score": 15,
+      "max_score": 20,
+      "reason": "正常 userinfo 合同已统一且冻结回归通过，但 malformed percent 可让 helper 把不确定解析当成无敏感变量并生成不安全 preview。",
+      "evidence_refs": [
+        "finding:P1-MALFORMED-PERCENT-USERINFO-DECODE-BYPASS",
+        "hard_gate:userinfo-helper-no-literal-output-and-normal-cases"
+      ]
+    },
+    {
+      "name": "revision_transactions_and_restore",
+      "score": 20,
+      "max_score": 20,
+      "reason": "当前 Knowledge 151 项含历史/故障矩阵，攻击的 actual upgrade 也正确回滚到 revision1/schema1；本轮未发现新的事务漂移。",
+      "evidence_refs": [
+        "hard_gate:previous-six-p1-regression",
+        "hard_gate:actual-upgrade-secondary-defense"
+      ]
+    },
+    {
+      "name": "sensitive_data_erasure_and_portability",
+      "score": 11,
+      "max_score": 25,
+      "reason": "前三轮明确攻击矩阵通过，但 malformed-percent 组合仍可把默认秘密带入 preview、export/import 与目标 SQLite，违反零秘密硬门。",
+      "evidence_refs": [
+        "finding:P1-MALFORMED-PERCENT-USERINFO-DECODE-BYPASS"
+      ]
+    },
+    {
+      "name": "legacy_consumers_and_runtime_isolation",
+      "score": 15,
+      "max_score": 15,
+      "reason": "Runtime/Studio/Local API 产品代码无漂移，Local API 14/14；新的 P1 位于数据可移植与预览链，不改变 v2 不可执行 guard。",
+      "evidence_refs": [
+        "hard_gate:candidate-integrity-and-scope",
+        "hard_gate:node24-modified-packages"
+      ]
+    },
+    {
+      "name": "regression_dual_node_and_evidence_quality",
+      "score": 8,
+      "max_score": 15,
+      "reason": "Node24 修改包 257/257 与静态/构建门禁充分，但新增测试只覆盖格式良好的编码 userinfo；新 P1 后按规则停止，未完成本候选 Node20 与本轮全仓/登录重放。",
+      "evidence_refs": [
+        "hard_gate:node24-modified-packages",
+        "hard_gate:node20-combined-candidate",
+        "finding:P1-MALFORMED-PERCENT-USERINFO-DECODE-BYPASS"
+      ]
+    },
+    {
+      "name": "scope_and_change_hygiene",
+      "score": 5,
+      "max_score": 5,
+      "reason": "候选改动保持在 Flow DSL helper/消费者、对应测试及修复报告内，无依赖、配置、lockfile、路线或日志越界。",
+      "evidence_refs": [
+        "hard_gate:candidate-integrity-and-scope"
+      ]
+    }
+  ],
+  "penalties": [],
+  "totals": {
+    "raw_score": 74,
+    "penalty_total": 0,
+    "final_score": 74
+  },
+  "total_score": 74,
+  "verdict": "REVISE",
+  "required_fixes": [
+    "修复 malformed-percent userinfo 解码旁路：统一 helper 对不确定 authority fail closed，覆盖 navigate/wait、username/password、单/多变量、raw/一/两轮编码及坏转义位于变量前后/另一侧；portability/preview/export/import/API/SQLite/WAL/SHM raw+escaped 全部零 canary，actual upgrade 失败零写。",
+    "修复后在同一组合候选重新独立重放前三轮六类 P1 与 malformed 矩阵，并真实完成 Node20.19.6 PATH/execPath、frozen force install、39/39 0 cache、739 tests、DSL92、Knowledge151、Local14、Runtime52、Studio219 及 v1 login4/4。"
+  ],
+  "nice_to_have": [],
+  "reviewers": [
+    {
+      "role": "generator",
+      "conclusion": "SUBMITTED",
+      "summary": "修复报告声明 v1 userinfo 正常 raw/编码变量路径已关闭并提供 739 项 Node24 证据。"
+    },
+    {
+      "role": "verifier",
+      "conclusion": "REVISE",
+      "summary": "格式良好路径回归通过，但 malformed percent 可稳定关闭变量识别并泄漏 default。"
+    },
+    {
+      "role": "strict_judge",
+      "conclusion": "REVISE",
+      "summary": "公开 export/import 已把复杂 canary 写入目标 SQLite，属于零秘密硬门 P1。"
+    },
+    {
+      "role": "anti_slop_reviewer",
+      "conclusion": "REVISE",
+      "summary": "报告把合法一/两轮编码矩阵外推为完整 authority 安全，但没有验证 decodeURIComponent 全片段失败的组合。"
+    },
+    {
+      "role": "chief_reviewer",
+      "conclusion": "REVISE",
+      "summary": "P0=0、P1=1、required_fixes 非空；修复与双 Node 复审前不得退出 review。"
+    }
+  ],
+  "reviewed_at": "2026-08-30T17:47:51+08:00"
+}
