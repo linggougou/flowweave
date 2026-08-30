@@ -1,7 +1,8 @@
-import type { FlowDocument } from "@flowweave/flow-dsl";
+import type { AnyFlowDocument, FlowDocument } from "@flowweave/flow-dsl";
 import type {
   ExecutionResult,
   ExecutionWithProject,
+  FlowRevisionRecord,
   FlowVersionRecord,
 } from "@flowweave/project-knowledge";
 
@@ -239,10 +240,14 @@ const knowledgeHttpClient: Pick<StudioApi, HttpFallbackMethod> = {
     return list.map(toStudioFlowVersion);
   },
 
-  getFlowVersion: async (projectId: string, versionId: string): Promise<FlowDocument | null> => {
+  getFlowVersion: async (
+    projectId: string,
+    flowId: string,
+    versionId: string,
+  ): Promise<AnyFlowDocument | null> => {
     try {
-      return await knowledgeRequest<FlowDocument>(
-        `/api/projects/${projectId}/flow-versions/${versionId}`,
+      return await knowledgeRequest<AnyFlowDocument>(
+        `/api/projects/${projectId}/flow-versions/${versionId}?flowId=${encodeURIComponent(flowId)}`,
       );
     } catch {
       return null;
@@ -251,12 +256,13 @@ const knowledgeHttpClient: Pick<StudioApi, HttpFallbackMethod> = {
 
   restoreFlowVersion: (
     projectId: string,
+    flowId: string,
     versionId: string,
     expectedRevision: number,
-  ): Promise<FlowDocument> =>
+  ): Promise<FlowRevisionRecord> =>
     knowledgeRequest(`/api/projects/${projectId}/flow-versions/${versionId}/restore`, {
       method: "POST",
-      body: JSON.stringify({ expectedRevision }),
+      body: JSON.stringify({ flowId, expectedRevision }),
     }),
 };
 

@@ -1553,6 +1553,39 @@ export class ProjectKnowledgeRepository {
     }
   }
 
+  /** 正式历史读取入口：支持 v1/v2，并按项目、Flow、版本三重归属校验。 */
+  getFlowVersionInFlow(
+    projectId: string,
+    flowId: string,
+    versionId: string,
+  ): AnyFlowDocument | null {
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
+    try {
+      const row = db
+        .select()
+        .from(dbSchema.flowVersions)
+        .where(
+          and(
+            eq(dbSchema.flowVersions.projectId, projectId),
+            eq(dbSchema.flowVersions.flowId, flowId),
+            eq(dbSchema.flowVersions.id, versionId),
+          ),
+        )
+        .get();
+      if (!row) {
+        return null;
+      }
+      const document = parseStoredFlow(row.documentJson);
+      assertFlowIdentity(document, projectId, flowId);
+      if (document.schemaVersion !== row.schemaVersion) {
+        throw new FlowWeaveError("FLOW_PERSISTENCE_FAILED", "Flow 版本 schema 元数据不一致");
+      }
+      return document;
+    } finally {
+      closeProjectDatabase(sqlite);
+    }
+  }
+
   restoreFlowVersion(
     projectId: string,
     versionId: string,

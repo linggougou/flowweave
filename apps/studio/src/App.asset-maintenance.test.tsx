@@ -168,7 +168,7 @@ describe("Studio 本地资产维护", () => {
     const v2 = deferred<FlowDocument | null>();
     const bad = deferred<FlowDocument | null>();
     let v1Calls = 0;
-    const getFlowVersion = vi.fn((_: string, versionId: string) => {
+    const getFlowVersion = vi.fn((_: string, _flowId: string, versionId: string) => {
       if (versionId === "v2") return v2.promise;
       v1Calls += 1;
       return v1Calls === 1 ? v1.promise : bad.promise;

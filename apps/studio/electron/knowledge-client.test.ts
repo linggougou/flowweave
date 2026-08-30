@@ -6,6 +6,7 @@ import {
   apiAllocateRunDirectory,
   apiExportFlow,
   apiGetFlow,
+  apiGetFlowVersion,
   apiImportFlow,
   apiListProjects,
   apiRenameFlow,
@@ -103,6 +104,53 @@ describe("Electron 本地知识库模式", () => {
     expect(saveFlow).not.toHaveBeenCalled();
   });
 
+  it("本地模式用 flow 归属读取 v2 历史，并直接调用 revision-aware restore", async () => {
+    const v2 = {
+      schemaVersion: 2,
+      id: "flow_v2_local",
+      projectId: "project_local",
+      name: "v2 历史",
+      steps: [],
+      meta: {
+        createdAt: "2026-08-30T00:00:00.000Z",
+        updatedAt: "2026-08-30T00:00:00.000Z",
+        source: "manual",
+      },
+    } as const;
+    const getFlowVersionInFlow = vi.fn(() => v2);
+    const restoreFlowRevision = vi.fn(() => ({
+      document: v2,
+      revision: 9,
+      updatedAt: "2026-08-30T01:00:00.000Z",
+    }));
+    const legacyRestore = vi.fn();
+    configureLocalKnowledgeRepository({
+      getFlowVersionInFlow,
+      restoreFlowRevision,
+      restoreFlowVersion: legacyRestore,
+    } as unknown as ProjectKnowledgeRepository);
+
+    await expect(
+      apiGetFlowVersion("project_local", "flow_v2_local", "version_v2"),
+    ).resolves.toBe(v2);
+    await expect(
+      apiRestoreFlowVersion("project_local", "flow_v2_local", "version_v2", 8),
+    ).resolves.toMatchObject({ revision: 9, document: { schemaVersion: 2 } });
+    expect(getFlowVersionInFlow).toHaveBeenCalledWith(
+      "project_local",
+      "flow_v2_local",
+      "version_v2",
+    );
+    expect(restoreFlowRevision).toHaveBeenCalledWith({
+      projectId: "project_local",
+      flowId: "flow_v2_local",
+      versionId: "version_v2",
+      expectedRevision: 8,
+      changeMessage: "从版本恢复",
+    });
+    expect(legacyRestore).not.toHaveBeenCalled();
+  });
+
   it("开发态通过 G2 专用 flow-imports endpoint 导入裸文档", async () => {
     const source = {
       schemaVersion: 1,
@@ -159,7 +207,8 @@ describe("Electron 本地知识库模式", () => {
 
     await apiSaveFlow("project_target", source, "CAS 保存", 4);
     await apiRenameFlow("project_target", source.id, "新名称", 5);
-    await apiRestoreFlowVersion("project_target", "version_1", 6);
+    await apiGetFlowVersion("project_target", source.id, "version_1");
+    await apiRestoreFlowVersion("project_target", source.id, "version_1", 6);
     await apiExportFlow("project_target", source.id);
 
     expect(fetchMock).toHaveBeenNthCalledWith(
@@ -180,14 +229,19 @@ describe("Electron 本地知识库模式", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
-      "http://127.0.0.1:3847/api/projects/project_target/flow-versions/version_1/restore",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({ expectedRevision: 6 }),
-      }),
+      `http://127.0.0.1:3847/api/projects/project_target/flow-versions/version_1?flowId=${source.id}`,
+      expect.any(Object),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,
+      "http://127.0.0.1:3847/api/projects/project_target/flow-versions/version_1/restore",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ flowId: source.id, expectedRevision: 6 }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
       `http://127.0.0.1:3847/api/projects/project_target/flows/${source.id}/export`,
       expect.any(Object),
     );

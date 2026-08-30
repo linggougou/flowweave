@@ -46,6 +46,7 @@ type ServicesModule = {
   ) => Promise<unknown>;
   restoreFlowVersion?: (
     projectId: string,
+    flowId: string,
     versionId: string,
     expectedRevision: number,
   ) => Promise<unknown>;
@@ -242,11 +243,15 @@ describe("getExecution 缓存命中策略", () => {
       revision: 8,
       schemaVersion: 1,
     });
-    mockApiRestoreFlowVersion.mockResolvedValue(buildFlow());
+    mockApiRestoreFlowVersion.mockResolvedValue({
+      document: buildFlow(),
+      revision: 9,
+      updatedAt: "2026-08-30T00:00:00.000Z",
+    });
     const services = (await loadServicesModule()) as ServicesModule;
 
     await services.renameFlow?.("project_cas", "flow_cas", "新名称", 7);
-    await services.restoreFlowVersion?.("project_cas", "version_cas", 8);
+    await services.restoreFlowVersion?.("project_cas", "flow_cas", "version_cas", 8);
 
     expect(mockApiRenameFlow).toHaveBeenCalledWith(
       "project_cas",
@@ -256,6 +261,7 @@ describe("getExecution 缓存命中策略", () => {
     );
     expect(mockApiRestoreFlowVersion).toHaveBeenCalledWith(
       "project_cas",
+      "flow_cas",
       "version_cas",
       8,
     );

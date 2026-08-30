@@ -254,13 +254,16 @@ export async function apiListFlowVersions(
 
 export async function apiGetFlowVersion(
   projectId: string,
+  flowId: string,
   versionId: string,
-): Promise<FlowDocument | null> {
+): Promise<AnyFlowDocument | null> {
   if (localRepository) {
-    return localRepository.getFlowVersion(projectId, versionId);
+    return localRepository.getFlowVersionInFlow(projectId, flowId, versionId);
   }
   try {
-    return await request<FlowDocument>(`/api/projects/${projectId}/flow-versions/${versionId}`);
+    return await request<AnyFlowDocument>(
+      `/api/projects/${projectId}/flow-versions/${versionId}?flowId=${encodeURIComponent(flowId)}`,
+    );
   } catch {
     return null;
   }
@@ -268,14 +271,21 @@ export async function apiGetFlowVersion(
 
 export async function apiRestoreFlowVersion(
   projectId: string,
+  flowId: string,
   versionId: string,
   expectedRevision: number,
-): Promise<FlowDocument> {
+): Promise<FlowRevisionRecord> {
   if (localRepository) {
-    return localRepository.restoreFlowVersion(projectId, versionId, expectedRevision);
+    return localRepository.restoreFlowRevision({
+      projectId,
+      flowId,
+      versionId,
+      expectedRevision,
+      changeMessage: "从版本恢复",
+    });
   }
   return request(`/api/projects/${projectId}/flow-versions/${versionId}/restore`, {
     method: "POST",
-    body: JSON.stringify({ expectedRevision }),
+    body: JSON.stringify({ flowId, expectedRevision }),
   });
 }

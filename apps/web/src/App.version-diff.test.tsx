@@ -310,6 +310,44 @@ describe("Web 版本只读 Diff 与请求守卫", () => {
     expect(container.querySelector(".json-diff")).toBeNull();
   });
 
+  it("恢复响应会更新 revision，下一次恢复使用最新 caller CAS", async () => {
+    apiMocks.listFlowVersions.mockResolvedValue([version("version-1", 1)]);
+    apiMocks.restoreFlowVersion
+      .mockResolvedValueOnce({
+        document: flowDocument("project-a", "flow-a", "第一次恢复"),
+        revision: 3,
+        updatedAt: "2026-08-30T01:00:00.000Z",
+      })
+      .mockResolvedValueOnce({
+        document: flowDocument("project-a", "flow-a", "第二次恢复"),
+        revision: 4,
+        updatedAt: "2026-08-30T02:00:00.000Z",
+      });
+
+    await mount();
+    act(() => button(container, "版本记录").click());
+    await flushEffects();
+    act(() => button(container, "恢复").click());
+    await flushEffects();
+    act(() => button(container, "恢复").click());
+    await flushEffects();
+
+    expect(apiMocks.restoreFlowVersion).toHaveBeenNthCalledWith(
+      1,
+      "project-a",
+      "flow-a",
+      "version-1",
+      2,
+    );
+    expect(apiMocks.restoreFlowVersion).toHaveBeenNthCalledWith(
+      2,
+      "project-a",
+      "flow-a",
+      "version-1",
+      3,
+    );
+  });
+
   it("切换任务后忽略旧 currentFlow 慢响应", async () => {
     const stale = deferred<FlowDocument>();
     apiMocks.getFlow.mockImplementation((_projectId: string, flowId: string) =>

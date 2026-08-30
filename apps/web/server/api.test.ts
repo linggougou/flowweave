@@ -114,7 +114,7 @@ describe("web API HTTP 路由", () => {
 
   it("GET /api/projects/:projectId/flow-versions/:versionId 返回历史版本", async () => {
     const response = await fetch(
-      `${baseUrl}/api/projects/${projectId}/flow-versions/${historyVersionId}`,
+      `${baseUrl}/api/projects/${projectId}/flow-versions/${historyVersionId}?flowId=${flowId}`,
     );
 
     expect(response.status).toBe(200);
@@ -138,19 +138,20 @@ describe("web API HTTP 路由", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ expectedRevision: 2 }),
+        body: JSON.stringify({ flowId, expectedRevision: 2 }),
       },
     );
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
-      id: string;
-      name: string;
-      steps: Array<unknown>;
+      revision: number;
+      document: { id: string; name: string; schemaVersion: number; steps: Array<unknown> };
     };
-    expect(body.id).toBe(flowId);
-    expect(body.name).toBe("流程 A");
-    expect(body.steps).toHaveLength(1);
+    expect(body.revision).toBe(3);
+    expect(body.document.id).toBe(flowId);
+    expect(body.document.name).toBe("流程 A");
+    expect(body.document.schemaVersion).toBe(1);
+    expect(body.document.steps).toHaveLength(1);
 
     const restored = repo.getFlowInProject(projectId, flowId);
     expect(restored?.name).toBe("流程 A");
@@ -163,13 +164,13 @@ describe("web API HTTP 路由", () => {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ expectedRevision: 2 }),
+        body: JSON.stringify({ flowId, expectedRevision: 2 }),
       },
     );
 
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toMatchObject({
-      error: "版本不存在",
+      error: "版本不存在或归属不匹配",
     });
   });
 });

@@ -10,6 +10,7 @@ import type { ExecutionProgressEvent } from "@flowweave/runtime";
 import type {
   ExecutionDeletionResult,
   ExecutionScreenshotPreviewResult,
+  FlowRevisionRecord,
 } from "@flowweave/project-knowledge";
 
 export type RunFlowVariableValue = string | number | boolean;
@@ -456,12 +457,17 @@ export type StudioApi = {
   listExecutions: (projectId: string) => Promise<ExecutionSummary[]>;
   deleteExecution?: (projectId: string, executionId: string) => Promise<ExecutionDeletionResult>;
   listFlowVersions: (projectId: string, flowId: string) => Promise<StudioFlowVersion[]>;
-  getFlowVersion: (projectId: string, versionId: string) => Promise<FlowDocument | null>;
+  getFlowVersion: (
+    projectId: string,
+    flowId: string,
+    versionId: string,
+  ) => Promise<AnyFlowDocument | null>;
   restoreFlowVersion: (
     projectId: string,
+    flowId: string,
     versionId: string,
     expectedRevision: number,
-  ) => Promise<FlowDocument>;
+  ) => Promise<FlowRevisionRecord>;
 };
 
 declare global {

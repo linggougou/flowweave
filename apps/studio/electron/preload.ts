@@ -43,12 +43,18 @@ const studioApi: StudioApi = {
     ipcRenderer.invoke(IPC_CHANNELS.deleteExecution, projectId, executionId),
   listFlowVersions: (projectId: string, flowId: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.listFlowVersions, projectId, flowId),
-  getFlowVersion: (projectId: string, versionId: string) =>
-    ipcRenderer.invoke(IPC_CHANNELS.getFlowVersion, projectId, versionId),
-  restoreFlowVersion: (projectId: string, versionId: string, expectedRevision: number) =>
+  getFlowVersion: (projectId: string, flowId: string, versionId: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.getFlowVersion, projectId, flowId, versionId),
+  restoreFlowVersion: (
+    projectId: string,
+    flowId: string,
+    versionId: string,
+    expectedRevision: number,
+  ) =>
     ipcRenderer.invoke(
       IPC_CHANNELS.restoreFlowVersion,
       projectId,
+      flowId,
       versionId,
       expectedRevision,
     ),

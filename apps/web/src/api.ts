@@ -1,5 +1,10 @@
-import type { FlowDocument } from "@flowweave/flow-dsl";
-import type { ExecutionResult, FlowVersionRecord, ProjectRef } from "@flowweave/project-knowledge";
+import type { AnyFlowDocument, FlowDocument } from "@flowweave/flow-dsl";
+import type {
+  ExecutionResult,
+  FlowRevisionRecord,
+  FlowVersionRecord,
+  ProjectRef,
+} from "@flowweave/project-knowledge";
 
 export type WebProject = ProjectRef & { baseUrl?: string };
 export type RenameFlowResult = {
@@ -58,19 +63,26 @@ export function listFlowVersions(projectId: string, flowId: string): Promise<Flo
   return request(`/api/projects/${projectId}/flows/${flowId}/versions`);
 }
 
-export function getFlowVersion(projectId: string, versionId: string): Promise<FlowDocument> {
-  return request(`/api/projects/${projectId}/flow-versions/${versionId}`);
+export function getFlowVersion(
+  projectId: string,
+  flowId: string,
+  versionId: string,
+): Promise<AnyFlowDocument> {
+  return request(
+    `/api/projects/${projectId}/flow-versions/${versionId}?flowId=${encodeURIComponent(flowId)}`,
+  );
 }
 
 export function restoreFlowVersion(
   projectId: string,
+  flowId: string,
   versionId: string,
   expectedRevision: number,
-): Promise<FlowDocument> {
+): Promise<FlowRevisionRecord> {
   return request(`/api/projects/${projectId}/flow-versions/${versionId}/restore`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ expectedRevision }),
+    body: JSON.stringify({ flowId, expectedRevision }),
   });
 }
 

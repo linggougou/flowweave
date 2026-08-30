@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { createPortableFlowDocument, type FlowDocument } from "@flowweave/flow-dsl";
+import {
+  createPortableFlowDocument,
+  type AnyFlowDocument,
+  type FlowDocument,
+} from "@flowweave/flow-dsl";
 import type { ExecutionResult, FlowVersionRecord } from "@flowweave/project-knowledge";
 import { APP_DISPLAY_NAME, FlowVersionList, JsonDiffView, createJsonDiff } from "@flowweave/ui";
 
@@ -25,7 +29,7 @@ export function App() {
   const [executionDetailLoading, setExecutionDetailLoading] = useState(false);
   const [versions, setVersions] = useState<FlowVersionRecord[]>([]);
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
-  const [previewFlow, setPreviewFlow] = useState<FlowDocument | null>(null);
+  const [previewFlow, setPreviewFlow] = useState<AnyFlowDocument | null>(null);
   const [currentFlow, setCurrentFlow] = useState<FlowDocument | null>(null);
   const [versionPreviewStatus, setVersionPreviewStatus] = useState<VersionPreviewStatus>("idle");
   const [flowRefreshNonce, setFlowRefreshNonce] = useState(0);
@@ -238,7 +242,7 @@ export function App() {
     setVersionPreviewStatus("loading");
     setError(null);
     try {
-      const historicalFlow = await api.getFlowVersion(projectId, versionId);
+      const historicalFlow = await api.getFlowVersion(projectId, flowId, versionId);
       if (
         versionPreviewRequestIdRef.current !== requestId ||
         selectedProjectIdRef.current !== projectId ||
@@ -252,7 +256,11 @@ export function App() {
         setError("版本数据与当前任务不匹配，已拒绝展示");
         return;
       }
-      setPreviewFlow(createPortableFlowDocument(historicalFlow).document);
+      setPreviewFlow(
+        historicalFlow.schemaVersion === 1
+          ? createPortableFlowDocument(historicalFlow).document
+          : historicalFlow,
+      );
       setVersionPreviewStatus("ready");
     } catch (reason: unknown) {
       if (
@@ -274,9 +282,30 @@ export function App() {
     try {
       const baseline = flows.find((flow) => flow.id === selectedFlowId);
       if (!baseline) throw new Error("任务 revision 不可用，请刷新后重试");
-      await api.restoreFlowVersion(selectedProjectId, versionId, baseline.revision);
-      const nextFlows = await api.listFlows(selectedProjectId);
-      setFlows(nextFlows);
+      const restored = await api.restoreFlowVersion(
+        selectedProjectId,
+        selectedFlowId,
+        versionId,
+        baseline.revision,
+      );
+      if (
+        restored.document.projectId !== selectedProjectId ||
+        restored.document.id !== selectedFlowId
+      ) {
+        throw new Error("恢复结果与当前任务不匹配，已拒绝更新状态");
+      }
+      setFlows((current) =>
+        current.map((flow) =>
+          flow.id === selectedFlowId
+            ? {
+                ...flow,
+                name: restored.document.name,
+                revision: restored.revision,
+                schemaVersion: restored.document.schemaVersion,
+              }
+            : flow,
+        ),
+      );
       if (
         selectedProjectIdRef.current === selectedProjectId &&
         selectedFlowIdRef.current === selectedFlowId

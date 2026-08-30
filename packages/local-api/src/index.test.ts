@@ -230,7 +230,7 @@ describe("本地知识库 API", () => {
     const stale = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ expectedRevision: 1 }),
+      body: JSON.stringify({ flowId: flow.id, expectedRevision: 1 }),
     });
     expect(stale.status).toBe(409);
     expect(repo.getFlowRevision(project.id, flow.id)).toMatchObject({
@@ -241,12 +241,102 @@ describe("本地知识库 API", () => {
     const restored = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ expectedRevision: 2 }),
+      body: JSON.stringify({ flowId: flow.id, expectedRevision: 2 }),
     });
     expect(restored.status).toBe(200);
     expect(repo.getFlowRevision(project.id, flow.id)).toMatchObject({
       revision: 3,
       document: { name: flow.name },
+    });
+  });
+
+  it("真实 HTTP 支持 v2 历史读取恢复，并对陈旧及跨归属请求保持零写入", async () => {
+    const project = repo.createProject("v2 restore 项目");
+    const otherProject = repo.createProject("v2 restore 其他项目");
+    const imported = repo.importFlow(project.id, createV2Flow("source_project")).flow;
+    const otherFlow = repo.importFlow(project.id, createV2Flow("source_other")).flow;
+    repo.saveFlowRevision({
+      projectId: project.id,
+      flowId: imported.id,
+      document: { ...imported, name: "当前 v2" },
+      expectedRevision: 1,
+    });
+    const versionId = repo.listFlowVersions(project.id, imported.id)[0]!.id;
+    const detailEndpoint = `${baseUrl}/api/projects/${project.id}/flow-versions/${versionId}`;
+    const restoreEndpoint = `${detailEndpoint}/restore`;
+
+    const detail = await fetch(`${detailEndpoint}?flowId=${encodeURIComponent(imported.id)}`);
+    expect(detail.status).toBe(200);
+    await expect(detail.json()).resolves.toMatchObject({
+      id: imported.id,
+      projectId: project.id,
+      schemaVersion: FLOW_SCHEMA_VERSION_V2,
+    });
+
+    const missingFlowIdDetail = await fetch(detailEndpoint);
+    expect(missingFlowIdDetail.status).toBe(400);
+    const missingFlowIdRestore = await fetch(restoreEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expectedRevision: 2 }),
+    });
+    expect(missingFlowIdRestore.status).toBe(400);
+    expect(repo.getFlowRevision(project.id, imported.id)?.revision).toBe(2);
+
+    const stale = await fetch(restoreEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ flowId: imported.id, expectedRevision: 1 }),
+    });
+    expect(stale.status).toBe(409);
+    expect(repo.getFlowRevision(project.id, imported.id)).toMatchObject({
+      revision: 2,
+      document: { name: "当前 v2" },
+    });
+
+    for (const attack of [
+      fetch(`${detailEndpoint}?flowId=${encodeURIComponent(otherFlow.id)}`),
+      fetch(`${baseUrl}/api/projects/${otherProject.id}/flow-versions/${versionId}?flowId=${encodeURIComponent(imported.id)}`),
+      fetch(`${baseUrl}/api/projects/${project.id}/flow-versions/missing_version?flowId=${encodeURIComponent(imported.id)}`),
+      fetch(restoreEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ flowId: otherFlow.id, expectedRevision: 1 }),
+      }),
+      fetch(`${baseUrl}/api/projects/${project.id}/flow-versions/missing_version/restore`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ flowId: imported.id, expectedRevision: 2 }),
+      }),
+      fetch(
+        `${baseUrl}/api/projects/${otherProject.id}/flow-versions/${versionId}/restore`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ flowId: imported.id, expectedRevision: 2 }),
+        },
+      ),
+    ]) {
+      const response = await attack;
+      expect(response.status).toBe(404);
+    }
+    expect(repo.getFlowRevision(project.id, imported.id)?.revision).toBe(2);
+    expect(repo.getFlowRevision(project.id, otherFlow.id)?.revision).toBe(1);
+
+    const restored = await fetch(restoreEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ flowId: imported.id, expectedRevision: 2 }),
+    });
+    expect(restored.status).toBe(200);
+    await expect(restored.json()).resolves.toMatchObject({
+      revision: 3,
+      document: {
+        id: imported.id,
+        projectId: project.id,
+        schemaVersion: FLOW_SCHEMA_VERSION_V2,
+        name: imported.name,
+      },
     });
   });
 
@@ -517,6 +607,37 @@ function createImportFlow(projectId: string) {
       createdAt: "2026-05-25T00:00:00.000Z",
       updatedAt: "2026-05-25T00:00:00.000Z",
       source: "recorded" as const,
+    },
+  };
+}
+
+function createV2Flow(projectId: string) {
+  return {
+    schemaVersion: FLOW_SCHEMA_VERSION_V2,
+    id: "flow_v2_restore_source",
+    projectId,
+    name: "v2 历史来源",
+    steps: [
+      {
+        id: "input_profile_01",
+        type: "input" as const,
+        name: "运行输入",
+        fields: [
+          {
+            fieldId: "field_name_01",
+            label: "名称",
+            type: "string" as const,
+            required: true,
+            sensitive: false,
+            remember: "never" as const,
+          },
+        ],
+      },
+    ],
+    meta: {
+      createdAt: "2026-08-30T00:00:00.000Z",
+      updatedAt: "2026-08-30T00:00:00.000Z",
+      source: "manual" as const,
     },
   };
 }

@@ -21,6 +21,7 @@ import {
   resolveRunDirectory,
   type ExecutionResult as KnowledgeExecutionResult,
   type FlowImportResult,
+  type FlowRevisionRecord,
   type ProjectEnvironment,
 } from "@flowweave/project-knowledge";
 import {
@@ -890,15 +891,17 @@ export async function listFlowVersions(
 
 export async function getFlowVersion(
   projectId: string,
+  flowId: string,
   versionId: string,
-): Promise<FlowDocument | null> {
-  return apiGetFlowVersion(projectId, versionId);
+): Promise<AnyFlowDocument | null> {
+  return apiGetFlowVersion(projectId, flowId, versionId);
 }
 
 export async function restoreFlowVersion(
   projectId: string,
+  flowId: string,
   versionId: string,
   expectedRevision: number,
-): Promise<FlowDocument> {
-  return apiRestoreFlowVersion(projectId, versionId, expectedRevision);
+): Promise<FlowRevisionRecord> {
+  return apiRestoreFlowVersion(projectId, flowId, versionId, expectedRevision);
 }

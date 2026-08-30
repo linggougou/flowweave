@@ -388,6 +388,57 @@ describe("vNext-1B Knowledge 数据基础", () => {
     expect(repo.getFlowFieldRecentValues(project.id, flow.id)).toEqual({});
   });
 
+  it("正式历史读取支持 v2 且按 projectId、flowId、versionId 三重归属校验", () => {
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-vnext-version-owner-"));
+    const repo = new ProjectKnowledgeRepository({ dataDir });
+    const project = repo.createProject("v2 历史归属");
+    const otherProject = repo.createProject("其他项目");
+    const flow = buildV1(project.id, "flow_v2_version_owner");
+    const otherFlow = buildV1(project.id, "flow_other_owner");
+    repo.saveFlow(project.id, flow);
+    const prepared = prepareUpgrade(flow);
+    const upgraded = repo.upgradeFlowToV2({
+      projectId: project.id,
+      flowId: flow.id,
+      expectedRevision: 1,
+      reportFingerprint: prepared.preview.reportFingerprint,
+      rememberSelections: prepared.rememberSelections,
+    });
+    repo.saveFlow(project.id, otherFlow);
+    repo.saveFlowRevision({
+      projectId: project.id,
+      flowId: flow.id,
+      document: { ...upgraded.document, name: "当前 v2" },
+      expectedRevision: 2,
+    });
+    const v2Version = repo
+      .listFlowVersions(project.id, flow.id)
+      .find((version) => version.schemaVersion === FLOW_SCHEMA_VERSION_V2)!;
+
+    expect(repo.getFlowVersionInFlow(project.id, flow.id, v2Version.id)).toMatchObject({
+      id: flow.id,
+      projectId: project.id,
+      schemaVersion: FLOW_SCHEMA_VERSION_V2,
+    });
+    expect(repo.getFlowVersionInFlow(project.id, otherFlow.id, v2Version.id)).toBeNull();
+    expect(repo.getFlowVersionInFlow(otherProject.id, flow.id, v2Version.id)).toBeNull();
+    expect(repo.getFlowVersionInFlow(project.id, flow.id, "missing_version")).toBeNull();
+    expect(() => repo.getFlowVersion(project.id, v2Version.id)).toThrowError(
+      expect.objectContaining({ code: "FLOW_SCHEMA_VERSION_UNSUPPORTED" }),
+    );
+
+    const restored = repo.restoreFlowRevision({
+      projectId: project.id,
+      flowId: flow.id,
+      versionId: v2Version.id,
+      expectedRevision: 3,
+    });
+    expect(restored).toMatchObject({
+      revision: 4,
+      document: { schemaVersion: FLOW_SCHEMA_VERSION_V2, name: upgraded.document.name },
+    });
+  });
+
   it("最近值只接受当前 v2 中非敏感且 remember:lastValue 的标量", () => {
     dataDir = mkdtempSync(join(tmpdir(), "flowweave-vnext-recent-"));
     const repo = new ProjectKnowledgeRepository({ dataDir });

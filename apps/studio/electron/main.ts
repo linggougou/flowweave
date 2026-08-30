@@ -502,21 +502,36 @@ function registerIpcHandlers(): void {
     return listFlowVersions(projectId, flowId);
   });
 
-  ipcMain.handle(IPC_CHANNELS.getFlowVersion, (_event, projectId: string, versionId: string) => {
-    if (typeof projectId !== "string" || projectId.length === 0) {
-      throw new Error("projectId 无效");
-    }
-    if (typeof versionId !== "string" || versionId.length === 0) {
-      throw new Error("versionId 无效");
-    }
-    return getFlowVersion(projectId, versionId);
-  });
+  ipcMain.handle(
+    IPC_CHANNELS.getFlowVersion,
+    (_event, projectId: string, flowId: string, versionId: string) => {
+      if (typeof projectId !== "string" || projectId.length === 0) {
+        throw new Error("projectId 无效");
+      }
+      if (typeof flowId !== "string" || flowId.length === 0) {
+        throw new Error("flowId 无效");
+      }
+      if (typeof versionId !== "string" || versionId.length === 0) {
+        throw new Error("versionId 无效");
+      }
+      return getFlowVersion(projectId, flowId, versionId);
+    },
+  );
 
   ipcMain.handle(
     IPC_CHANNELS.restoreFlowVersion,
-    (_event, projectId: string, versionId: string, expectedRevision: number) => {
+    (
+      _event,
+      projectId: string,
+      flowId: string,
+      versionId: string,
+      expectedRevision: number,
+    ) => {
       if (typeof projectId !== "string" || projectId.length === 0) {
         throw new Error("projectId 无效");
+      }
+      if (typeof flowId !== "string" || flowId.length === 0) {
+        throw new Error("flowId 无效");
       }
       if (typeof versionId !== "string" || versionId.length === 0) {
         throw new Error("versionId 无效");
@@ -524,7 +539,7 @@ function registerIpcHandlers(): void {
       if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
         throw new Error("expectedRevision 无效");
       }
-      return restoreFlowVersion(projectId, versionId, expectedRevision);
+      return restoreFlowVersion(projectId, flowId, versionId, expectedRevision);
     },
   );
 

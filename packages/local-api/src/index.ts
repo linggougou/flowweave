@@ -353,34 +353,63 @@ export async function handleKnowledgeApiRequest(
         return true;
       }
       if (segments.length === 5 && method === "GET") {
-        const flow = repo.getFlowVersion(projectId, versionId);
-        if (!flow) {
-          sendJson(res, 404, { error: "版本不存在" });
+        const flowId = url.searchParams.get("flowId")?.trim();
+        if (!flowId) {
+          sendApiError(res, 400, "INVALID_FLOW_ID", "缺少 flowId");
           return true;
         }
-        sendJson(res, 200, flow);
+        try {
+          const flow = repo.getFlowVersionInFlow(projectId, flowId, versionId);
+          if (!flow) {
+            sendJson(res, 404, { error: "版本不存在或归属不匹配" });
+            return true;
+          }
+          sendJson(res, 200, flow);
+        } catch (error: unknown) {
+          if (error instanceof FlowWeaveError) {
+            sendApiError(res, 400, "FLOW_VERSION_INVALID", "版本数据归属校验失败");
+          } else {
+            sendApiError(res, 500, "FLOW_VERSION_READ_FAILED", "读取版本失败");
+          }
+        }
         return true;
       }
       if (segments.length === 6 && segments[5] === "restore" && method === "POST") {
-        const flow = repo.getFlowVersion(projectId, versionId);
-        if (!flow) {
-          sendJson(res, 404, { error: "版本不存在" });
-          return true;
-        }
-        const body = (await readJsonBody(req)) as { expectedRevision?: unknown };
+        const body = (await readJsonBody(req)) as {
+          flowId?: unknown;
+          expectedRevision?: unknown;
+        };
         if (!Number.isSafeInteger(body.expectedRevision) || (body.expectedRevision as number) < 1) {
           sendApiError(res, 400, "INVALID_EXPECTED_REVISION", "缺少 expectedRevision");
           return true;
         }
+        if (typeof body.flowId !== "string" || body.flowId.trim().length === 0) {
+          sendApiError(res, 400, "INVALID_FLOW_ID", "缺少 flowId");
+          return true;
+        }
+        const flowId = body.flowId.trim();
         try {
+          const version = repo.getFlowVersionInFlow(projectId, flowId, versionId);
+          if (!version) {
+            sendJson(res, 404, { error: "版本不存在或归属不匹配" });
+            return true;
+          }
           sendJson(
             res,
             200,
-            repo.restoreFlowVersion(projectId, versionId, body.expectedRevision as number),
+            repo.restoreFlowRevision({
+              projectId,
+              flowId,
+              versionId,
+              expectedRevision: body.expectedRevision as number,
+              changeMessage: "从版本恢复",
+            }),
           );
         } catch (error: unknown) {
           if (error instanceof FlowWeaveError && error.code === "FLOW_REVISION_CONFLICT") {
             sendApiError(res, 409, error.code, "Flow revision 已变化");
+          } else if (error instanceof FlowWeaveError && error.code === "VALIDATION_FAILED") {
+            sendJson(res, 404, { error: "版本不存在或归属不匹配" });
           } else {
             sendApiError(res, 400, "FLOW_RESTORE_FAILED", "恢复 Flow 失败");
           }
