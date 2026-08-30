@@ -1,0 +1,293 @@
+{
+  "review_id": "vnext-1-g1a-dsl-l3-2026-08-30",
+  "task_id": "vNext-1A-G1A",
+  "lane": "g1a-dsl",
+  "review_level": "L3",
+  "rubric_id": "vnext-1a-dsl-l3-v1",
+  "baseline_sha": "37cf7179ce156309c2c57063662b20d53a4fbc1f",
+  "reviewed_sha": "a739ef8af517c67cfc258b35c52373cf0804865e",
+  "artifact_refs": [
+    "doc:PROJECT_ROUTE_LOCK.md",
+    "doc:docs/exec-plans/active/vnext-1a-1b-data-foundation.md",
+    "doc:docs/design-docs/vnext-flow-schema-migration.md",
+    "doc:docs/adr/0009-vnext-input-node-and-schema-versioning.md",
+    "code:packages/shared/src/constants.ts",
+    "code:packages/shared/src/errors.ts",
+    "code:packages/flow-dsl/src/parsers.ts",
+    "code:packages/flow-dsl/src/v2-schema.ts",
+    "code:packages/flow-dsl/src/upgrade.ts",
+    "test:packages/flow-dsl/src/schema.test.ts",
+    "test:packages/flow-dsl/src/v2-schema.test.ts",
+    "test:packages/flow-dsl/src/upgrade.test.ts"
+  ],
+  "command_results": [
+    {
+      "cmd": "pnpm install --frozen-lockfile",
+      "status": "pass",
+      "result": "Node 24.14.0 / pnpm 9.15.4；lockfile 未变化，801 个依赖从本地 store 复用完成。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/shared test && typecheck && lint && build",
+      "status": "pass",
+      "result": "3 个测试文件、7 个测试通过；typecheck、lint、build 通过。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/flow-dsl test && typecheck && lint && build",
+      "status": "pass",
+      "result": "4 个测试文件、59 个测试通过；typecheck、lint、build 通过。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/recorder test && typecheck && lint && build",
+      "status": "pass",
+      "result": "3 个测试文件、54 个测试通过；typecheck、lint、build 通过。首次并行运行因 fresh worktree 尚无上游 dist 失败，按 shared -> flow-dsl -> recorder 依赖顺序重跑后全绿。"
+    },
+    {
+      "cmd": "pnpm typecheck",
+      "status": "fail",
+      "result": "全仓硬门禁失败；首个确定性错误为 packages/ai-orchestrator/src/generate.ts:37 的 TS2322，AnyFlowDocument 不能赋给 FlowDocument。定向检查另确认 project-knowledge 与 extension 多个旧 v1 调用方发生同类类型回归。"
+    },
+    {
+      "cmd": "pnpm exec prettier --check <12 changed source/test files>",
+      "status": "pass",
+      "result": "All matched files use Prettier code style!"
+    },
+    {
+      "cmd": "git diff --check 37cf7179..a739ef8",
+      "status": "pass",
+      "result": "无输出。"
+    },
+    {
+      "cmd": "node attack: explicit non-password target",
+      "status": "fail",
+      "result": "inputType=text 且 selector=#password-policy-note 时，既有 portability 保留 PUBLIC_NOTE default；upgrade 却将 policy_note 误标 sensitive=true 并移除 default。"
+    },
+    {
+      "cmd": "node attack: ambiguous deterministic fieldId seed",
+      "status": "fail",
+      "result": "同一 Flow 内 variables[1].name=23 与 variables[12].name=3 生成相同 field_f383a9127739073b0790，候选被 CANDIDATE_INVALID 阻塞。"
+    },
+    {
+      "cmd": "node attack: SHA-256 and canonical JSON cross-check",
+      "status": "pass",
+      "result": "507 个 ASCII/Unicode/孤立 surrogate/random 样本与 node:crypto 零差异；不同对象键插入顺序 canonical JSON 相同。"
+    }
+  ],
+  "hard_gates": [
+    {
+      "id": "candidate-and-scope",
+      "status": "pass",
+      "evidence": [
+        "HEAD 精确为 a739ef8af517c67cfc258b35c52373cf0804865e。",
+        "baseline..candidate 仅修改 packages/shared 与 packages/flow-dsl 的 12 个源文件/测试；未修改 Runtime、Knowledge、Electron、Studio、路线锁或日志。"
+      ]
+    },
+    {
+      "id": "v1-default-and-version-dispatch",
+      "status": "pass",
+      "evidence": [
+        "FLOW_SCHEMA_VERSION 继续等于 1；v1/v2/未知版本分派测试通过。",
+        "v1 flowDocumentSchema 实现未改变，仅增加显式 v1 别名。"
+      ]
+    },
+    {
+      "id": "v1-workspace-compatibility",
+      "status": "fail",
+      "evidence": [
+        "pnpm typecheck 失败：packages/ai-orchestrator/src/generate.ts:37 TS2322。",
+        "定向 typecheck 还确认 packages/project-knowledge/src/repository.ts:401,837,880,1470,1518 与 apps/extension/lib/export-download.ts:85 的 AnyFlowDocument -> FlowDocument 回归。"
+      ]
+    },
+    {
+      "id": "v2-strict-schema-and-binding-policy",
+      "status": "pass",
+      "evidence": [
+        "顶层、step、input field、target、strategy、hints、selectionContext 和 meta 均使用 strict schema。",
+        "步骤/fieldId/label 唯一性、未来/未知引用、七类 allowlist、非法槽位、类型、可选字段 default、敏感消费与 selectionContext 均有实现和正负测试。"
+      ]
+    },
+    {
+      "id": "pure-deterministic-migration",
+      "status": "fail",
+      "evidence": [
+        "相同普通输入、canonical JSON 与标准 SHA-256 稳定性通过。",
+        "但 `${flow.id}${index}${variable.name}` 为无边界编码，不同 index/name 可构造相同 seed，导致本应可迁移的 v1 被生成 fieldId 冲突阻塞。"
+      ]
+    },
+    {
+      "id": "identity-preservation",
+      "status": "pass",
+      "evidence": [
+        "flowId、projectId 与既有 browser step.id 保持原值；历史 opaque 身份测试通过。",
+        "生成 input step id 与既有 step.id 冲突时 fail closed，符合冻结设计把生成后重复 ID 列为 blocking issue 的要求。"
+      ]
+    },
+    {
+      "id": "sensitive-policy-and-safe-errors",
+      "status": "fail",
+      "evidence": [
+        "v2 sensitive string/never/no-default/fill-only 与 canary error 不泄露测试通过。",
+        "迁移的 password target 启发式偏离既有 portability：显式 inputType=text 未抑制 selector 中 password 字样，普通字段被误标敏感并丢弃 default。"
+      ]
+    },
+    {
+      "id": "target-package-verification",
+      "status": "pass",
+      "evidence": [
+        "shared 7 tests、flow-dsl 59 tests、recorder 54 tests 全部通过。",
+        "三个包的 typecheck/lint/build 全部通过；Prettier 与 git diff --check 通过。"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "P0-01",
+      "severity": "P0",
+      "title": "通用 parser 的联合返回类型破坏现有 v1 调用方，导致全仓 typecheck 失败",
+      "evidence_refs": [
+        "packages/flow-dsl/src/parsers.ts:16",
+        "packages/flow-dsl/src/parsers.ts:51",
+        "packages/ai-orchestrator/src/generate.ts:37",
+        "packages/project-knowledge/src/repository.ts:401",
+        "apps/extension/lib/export-download.ts:85",
+        "command:pnpm typecheck"
+      ],
+      "impact": "候选不能在当前主线独立集成；v1 默认运行路径虽然运行时常量未改，但公共 TypeScript 合同已让现有 workspace 无法通过硬门禁。"
+    },
+    {
+      "id": "P1-01",
+      "severity": "P1",
+      "title": "迁移 password 启发式未保留显式非 password inputType 的优先级",
+      "evidence_refs": [
+        "packages/flow-dsl/src/upgrade.ts:84",
+        "packages/flow-dsl/src/portability.ts:82",
+        "attack:inputType=text + #password-policy-note"
+      ],
+      "impact": "普通字段会被错误标记为 sensitive，default 被移除；后续原子升级会把错误分类传播到历史清理与 remember 策略，造成不必要的数据丢失。"
+    },
+    {
+      "id": "P1-02",
+      "severity": "P1",
+      "title": "确定性 fieldId seed 无边界编码，可由不同 index/name 构造碰撞",
+      "evidence_refs": [
+        "packages/flow-dsl/src/upgrade.ts:311",
+        "attack:variables[1].name=23 + variables[12].name=3"
+      ],
+      "impact": "没有重复变量名、重复 stepId 或非法引用的合法 v1 Flow 仍会因为迁移器自己制造的 fieldId 重复而无法升级。当前行为 fail closed，不会产出错误候选，但不满足每变量唯一映射合同。"
+    }
+  ],
+  "p0_count": 1,
+  "p1_count": 2,
+  "p2_count": 0,
+  "dimensions": [
+    {
+      "name": "v1_compatibility_and_dispatch",
+      "score": 15,
+      "max_score": 15,
+      "reason": "默认版本和运行时分派本身正确；公共类型回归作为独立硬门禁 penalty 处理。"
+    },
+    {
+      "name": "strict_schema",
+      "score": 15,
+      "max_score": 15,
+      "reason": "v2 各层 strict、唯一性、路径定位与结构约束完整。"
+    },
+    {
+      "name": "bindings_and_selection",
+      "score": 19,
+      "max_score": 20,
+      "reason": "七类白名单、非法槽位扫描、类型/顺序/selection 校验完整；部分选择来源攻击矩阵仍偏少。"
+    },
+    {
+      "name": "migration_and_identity",
+      "score": 18,
+      "max_score": 20,
+      "reason": "纯预览、身份保留和常规确定性良好；seed 边界碰撞作为独立 penalty 处理。"
+    },
+    {
+      "name": "sensitive_policy_and_errors",
+      "score": 13,
+      "max_score": 15,
+      "reason": "v2 fail-closed 与错误脱敏良好；迁移敏感启发式回归作为独立 penalty 处理。"
+    },
+    {
+      "name": "canonical_and_fingerprint",
+      "score": 5,
+      "max_score": 5,
+      "reason": "canonical 键排序和自实现 SHA-256 经标准库及 Unicode 样本交叉验证稳定。"
+    },
+    {
+      "name": "tests_evidence_and_scope",
+      "score": 7,
+      "max_score": 10,
+      "reason": "目标包门禁和范围控制良好，但未在候选自检中捕获全仓类型回归、敏感误判与 seed 碰撞。"
+    }
+  ],
+  "penalties": [
+    {
+      "id": "P0-01",
+      "severity": "P0",
+      "deduction": 10,
+      "reason": "全仓 typecheck 硬门禁失败，候选不可独立集成。",
+      "evidence_refs": ["command:pnpm typecheck", "packages/ai-orchestrator/src/generate.ts:37"]
+    },
+    {
+      "id": "P1-01",
+      "severity": "P1",
+      "deduction": 4,
+      "reason": "迁移敏感启发式偏离既有 portability 规则并会错误丢弃普通 default。",
+      "evidence_refs": [
+        "packages/flow-dsl/src/upgrade.ts:84",
+        "packages/flow-dsl/src/portability.ts:82"
+      ]
+    },
+    {
+      "id": "P1-02",
+      "severity": "P1",
+      "deduction": 3,
+      "reason": "无分隔 seed 让合法变量组合产生相同 fieldId 并阻塞迁移。",
+      "evidence_refs": ["packages/flow-dsl/src/upgrade.ts:311"]
+    }
+  ],
+  "totals": {
+    "raw_score": 92,
+    "penalty_total": 17,
+    "final_score": 75
+  },
+  "verdict": "REVISE",
+  "required_fixes": [
+    {
+      "id": "RF-P0-01",
+      "priority": "P0",
+      "fix": "在保持 parseFlowDocument 版本分派合同的同时，收口所有既有 v1-only 调用方或提供兼容类型边界，使全仓 pnpm typecheck 通过；必须显式证明 v2 不会被旧 repository、extension 或 AI v1 路径误接收。"
+    },
+    {
+      "id": "RF-P1-01",
+      "priority": "P1",
+      "fix": "让 upgrade 与既有 portability 共用同一 password target 判定，至少恢复显式 inputType 非 password 时不再使用名称/selector 启发式，并增加普通 password-policy 文本输入的回归测试。"
+    },
+    {
+      "id": "RF-P1-02",
+      "priority": "P1",
+      "fix": "将 fieldId seed 改为无歧义的边界编码（例如长度前缀或 canonical tuple），保留跨环境确定性，并增加 index/name 歧义组合的回归测试。"
+    }
+  ],
+  "nice_to_have": [],
+  "reviewers": [
+    {
+      "role": "verifier",
+      "conclusion": "FAIL",
+      "summary": "目标包门禁通过，但 workspace typecheck 硬门禁失败。"
+    },
+    {
+      "role": "strict_judge",
+      "conclusion": "REVISE",
+      "summary": "核心 v2 schema 质量较高，但 v1 公共类型兼容、迁移敏感判定与确定性 ID 唯一性存在 required fixes。"
+    },
+    {
+      "role": "anti_slop_judge",
+      "conclusion": "REVISE",
+      "summary": "未发现模板化占位或越界实现；测试矩阵遗漏三个可稳定复现的合同缺口。"
+    }
+  ],
+  "reviewed_at": "2026-08-30T14:23:54+08:00"
+}
