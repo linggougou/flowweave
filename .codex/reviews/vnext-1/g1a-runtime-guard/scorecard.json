@@ -1,0 +1,170 @@
+{
+  "review_id": "vnext-1-g1a-runtime-guard-2026-08-30",
+  "task_id": "vNext-1A-C",
+  "lane": "g1a-runtime-guard",
+  "review_level": "L2",
+  "rubric_id": "vnext-1-g1a-c-runtime-guard-l2-v1",
+  "reviewed_sha": "093e92eab33c0dd9904b5005e9f8aea1ba1a9918",
+  "artifact_refs": [
+    "baseline:37cf7179ce156309c2c57063662b20d53a4fbc1f",
+    "reviewed-commit:093e92eab33c0dd9904b5005e9f8aea1ba1a9918",
+    "doc:PROJECT_ROUTE_LOCK.md",
+    "doc:docs/exec-plans/active/vnext-1a-1b-data-foundation.md",
+    "code:packages/runtime/src/playwright-runner.ts",
+    "code:packages/runtime/src/playwright-launch-options.test.ts",
+    "code:packages/shared/src/errors.ts",
+    "code:apps/studio/electron/main.ts",
+    "code:apps/studio/electron/services.ts"
+  ],
+  "command_results": [
+    {
+      "cmd": "git diff --stat 37cf7179ce156309c2c57063662b20d53a4fbc1f..093e92eab33c0dd9904b5005e9f8aea1ba1a9918",
+      "status": "pass",
+      "result": "差异仅命中 packages/runtime/src/playwright-runner.ts 与 packages/runtime/src/playwright-launch-options.test.ts。"
+    },
+    {
+      "cmd": "pnpm typecheck",
+      "status": "pass",
+      "result": "turbo typecheck 21/21 successful。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/runtime test",
+      "status": "pass",
+      "result": "4 test files / 48 tests 全绿；含新增 launch-options guard 测试、playwright-runner 回归、real-page matrix、recorded-replay matrix。"
+    },
+    {
+      "cmd": "node malformed-schemaVersion probe",
+      "status": "fail",
+      "result": "executeFlow() 在 schemaVersion 为对象时抛出 FLOW_SCHEMA_MISMATCH，但 error.details.receivedVersion 与输入对象保持同一引用；输出 sameObject=true，detailsJson 包含嵌套 secret/token。"
+    }
+  ],
+  "hard_gates": [
+    {
+      "id": "reject-non-v1-before-runtime-side-effects",
+      "status": "pass",
+      "evidence": [
+        "packages/runtime/src/playwright-runner.ts:2233-2243 在 headless/timeout/executionId/artifactDir 计算前先比较 schemaVersion 并抛错。",
+        "packages/runtime/src/playwright-launch-options.test.ts:71-99 证明 v2 Flow 被拒绝时 artifactDir 未创建、progress 未发送、chromium launch / launchPersistentContext 均未调用。"
+      ]
+    },
+    {
+      "id": "v1-runtime-regression-green",
+      "status": "pass",
+      "evidence": [
+        "fresh `pnpm --filter @flowweave/runtime test` 通过 48/48。",
+        "其中 src/playwright-runner.test.ts 38/38、src/real-page-matrix.test.ts 4/4、src/recorded-replay-matrix.test.ts 1/1 均通过，说明 v1 主链路未被 guard 回归破坏。"
+      ]
+    },
+    {
+      "id": "fresh-typecheck-green",
+      "status": "pass",
+      "evidence": [
+        "fresh `pnpm typecheck` 通过，21/21 tasks successful。"
+      ]
+    },
+    {
+      "id": "renderer-path-message-only",
+      "status": "pass",
+      "evidence": [
+        "apps/studio/electron/main.ts:273-292 仅把 runFlow 错误压缩为 message 并裁到 2000 字，当前 Studio renderer 路径未直接透传 FlowWeaveError.details。",
+        "apps/studio/electron/services.ts:644-655 显示当前 Studio 分轨在分配 run directory 后才调用 executeFlow；本次 runtime guard 审查不把 Studio 级副作用前拒绝算作已完成。"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "severity": "P1",
+      "title": "FLOW_SCHEMA_MISMATCH 会把未校验的 schemaVersion 对象原样挂进错误 details",
+      "files": [
+        "packages/runtime/src/playwright-runner.ts:2233-2241",
+        "packages/shared/src/errors.ts:8-16"
+      ],
+      "why_it_matters": "当前 guard 虽然能在副作用前拒绝非 v1，但它把 `(flow as { schemaVersion?: unknown }).schemaVersion` 原样写入 `FlowWeaveError.details`。对 raw/cast 输入，调用方可把任意对象甚至敏感嵌套结构带进错误对象，后续只要有日志/API/调试通道序列化 details，就会违反 fail-closed 的错误边界。",
+      "evidence": [
+        "运行 node probe 得到 `sameObject true`。",
+        "同一 probe 输出 `detailsJson {\"expectedVersion\":1,\"receivedVersion\":{\"secret\":\"top-secret\",\"nested\":{\"token\":\"abc\"}}}`。"
+      ],
+      "recommended_fix": "将 receivedVersion 规范化为安全的原始诊断值，例如 number/string/null/\"missing\"/\"non-primitive\"，不要把原对象引用直接挂到 details。"
+    },
+    {
+      "severity": "P2",
+      "title": "新增测试只覆盖 schemaVersion=2，没覆盖 raw/cast 的非原始值边界",
+      "files": [
+        "packages/runtime/src/playwright-launch-options.test.ts:71-99"
+      ],
+      "why_it_matters": "当前测试证明了 v2 数字版本会在 mkdir/progress/Chromium 前被拒绝，但没有覆盖 object/array/missing 等非原始 schemaVersion。也正是这条未覆盖路径暴露了当前的 details 泄漏问题。",
+      "evidence": [
+        "唯一新增断言把 receivedVersion 固定比较为 2。",
+        "malformed-schemaVersion probe 能稳定复现对象被原样带入 details，而现有测试未能发现。"
+      ],
+      "recommended_fix": "补一个 raw/cast 输入回归测试，断言非原始 schemaVersion 同样副作用前拒绝，且错误 details 只返回规范化后的安全值。"
+    }
+  ],
+  "p0_count": 0,
+  "p1_count": 1,
+  "p2_count": 1,
+  "dimensions": [
+    {
+      "name": "correctness",
+      "score": 24,
+      "max_score": 25,
+      "reason": "核心 guard 顺序正确，v1 回归 fresh 全绿；唯一正确性缺口集中在异常诊断值未规范化。"
+    },
+    {
+      "name": "security",
+      "score": 20,
+      "max_score": 25,
+      "reason": "当前 Studio renderer 路径只回 message，但 FlowWeaveError.details 仍可携带调用方注入的任意对象，错误边界尚未完全 fail-closed。"
+    },
+    {
+      "name": "regression_safety",
+      "score": 19,
+      "max_score": 20,
+      "reason": "runtime 全量回归与矩阵测试均通过；但新增 guard 的最危险异常形态还缺少自动化覆盖。"
+    },
+    {
+      "name": "route_discipline",
+      "score": 10,
+      "max_score": 10,
+      "reason": "候选严格停留在 G1A-C Runtime guard 范围内，没有偷渡 v2 执行分支。"
+    },
+    {
+      "name": "evidence_quality",
+      "score": 16,
+      "max_score": 20,
+      "reason": "fresh diff、typecheck、runtime 回归和畸形输入 probe 证据充分；但缺少把 raw/cast 泄漏场景固化为测试的提交内证据。"
+    }
+  ],
+  "penalties": [],
+  "totals": {
+    "raw_score": 89,
+    "penalty_total": 0,
+    "final_score": 89
+  },
+  "verdict": "REVISE",
+  "required_fixes": [
+    "规范化 FLOW_SCHEMA_MISMATCH.details.receivedVersion，禁止把 schemaVersion 的原始对象/数组/任意引用直接挂进错误 details。",
+    "新增 raw/cast 异常输入测试，覆盖 object/array/missing schemaVersion，并断言依旧在 mkdir、progress、HAR/Chromium 前拒绝。"
+  ],
+  "nice_to_have": [
+    "后续 G1B/集成轨可再补一条跨入口测试，明确 Studio 级 run directory 分配前也要拒绝 v2。"
+  ],
+  "reviewers": [
+    {
+      "role": "verifier",
+      "conclusion": "REVISE",
+      "summary": "副作用前拒绝与 v1 回归门禁通过，但错误 details 仍接受未规范化的任意对象。"
+    },
+    {
+      "role": "strict_judge",
+      "conclusion": "REVISE",
+      "summary": "范围控制良好，主要扣分来自异常边界未 fail-closed 与缺少覆盖该边界的自动化测试。"
+    },
+    {
+      "role": "chief_reviewer",
+      "conclusion": "REVISE",
+      "summary": "该提交可快速修正后再审；当前不建议按 PASS 合入。"
+    }
+  ],
+  "reviewed_at": "2026-08-30T14:20:00+08:00"
+}
