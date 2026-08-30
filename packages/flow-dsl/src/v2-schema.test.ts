@@ -88,6 +88,18 @@ describe("FlowDocument v2 结构与引用合同", () => {
     expect(compileFlowDocumentV2(parsed).bindings[0]?.fieldId).toBe("field_name_01");
   });
 
+  it("沿用 v1 的 opaque flow/project/browser step 身份，不按新 ID 格式拒绝历史值", () => {
+    const historicalId = `历史 空格/${"x".repeat(600)}`;
+    const flow = buildFlow([{ id: historicalId, type: "navigate", url: "https://example.com" }]);
+    flow.id = historicalId;
+    flow.projectId = historicalId;
+    expect(parseFlowDocumentV2(flow)).toMatchObject({
+      id: historicalId,
+      projectId: historicalId,
+      steps: [{ id: historicalId }],
+    });
+  });
+
   it.each([
     ["input id", inputStep("bad_input", "field_name_01")],
     ["field id", inputStep("input_profile_01", "bad_field")],
@@ -208,6 +220,19 @@ describe("FlowDocument v2 结构与引用合同", () => {
         ]),
       ),
     ).toThrow(expected);
+  });
+
+  it("拒绝 Flow 展示元数据中的引用与 setChecked 字符串字面量", () => {
+    const input = inputStep("input_profile_01", "field_name_01");
+    const metadataBinding = buildFlow([input]);
+    metadataBinding.description = "描述 {{field_name_01}}";
+    expect(() => parseFlowDocumentV2(metadataBinding)).toThrow(/禁止/);
+
+    expect(() =>
+      parseFlowDocumentV2(
+        buildFlow([input, { id: "check", type: "setChecked", target, checked: "true" }]),
+      ),
+    ).toThrow(/boolean 字面量/);
   });
 
   it("拒绝类型错配、可选无默认值消费和 select 多值引用", () => {

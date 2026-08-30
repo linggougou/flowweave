@@ -8,7 +8,7 @@ const generatedIdSchema = z
   .min(9)
   .max(128)
   .regex(/^[A-Za-z][A-Za-z0-9._:-]*$/);
-const legacyOpaqueIdSchema = z.string().min(1).max(512);
+const legacyOpaqueIdSchema = z.string().min(1);
 
 export type FlowV2ValidationCode =
   | "FLOW_V2_STRUCTURE_INVALID"
@@ -349,6 +349,13 @@ function validateFlowDocumentV2(flow: FlowDocumentV2, ctx: z.RefinementCtx): voi
   >();
   const bindings: FlowBindingV2[] = [];
 
+  (["name", "description"] as const).forEach((key) => {
+    const value = flow[key];
+    if (value !== undefined && hasTemplateReference(value)) {
+      addIssue(ctx, [key], "FLOW_BINDING_TARGET_FORBIDDEN", `字段引用禁止出现在 Flow.${key}`);
+    }
+  });
+
   flow.steps.forEach((step, stepIndex) => {
     const previousStepIndex = stepIds.get(step.id);
     if (previousStepIndex !== undefined) {
@@ -438,6 +445,18 @@ function validateFlowDocumentV2(flow: FlowDocumentV2, ctx: z.RefinementCtx): voi
 
   flow.steps.forEach((step, stepIndex) => {
     const allowedSlots = collectAllowedSlots(step, stepIndex);
+    if (
+      step.type === "setChecked" &&
+      typeof step.checked === "string" &&
+      !hasTemplateReference(step.checked)
+    ) {
+      addIssue(
+        ctx,
+        ["steps", stepIndex, "checked"],
+        "FLOW_BINDING_TYPE_MISMATCH",
+        "setChecked.checked 只允许 boolean 字面量或完整 boolean 字段引用",
+      );
+    }
     const allowedPaths = new Set(allowedSlots.map((slot) => slot.displayPath));
     walkStrings(step, ["steps", stepIndex], (value, path) => {
       const pathText = displayPath(path);
