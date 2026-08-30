@@ -22,6 +22,111 @@ export type FlowV2ValidationCode =
   | "FLOW_SENSITIVE_POLICY_INVALID"
   | "FLOW_SELECTION_CONTEXT_INVALID";
 
+export type LocatorStrategyV2 =
+  | { kind: "role"; role: string; name?: string }
+  | { kind: "testId"; testId: string }
+  | { kind: "css"; selector: string }
+  | { kind: "xpath"; expression: string }
+  | { kind: "text"; text: string; exact?: boolean };
+
+export type TargetV2 = {
+  strategies: LocatorStrategyV2[];
+  hints?: {
+    tagName?: string;
+    inputType?: string;
+    nameAttr?: string;
+    placeholder?: string;
+    labelText?: string;
+    textSample?: string;
+    scopeText?: string;
+    scopeKind?: "row" | "listitem" | "dialog" | "tabpanel" | "section" | "card";
+  };
+};
+
+export type InputFieldV2 = {
+  fieldId: string;
+  label: string;
+  description?: string;
+  placeholder?: string;
+  type: "string" | "number" | "boolean";
+  required: boolean;
+  sensitive: boolean;
+  remember: "never" | "lastValue";
+  defaultValue?: string | number | boolean;
+};
+
+export type InputStepV2 = {
+  id: string;
+  type: "input";
+  name: string;
+  description?: string;
+  fields: InputFieldV2[];
+};
+
+type BrowserStepBaseV2 = { id: string; label?: string };
+type SelectionContextV2 = { searchStepId: string };
+
+export type BrowserStepV2 =
+  | (BrowserStepBaseV2 & {
+      type: "navigate";
+      url: string;
+      waitUntil?: "load" | "domcontentloaded" | "networkidle";
+    })
+  | (BrowserStepBaseV2 & {
+      type: "click";
+      target: TargetV2;
+      button?: "left" | "right" | "middle";
+      selectionContext?: SelectionContextV2;
+    })
+  | (BrowserStepBaseV2 & {
+      type: "fill";
+      target: TargetV2;
+      value: string;
+      clear?: boolean;
+    })
+  | (BrowserStepBaseV2 & { type: "select"; target: TargetV2; values: string[] })
+  | (BrowserStepBaseV2 & {
+      type: "setChecked";
+      target: TargetV2;
+      checked: boolean | string;
+    })
+  | (BrowserStepBaseV2 & {
+      type: "press";
+      target?: TargetV2;
+      key: string;
+      selectionContext?: SelectionContextV2;
+    })
+  | (BrowserStepBaseV2 & {
+      type: "scroll";
+      target?: TargetV2;
+      x: number;
+      y: number;
+    })
+  | (BrowserStepBaseV2 & { type: "upload"; target: TargetV2; files: string[] })
+  | (BrowserStepBaseV2 & {
+      type: "wait";
+      ms?: number;
+      condition?: "networkidle" | "visible" | "hidden" | "attached" | "detached" | "urlIncludes";
+      target?: TargetV2;
+      urlIncludes?: string;
+    });
+
+export type FlowStepV2 = InputStepV2 | BrowserStepV2;
+
+export type FlowDocumentV2 = {
+  schemaVersion: 2;
+  id: string;
+  projectId: string;
+  name: string;
+  description?: string;
+  steps: FlowStepV2[];
+  meta: {
+    createdAt: string;
+    updatedAt: string;
+    source: "recorded" | "manual" | "ai";
+  };
+};
+
 function addIssue(
   ctx: z.RefinementCtx,
   path: (string | number)[],
@@ -227,7 +332,7 @@ const flowMetaV2Schema = z
   })
   .strict();
 
-const flowDocumentV2BaseSchema = z
+const flowDocumentV2BaseSchema: z.ZodType<FlowDocumentV2> = z
   .object({
     schemaVersion: z.literal(FLOW_SCHEMA_VERSION_V2),
     id: legacyOpaqueIdSchema,
@@ -238,11 +343,6 @@ const flowDocumentV2BaseSchema = z
     meta: flowMetaV2Schema,
   })
   .strict();
-
-export type FlowDocumentV2 = z.infer<typeof flowDocumentV2BaseSchema>;
-export type FlowStepV2 = FlowDocumentV2["steps"][number];
-export type InputStepV2 = Extract<FlowStepV2, { type: "input" }>;
-export type InputFieldV2 = InputStepV2["fields"][number];
 
 export type FlowBindingV2 = {
   stepId: string;

@@ -14,12 +14,15 @@ export {
 } from "./schema.js";
 export {
   flowDocumentV2Schema,
+  type BrowserStepV2,
   type FlowBindingV2,
   type FlowDocumentV2,
   type FlowStepV2,
   type FlowV2ValidationCode,
   type InputFieldV2,
   type InputStepV2,
+  type LocatorStrategyV2,
+  type TargetV2,
 } from "./v2-schema.js";
 export {
   compileFlowDocumentV2,
