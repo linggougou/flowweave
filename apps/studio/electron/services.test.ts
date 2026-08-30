@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { FlowDocument } from "@flowweave/flow-dsl";
+import type { AnyFlowDocument, FlowDocument } from "@flowweave/flow-dsl";
 import type { ExecutionWithProject } from "@flowweave/project-knowledge";
 import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
 
@@ -14,7 +14,9 @@ const mockApiAllocateRunDirectory = vi.fn();
 const mockApiCreateProject = vi.fn();
 const mockApiDeleteExecution = vi.fn();
 const mockApiGetExecution = vi.fn();
+const mockApiExportFlow = vi.fn();
 const mockApiGetFlow = vi.fn();
+const mockApiGetFlowRevision = vi.fn();
 const mockApiGetFlowVersion = vi.fn();
 const mockApiListExecutions = vi.fn();
 const mockApiListFlowVersions = vi.fn();
@@ -35,7 +37,18 @@ const mockRepoGetExecutionScreenshotPreview = vi.fn();
 type ServicesModule = {
   assertProjectExistsForFileOperation?: (projectId: string) => Promise<void>;
   getFlowRunInput?: (projectId: string, flowId: string) => Promise<unknown>;
-  getFlowForExport?: (projectId: string, flowId: string) => Promise<FlowDocument>;
+  getFlowForExport?: (projectId: string, flowId: string) => Promise<AnyFlowDocument>;
+  renameFlow?: (
+    projectId: string,
+    flowId: string,
+    name: string,
+    expectedRevision: number,
+  ) => Promise<unknown>;
+  restoreFlowVersion?: (
+    projectId: string,
+    versionId: string,
+    expectedRevision: number,
+  ) => Promise<unknown>;
   getExecutionScreenshotPreview?: (request: {
     projectId: string;
     executionId: string;
@@ -86,8 +99,10 @@ vi.mock("./knowledge-client.js", () => ({
   apiAllocateRunDirectory: mockApiAllocateRunDirectory,
   apiCreateProject: mockApiCreateProject,
   apiDeleteExecution: mockApiDeleteExecution,
+  apiExportFlow: mockApiExportFlow,
   apiGetExecution: mockApiGetExecution,
   apiGetFlow: mockApiGetFlow,
+  apiGetFlowRevision: mockApiGetFlowRevision,
   apiGetFlowVersion: mockApiGetFlowVersion,
   apiListExecutions: mockApiListExecutions,
   apiListFlowVersions: mockApiListFlowVersions,
@@ -153,8 +168,10 @@ describe("getExecution 缓存命中策略", () => {
     mockApiAllocateRunDirectory.mockReset();
     mockApiCreateProject.mockReset();
     mockApiDeleteExecution.mockReset();
+    mockApiExportFlow.mockReset();
     mockApiGetExecution.mockReset();
     mockApiGetFlow.mockReset();
+    mockApiGetFlowRevision.mockReset();
     mockApiGetFlowVersion.mockReset();
     mockApiListExecutions.mockReset();
     mockApiListFlowVersions.mockReset();
@@ -215,6 +232,33 @@ describe("getExecution 缓存命中策略", () => {
 
     expect(mockApiListProjects).toHaveBeenCalledTimes(2);
     expect(mockApiGetFlow).not.toHaveBeenCalled();
+  });
+
+  it("重命名与恢复逐字透传 caller expectedRevision", async () => {
+    mockApiRenameFlow.mockResolvedValue({
+      flowId: "flow_cas",
+      name: "新名称",
+      createdAt: "2026-08-30T00:00:00.000Z",
+      revision: 8,
+      schemaVersion: 1,
+    });
+    mockApiRestoreFlowVersion.mockResolvedValue(buildFlow());
+    const services = (await loadServicesModule()) as ServicesModule;
+
+    await services.renameFlow?.("project_cas", "flow_cas", "新名称", 7);
+    await services.restoreFlowVersion?.("project_cas", "version_cas", 8);
+
+    expect(mockApiRenameFlow).toHaveBeenCalledWith(
+      "project_cas",
+      "flow_cas",
+      "新名称",
+      7,
+    );
+    expect(mockApiRestoreFlowVersion).toHaveBeenCalledWith(
+      "project_cas",
+      "version_cas",
+      8,
+    );
   });
 
   it("缓存里缺少 flowSnapshot 时，会继续回源知识库", async () => {

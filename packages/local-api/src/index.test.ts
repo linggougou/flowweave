@@ -139,8 +139,115 @@ describe("本地知识库 API", () => {
     await expect(savedResponse.json()).resolves.toMatchObject({
       flowId: flow.id,
       projectId: project.id,
+      revision: 1,
     });
     expect(flows).toContainEqual(expect.objectContaining({ id: flow.id, name: flow.name }));
+
+    const duplicateWithoutRevision = await fetch(
+      `${baseUrl}/api/projects/${project.id}/flows`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ flow: { ...flow, name: "不得静默覆盖" } }),
+      },
+    );
+    expect(duplicateWithoutRevision.status).toBe(409);
+    expect(repo.getFlowRevision(project.id, flow.id)?.revision).toBe(1);
+    expect(repo.listFlowVersions(project.id, flow.id)).toEqual([]);
+
+    const updatedResponse = await fetch(`${baseUrl}/api/projects/${project.id}/flows`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        flow: { ...flow, name: "带 CAS 的录制更新" },
+        expectedRevision: 1,
+      }),
+    });
+    expect(updatedResponse.status).toBe(200);
+    await expect(updatedResponse.json()).resolves.toMatchObject({ revision: 2 });
+
+    const staleRename = await fetch(
+      `${baseUrl}/api/projects/${project.id}/flows/${flow.id}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "陈旧重命名", expectedRevision: 1 }),
+      },
+    );
+    expect(staleRename.status).toBe(409);
+    expect(repo.getFlowRevision(project.id, flow.id)?.document.name).toBe("带 CAS 的录制更新");
+
+    const renamed = await fetch(`${baseUrl}/api/projects/${project.id}/flows/${flow.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "CAS 重命名", expectedRevision: 2 }),
+    });
+    expect(renamed.status).toBe(200);
+    await expect(renamed.json()).resolves.toMatchObject({ name: "CAS 重命名", revision: 3 });
+  });
+
+  it("rename 缺 expectedRevision 时 fail closed 且零写入", async () => {
+    const project = repo.createProject("rename revision 项目");
+    const flow = createImportFlow(project.id);
+    repo.saveFlow(project.id, flow);
+
+    const response = await fetch(`${baseUrl}/api/projects/${project.id}/flows/${flow.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "不允许" }),
+    });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "INVALID_EXPECTED_REVISION",
+    });
+    expect(repo.getFlowRevision(project.id, flow.id)).toMatchObject({
+      revision: 1,
+      document: { name: flow.name },
+    });
+  });
+
+  it("restore 缺失或陈旧 expectedRevision 零写入，正确 revision 原子成功", async () => {
+    const project = repo.createProject("restore revision 项目");
+    const flow = createImportFlow(project.id);
+    repo.saveFlow(project.id, flow);
+    repo.saveFlowRevision({
+      projectId: project.id,
+      flowId: flow.id,
+      document: { ...flow, name: "当前名称" },
+      expectedRevision: 1,
+    });
+    const versionId = repo.listFlowVersions(project.id, flow.id)[0]!.id;
+    const endpoint = `${baseUrl}/api/projects/${project.id}/flow-versions/${versionId}/restore`;
+
+    const missing = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(missing.status).toBe(400);
+    expect(repo.getFlowRevision(project.id, flow.id)?.revision).toBe(2);
+
+    const stale = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expectedRevision: 1 }),
+    });
+    expect(stale.status).toBe(409);
+    expect(repo.getFlowRevision(project.id, flow.id)).toMatchObject({
+      revision: 2,
+      document: { name: "当前名称" },
+    });
+
+    const restored = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expectedRevision: 2 }),
+    });
+    expect(restored.status).toBe(200);
+    expect(repo.getFlowRevision(project.id, flow.id)).toMatchObject({
+      revision: 3,
+      document: { name: flow.name },
+    });
   });
 
   it("旧 recorder 同步入口明确拒绝 v2 且数据库零写入", async () => {
@@ -234,6 +341,74 @@ describe("本地知识库 API", () => {
       "API 导入流程（导入 3）",
       "API 导入流程（导入）",
     ]);
+  });
+
+  it("v2 通过专用 endpoint 同版本导入导出且不携带来源身份", async () => {
+    const project = repo.createProject("v2 API 项目");
+    const source = {
+      schemaVersion: FLOW_SCHEMA_VERSION_V2,
+      id: "flow_v2_api_source",
+      projectId: "project_v2_api_source",
+      name: "v2 API 流程",
+      steps: [
+        {
+          id: "input_profile_01",
+          type: "input",
+          name: "运行输入",
+          fields: [
+            {
+              fieldId: "field_name_01",
+              label: "名称",
+              type: "string",
+              required: true,
+              sensitive: false,
+              remember: "never",
+            },
+          ],
+        },
+        {
+          id: "fill_name",
+          type: "fill",
+          target: { strategies: [{ kind: "css", selector: "#name" }] },
+          value: "{{field_name_01}}",
+        },
+      ],
+      meta: {
+        createdAt: "2026-08-30T00:00:00.000Z",
+        updatedAt: "2026-08-30T00:00:00.000Z",
+        source: "manual",
+      },
+    };
+
+    const importedResponse = await fetch(
+      `${baseUrl}/api/projects/${project.id}/flow-imports`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(source),
+      },
+    );
+    expect(importedResponse.status).toBe(201);
+    const imported = (await importedResponse.json()) as {
+      flow: typeof source;
+      warnings: unknown[];
+    };
+    expect(imported.flow.schemaVersion).toBe(FLOW_SCHEMA_VERSION_V2);
+    expect(imported.flow.id).not.toBe(source.id);
+    expect(imported.flow.projectId).toBe(project.id);
+    expect(imported.warnings).toEqual([]);
+
+    const exportedResponse = await fetch(
+      `${baseUrl}/api/projects/${project.id}/flows/${imported.flow.id}/export`,
+    );
+    expect(exportedResponse.status).toBe(200);
+    await expect(exportedResponse.json()).resolves.toMatchObject({
+      schemaVersion: FLOW_SCHEMA_VERSION_V2,
+      id: imported.flow.id,
+      projectId: project.id,
+    });
+    expect(repo.getFlowRevision(project.id, imported.flow.id)?.revision).toBe(1);
+    expect(repo.listFlowVersions(project.id, imported.flow.id)).toEqual([]);
   });
 
   it("畸形 JSON、无效 schema 与不存在项目返回准确状态且无写入", async () => {

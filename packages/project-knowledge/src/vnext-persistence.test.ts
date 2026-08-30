@@ -14,7 +14,21 @@ import { afterEach, describe, expect, it } from "vitest";
 import { closeProjectDatabase, openProjectDatabase, resolveProjectStorePath } from "./db/client.js";
 import { ProjectKnowledgeRepository } from "./repository.js";
 
-const SECRET_CANARY = "FLOWWEAVE_SECRET_CANARY_vnext_1b_7f4c1e";
+const SECRET_CANARY = 'FLOWWEAVE_SECRET_CANARY_vnext_1b_7f4c1e"\\line\nnext';
+
+function assertNoCanaryBytes(storePath: string): void {
+  const escapedCanary = JSON.stringify(SECRET_CANARY).slice(1, -1);
+  for (const path of [storePath, `${storePath}-wal`, `${storePath}-shm`]) {
+    if (!existsSync(path)) {
+      continue;
+    }
+    const bytes = readFileSync(path);
+    expect(bytes.includes(Buffer.from(SECRET_CANARY)), `${path} 含 raw canary`).toBe(false);
+    expect(bytes.includes(Buffer.from(escapedCanary)), `${path} 含 JSON escaped canary`).toBe(
+      false,
+    );
+  }
+}
 
 function buildV1(projectId: string, flowId: string): FlowDocumentV1 {
   return {
@@ -206,6 +220,27 @@ describe("vNext-1B Knowledge 数据基础", () => {
       }),
     ).toThrowError(expect.objectContaining({ code: "FLOW_REVISION_CONFLICT" }));
     expect(repo.getFlowRevision(project.id, flow.id)?.document.name).toBe("第一个写者");
+  });
+
+  it("legacy save 只能创建，rename 与 restore 必须使用调用方 expectedRevision", () => {
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-vnext-legacy-cas-"));
+    const repo = new ProjectKnowledgeRepository({ dataDir });
+    const project = repo.createProject("legacy CAS");
+    const flow = buildV1(project.id, "flow_legacy_cas");
+    repo.saveFlow(project.id, flow);
+
+    expect(() => repo.saveFlow(project.id, { ...flow, name: "静默覆盖" })).toThrowError(
+      expect.objectContaining({ code: "FLOW_REVISION_CONFLICT" }),
+    );
+    expect(() => repo.renameFlow(project.id, flow.id, "陈旧重命名", 0)).toThrowError();
+
+    const renamed = repo.renameFlow(project.id, flow.id, "CAS 重命名", 1);
+    expect(renamed.name).toBe("CAS 重命名");
+    expect(repo.getFlowRevision(project.id, flow.id)?.revision).toBe(2);
+    expect(() => repo.renameFlow(project.id, flow.id, "陈旧重命名", 1)).toThrowError(
+      expect.objectContaining({ code: "FLOW_REVISION_CONFLICT" }),
+    );
+    expect(repo.getFlowRevision(project.id, flow.id)?.document.name).toBe("CAS 重命名");
   });
 
   it("升级拒绝 stale fingerprint 与 stale revision 且零写入", () => {
@@ -455,8 +490,26 @@ describe("vNext-1B Knowledge 数据基础", () => {
       executionId: "exec_canary_cleanup",
       flowId: flow.id,
       status: "success",
-      runContext: { variables: { secret_password: SECRET_CANARY } },
-      steps: [{ stepIndex: 0, stepId: "fill_password", status: "passed" }],
+      flowSnapshot: { ...flow, description: `快照泄漏 ${SECRET_CANARY}` },
+      runContext: {
+        environmentName: `环境 ${SECRET_CANARY}`,
+        baseUrl: `https://example.test/${SECRET_CANARY}`,
+        storageStatePath: `/tmp/${SECRET_CANARY}.json`,
+        variables: {
+          secret_password: SECRET_CANARY,
+          account: `嵌套残留 ${SECRET_CANARY}`,
+        },
+      },
+      steps: [
+        {
+          stepIndex: 0,
+          stepId: "fill_password",
+          status: "failed",
+          errorMessage: `错误 ${SECRET_CANARY}`,
+          screenshotPath: `/tmp/${SECRET_CANARY}.png`,
+          diagnosticPath: `/tmp/${SECRET_CANARY}.json`,
+        },
+      ],
     });
     const prepared = prepareUpgrade(flow);
 
@@ -469,12 +522,68 @@ describe("vNext-1B Knowledge 数据基础", () => {
     });
 
     const storePath = resolveProjectStorePath(project.id, dataDir);
-    for (const path of [storePath, `${storePath}-wal`, `${storePath}-shm`]) {
-      if (existsSync(path)) {
-        expect(readFileSync(path).includes(Buffer.from(SECRET_CANARY)), path).toBe(false);
-      }
-    }
+    assertNoCanaryBytes(storePath);
     expect(JSON.stringify(repo.getExecution("exec_canary_cleanup"))).not.toContain(SECRET_CANARY);
+  });
+
+  it("候选 description 出现已识别秘密时 fail closed 且不生成 v2", () => {
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-vnext-candidate-secret-"));
+    const repo = new ProjectKnowledgeRepository({ dataDir });
+    const project = repo.createProject("候选秘密防线");
+    const flow = {
+      ...buildV1(project.id, "flow_candidate_secret"),
+      description: `不得迁移 ${SECRET_CANARY}`,
+    };
+    repo.saveFlow(project.id, flow);
+    const prepared = prepareUpgrade(flow);
+
+    expect(() =>
+      repo.upgradeFlowToV2({
+        projectId: project.id,
+        flowId: flow.id,
+        expectedRevision: 1,
+        reportFingerprint: prepared.preview.reportFingerprint,
+        rememberSelections: prepared.rememberSelections,
+      }),
+    ).toThrowError(expect.objectContaining({ code: "FLOW_UPGRADE_BLOCKED" }));
+    expect(repo.getFlowRevision(project.id, flow.id)).toMatchObject({
+      revision: 1,
+      document: { schemaVersion: 1 },
+    });
+    expect(repo.listFlowVersions(project.id, flow.id)).toEqual([]);
+  });
+
+  it("活跃 reader 会在任何升级写入前触发维护锁失败", () => {
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-vnext-reader-lock-"));
+    const repo = new ProjectKnowledgeRepository({ dataDir });
+    const project = repo.createProject("维护锁");
+    const flow = buildV1(project.id, "flow_reader_lock");
+    repo.saveFlow(project.id, flow);
+    const prepared = prepareUpgrade(flow);
+    const storePath = resolveProjectStorePath(project.id, dataDir);
+    const reader = new Database(storePath, { readonly: true });
+    reader.exec("BEGIN");
+    reader.prepare("SELECT document_json FROM flows WHERE id = ?").get(flow.id);
+
+    try {
+      expect(() =>
+        repo.upgradeFlowToV2({
+          projectId: project.id,
+          flowId: flow.id,
+          expectedRevision: 1,
+          reportFingerprint: prepared.preview.reportFingerprint,
+          rememberSelections: prepared.rememberSelections,
+        }),
+      ).toThrowError(expect.objectContaining({ code: "FLOW_PERSISTENCE_FAILED" }));
+      expect(repo.getFlowRevision(project.id, flow.id)).toMatchObject({
+        revision: 1,
+        document: { schemaVersion: 1 },
+      });
+      expect(repo.listFlowVersions(project.id, flow.id)).toEqual([]);
+    } finally {
+      reader.exec("ROLLBACK");
+      reader.close();
+    }
   });
 
   it("通用读取支持 v2，但 legacy getFlowInProject 继续 fail closed", () => {
@@ -498,7 +607,7 @@ describe("vNext-1B Knowledge 数据基础", () => {
     expect(() => repo.getFlowInProject(project.id, flow.id)).toThrowError(
       expect.objectContaining({ code: "FLOW_SCHEMA_VERSION_UNSUPPORTED" }),
     );
-    expect(() => repo.renameFlow(project.id, flow.id, "不得绕过")).toThrowError(
+    expect(() => repo.renameFlow(project.id, flow.id, "不得绕过", 2)).toThrowError(
       expect.objectContaining({ code: "FLOW_SCHEMA_VERSION_UNSUPPORTED" }),
     );
   });

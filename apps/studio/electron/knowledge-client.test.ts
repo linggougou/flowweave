@@ -4,10 +4,13 @@ import type { ProjectKnowledgeRepository } from "@flowweave/project-knowledge";
 
 import {
   apiAllocateRunDirectory,
+  apiExportFlow,
   apiGetFlow,
   apiImportFlow,
   apiListProjects,
   apiRenameFlow,
+  apiRestoreFlowVersion,
+  apiSaveFlow,
   configureLocalKnowledgeRepository,
 } from "./knowledge-client.js";
 
@@ -48,18 +51,23 @@ describe("Electron 本地知识库模式", () => {
       name: "本地流程",
       meta: { createdAt: "2026-07-15" },
     } as unknown as FlowDocument;
+    const renameFlow = vi.fn(() => ({ ...flow, name: "新名称" }));
     configureLocalKnowledgeRepository({
       getFlowInProject: vi.fn(() => flow),
-      renameFlow: vi.fn(() => ({ ...flow, name: "新名称" })),
+      renameFlow,
+      getFlowRevision: vi.fn(() => ({ document: flow, revision: 8, updatedAt: "2026-07-15" })),
       allocateRunDirectory: vi.fn(() => "/tmp/run-local"),
     } as unknown as ProjectKnowledgeRepository);
 
     await expect(apiGetFlow("project_local", "flow_local")).resolves.toBe(flow);
-    await expect(apiRenameFlow("project_local", "flow_local", "新名称")).resolves.toEqual({
+    await expect(apiRenameFlow("project_local", "flow_local", "新名称", 7)).resolves.toEqual({
       flowId: "flow_local",
       name: "新名称",
       createdAt: "2026-07-15",
+      revision: 8,
+      schemaVersion: flow.schemaVersion,
     });
+    expect(renameFlow).toHaveBeenCalledWith("project_local", "flow_local", "新名称", 7);
     await expect(apiAllocateRunDirectory("project_local", "execution_local")).resolves.toBe(
       "/tmp/run-local",
     );
@@ -126,6 +134,62 @@ describe("Electron 本地知识库模式", () => {
         method: "POST",
         body: JSON.stringify(source),
       }),
+    );
+  });
+
+  it("HTTP mutation 精确透传 expectedRevision，export 使用专用安全 endpoint", async () => {
+    const source = {
+      schemaVersion: 1,
+      id: "flow_http_cas",
+      projectId: "project_target",
+      name: "HTTP CAS",
+      variables: [],
+      steps: [{ id: "navigate", type: "navigate", url: "/" }],
+      meta: {
+        createdAt: "2026-08-23T08:00:00.000Z",
+        updatedAt: "2026-08-23T08:00:00.000Z",
+        source: "recorded",
+      },
+    } as FlowDocument;
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(source),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await apiSaveFlow("project_target", source, "CAS 保存", 4);
+    await apiRenameFlow("project_target", source.id, "新名称", 5);
+    await apiRestoreFlowVersion("project_target", "version_1", 6);
+    await apiExportFlow("project_target", source.id);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "http://127.0.0.1:3847/api/projects/project_target/flows",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ flow: source, changeMessage: "CAS 保存", expectedRevision: 4 }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      `http://127.0.0.1:3847/api/projects/project_target/flows/${source.id}`,
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ name: "新名称", expectedRevision: 5 }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "http://127.0.0.1:3847/api/projects/project_target/flow-versions/version_1/restore",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ expectedRevision: 6 }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      `http://127.0.0.1:3847/api/projects/project_target/flows/${source.id}/export`,
+      expect.any(Object),
     );
   });
 });

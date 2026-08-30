@@ -34,10 +34,30 @@ const projects = [
 
 const flows = {
   "project-a": [
-    { id: "flow-a", name: "自动化 A", createdAt: "2026-08-23T08:00:00.000Z" },
-    { id: "flow-a2", name: "自动化 A2", createdAt: "2026-08-23T08:10:00.000Z" },
+    {
+      id: "flow-a",
+      name: "自动化 A",
+      createdAt: "2026-08-23T08:00:00.000Z",
+      revision: 2,
+      schemaVersion: 1,
+    },
+    {
+      id: "flow-a2",
+      name: "自动化 A2",
+      createdAt: "2026-08-23T08:10:00.000Z",
+      revision: 1,
+      schemaVersion: 1,
+    },
   ],
-  "project-b": [{ id: "flow-b", name: "自动化 B", createdAt: "2026-08-23T09:00:00.000Z" }],
+  "project-b": [
+    {
+      id: "flow-b",
+      name: "自动化 B",
+      createdAt: "2026-08-23T09:00:00.000Z",
+      revision: 1,
+      schemaVersion: 1,
+    },
+  ],
 };
 
 function flowDocument(

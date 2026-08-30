@@ -97,6 +97,8 @@ function setLayoutContractState(flow: FlowDocument): void {
       id: flow.id,
       name: flow.name,
       createdAt: "2026-08-23T08:00:00.000Z",
+      revision: 1,
+      schemaVersion: flow.schemaVersion,
     },
   ];
 

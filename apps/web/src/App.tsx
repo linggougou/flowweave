@@ -4,7 +4,7 @@ import type { ExecutionResult, FlowVersionRecord } from "@flowweave/project-know
 import { APP_DISPLAY_NAME, FlowVersionList, JsonDiffView, createJsonDiff } from "@flowweave/ui";
 
 import * as api from "./api.js";
-import type { WebProject } from "./api.js";
+import type { WebFlowRef, WebProject } from "./api.js";
 import { EmptyWorkspaceGuide, WorkspaceBreadcrumb } from "./business-view.js";
 import { ExecutionRecordsView } from "./ExecutionRecordsView.js";
 import { ViewSwitcher } from "./ViewSwitcher.js";
@@ -16,7 +16,7 @@ type VersionPreviewStatus = "idle" | "loading" | "ready";
 export function App() {
   const [projects, setProjects] = useState<WebProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [flows, setFlows] = useState<Array<{ id: string; name: string }>>([]);
+  const [flows, setFlows] = useState<WebFlowRef[]>([]);
   const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
   const [mainTab, setMainTab] = useState<MainTab>("executions");
   const [executions, setExecutions] = useState<ExecutionResult[]>([]);
@@ -272,7 +272,11 @@ export function App() {
     setRestoringId(versionId);
     setError(null);
     try {
-      await api.restoreFlowVersion(selectedProjectId, versionId);
+      const baseline = flows.find((flow) => flow.id === selectedFlowId);
+      if (!baseline) throw new Error("任务 revision 不可用，请刷新后重试");
+      await api.restoreFlowVersion(selectedProjectId, versionId, baseline.revision);
+      const nextFlows = await api.listFlows(selectedProjectId);
+      setFlows(nextFlows);
       if (
         selectedProjectIdRef.current === selectedProjectId &&
         selectedFlowIdRef.current === selectedFlowId
@@ -293,7 +297,7 @@ export function App() {
     setRenaming(false);
   };
 
-  const handleStartRename = (flow: { id: string; name: string }) => {
+  const handleStartRename = (flow: WebFlowRef) => {
     renameRequestIdRef.current += 1;
     setSelectedFlowId(flow.id);
     setRenamingFlowId(flow.id);
@@ -322,7 +326,9 @@ export function App() {
     setError(null);
 
     try {
-      const updated = await api.renameFlow(projectId, flowId, name);
+      const baseline = flows.find((flow) => flow.id === flowId);
+      if (!baseline) throw new Error("任务 revision 不可用，请刷新后重试");
+      const updated = await api.renameFlow(projectId, flowId, name, baseline.revision);
       if (
         latestRenameRequestByFlowRef.current.get(requestKey) !== requestId ||
         selectedProjectIdRef.current !== projectId
@@ -332,7 +338,14 @@ export function App() {
 
       setFlows((current) =>
         current.map((flow) =>
-          flow.id === updated.flowId ? { ...flow, name: updated.name } : flow,
+          flow.id === updated.flowId
+            ? {
+                ...flow,
+                name: updated.name,
+                revision: updated.revision,
+                schemaVersion: updated.schemaVersion,
+              }
+            : flow,
         ),
       );
       setCurrentFlow((current) =>

@@ -104,6 +104,8 @@ function createApi(
       id: flow.id,
       name: flow.name,
       createdAt: flow.meta.createdAt,
+      revision: 1,
+      schemaVersion: flow.schemaVersion,
     }));
   return {
     nativeFilePortability: true,

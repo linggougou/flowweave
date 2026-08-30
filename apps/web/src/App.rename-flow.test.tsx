@@ -25,7 +25,13 @@ vi.mock("./api.js", () => apiMocks);
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
 
-type FlowRef = { id: string; name: string; createdAt: string };
+type FlowRef = {
+  id: string;
+  name: string;
+  createdAt: string;
+  revision: number;
+  schemaVersion: number;
+};
 
 const projects = [
   { id: "project-a", name: "项目 A", createdAt: "2026-08-23T08:00:00.000Z" },
@@ -34,10 +40,30 @@ const projects = [
 
 const projectFlows: Record<string, FlowRef[]> = {
   "project-a": [
-    { id: "flow-a", name: "自动化 A", createdAt: "2026-08-23T08:00:00.000Z" },
-    { id: "flow-a2", name: "自动化 A2", createdAt: "2026-08-23T08:10:00.000Z" },
+    {
+      id: "flow-a",
+      name: "自动化 A",
+      createdAt: "2026-08-23T08:00:00.000Z",
+      revision: 7,
+      schemaVersion: 1,
+    },
+    {
+      id: "flow-a2",
+      name: "自动化 A2",
+      createdAt: "2026-08-23T08:10:00.000Z",
+      revision: 3,
+      schemaVersion: 1,
+    },
   ],
-  "project-b": [{ id: "flow-b", name: "自动化 B", createdAt: "2026-08-23T09:00:00.000Z" }],
+  "project-b": [
+    {
+      id: "flow-b",
+      name: "自动化 B",
+      createdAt: "2026-08-23T09:00:00.000Z",
+      revision: 1,
+      schemaVersion: 1,
+    },
+  ],
 };
 
 function flow(projectId: string, flowId: string): FlowDocument {
@@ -107,11 +133,20 @@ describe("Web 自动化任务重命名", () => {
     apiMocks.getExecution.mockReset();
     apiMocks.renameFlow
       .mockReset()
-      .mockImplementation(async (_projectId: string, flowId: string, name: string) => ({
+      .mockImplementation(
+        async (
+          _projectId: string,
+          flowId: string,
+          name: string,
+          expectedRevision: number,
+        ) => ({
         flowId,
         name,
         createdAt: "2026-08-23T08:00:00.000Z",
-      }));
+        revision: expectedRevision + 1,
+        schemaVersion: 1,
+        }),
+      );
 
     container = document.createElement("div");
     document.body.append(container);
@@ -182,15 +217,34 @@ describe("Web 自动化任务重命名", () => {
     act(() => button(container, "保存名称").click());
     await flushEffects();
 
-    expect(apiMocks.renameFlow).toHaveBeenCalledWith("project-a", "flow-a", "每日对账");
+    expect(apiMocks.renameFlow).toHaveBeenCalledWith("project-a", "flow-a", "每日对账", 7);
     expect(button(container, "重命名 每日对账")).toBeTruthy();
     expect(container.querySelector(".workspace-breadcrumb")?.textContent).toContain("每日对账");
     expect(container.querySelector(".panel-header h2")?.textContent).toBe("每日对账");
     expect(container.querySelector("input[name='flow-name']")).toBeNull();
+
+    act(() => button(container, "重命名 每日对账").click());
+    act(() =>
+      changeInput(container.querySelector<HTMLInputElement>("input[name='flow-name']")!, "月底对账"),
+    );
+    act(() => button(container, "保存名称").click());
+    await flushEffects();
+    expect(apiMocks.renameFlow).toHaveBeenLastCalledWith(
+      "project-a",
+      "flow-a",
+      "月底对账",
+      8,
+    );
   });
 
   it("切换项目后忽略旧项目的慢重命名响应", async () => {
-    const pending = deferred<{ flowId: string; name: string; createdAt: string }>();
+    const pending = deferred<{
+      flowId: string;
+      name: string;
+      createdAt: string;
+      revision: number;
+      schemaVersion: number;
+    }>();
     apiMocks.renameFlow.mockReturnValueOnce(pending.promise);
     act(() => button(container, "重命名 自动化 A").click());
     act(() => changeInput(container.querySelector("input[name='flow-name']")!, "旧项目新名称"));
@@ -204,6 +258,8 @@ describe("Web 自动化任务重命名", () => {
       flowId: "flow-a",
       name: "旧项目新名称",
       createdAt: "2026-08-23T08:00:00.000Z",
+      revision: 8,
+      schemaVersion: 1,
     });
     await flushEffects();
 
@@ -213,7 +269,13 @@ describe("Web 自动化任务重命名", () => {
   });
 
   it("切换任务后仍更新同项目侧栏，但不会改写当前任务标题", async () => {
-    const pending = deferred<{ flowId: string; name: string; createdAt: string }>();
+    const pending = deferred<{
+      flowId: string;
+      name: string;
+      createdAt: string;
+      revision: number;
+      schemaVersion: number;
+    }>();
     apiMocks.renameFlow.mockReturnValueOnce(pending.promise);
     act(() => button(container, "重命名 自动化 A").click());
     act(() => changeInput(container.querySelector("input[name='flow-name']")!, "自动化 A 新名称"));
@@ -225,6 +287,8 @@ describe("Web 自动化任务重命名", () => {
       flowId: "flow-a",
       name: "自动化 A 新名称",
       createdAt: "2026-08-23T08:00:00.000Z",
+      revision: 8,
+      schemaVersion: 1,
     });
     await flushEffects();
 

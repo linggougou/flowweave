@@ -119,18 +119,36 @@ export async function handleKnowledgeApiRequest(
 
     if (segments[3] === "flows" && segments.length === 4 && method === "POST") {
       try {
-        const body = (await readJsonBody(req)) as { flow?: unknown; changeMessage?: string };
+        const body = (await readJsonBody(req)) as {
+          flow?: unknown;
+          changeMessage?: string;
+          expectedRevision?: unknown;
+        };
         const flow = parseFlowDocumentV1(body.flow ?? body);
-        repo.saveFlow(projectId, flow, body.changeMessage ?? "扩展录制同步");
-        sendJson(res, 200, { flowId: flow.id, name: flow.name, projectId });
+        if (body.expectedRevision === undefined) {
+          repo.saveFlow(projectId, flow, body.changeMessage ?? "扩展录制同步");
+        } else {
+          repo.saveFlowRevision({
+            projectId,
+            flowId: flow.id,
+            document: { ...flow, projectId },
+            expectedRevision: body.expectedRevision as number,
+            changeMessage: body.changeMessage ?? "扩展录制同步",
+          });
+        }
+        const revision = repo.getFlowRevision(projectId, flow.id);
+        sendJson(res, 200, {
+          flowId: flow.id,
+          name: flow.name,
+          projectId,
+          revision: revision?.revision,
+        });
       } catch (error: unknown) {
-        const message =
-          error instanceof FlowWeaveError
-            ? error.message
-            : error instanceof Error
-              ? error.message
-              : "保存 Flow 失败";
-        sendJson(res, 400, { error: message });
+        if (error instanceof FlowWeaveError && error.code === "FLOW_REVISION_CONFLICT") {
+          sendApiError(res, 409, error.code, "Flow revision 已变化");
+        } else {
+          sendApiError(res, 400, "INVALID_FLOW", "保存 Flow 失败");
+        }
       }
       return true;
     }
@@ -168,6 +186,44 @@ export async function handleKnowledgeApiRequest(
       return true;
     }
 
+    if (
+      segments[3] === "flows" &&
+      segments[5] === "export" &&
+      segments.length === 6 &&
+      method === "GET"
+    ) {
+      const flowId = segments[4];
+      if (!flowId) {
+        sendApiError(res, 400, "INVALID_FLOW", "缺少 flowId");
+        return true;
+      }
+      try {
+        sendJson(res, 200, repo.exportFlow(projectId, flowId));
+      } catch (error: unknown) {
+        if (error instanceof FlowWeaveError && error.code === "VALIDATION_FAILED") {
+          sendApiError(res, 400, "INVALID_FLOW", "Flow 无法安全导出");
+        } else {
+          sendApiError(res, 500, "FLOW_EXPORT_FAILED", "导出 Flow 失败");
+        }
+      }
+      return true;
+    }
+
+    if (
+      segments[3] === "flow-revisions" &&
+      segments.length === 5 &&
+      method === "GET"
+    ) {
+      const flowId = segments[4];
+      const revision = flowId ? repo.getFlowRevision(projectId, flowId) : null;
+      if (!revision) {
+        sendJson(res, 404, { error: "Flow 不存在" });
+        return true;
+      }
+      sendJson(res, 200, revision);
+      return true;
+    }
+
     if (segments[3] === "flows" && segments.length === 5 && method === "GET") {
       const flowId = segments[4];
       if (!flowId) {
@@ -190,15 +246,38 @@ export async function handleKnowledgeApiRequest(
         return true;
       }
       try {
-        const body = (await readJsonBody(req)) as { name?: string };
+        const body = (await readJsonBody(req)) as {
+          name?: string;
+          expectedRevision?: unknown;
+        };
         if (!body.name?.trim()) {
           sendJson(res, 400, { error: "缺少 name" });
           return true;
         }
-        const flow = repo.renameFlow(projectId, flowId, body.name);
-        sendJson(res, 200, { flowId: flow.id, name: flow.name, createdAt: flow.meta.createdAt });
+        if (!Number.isSafeInteger(body.expectedRevision) || (body.expectedRevision as number) < 1) {
+          sendApiError(res, 400, "INVALID_EXPECTED_REVISION", "缺少 expectedRevision");
+          return true;
+        }
+        const flow = repo.renameFlow(
+          projectId,
+          flowId,
+          body.name,
+          body.expectedRevision as number,
+        );
+        const revision = repo.getFlowRevision(projectId, flowId);
+        sendJson(res, 200, {
+          flowId: flow.id,
+          name: flow.name,
+          createdAt: flow.meta.createdAt,
+          revision: revision?.revision,
+          schemaVersion: flow.schemaVersion,
+        });
       } catch (error: unknown) {
-        sendJson(res, 400, { error: error instanceof Error ? error.message : "重命名失败" });
+        if (error instanceof FlowWeaveError && error.code === "FLOW_REVISION_CONFLICT") {
+          sendApiError(res, 409, error.code, "Flow revision 已变化");
+        } else {
+          sendApiError(res, 400, "FLOW_RENAME_FAILED", "重命名失败");
+        }
       }
       return true;
     }
@@ -288,7 +367,24 @@ export async function handleKnowledgeApiRequest(
           sendJson(res, 404, { error: "版本不存在" });
           return true;
         }
-        sendJson(res, 200, repo.restoreFlowVersion(projectId, versionId));
+        const body = (await readJsonBody(req)) as { expectedRevision?: unknown };
+        if (!Number.isSafeInteger(body.expectedRevision) || (body.expectedRevision as number) < 1) {
+          sendApiError(res, 400, "INVALID_EXPECTED_REVISION", "缺少 expectedRevision");
+          return true;
+        }
+        try {
+          sendJson(
+            res,
+            200,
+            repo.restoreFlowVersion(projectId, versionId, body.expectedRevision as number),
+          );
+        } catch (error: unknown) {
+          if (error instanceof FlowWeaveError && error.code === "FLOW_REVISION_CONFLICT") {
+            sendApiError(res, 409, error.code, "Flow revision 已变化");
+          } else {
+            sendApiError(res, 400, "FLOW_RESTORE_FAILED", "恢复 Flow 失败");
+          }
+        }
         return true;
       }
     }

@@ -2,10 +2,12 @@ import { randomUUID } from "node:crypto";
 import {
   closeSync,
   constants,
+  existsSync,
   fstatSync,
   lstatSync,
   mkdirSync,
   openSync,
+  readFileSync,
   readSync,
   readdirSync,
   renameSync,
@@ -128,6 +130,119 @@ function sanitizeV1Document(
   };
 }
 
+function scrubSensitiveString(
+  value: string | null,
+  sensitiveValues: ReadonlySet<string>,
+): string | null {
+  if (value === null) {
+    return null;
+  }
+  let scrubbed = value;
+  for (const sensitiveValue of sensitiveValues) {
+    if (sensitiveValue.length > 0) {
+      scrubbed = scrubbed.replaceAll(sensitiveValue, "[已清理]");
+    }
+  }
+  return scrubbed;
+}
+
+function scrubSensitiveStructure(value: unknown, sensitiveValues: ReadonlySet<string>): unknown {
+  if (typeof value === "string") {
+    return scrubSensitiveString(value, sensitiveValues);
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => scrubSensitiveStructure(entry, sensitiveValues));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [
+        key,
+        scrubSensitiveStructure(entry, sensitiveValues),
+      ]),
+    );
+  }
+  return value;
+}
+
+function containsSensitiveValue(value: unknown, sensitiveValues: ReadonlySet<string>): boolean {
+  if (typeof value === "string") {
+    return [...sensitiveValues].some(
+      (sensitiveValue) => sensitiveValue.length > 0 && value.includes(sensitiveValue),
+    );
+  }
+  if (Array.isArray(value)) {
+    return value.some((entry) => containsSensitiveValue(entry, sensitiveValues));
+  }
+  if (value && typeof value === "object") {
+    return Object.values(value).some((entry) => containsSensitiveValue(entry, sensitiveValues));
+  }
+  return false;
+}
+
+function collectStringValues(value: unknown, target: Set<string>): void {
+  if (typeof value === "string") {
+    if (value.length > 0) {
+      target.add(value);
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      collectStringValues(entry, target);
+    }
+    return;
+  }
+  if (value && typeof value === "object") {
+    for (const entry of Object.values(value)) {
+      collectStringValues(entry, target);
+    }
+  }
+}
+
+function assertNoSensitiveValue(
+  value: unknown,
+  sensitiveValues: ReadonlySet<string>,
+  message: string,
+): void {
+  if (containsSensitiveValue(value, sensitiveValues)) {
+    throw new FlowWeaveError("FLOW_UPGRADE_BLOCKED", message);
+  }
+}
+
+const PORTABLE_SENSITIVE_QUERY_KEY = /(token|secret|password|passwd|api[-_]?key|auth)/i;
+
+function assertPortableV2Document(document: FlowDocumentV2): void {
+  for (const step of document.steps) {
+    if (step.type === "upload" && step.files.length > 0) {
+      throw new FlowWeaveError(
+        "VALIDATION_FAILED",
+        "v2 Flow 包含不可安全导出的本地上传路径",
+      );
+    }
+    if (step.type !== "navigate") {
+      continue;
+    }
+    try {
+      const url = new URL(step.url);
+      if (
+        url.username ||
+        url.password ||
+        [...url.searchParams.keys()].some((key) => PORTABLE_SENSITIVE_QUERY_KEY.test(key))
+      ) {
+        throw new FlowWeaveError(
+          "VALIDATION_FAILED",
+          "v2 Flow 包含不可安全导出的 URL 凭据",
+        );
+      }
+    } catch (error: unknown) {
+      if (error instanceof FlowWeaveError) {
+        throw error;
+      }
+      // 相对 URL 不携带 authority；保留其同版本语义。
+    }
+  }
+}
+
 function collectV2Fields(document: FlowDocumentV2): Map<string, InputFieldV2> {
   const fields = new Map<string, InputFieldV2>();
   for (const step of document.steps) {
@@ -148,22 +263,6 @@ function isRecentValueCompatible(field: InputFieldV2, value: unknown): value is 
     typeof value === field.type &&
     (typeof value !== "number" || Number.isFinite(value))
   );
-}
-
-function redactSensitiveStrings(
-  value: string | null,
-  sensitiveValues: ReadonlySet<string>,
-): string | null {
-  if (value === null) {
-    return null;
-  }
-  let redacted = value;
-  for (const sensitiveValue of sensitiveValues) {
-    if (sensitiveValue.length > 0) {
-      redacted = redacted.split(sensitiveValue).join("[已清理]");
-    }
-  }
-  return redacted;
 }
 
 function persistenceFailure(error: unknown): never {
@@ -767,7 +866,7 @@ export class ProjectKnowledgeRepository {
     }
   }
 
-  saveFlow(projectId: string, flow: FlowDocument, changeMessage?: string): void {
+  saveFlow(projectId: string, flow: FlowDocument, _changeMessage?: string): void {
     const parsed = parseFlowDocumentV1(flow);
     const document = {
       ...parsed,
@@ -793,35 +892,25 @@ export class ProjectKnowledgeRepository {
             "legacy saveFlow 只允许保存 v1 Flow",
           );
         }
-
-        if (existing?.documentJson !== documentJson) {
-          if (existing) {
-            this.appendFlowVersion(db, {
-              projectId,
-              flowId: document.id,
-              documentJson: existing.documentJson,
-              schemaVersion: existing.schemaVersion,
-              sourceRevision: existing.revision,
-              changeMessage: changeMessage ?? "保存前自动快照",
-              createdAt: now,
-            });
-          }
-          const row = {
+        if (existing) {
+          throw new FlowWeaveError(
+            "FLOW_REVISION_CONFLICT",
+            "legacy saveFlow 仅允许新建；更新必须携带 expectedRevision",
+            { currentRevision: existing.revision },
+          );
+        }
+        db.insert(dbSchema.flows)
+          .values({
             id: document.id,
             projectId,
             name: document.name,
             documentJson,
             schemaVersion: document.schemaVersion,
-            revision: existing ? existing.revision + 1 : 1,
-            createdAt: existing?.createdAt ?? document.meta.createdAt,
+            revision: 1,
+            createdAt: document.meta.createdAt,
             updatedAt: now,
-          };
-          if (existing) {
-            db.update(dbSchema.flows).set(row).where(eq(dbSchema.flows.id, document.id)).run();
-          } else {
-            db.insert(dbSchema.flows).values(row).run();
-          }
-        }
+          })
+          .run();
       });
       saveTransaction.immediate();
     } finally {
@@ -966,6 +1055,25 @@ export class ProjectKnowledgeRepository {
       this.databaseOptions,
     );
     try {
+      sqlite.pragma("busy_timeout = 0");
+      const checkpoint = sqlite.pragma("wal_checkpoint(TRUNCATE)") as Array<{
+        busy?: number;
+        log?: number;
+        checkpointed?: number;
+      }>;
+      if (checkpoint.some((row) => (row.busy ?? 0) !== 0)) {
+        throw new FlowWeaveError(
+          "FLOW_PERSISTENCE_FAILED",
+          "Flow 升级维护锁不可用",
+        );
+      }
+      const journalMode = sqlite.pragma("journal_mode = DELETE", { simple: true });
+      if (String(journalMode).toLowerCase() !== "delete") {
+        throw new FlowWeaveError(
+          "FLOW_PERSISTENCE_FAILED",
+          "Flow 升级维护锁不可用",
+        );
+      }
       const upgradeTransaction = sqlite.transaction(() => {
         const existing = db
           .select()
@@ -1013,16 +1121,11 @@ export class ProjectKnowledgeRepository {
           currentV1,
           sensitiveNames,
         );
-        if (
-          [...cleanup.sensitiveValues].some((value) =>
-            JSON.stringify(preview.candidate).includes(value),
-          )
-        ) {
-          throw new FlowWeaveError(
-            "FLOW_UPGRADE_BLOCKED",
-            "迁移候选仍包含已识别敏感值",
-          );
-        }
+        assertNoSensitiveValue(
+          preview.candidate,
+          cleanup.sensitiveValues,
+          "迁移候选仍包含已识别敏感值",
+        );
         this.beforeVNextPersistenceStep("upgrade:after-history-cleanup");
 
         const now = new Date().toISOString();
@@ -1066,11 +1169,14 @@ export class ProjectKnowledgeRepository {
           });
         }
         this.beforeVNextPersistenceStep("upgrade:after-cas");
-        return { document: candidate, revision: nextRevision, updatedAt: now };
+        return {
+          record: { document: candidate, revision: nextRevision, updatedAt: now },
+          sensitiveValues: cleanup.sensitiveValues,
+        };
       });
-      const result = upgradeTransaction.immediate();
-      sqlite.pragma("wal_checkpoint(TRUNCATE)");
-      return result;
+      const result = upgradeTransaction.exclusive();
+      this.assertPhysicalSecretErasure(input.projectId, result.sensitiveValues);
+      return result.record;
     } catch (error: unknown) {
       persistenceFailure(error);
     } finally {
@@ -1280,16 +1386,38 @@ export class ProjectKnowledgeRepository {
     }
   }
 
-  /** 将裸 FlowDocument 安全导入目标项目，每次都创建独立副本。 */
+  /** 导出同 schema 的可移植文档，不包含版本、最近值、执行或本机状态。 */
+  exportFlow(projectId: string, flowId: string): AnyFlowDocument {
+    const revision = this.getFlowRevision(projectId, flowId);
+    if (!revision) {
+      throw new FlowWeaveError("VALIDATION_FAILED", "Flow 不存在");
+    }
+    if (revision.document.schemaVersion === FLOW_SCHEMA_VERSION) {
+      return createPortableFlowDocument(revision.document).document;
+    }
+    const document = parseFlowDocumentV2(
+      JSON.parse(JSON.stringify(revision.document)) as unknown,
+    );
+    assertPortableV2Document(document);
+    return document;
+  }
+
+  /** 将裸 v1/v2 FlowDocument 安全导入目标项目，每次都创建独立副本。 */
   importFlow(projectId: string, input: unknown): FlowImportResult {
     const projectExists = this.listProjects().some((project) => project.id === projectId);
     if (!projectExists) {
       throw new FlowWeaveError("PROJECT_NOT_FOUND", "目标项目不存在");
     }
 
-    let portable: ReturnType<typeof createPortableFlowDocument>;
+    let portable: { document: AnyFlowDocument; warnings: FlowImportResult["warnings"] };
     try {
-      portable = createPortableFlowDocument(input);
+      const source = parseFlowDocument(input);
+      if (source.schemaVersion === FLOW_SCHEMA_VERSION) {
+        portable = createPortableFlowDocument(source);
+      } else {
+        assertPortableV2Document(source);
+        portable = { document: source, warnings: [] };
+      }
     } catch {
       throw new FlowWeaveError("VALIDATION_FAILED", "Flow 文档格式无效");
     }
@@ -1307,17 +1435,13 @@ export class ProjectKnowledgeRepository {
         );
         const name = this.allocateImportedFlowName(portable.document.name, existingNames);
         const now = new Date().toISOString();
-        const flow: FlowDocument = {
+        const flow = parseFlowDocument({
           ...portable.document,
           id: randomUUID(),
           projectId,
           name,
-          meta: {
-            ...portable.document.meta,
-            createdAt: now,
-            updatedAt: now,
-          },
-        };
+          meta: { ...portable.document.meta, createdAt: now, updatedAt: now },
+        });
         db.insert(dbSchema.flows)
           .values({
             id: flow.id,
@@ -1325,6 +1449,7 @@ export class ProjectKnowledgeRepository {
             name: flow.name,
             documentJson: JSON.stringify(flow),
             schemaVersion: flow.schemaVersion,
+            revision: 1,
             createdAt: now,
             updatedAt: now,
           })
@@ -1428,13 +1553,30 @@ export class ProjectKnowledgeRepository {
     }
   }
 
-  restoreFlowVersion(projectId: string, versionId: string): FlowDocument {
+  restoreFlowVersion(
+    projectId: string,
+    versionId: string,
+    expectedRevision: number,
+  ): FlowDocument {
+    assertExpectedRevision(expectedRevision);
     const document = this.getFlowVersion(projectId, versionId);
     if (!document) {
       throw new Error(`未找到版本: ${versionId}`);
     }
-    this.saveFlow(projectId, document, "从版本恢复");
-    return document;
+    const restored = this.restoreFlowRevision({
+      projectId,
+      flowId: document.id,
+      versionId,
+      expectedRevision,
+      changeMessage: "从版本恢复",
+    });
+    if (restored.document.schemaVersion !== FLOW_SCHEMA_VERSION) {
+      throw new FlowWeaveError(
+        "FLOW_SCHEMA_VERSION_UNSUPPORTED",
+        "legacy restoreFlowVersion 只允许恢复 v1 Flow",
+      );
+    }
+    return restored.document;
   }
 
   private appendFlowVersion(
@@ -1541,14 +1683,13 @@ export class ProjectKnowledgeRepository {
         ),
       )
       .all();
-    const sanitizedVersions = versionRows.map((row) => {
+    const parsedVersions = versionRows.map((row) => {
       const document = parseStoredFlow(row.documentJson);
       assertFlowIdentity(document, projectId, flowId);
-      if (document.schemaVersion !== FLOW_SCHEMA_VERSION) {
-        return { row, document };
+      if (document.schemaVersion === FLOW_SCHEMA_VERSION) {
+        collectDefaults(document);
       }
-      collectDefaults(document);
-      return { row, document: sanitizeV1Document(document, sensitiveVariableNames) };
+      return { row, document };
     });
 
     const executionRows = db
@@ -1561,7 +1702,7 @@ export class ProjectKnowledgeRepository {
         ),
       )
       .all();
-    const sanitizedExecutions = executionRows.map((row) => {
+    const parsedExecutions = executionRows.map((row) => {
       let variables: Record<string, unknown> | undefined;
       if (row.variablesJson !== null) {
         try {
@@ -1578,14 +1719,11 @@ export class ProjectKnowledgeRepository {
         }
         for (const name of sensitiveVariableNames) {
           const value = variables[name];
-          if (typeof value === "string" && value.length > 0) {
-            sensitiveValues.add(value);
-          }
-          delete variables[name];
+          collectStringValues(value, sensitiveValues);
         }
       }
 
-      let flowSnapshotJson = row.flowSnapshotJson;
+      let flowSnapshot: FlowDocumentV1 | undefined;
       if (row.flowSnapshotJson !== null) {
         const snapshot = parseStoredFlow(row.flowSnapshotJson);
         if (snapshot.schemaVersion !== FLOW_SCHEMA_VERSION) {
@@ -1595,39 +1733,82 @@ export class ProjectKnowledgeRepository {
           );
         }
         collectDefaults(snapshot);
-        flowSnapshotJson = JSON.stringify(
-          sanitizeV1Document(snapshot, sensitiveVariableNames),
-        );
+        flowSnapshot = snapshot;
       }
-      return {
-        row,
-        variablesJson: variables === undefined ? null : JSON.stringify(variables),
-        flowSnapshotJson,
-      };
+      return { row, variables, flowSnapshot };
     });
 
-    for (const entry of sanitizedVersions) {
-      const safeDocumentJson = redactSensitiveStrings(
-        JSON.stringify(entry.document),
+    const safeCurrent = parseFlowDocumentV1(
+      scrubSensitiveStructure(
+        sanitizeV1Document(current, sensitiveVariableNames),
         sensitiveValues,
+      ),
+    );
+    assertNoSensitiveValue(safeCurrent, sensitiveValues, "当前 Flow 安全快照清理失败");
+
+    for (const entry of parsedVersions) {
+      const withoutSensitiveDefaults =
+        entry.document.schemaVersion === FLOW_SCHEMA_VERSION
+          ? sanitizeV1Document(entry.document, sensitiveVariableNames)
+          : entry.document;
+      const safeDocument = parseFlowDocument(
+        scrubSensitiveStructure(withoutSensitiveDefaults, sensitiveValues),
       );
+      assertNoSensitiveValue(safeDocument, sensitiveValues, "历史 Flow 安全清理失败");
+      const safeChangeMessage = scrubSensitiveString(entry.row.changeMessage, sensitiveValues);
+      assertNoSensitiveValue(safeChangeMessage, sensitiveValues, "历史版本说明安全清理失败");
       db.update(dbSchema.flowVersions)
         .set({
-          documentJson: safeDocumentJson ?? JSON.stringify(entry.document),
-          schemaVersion: entry.document.schemaVersion,
-          changeMessage: redactSensitiveStrings(entry.row.changeMessage, sensitiveValues),
+          documentJson: JSON.stringify(safeDocument),
+          schemaVersion: safeDocument.schemaVersion,
+          changeMessage: safeChangeMessage,
         })
         .where(eq(dbSchema.flowVersions.id, entry.row.id))
         .run();
     }
-    for (const entry of sanitizedExecutions) {
+    for (const entry of parsedExecutions) {
+      const variables = entry.variables === undefined ? undefined : { ...entry.variables };
+      if (variables) {
+        for (const name of sensitiveVariableNames) {
+          delete variables[name];
+        }
+      }
+      const safeVariables =
+        variables === undefined
+          ? undefined
+          : scrubSensitiveStructure(variables, sensitiveValues);
+      assertNoSensitiveValue(safeVariables, sensitiveValues, "执行变量安全清理失败");
+      const safeSnapshot =
+        entry.flowSnapshot === undefined
+          ? undefined
+          : parseFlowDocumentV1(
+              scrubSensitiveStructure(
+                sanitizeV1Document(entry.flowSnapshot, sensitiveVariableNames),
+                sensitiveValues,
+              ),
+            );
+      assertNoSensitiveValue(safeSnapshot, sensitiveValues, "执行快照安全清理失败");
+      const environmentName = scrubSensitiveString(
+        entry.row.environmentName,
+        sensitiveValues,
+      );
+      const baseUrl = scrubSensitiveString(entry.row.baseUrl, sensitiveValues);
+      const storageStatePath = scrubSensitiveString(
+        entry.row.storageStatePath,
+        sensitiveValues,
+      );
+      assertNoSensitiveValue(
+        { environmentName, baseUrl, storageStatePath },
+        sensitiveValues,
+        "执行上下文安全清理失败",
+      );
       db.update(dbSchema.executions)
         .set({
-          variablesJson: entry.variablesJson,
-          flowSnapshotJson: entry.flowSnapshotJson,
-          environmentName: redactSensitiveStrings(entry.row.environmentName, sensitiveValues),
-          baseUrl: redactSensitiveStrings(entry.row.baseUrl, sensitiveValues),
-          storageStatePath: redactSensitiveStrings(entry.row.storageStatePath, sensitiveValues),
+          variablesJson: safeVariables === undefined ? null : JSON.stringify(safeVariables),
+          flowSnapshotJson: safeSnapshot === undefined ? null : JSON.stringify(safeSnapshot),
+          environmentName,
+          baseUrl,
+          storageStatePath,
         })
         .where(eq(dbSchema.executions.id, entry.row.id))
         .run();
@@ -1638,27 +1819,53 @@ export class ProjectKnowledgeRepository {
         .where(eq(dbSchema.executionSteps.executionId, entry.row.id))
         .all();
       for (const step of stepRows) {
+        const errorMessage = scrubSensitiveString(step.errorMessage, sensitiveValues);
+        const screenshotPath = scrubSensitiveString(step.screenshotPath, sensitiveValues);
+        const diagnosticPath = scrubSensitiveString(step.diagnosticPath, sensitiveValues);
+        assertNoSensitiveValue(
+          { errorMessage, screenshotPath, diagnosticPath },
+          sensitiveValues,
+          "执行步骤元数据安全清理失败",
+        );
         db.update(dbSchema.executionSteps)
           .set({
-            errorMessage: redactSensitiveStrings(step.errorMessage, sensitiveValues),
-            screenshotPath: redactSensitiveStrings(step.screenshotPath, sensitiveValues),
-            diagnosticPath: redactSensitiveStrings(step.diagnosticPath, sensitiveValues),
+            errorMessage,
+            screenshotPath,
+            diagnosticPath,
           })
           .where(eq(dbSchema.executionSteps.id, step.id))
           .run();
       }
     }
-    const safeCurrent = sanitizeV1Document(current, sensitiveVariableNames);
-    const redactedCurrentJson = redactSensitiveStrings(
-      JSON.stringify(safeCurrent),
-      sensitiveValues,
-    );
-    return {
-      safeCurrent: parseFlowDocumentV1(
-        JSON.parse(redactedCurrentJson ?? JSON.stringify(safeCurrent)),
-      ),
-      sensitiveValues,
-    };
+    return { safeCurrent, sensitiveValues };
+  }
+
+  private assertPhysicalSecretErasure(
+    projectId: string,
+    sensitiveValues: ReadonlySet<string>,
+  ): void {
+    const storePath = resolveProjectStorePath(projectId, this.dataDir);
+    for (const path of [storePath, `${storePath}-wal`, `${storePath}-shm`]) {
+      if (!existsSync(path)) {
+        continue;
+      }
+      const bytes = readFileSync(path);
+      for (const sensitiveValue of sensitiveValues) {
+        if (!sensitiveValue) {
+          continue;
+        }
+        const escaped = JSON.stringify(sensitiveValue).slice(1, -1);
+        if (
+          bytes.includes(Buffer.from(sensitiveValue)) ||
+          bytes.includes(Buffer.from(escaped))
+        ) {
+          throw new FlowWeaveError(
+            "FLOW_PERSISTENCE_FAILED",
+            "Flow 升级后的物理存储安全验证失败",
+          );
+        }
+      }
+    }
   }
 
   private toFlowVersionRecord(
@@ -2207,7 +2414,13 @@ export class ProjectKnowledgeRepository {
     return projects.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
-  listFlows(projectId: string): Array<{ id: string; name: string; createdAt: string }> {
+  listFlows(projectId: string): Array<{
+    id: string;
+    name: string;
+    createdAt: string;
+    revision: number;
+    schemaVersion: number;
+  }> {
     const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
     try {
       return db
@@ -2215,6 +2428,8 @@ export class ProjectKnowledgeRepository {
           id: dbSchema.flows.id,
           name: dbSchema.flows.name,
           createdAt: dbSchema.flows.createdAt,
+          revision: dbSchema.flows.revision,
+          schemaVersion: dbSchema.flows.schemaVersion,
         })
         .from(dbSchema.flows)
         .where(eq(dbSchema.flows.projectId, projectId))
@@ -2226,7 +2441,13 @@ export class ProjectKnowledgeRepository {
   }
 
   /** 仅更新 Flow 名称（不新增版本快照） */
-  renameFlow(projectId: string, flowId: string, name: string): FlowDocument {
+  renameFlow(
+    projectId: string,
+    flowId: string,
+    name: string,
+    expectedRevision: number,
+  ): FlowDocument {
+    assertExpectedRevision(expectedRevision);
     const trimmed = name.trim();
     if (!trimmed) {
       throw new Error("Flow 名称不能为空");
@@ -2241,6 +2462,12 @@ export class ProjectKnowledgeRepository {
         .get();
       if (!row) {
         throw new Error("Flow 不存在");
+      }
+      if (row.revision !== expectedRevision) {
+        throw new FlowWeaveError("FLOW_REVISION_CONFLICT", "Flow revision 已变化", {
+          expectedRevision,
+          currentRevision: row.revision,
+        });
       }
 
       if (row.schemaVersion !== FLOW_SCHEMA_VERSION) {
@@ -2273,13 +2500,13 @@ export class ProjectKnowledgeRepository {
           and(
             eq(dbSchema.flows.projectId, projectId),
             eq(dbSchema.flows.id, flowId),
-            eq(dbSchema.flows.revision, row.revision),
+            eq(dbSchema.flows.revision, expectedRevision),
           ),
         )
         .run();
       if (update.changes !== 1) {
-        throw new FlowWeaveError("FLOW_REVISION_CONFLICT", "Flow revision 已变化", {
-          expectedRevision: row.revision,
+          throw new FlowWeaveError("FLOW_REVISION_CONFLICT", "Flow revision 已变化", {
+          expectedRevision,
         });
       }
 

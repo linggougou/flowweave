@@ -3,8 +3,12 @@ import { mkdir, open, readFile, rm, symlink, writeFile } from "node:fs/promises"
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { FlowDocument, FlowPortabilityWarning } from "@flowweave/flow-dsl";
-import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
+import type {
+  FlowDocument,
+  FlowDocumentV2,
+  FlowPortabilityWarning,
+} from "@flowweave/flow-dsl";
+import { FLOW_SCHEMA_VERSION, FLOW_SCHEMA_VERSION_V2 } from "@flowweave/shared";
 
 import {
   FLOW_IMPORT_FILE_LIMIT_BYTES,
@@ -28,6 +32,43 @@ function buildFlow(overrides: Partial<FlowDocument> = {}): FlowDocument {
       source: "recorded",
     },
     ...overrides,
+  };
+}
+
+function buildV2Flow(): FlowDocumentV2 {
+  return {
+    schemaVersion: FLOW_SCHEMA_VERSION_V2,
+    id: "flow_v2_source",
+    projectId: "project_v2_source",
+    name: "v2 原子闭环",
+    steps: [
+      {
+        id: "input_profile_01",
+        type: "input",
+        name: "运行输入",
+        fields: [
+          {
+            fieldId: "field_name_01",
+            label: "名称",
+            type: "string",
+            required: true,
+            sensitive: false,
+            remember: "never",
+          },
+        ],
+      },
+      {
+        id: "fill_name",
+        type: "fill",
+        target: { strategies: [{ kind: "css", selector: "#name" }] },
+        value: "{{field_name_01}}",
+      },
+    ],
+    meta: {
+      createdAt: "2026-08-30T00:00:00.000Z",
+      updatedAt: "2026-08-30T00:00:00.000Z",
+      source: "manual",
+    },
   };
 }
 
@@ -200,7 +241,7 @@ describe("Studio Flow 文件导入", () => {
   it.each([
     ["畸形 JSON", "{not-json", "不是合法 JSON"],
     ["包装对象", JSON.stringify({ flow: buildFlow() }), "裸 FlowDocument"],
-    ["版本不兼容", JSON.stringify({ ...buildFlow(), schemaVersion: 2 }), "schemaVersion 1"],
+    ["版本不兼容", JSON.stringify({ ...buildFlow(), schemaVersion: 3 }), "schemaVersion 1 或 2"],
   ])("%s 在调用导入服务前准确失败", async (_caseName, contents, message) => {
     const filePath = await prepareFile("invalid.json", contents);
     const importFlow = vi.fn();
@@ -225,6 +266,26 @@ describe("Studio Flow 文件导入", () => {
       }),
     ).rejects.toThrow("目标项目不存在");
     expect(importFlow).toHaveBeenCalledOnce();
+  });
+
+  it("strict v2 裸文档保持 schema 并交给原子导入服务重建身份", async () => {
+    const source = buildV2Flow();
+    const filePath = await prepareFile("v2.json", JSON.stringify(source));
+    const imported = {
+      ...source,
+      id: "flow_v2_imported",
+      projectId: "project_target",
+      name: "v2 原子闭环（导入）",
+    };
+    const importFlow = vi.fn().mockResolvedValue({ flow: imported, warnings: [] });
+
+    await expect(
+      importFlowFromFile("project_target", {
+        showOpenDialog: vi.fn().mockResolvedValue({ canceled: false, filePaths: [filePath] }),
+        importFlow,
+      }),
+    ).resolves.toEqual({ status: "imported", flow: imported, warnings: [] });
+    expect(importFlow).toHaveBeenCalledWith("project_target", source);
   });
 });
 
@@ -292,5 +353,25 @@ describe("Studio Flow 文件导出", () => {
         writeOutput: vi.fn().mockRejectedValue(writeError),
       }),
     ).rejects.toBe(writeError);
+  });
+
+  it("v2 导出保持同版本裸文档且不追加运行态字段", async () => {
+    const flow = buildV2Flow();
+    const outputPath = await prepareFile("v2-output.json", "");
+    const result = await exportFlowToFile("project_target", flow.id, {
+      getFlow: vi.fn().mockResolvedValue(flow),
+      showSaveDialog: vi.fn().mockResolvedValue({ canceled: false, filePath: outputPath }),
+    });
+
+    expect(result).toEqual({ status: "exported", warnings: [] });
+    const parsed = JSON.parse(await readFile(outputPath, "utf8")) as Record<string, unknown>;
+    expect(parsed).toMatchObject({
+      schemaVersion: FLOW_SCHEMA_VERSION_V2,
+      id: flow.id,
+      projectId: flow.projectId,
+    });
+    expect(parsed).not.toHaveProperty("revision");
+    expect(parsed).not.toHaveProperty("executions");
+    expect(parsed).not.toHaveProperty("recentValues");
   });
 });

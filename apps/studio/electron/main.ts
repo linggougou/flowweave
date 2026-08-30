@@ -327,7 +327,13 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(
     IPC_CHANNELS.renameFlow,
-    (_event, projectId: string, flowId: string, name: string) => {
+    (
+      _event,
+      projectId: string,
+      flowId: string,
+      name: string,
+      expectedRevision: number,
+    ) => {
       if (typeof projectId !== "string" || projectId.length === 0) {
         throw new Error("projectId 无效");
       }
@@ -337,7 +343,10 @@ function registerIpcHandlers(): void {
       if (typeof name !== "string") {
         throw new Error("name 无效");
       }
-      return renameFlow(projectId, flowId, name);
+      if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
+        throw new Error("expectedRevision 无效");
+      }
+      return renameFlow(projectId, flowId, name, expectedRevision);
     },
   );
 
@@ -505,14 +514,17 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle(
     IPC_CHANNELS.restoreFlowVersion,
-    (_event, projectId: string, versionId: string) => {
+    (_event, projectId: string, versionId: string, expectedRevision: number) => {
       if (typeof projectId !== "string" || projectId.length === 0) {
         throw new Error("projectId 无效");
       }
       if (typeof versionId !== "string" || versionId.length === 0) {
         throw new Error("versionId 无效");
       }
-      return restoreFlowVersion(projectId, versionId);
+      if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
+        throw new Error("expectedRevision 无效");
+      }
+      return restoreFlowVersion(projectId, versionId, expectedRevision);
     },
   );
 

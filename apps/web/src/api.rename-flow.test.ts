@@ -21,14 +21,14 @@ describe("Web Flow 重命名 API", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(renameFlow("project-a", "flow-a", "  新任务名称  ")).resolves.toMatchObject({
+    await expect(renameFlow("project-a", "flow-a", "  新任务名称  ", 7)).resolves.toMatchObject({
       flowId: "flow-a",
       name: "新任务名称",
     });
     expect(fetchMock).toHaveBeenCalledWith("/api/projects/project-a/flows/flow-a", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "新任务名称" }),
+      body: JSON.stringify({ name: "新任务名称", expectedRevision: 7 }),
     });
   });
 });

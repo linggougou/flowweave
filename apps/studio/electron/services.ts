@@ -13,7 +13,7 @@ import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { app } from "electron";
 
-import type { FlowDocument } from "@flowweave/flow-dsl";
+import type { AnyFlowDocument, FlowDocument } from "@flowweave/flow-dsl";
 import type { PageSnapshotSummary } from "@flowweave/page-intelligence";
 import {
   ProjectKnowledgeRepository,
@@ -61,7 +61,9 @@ import {
   apiCreateProject,
   apiDeleteExecution,
   apiGetExecution,
+  apiExportFlow,
   apiGetFlow,
+  apiGetFlowRevision,
   apiGetFlowVersion,
   apiImportFlow,
   apiListExecutions,
@@ -816,7 +818,15 @@ export async function deleteExecution(projectId: string, executionId: string) {
 
 export async function listFlows(
   projectId: string,
-): Promise<Array<{ id: string; name: string; createdAt: string }>> {
+): Promise<
+  Array<{
+    id: string;
+    name: string;
+    createdAt: string;
+    revision: number;
+    schemaVersion: number;
+  }>
+> {
   return apiListFlows(projectId);
 }
 
@@ -824,12 +834,21 @@ export async function renameFlow(
   projectId: string,
   flowId: string,
   name: string,
-): Promise<{ id: string; name: string; createdAt: string }> {
-  const result = await apiRenameFlow(projectId, flowId, name);
+  expectedRevision: number,
+): Promise<{
+  id: string;
+  name: string;
+  createdAt: string;
+  revision: number;
+  schemaVersion: number;
+}> {
+  const result = await apiRenameFlow(projectId, flowId, name, expectedRevision);
   return {
     id: result.flowId,
     name: result.name,
     createdAt: result.createdAt,
+    revision: result.revision,
+    schemaVersion: result.schemaVersion,
   };
 }
 
@@ -844,9 +863,15 @@ export async function assertProjectExistsForFileOperation(projectId: string): Pr
   }
 }
 
-export async function getFlowForExport(projectId: string, flowId: string): Promise<FlowDocument> {
+export async function getFlowForExport(
+  projectId: string,
+  flowId: string,
+): Promise<AnyFlowDocument> {
   await assertProjectExistsForFileOperation(projectId);
-  return apiGetFlow(projectId, flowId);
+  const revision = await apiGetFlowRevision(projectId, flowId);
+  return revision.document.schemaVersion === FLOW_SCHEMA_VERSION
+    ? revision.document
+    : apiExportFlow(projectId, flowId);
 }
 
 export async function importFlowDocument(
@@ -873,6 +898,7 @@ export async function getFlowVersion(
 export async function restoreFlowVersion(
   projectId: string,
   versionId: string,
+  expectedRevision: number,
 ): Promise<FlowDocument> {
-  return apiRestoreFlowVersion(projectId, versionId);
+  return apiRestoreFlowVersion(projectId, versionId, expectedRevision);
 }

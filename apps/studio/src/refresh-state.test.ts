@@ -2,8 +2,20 @@ import { describe, expect, it, vi } from "vitest";
 
 import { registerWindowFocusRefresh, resolveRefreshedFlowSelection } from "./refresh-state.js";
 
-const oldFlow = { id: "flow_old", name: "旧任务", createdAt: "2026-07-15" };
-const newFlow = { id: "flow_new", name: "新任务", createdAt: "2026-07-16" };
+const oldFlow = {
+  id: "flow_old",
+  name: "旧任务",
+  createdAt: "2026-07-15",
+  revision: 1,
+  schemaVersion: 1,
+};
+const newFlow = {
+  id: "flow_new",
+  name: "新任务",
+  createdAt: "2026-07-16",
+  revision: 1,
+  schemaVersion: 1,
+};
 
 describe("Studio 同步刷新状态", () => {
   it("发现新任务时优先选择新内容", () => {

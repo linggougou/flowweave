@@ -1,10 +1,11 @@
-import type { FlowDocument } from "@flowweave/flow-dsl";
+import type { AnyFlowDocument, FlowDocument } from "@flowweave/flow-dsl";
 import type { PageSnapshotSummary } from "@flowweave/page-intelligence";
 import type {
   ExecutionResult,
   ExecutionDeletionResult,
   ExecutionWithProject,
   FlowImportResult,
+  FlowRevisionRecord,
   FlowVersionRecord,
   ProjectKnowledgeRepository,
   ProjectRef,
@@ -59,7 +60,15 @@ export async function apiCreateProject(name: string): Promise<ProjectRef> {
 
 export async function apiListFlows(
   projectId: string,
-): Promise<Array<{ id: string; name: string; createdAt: string }>> {
+): Promise<
+  Array<{
+    id: string;
+    name: string;
+    createdAt: string;
+    revision: number;
+    schemaVersion: number;
+  }>
+> {
   if (localRepository) {
     return localRepository.listFlows(projectId);
   }
@@ -70,19 +79,53 @@ export async function apiRenameFlow(
   projectId: string,
   flowId: string,
   name: string,
-): Promise<{ flowId: string; name: string; createdAt: string }> {
+  expectedRevision: number,
+): Promise<{
+  flowId: string;
+  name: string;
+  createdAt: string;
+  revision: number;
+  schemaVersion: number;
+}> {
   if (localRepository) {
-    const flow = localRepository.renameFlow(projectId, flowId, name);
+    const flow = localRepository.renameFlow(projectId, flowId, name, expectedRevision);
+    const revision = localRepository.getFlowRevision(projectId, flowId);
     return {
       flowId: flow.id,
       name: flow.name,
       createdAt: flow.meta.createdAt,
+      revision: revision!.revision,
+      schemaVersion: flow.schemaVersion,
     };
   }
   return request(`/api/projects/${projectId}/flows/${flowId}`, {
     method: "PATCH",
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ name, expectedRevision }),
   });
+}
+
+export async function apiGetFlowRevision(
+  projectId: string,
+  flowId: string,
+): Promise<FlowRevisionRecord> {
+  if (localRepository) {
+    const revision = localRepository.getFlowRevision(projectId, flowId);
+    if (!revision) {
+      throw new Error("Flow 不存在");
+    }
+    return revision;
+  }
+  return request(`/api/projects/${projectId}/flow-revisions/${flowId}`);
+}
+
+export async function apiExportFlow(
+  projectId: string,
+  flowId: string,
+): Promise<AnyFlowDocument> {
+  if (localRepository) {
+    return localRepository.exportFlow(projectId, flowId);
+  }
+  return request(`/api/projects/${projectId}/flows/${flowId}/export`);
 }
 
 export async function apiGetFlow(projectId: string, flowId: string): Promise<FlowDocument> {
@@ -110,14 +153,25 @@ export async function apiSaveFlow(
   projectId: string,
   flow: FlowDocument,
   changeMessage?: string,
+  expectedRevision?: number,
 ): Promise<void> {
   if (localRepository) {
-    localRepository.saveFlow(projectId, flow, changeMessage);
+    if (expectedRevision === undefined) {
+      localRepository.saveFlow(projectId, flow, changeMessage);
+    } else {
+      localRepository.saveFlowRevision({
+        projectId,
+        flowId: flow.id,
+        document: { ...flow, projectId },
+        expectedRevision,
+        changeMessage,
+      });
+    }
     return;
   }
   await request(`/api/projects/${projectId}/flows`, {
     method: "POST",
-    body: JSON.stringify({ flow, changeMessage }),
+    body: JSON.stringify({ flow, changeMessage, expectedRevision }),
   });
 }
 
@@ -215,11 +269,13 @@ export async function apiGetFlowVersion(
 export async function apiRestoreFlowVersion(
   projectId: string,
   versionId: string,
+  expectedRevision: number,
 ): Promise<FlowDocument> {
   if (localRepository) {
-    return localRepository.restoreFlowVersion(projectId, versionId);
+    return localRepository.restoreFlowVersion(projectId, versionId, expectedRevision);
   }
   return request(`/api/projects/${projectId}/flow-versions/${versionId}/restore`, {
     method: "POST",
+    body: JSON.stringify({ expectedRevision }),
   });
 }

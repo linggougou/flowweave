@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import { createPortableFlowDocument, type FlowDocument } from "@flowweave/flow-dsl";
 import { analyzeFlowFragility } from "@flowweave/page-intelligence";
+import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
 import {
   APP_DISPLAY_NAME,
   FlowStepsTable,
@@ -766,9 +767,18 @@ export function App() {
     setError(null);
     try {
       const api = getStudioApi();
-      const updated = await api.renameFlow(selectedProjectId, renamingFlowId, name);
+      const baseline = flows.find((flow) => flow.id === renamingFlowId);
+      if (!baseline) {
+        throw new Error("任务 revision 不可用，请刷新后重试");
+      }
+      const updated = await api.renameFlow(
+        selectedProjectId,
+        renamingFlowId,
+        name,
+        baseline.revision,
+      );
       setFlows((prev) =>
-        prev.map((flow) => (flow.id === updated.id ? { ...flow, name: updated.name } : flow)),
+        prev.map((flow) => (flow.id === updated.id ? updated : flow)),
       );
       if (currentFlow?.id === updated.id) {
         setCurrentFlow({ ...currentFlow, name: updated.name });
@@ -855,14 +865,6 @@ export function App() {
       ) {
         return;
       }
-      setFlows((previous) => [
-        {
-          id: result.flow.id,
-          name: result.flow.name,
-          createdAt: result.flow.meta.createdAt,
-        },
-        ...previous.filter((flow) => flow.id !== result.flow.id),
-      ]);
       const nextFlows = await api.listFlows(projectId);
       if (
         requestId !== portabilityRequestIdRef.current ||
@@ -877,7 +879,7 @@ export function App() {
       flowLoadRequestIdRef.current += 1;
       selectedFlowIdRef.current = result.flow.id;
       setSelectedFlowId(result.flow.id);
-      setCurrentFlow(result.flow);
+      setCurrentFlow(result.flow.schemaVersion === FLOW_SCHEMA_VERSION ? result.flow : null);
       setVersions([]);
       setPreviewVersion(null);
       setTab("flow");
@@ -1336,7 +1338,13 @@ export function App() {
     setError(null);
     try {
       const api = getStudioApi();
-      await api.restoreFlowVersion(selectedProjectId, versionId);
+      const baseline = flows.find((flow) => flow.id === selectedFlowId);
+      if (!baseline) {
+        throw new Error("任务 revision 不可用，请刷新后重试");
+      }
+      await api.restoreFlowVersion(selectedProjectId, versionId, baseline.revision);
+      const nextFlows = await api.listFlows(selectedProjectId);
+      setFlows(nextFlows);
       await refreshVersions(selectedProjectId, selectedFlowId);
     } catch (err: unknown) {
       setError(formatStudioError(err));

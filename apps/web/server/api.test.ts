@@ -75,9 +75,10 @@ describe("web API HTTP 路由", () => {
 
     const v1 = buildFlow(projectId, flowId, "流程 A");
     repo.saveFlow(projectId, v1);
-    repo.saveFlow(
+    repo.saveFlowRevision({
       projectId,
-      {
+      flowId,
+      document: {
         ...v1,
         name: "流程 B",
         steps: [
@@ -89,8 +90,9 @@ describe("web API HTTP 路由", () => {
           },
         ],
       },
-      "新增点击步骤",
-    );
+      expectedRevision: 1,
+      changeMessage: "新增点击步骤",
+    });
 
     const versions = repo.listFlowVersions(projectId, flowId);
     historyVersionId = versions[0]!.id;
@@ -133,7 +135,11 @@ describe("web API HTTP 路由", () => {
 
     const response = await fetch(
       `${baseUrl}/api/projects/${projectId}/flow-versions/${historyVersionId}/restore`,
-      { method: "POST" },
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expectedRevision: 2 }),
+      },
     );
 
     expect(response.status).toBe(200);
@@ -154,7 +160,11 @@ describe("web API HTTP 路由", () => {
   it("POST restore 在 versionId 不存在时返回 404", async () => {
     const response = await fetch(
       `${baseUrl}/api/projects/${projectId}/flow-versions/missing-version/restore`,
-      { method: "POST" },
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expectedRevision: 2 }),
+      },
     );
 
     expect(response.status).toBe(404);

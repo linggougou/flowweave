@@ -1,5 +1,10 @@
 /** 渲染进程与 preload 共享的 Studio API 类型 */
-import type { FlowDocument, FlowPortabilityWarning, NormalizedStep } from "@flowweave/flow-dsl";
+import type {
+  AnyFlowDocument,
+  FlowDocument,
+  FlowPortabilityWarning,
+  NormalizedStep,
+} from "@flowweave/flow-dsl";
 import type { FragilityIssue, PageSnapshotSummary } from "@flowweave/page-intelligence";
 import type { ExecutionProgressEvent } from "@flowweave/runtime";
 import type {
@@ -387,13 +392,15 @@ export type StudioFlowRef = {
   id: string;
   name: string;
   createdAt: string;
+  revision: number;
+  schemaVersion: number;
 };
 
 export type StudioImportFlowFileResult =
   | { status: "cancelled" }
   | {
       status: "imported";
-      flow: FlowDocument;
+      flow: AnyFlowDocument;
       warnings: FlowPortabilityWarning[];
     };
 
@@ -429,7 +436,12 @@ export type StudioApi = {
   listProjects: () => Promise<StudioProject[]>;
   createProject: (name: string) => Promise<StudioProject>;
   listFlows: (projectId: string) => Promise<StudioFlowRef[]>;
-  renameFlow: (projectId: string, flowId: string, name: string) => Promise<StudioFlowRef>;
+  renameFlow: (
+    projectId: string,
+    flowId: string,
+    name: string,
+    expectedRevision: number,
+  ) => Promise<StudioFlowRef>;
   getFlow: (projectId: string, flowId: string) => Promise<FlowDocument>;
   importFlowFile: (projectId: string) => Promise<StudioImportFlowFileResult>;
   exportFlowFile: (projectId: string, flowId: string) => Promise<StudioExportFlowFileResult>;
@@ -445,7 +457,11 @@ export type StudioApi = {
   deleteExecution?: (projectId: string, executionId: string) => Promise<ExecutionDeletionResult>;
   listFlowVersions: (projectId: string, flowId: string) => Promise<StudioFlowVersion[]>;
   getFlowVersion: (projectId: string, versionId: string) => Promise<FlowDocument | null>;
-  restoreFlowVersion: (projectId: string, versionId: string) => Promise<FlowDocument>;
+  restoreFlowVersion: (
+    projectId: string,
+    versionId: string,
+    expectedRevision: number,
+  ) => Promise<FlowDocument>;
 };
 
 declare global {

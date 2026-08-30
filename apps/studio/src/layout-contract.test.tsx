@@ -99,6 +99,8 @@ function buildLayoutContractRenderState(): LayoutContractRenderState {
         id: "flow_layout_contract",
         name: "布局合同回归",
         createdAt: "2026-06-09T00:00:00.000Z",
+        revision: 1,
+        schemaVersion: 1,
       },
     ],
     selectedFlowId: "flow_layout_contract",

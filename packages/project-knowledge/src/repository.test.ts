@@ -96,7 +96,7 @@ describe("ProjectKnowledgeRepository", () => {
     const flowId = "flow_rename_1";
     repo.saveFlow(project.id, sampleFlow(project.id, flowId));
 
-    const renamed = repo.renameFlow(project.id, flowId, "新名称");
+    const renamed = repo.renameFlow(project.id, flowId, "新名称", 1);
     expect(renamed.name).toBe("新名称");
 
     const loaded = repo.getFlowInProject(project.id, flowId);
@@ -513,7 +513,7 @@ VALUES (?, ?, ?, ?, ?)
     });
   });
 
-  it("saveFlow 更新时写入版本历史并可恢复", () => {
+  it("revision save 更新时写入版本历史并可恢复", () => {
     dataDir = mkdtempSync(join(tmpdir(), "flowweave-pk-"));
     const repo = new ProjectKnowledgeRepository({ dataDir });
     const project = repo.createProject("版本项目");
@@ -535,7 +535,13 @@ VALUES (?, ?, ?, ?, ?)
       ],
       meta: { ...v1.meta, updatedAt: new Date().toISOString() },
     };
-    repo.saveFlow(project.id, v2, "新增提交按钮");
+    repo.saveFlowRevision({
+      projectId: project.id,
+      flowId,
+      document: v2,
+      expectedRevision: 1,
+      changeMessage: "新增提交按钮",
+    });
 
     const versions = repo.listFlowVersions(project.id, flowId);
     expect(versions).toHaveLength(1);
@@ -546,7 +552,7 @@ VALUES (?, ?, ?, ?, ?)
     const current = repo.getFlowInProject(project.id, flowId);
     expect(current?.steps).toHaveLength(2);
 
-    repo.restoreFlowVersion(project.id, versions[0]!.id);
+    repo.restoreFlowVersion(project.id, versions[0]!.id, 2);
     const restored = repo.getFlowInProject(project.id, flowId);
     expect(restored?.steps).toHaveLength(1);
 

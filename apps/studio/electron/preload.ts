@@ -13,8 +13,8 @@ const studioApi: StudioApi = {
   listProjects: () => ipcRenderer.invoke(IPC_CHANNELS.listProjects),
   createProject: (name: string) => ipcRenderer.invoke(IPC_CHANNELS.createProject, name),
   listFlows: (projectId: string) => ipcRenderer.invoke(IPC_CHANNELS.listFlows, projectId),
-  renameFlow: (projectId: string, flowId: string, name: string) =>
-    ipcRenderer.invoke(IPC_CHANNELS.renameFlow, projectId, flowId, name),
+  renameFlow: (projectId: string, flowId: string, name: string, expectedRevision: number) =>
+    ipcRenderer.invoke(IPC_CHANNELS.renameFlow, projectId, flowId, name, expectedRevision),
   getFlow: (projectId: string, flowId: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.getFlow, projectId, flowId),
   importFlowFile: (projectId: string) => ipcRenderer.invoke(IPC_CHANNELS.importFlowFile, projectId),
@@ -45,8 +45,13 @@ const studioApi: StudioApi = {
     ipcRenderer.invoke(IPC_CHANNELS.listFlowVersions, projectId, flowId),
   getFlowVersion: (projectId: string, versionId: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.getFlowVersion, projectId, versionId),
-  restoreFlowVersion: (projectId: string, versionId: string) =>
-    ipcRenderer.invoke(IPC_CHANNELS.restoreFlowVersion, projectId, versionId),
+  restoreFlowVersion: (projectId: string, versionId: string, expectedRevision: number) =>
+    ipcRenderer.invoke(
+      IPC_CHANNELS.restoreFlowVersion,
+      projectId,
+      versionId,
+      expectedRevision,
+    ),
 };
 
 contextBridge.exposeInMainWorld("flowweaveStudio", studioApi);

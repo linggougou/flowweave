@@ -4,8 +4,8 @@ import { extname } from "node:path";
 
 import {
   createPortableFlowDocument,
-  parseFlowDocumentV1,
-  type FlowDocument,
+  parseFlowDocument,
+  type AnyFlowDocument,
 } from "@flowweave/flow-dsl";
 import type { FlowImportResult } from "@flowweave/project-knowledge";
 import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
@@ -41,7 +41,7 @@ type ExportFlowFileDependencies = {
   showSaveDialog: (
     options: SaveDialogOptions,
   ) => Promise<{ canceled: boolean; filePath?: string }>;
-  getFlow: (projectId: string, flowId: string) => Promise<FlowDocument>;
+  getFlow: (projectId: string, flowId: string) => Promise<AnyFlowDocument>;
   writeOutput?: (filePath: string, contents: string) => Promise<void>;
 };
 
@@ -77,7 +77,7 @@ async function readFileWithinLimit(filePath: string): Promise<Buffer> {
   }
 }
 
-function parseBareFlowDocument(contents: Buffer): FlowDocument {
+function parseBareFlowDocument(contents: Buffer): AnyFlowDocument {
   let input: unknown;
   try {
     input = JSON.parse(contents.toString("utf8"));
@@ -86,19 +86,16 @@ function parseBareFlowDocument(contents: Buffer): FlowDocument {
   }
 
   if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new Error("Flow JSON 必须是 schemaVersion 1 的裸 FlowDocument");
+    throw new Error("Flow JSON 必须是裸 FlowDocument");
   }
   const record = input as Record<string, unknown>;
   if ("flow" in record) {
     throw new Error("Flow JSON 必须是裸 FlowDocument，不能使用包装对象");
   }
-  if (record.schemaVersion !== FLOW_SCHEMA_VERSION) {
-    throw new Error("Flow JSON 仅支持 schemaVersion 1");
-  }
   try {
-    return parseFlowDocumentV1(input);
+    return parseFlowDocument(input);
   } catch {
-    throw new Error("Flow JSON 必须是有效的 schemaVersion 1 裸 FlowDocument");
+    throw new Error("Flow JSON 必须是有效的 schemaVersion 1 或 2 裸 FlowDocument");
   }
 }
 
@@ -147,7 +144,10 @@ export async function exportFlowToFile(
   dependencies: ExportFlowFileDependencies,
 ): Promise<StudioExportFlowFileResult> {
   const flow = await dependencies.getFlow(projectId, flowId);
-  const portable = createPortableFlowDocument(flow);
+  const portable =
+    flow.schemaVersion === FLOW_SCHEMA_VERSION
+      ? createPortableFlowDocument(flow)
+      : { document: parseFlowDocument(flow), warnings: [] };
   const selection = await dependencies.showSaveDialog({
     title: "导出 Flow JSON",
     defaultPath: safeDefaultFileName(flow.name),

@@ -12,7 +12,27 @@ export type SaveFlowResult = {
   flowId: string;
   name: string;
   projectId: string;
+  revision: number;
 };
+
+async function getFlowRevision(
+  baseUrl: string,
+  projectId: string,
+  flowId: string,
+): Promise<number | undefined> {
+  const res = await fetch(
+    `${baseUrl.replace(/\/$/, "")}/api/projects/${projectId}/flow-revisions/${flowId}`,
+    { headers: { "Content-Type": "application/json" } },
+  );
+  if (res.status === 404) {
+    return undefined;
+  }
+  const body = (await res.json().catch(() => ({}))) as { revision?: unknown; error?: string };
+  if (!res.ok || !Number.isSafeInteger(body.revision) || (body.revision as number) < 1) {
+    throw new Error(body.error ?? "无法读取 Flow revision");
+  }
+  return body.revision as number;
+}
 
 async function requestJson<T>(
   baseUrl: string,
@@ -66,8 +86,16 @@ export async function saveFlowToKnowledge(
   flow: unknown,
   changeMessage?: string,
 ): Promise<SaveFlowResult> {
+  const flowId =
+    flow && typeof flow === "object" && !Array.isArray(flow)
+      ? (flow as { id?: unknown }).id
+      : undefined;
+  if (typeof flowId !== "string" || !flowId) {
+    throw new Error("Flow id 无效");
+  }
+  const expectedRevision = await getFlowRevision(baseUrl, projectId, flowId);
   return requestJson<SaveFlowResult>(baseUrl, `/api/projects/${projectId}/flows`, {
     method: "POST",
-    body: JSON.stringify({ flow, changeMessage }),
+    body: JSON.stringify({ flow, changeMessage, expectedRevision }),
   });
 }

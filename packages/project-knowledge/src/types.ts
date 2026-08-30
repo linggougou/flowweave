@@ -12,7 +12,7 @@ export type ProjectRef = {
 };
 
 export type FlowImportResult = {
-  flow: FlowDocument;
+  flow: AnyFlowDocument;
   warnings: FlowPortabilityWarning[];
 };
 

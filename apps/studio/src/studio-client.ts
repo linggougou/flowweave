@@ -152,18 +152,31 @@ const knowledgeHttpClient: Pick<StudioApi, HttpFallbackMethod> = {
   listFlows: (projectId: string): Promise<StudioFlowRef[]> =>
     knowledgeRequest(`/api/projects/${projectId}/flows`),
 
-  renameFlow: async (projectId: string, flowId: string, name: string): Promise<StudioFlowRef> => {
-    const result = await knowledgeRequest<{ flowId: string; name: string; createdAt: string }>(
+  renameFlow: async (
+    projectId: string,
+    flowId: string,
+    name: string,
+    expectedRevision: number,
+  ): Promise<StudioFlowRef> => {
+    const result = await knowledgeRequest<{
+      flowId: string;
+      name: string;
+      createdAt: string;
+      revision: number;
+      schemaVersion: number;
+    }>(
       `/api/projects/${projectId}/flows/${flowId}`,
       {
         method: "PATCH",
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, expectedRevision }),
       },
     );
     return {
       id: result.flowId,
       name: result.name,
       createdAt: result.createdAt,
+      revision: result.revision,
+      schemaVersion: result.schemaVersion,
     };
   },
 
@@ -236,9 +249,14 @@ const knowledgeHttpClient: Pick<StudioApi, HttpFallbackMethod> = {
     }
   },
 
-  restoreFlowVersion: (projectId: string, versionId: string): Promise<FlowDocument> =>
+  restoreFlowVersion: (
+    projectId: string,
+    versionId: string,
+    expectedRevision: number,
+  ): Promise<FlowDocument> =>
     knowledgeRequest(`/api/projects/${projectId}/flow-versions/${versionId}/restore`, {
       method: "POST",
+      body: JSON.stringify({ expectedRevision }),
     }),
 };
 
