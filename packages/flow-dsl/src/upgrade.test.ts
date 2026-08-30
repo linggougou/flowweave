@@ -236,6 +236,59 @@ describe("v1 → v2 纯升级预览", () => {
     );
   });
 
+  it("显式非 password inputType 优先于 selector 的密码字样", () => {
+    const report = previewFlowV1Upgrade(
+      buildV1({
+        variables: [
+          {
+            name: "PUBLIC_NOTE",
+            type: "string",
+            required: true,
+            defaultValue: "公开说明",
+          },
+        ],
+        steps: [
+          {
+            id: "fill_note",
+            type: "fill",
+            target: {
+              strategies: [{ kind: "css", selector: "#password-policy-note" }],
+              hints: { inputType: "text" },
+            },
+            value: "{{PUBLIC_NOTE}}",
+          },
+        ],
+      }),
+    );
+
+    expect(report.blockingIssues).toEqual([]);
+    expect(report.fieldMappings).toEqual([
+      expect.objectContaining({ variableName: "PUBLIC_NOTE", sensitive: false }),
+    ]);
+    expect(report.candidate?.steps[0]).toMatchObject({
+      type: "input",
+      fields: [expect.objectContaining({ sensitive: false, defaultValue: "公开说明" })],
+    });
+  });
+
+  it("fieldId 使用无歧义 tuple seed，index 与名称边界不能碰撞", () => {
+    const variables: FlowDocument["variables"] = Array.from({ length: 13 }, (_, index) => ({
+      name: index === 1 ? "23" : index === 12 ? "3" : `value_${index}`,
+      type: "string",
+      required: true,
+    }));
+    const report = previewFlowV1Upgrade(
+      buildV1({
+        variables,
+        steps: [{ id: "open", type: "navigate", url: "https://example.com" }],
+      }),
+    );
+
+    expect(report.blockingIssues).toEqual([]);
+    expect(report.candidate).not.toBeNull();
+    expect(new Set(report.fieldMappings.map((mapping) => mapping.fieldId))).toHaveLength(13);
+  });
+
   it("label 截断与规范化碰撞采用确定性后缀并给出告警", () => {
     const long = "Ａ".repeat(90);
     const report = previewFlowV1Upgrade(

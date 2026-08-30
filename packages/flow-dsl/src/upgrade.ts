@@ -1,13 +1,14 @@
 import { extractTemplateVariables, getSingleTemplateVariableName } from "@flowweave/shared";
 import { canonicalizeJson, sha256Hex } from "./canonical-json.js";
 import { parseFlowDocumentV1 } from "./parsers.js";
+import { isPasswordTarget } from "./portability.js";
 import {
   flowDocumentV2Schema,
   type FlowDocumentV2,
   type FlowStepV2,
   type InputFieldV2,
 } from "./v2-schema.js";
-import type { FlowDocument, Target } from "./schema.js";
+import type { FlowDocument } from "./schema.js";
 
 export type FlowUpgradeIssueCode =
   | "DUPLICATE_VARIABLE_NAME"
@@ -63,7 +64,6 @@ type Slot = {
 };
 
 const secretVariablePattern = /^secret_/i;
-const passwordTargetPattern = /password|passwd|passcode|pwd|密码|口令/i;
 const sensitiveQueryKeys = new Set([
   "token",
   "accesstoken",
@@ -80,29 +80,6 @@ const sensitiveQueryKeys = new Set([
   "auth",
   "authorization",
 ]);
-
-function isPasswordTarget(target: Target): boolean {
-  if (target.hints?.inputType?.toLowerCase() === "password") {
-    return true;
-  }
-  if (
-    [target.hints?.nameAttr, target.hints?.placeholder, target.hints?.labelText].some(
-      (value) => value !== undefined && passwordTargetPattern.test(value),
-    )
-  ) {
-    return true;
-  }
-  return target.strategies.some((strategy) => {
-    if (strategy.kind === "css") {
-      return passwordTargetPattern.test(strategy.selector);
-    }
-    return (
-      strategy.kind === "role" &&
-      strategy.name !== undefined &&
-      passwordTargetPattern.test(strategy.name)
-    );
-  });
-}
 
 function deepClone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -308,7 +285,7 @@ export function previewFlowV1Upgrade(
   const fieldMappings = flow.variables.map((variable, index) => ({
     variableIndex: index,
     variableName: variable.name,
-    fieldId: `field_${sha256Hex(`${flow.id}${index}${variable.name}`).slice(0, 20)}`,
+    fieldId: `field_${sha256Hex(canonicalizeJson([flow.id, index, variable.name])).slice(0, 20)}`,
     sensitive: sensitiveNames.has(variable.name),
   }));
   const mappingByName = new Map(fieldMappings.map((mapping) => [mapping.variableName, mapping]));

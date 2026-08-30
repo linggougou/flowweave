@@ -1,5 +1,10 @@
 import { getSingleTemplateVariableName } from "@flowweave/shared";
-import { flowDocumentSchema, type FlowDocument, type NormalizedStep, type Target } from "./schema.js";
+import {
+  flowDocumentSchema,
+  type FlowDocument,
+  type NormalizedStep,
+  type Target,
+} from "./schema.js";
 
 export type FlowPortabilityWarningCode =
   | "secret-default-removed"
@@ -79,7 +84,7 @@ function createRequiredStringVariable(name: string): FlowVariable {
   };
 }
 
-function isPasswordTarget(target: Target): boolean {
+export function isPasswordTarget(target: Target): boolean {
   const hints = target.hints;
   if (hints?.inputType !== undefined) {
     return hints.inputType.toLowerCase() === "password";
@@ -156,7 +161,9 @@ function sanitizePasswordTargetHints(
 }
 
 function isAbsoluteLocalPath(value: string): boolean {
-  return value.startsWith("/") || value.startsWith("\\\\") || absoluteWindowsPathPattern.test(value);
+  return (
+    value.startsWith("/") || value.startsWith("\\\\") || absoluteWindowsPathPattern.test(value)
+  );
 }
 
 function decodeQueryKey(value: string): string {
@@ -428,10 +435,7 @@ function sanitizeStep(
     }
 
     const stepToken = normalizeVariableToken(step.id, `step_${stepIndex + 1}`);
-    const variableName = allocateVariableName(
-      `secret_password_${stepToken}`,
-      usedVariableNames,
-    );
+    const variableName = allocateVariableName(`secret_password_${stepToken}`, usedVariableNames);
     variables.push(createRequiredStringVariable(variableName));
     warnings.push({
       code: "password-value-variableized",
