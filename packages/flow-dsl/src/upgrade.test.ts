@@ -244,6 +244,103 @@ describe("v1 → v2 纯升级预览", () => {
     expect(report.blockingIssues.map((issue) => issue.code)).toContain("MIXED_TEMPLATE");
   });
 
+  it.each([
+    [
+      "navigate raw username",
+      "navigate",
+      "https://{{credential}}:literal@example.test/path",
+      false,
+    ],
+    [
+      "navigate raw password",
+      "navigate",
+      "https://literal:{{credential}}@example.test/path",
+      false,
+    ],
+    [
+      "wait raw multiple",
+      "wait",
+      "https://{{credential}}:prefix-{{secondary}}@example.test/path",
+      false,
+    ],
+    [
+      "navigate single encoded",
+      "navigate",
+      "https://%7B%7Bcredential%7D%7D:literal@example.test/path",
+      true,
+    ],
+    [
+      "wait double encoded",
+      "wait",
+      "https://literal:%257B%257Bcredential%257D%257D@example.test/path",
+      true,
+    ],
+  ])("%s 将 userinfo 变量标为敏感且不回显 default", (_label, type, value, encoded) => {
+    const canary = 'FLOWWEAVE_R3_UPGRADE_CANARY_"\\\n雪';
+    const step =
+      type === "navigate"
+        ? { id: "userinfo-sensitive", type: "navigate" as const, url: value }
+        : {
+            id: "userinfo-sensitive",
+            type: "wait" as const,
+            condition: "urlIncludes" as const,
+            urlIncludes: value,
+          };
+    const report = previewFlowV1Upgrade(
+      buildV1({
+        variables: [
+          { name: "credential", type: "string", required: false, defaultValue: canary },
+          ...(value.includes("secondary")
+            ? [
+                {
+                  name: "secondary",
+                  type: "string" as const,
+                  required: false,
+                  defaultValue: canary,
+                },
+              ]
+            : []),
+        ],
+        steps: [step],
+      }),
+    );
+    const serialized = JSON.stringify(report);
+    const escapedCanary = JSON.stringify(canary).slice(1, -1);
+
+    expect(report.fieldMappings).toContainEqual(
+      expect.objectContaining({ variableName: "credential", sensitive: true }),
+    );
+    if (value.includes("secondary")) {
+      expect(report.fieldMappings).toContainEqual(
+        expect.objectContaining({ variableName: "secondary", sensitive: true }),
+      );
+    }
+    expect(report.candidate === null).toBe(!encoded);
+    expect(serialized).not.toContain(canary);
+    expect(serialized).not.toContain(escapedCanary);
+  });
+
+  it("无 userinfo 的普通 query 变量保持非敏感", () => {
+    const report = previewFlowV1Upgrade(
+      buildV1({
+        variables: [
+          { name: "public_state", type: "string", required: false, defaultValue: "ready" },
+        ],
+        steps: [
+          {
+            id: "public-query",
+            type: "navigate",
+            url: "https://example.test/path?state={{public_state}}",
+          },
+        ],
+      }),
+    );
+
+    expect(report.fieldMappings).toContainEqual(
+      expect.objectContaining({ variableName: "public_state", sensitive: false }),
+    );
+  });
+
   it("类型不兼容的合法 v1 引用以结构化问题阻塞", () => {
     const report = previewFlowV1Upgrade(
       buildV1({

@@ -2,7 +2,7 @@ import { extractTemplateVariables, getSingleTemplateVariableName } from "@flowwe
 import { canonicalizeJson, sha256Hex } from "./canonical-json.js";
 import { parseFlowDocumentV1 } from "./parsers.js";
 import { isPasswordTarget } from "./portability.js";
-import { isSensitiveParameterKey } from "./sensitivity.js";
+import { inspectUrlUserInfo, isSensitiveParameterKey } from "./sensitivity.js";
 import {
   flowDocumentV2Schema,
   type FlowDocumentV2,
@@ -126,6 +126,7 @@ function collectAllowedSlots(step: MutableStep, stepIndex: number): Slot[] {
 }
 
 function collectSensitiveUrlVariableNames(value: string, target: Set<string>): void {
+  inspectUrlUserInfo(value).variableNames.forEach((name) => target.add(name));
   const parameterSections = [
     value.includes("?") ? (value.slice(value.indexOf("?") + 1).split("#", 1)[0] ?? "") : "",
     value.includes("#") ? value.slice(value.indexOf("#") + 1).replace(/^.*?\?/, "") : "",

@@ -284,6 +284,108 @@ describe("createPortableFlowDocument", () => {
     ]);
   });
 
+  it("在 navigate 与 wait 删除 raw/编码 userinfo 前硬化 username/password 全部变量", () => {
+    const canary = 'FLOWWEAVE_R3_USERINFO_CANARY_"\\\n雪';
+    const input = createFlow({
+      variables: [
+        { name: "username", type: "string", required: false, defaultValue: canary },
+        { name: "password", type: "string", required: false, defaultValue: canary },
+        { name: "tenant", type: "string", required: false, defaultValue: canary },
+        { name: "public_note", type: "string", required: false, defaultValue: "公开默认值" },
+      ],
+      steps: [
+        {
+          id: "navigate-raw-single-username",
+          type: "navigate",
+          url: "https://{{username}}:literal@example.test/raw-user",
+        },
+        {
+          id: "navigate-raw-single-password",
+          type: "navigate",
+          url: "https://literal:{{password}}@example.test/raw-password",
+        },
+        {
+          id: "wait-raw-multiple",
+          type: "wait",
+          condition: "urlIncludes",
+          urlIncludes:
+            "https://{{username}}:prefix-{{password}}-{{tenant}}@example.test/raw-multiple",
+        },
+        {
+          id: "navigate-single-encoded",
+          type: "navigate",
+          url: "https://%7B%7Busername%7D%7D:%7B%7Bpassword%7D%7D@example.test/encoded-one",
+        },
+        {
+          id: "wait-double-encoded",
+          type: "wait",
+          condition: "urlIncludes",
+          urlIncludes:
+            "https://%257B%257Busername%257D%257D:%257B%257Bpassword%257D%257D@example.test/encoded-two",
+        },
+        {
+          id: "literal-userinfo",
+          type: "navigate",
+          url: "https://literal-user:literal-password@example.test/literal",
+        },
+        {
+          id: "public-query",
+          type: "navigate",
+          url: "https://example.test/path?state={{public_note}}",
+        },
+      ],
+    });
+
+    const result = createPortableFlowDocument(input);
+    const serialized = JSON.stringify(result);
+    const escapedCanary = JSON.stringify(canary).slice(1, -1);
+
+    expect(serialized).not.toContain(canary);
+    expect(serialized).not.toContain(escapedCanary);
+    expect(result.document.variables).toEqual([
+      { name: "username", type: "string", required: true },
+      { name: "password", type: "string", required: true },
+      { name: "tenant", type: "string", required: true },
+      {
+        name: "public_note",
+        type: "string",
+        required: false,
+        defaultValue: "公开默认值",
+      },
+    ]);
+    expect(result.document.steps.slice(0, 6)).toEqual([
+      {
+        id: "navigate-raw-single-username",
+        type: "navigate",
+        url: "https://example.test/raw-user",
+      },
+      {
+        id: "navigate-raw-single-password",
+        type: "navigate",
+        url: "https://example.test/raw-password",
+      },
+      {
+        id: "wait-raw-multiple",
+        type: "wait",
+        condition: "urlIncludes",
+        urlIncludes: "https://example.test/raw-multiple",
+      },
+      { id: "navigate-single-encoded", type: "navigate", url: "https://example.test/encoded-one" },
+      {
+        id: "wait-double-encoded",
+        type: "wait",
+        condition: "urlIncludes",
+        urlIncludes: "https://example.test/encoded-two",
+      },
+      { id: "literal-userinfo", type: "navigate", url: "https://example.test/literal" },
+    ]);
+    expect(
+      result.warnings.filter((warning) => warning.code === "url-userinfo-removed"),
+    ).toHaveLength(6);
+    expect(JSON.stringify(result.warnings)).not.toContain(canary);
+    expect(JSON.stringify(result.warnings)).not.toContain(escapedCanary);
+  });
+
   it("变量化 OAuth hash 与 wait urlIncludes 中的敏感参数并保留普通片段", () => {
     const input = createFlow({
       steps: [

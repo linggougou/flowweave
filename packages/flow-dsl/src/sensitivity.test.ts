@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   SENSITIVE_PARAMETER_KEYS,
+  inspectUrlUserInfo,
   isSensitiveParameterKey,
   normalizeSensitiveParameterKey,
 } from "./index.js";
@@ -34,5 +35,39 @@ describe("统一敏感参数键合同", () => {
     expect(SENSITIVE_PARAMETER_KEYS).toEqual(
       expect.arrayContaining(["token", "key", "secret", "password", "auth"]),
     );
+  });
+
+  it.each([
+    ["raw username", "https://{{username}}:literal@example.test/path", ["username"]],
+    ["raw password", "https://literal:{{password}}@example.test/path", ["password"]],
+    [
+      "raw multiple",
+      "https://{{username}}:prefix-{{password}}-{{tenant}}@example.test/path",
+      ["username", "password", "tenant"],
+    ],
+    [
+      "single encoded",
+      "https://%7B%7Busername%7D%7D:%7B%7Bpassword%7D%7D@example.test/path",
+      ["username", "password"],
+    ],
+    [
+      "double encoded",
+      "https://%257B%257Busername%257D%257D:%257B%257Bpassword%257D%257D@example.test/path",
+      ["username", "password"],
+    ],
+  ])("识别并移除 %s userinfo", (_label, value, variableNames) => {
+    expect(inspectUrlUserInfo(value)).toEqual({
+      url: "https://example.test/path",
+      removed: true,
+      variableNames,
+    });
+  });
+
+  it.each([
+    "https://example.test/path?user={{username}}",
+    "/relative/path?state={{state}}",
+    "https://example.test/path#{{fragment}}",
+  ])("无 userinfo 时保持 %s 且不误判变量", (value) => {
+    expect(inspectUrlUserInfo(value)).toEqual({ url: value, removed: false, variableNames: [] });
   });
 });

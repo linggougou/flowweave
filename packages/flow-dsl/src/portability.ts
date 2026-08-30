@@ -5,7 +5,7 @@ import {
   type NormalizedStep,
   type Target,
 } from "./schema.js";
-import { isSensitiveParameterKey } from "./sensitivity.js";
+import { inspectUrlUserInfo, isSensitiveParameterKey } from "./sensitivity.js";
 
 export type FlowPortabilityWarningCode =
   | "secret-default-removed"
@@ -34,7 +34,6 @@ type FlowVariable = FlowDocument["variables"][number];
 const secretVariablePattern = /^secret_/i;
 const passwordTargetPattern = /password|passwd|passcode|pwd|密码|口令/i;
 const absoluteWindowsPathPattern = /^[a-z]:[\\/]/i;
-const urlWithAuthorityPattern = /^([a-z][a-z\d+.-]*:\/\/)([^/?#]*)(.*)$/i;
 
 function normalizeVariableToken(value: string, fallback: string): string {
   const normalized = value
@@ -186,6 +185,9 @@ function collectSensitiveUrlVariables(
   names: Set<string>,
   allowBareParameters = false,
 ): void {
+  for (const variableName of inspectUrlUserInfo(value).variableNames) {
+    names.add(variableName);
+  }
   const hashStart = value.indexOf("#");
   const beforeHash = hashStart >= 0 ? value.slice(0, hashStart) : value;
   const queryStart = beforeHash.indexOf("?");
@@ -238,29 +240,6 @@ function collectSensitiveVariableNames(steps: NormalizedStep[]): Set<string> {
     }
   }
   return names;
-}
-
-function stripUrlUserInfo(value: string): { url: string; removed: boolean } {
-  const match = urlWithAuthorityPattern.exec(value);
-  if (!match) {
-    return { url: value, removed: false };
-  }
-
-  const scheme = match[1];
-  const authority = match[2];
-  const rest = match[3];
-  if (scheme === undefined || authority === undefined || rest === undefined) {
-    return { url: value, removed: false };
-  }
-  const userInfoEnd = authority.lastIndexOf("@");
-  if (userInfoEnd < 0) {
-    return { url: value, removed: false };
-  }
-
-  return {
-    url: `${scheme}${authority.slice(userInfoEnd + 1)}${rest}`,
-    removed: true,
-  };
 }
 
 function sanitizeUrlParameters(
@@ -320,7 +299,7 @@ function sanitizeUrlValue(
   usedVariableNames: Set<string>,
   warnings: FlowPortabilityWarning[],
 ): string {
-  const withoutUserInfo = stripUrlUserInfo(value);
+  const withoutUserInfo = inspectUrlUserInfo(value);
   if (withoutUserInfo.removed) {
     warnings.push({
       code: "url-userinfo-removed",

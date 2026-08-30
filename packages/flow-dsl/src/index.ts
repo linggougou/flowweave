@@ -44,8 +44,10 @@ export {
 } from "./portability.js";
 export {
   SENSITIVE_PARAMETER_KEYS,
+  inspectUrlUserInfo,
   isSensitiveParameterKey,
   normalizeSensitiveParameterKey,
+  type UrlUserInfoInspection,
 } from "./sensitivity.js";
 export { canonicalizeJson, sha256Hex } from "./canonical-json.js";
 export {

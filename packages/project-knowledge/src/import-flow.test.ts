@@ -132,6 +132,17 @@ function expectNoCanaryInProjectStore(storePath: string): void {
   }
 }
 
+function expectNoSensitiveBytesInProjectStore(storePath: string, value: string): void {
+  const escaped = JSON.stringify(value).slice(1, -1);
+  for (const candidate of [storePath, `${storePath}-wal`, `${storePath}-shm`]) {
+    if (existsSync(candidate)) {
+      const bytes = readFileSync(candidate);
+      expect(bytes.includes(Buffer.from(value))).toBe(false);
+      expect(bytes.includes(Buffer.from(escaped))).toBe(false);
+    }
+  }
+}
+
 describe("ProjectKnowledgeRepository.importFlow", () => {
   let dataDir = "";
 
@@ -245,6 +256,68 @@ describe("ProjectKnowledgeRepository.importFlow", () => {
     expect(repo.listFlowVersions(targetProject.id, importedV2.flow.id)).toEqual([]);
     expect(repo.getFlowFieldRecentValues(targetProject.id, importedV2.flow.id)).toEqual({});
     expect(JSON.stringify(exportedV2)).not.toContain(dataDir);
+  });
+
+  it("v1 公开 export/import 对 raw 与编码 userinfo 变量硬化且目标存储零 canary", () => {
+    const canary = 'FLOWWEAVE_R3_REPOSITORY_CANARY_"\\\n雪';
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-import-v1-userinfo-"));
+    const repo = new ProjectKnowledgeRepository({ dataDir });
+    const sourceProject = repo.createProject("v1 userinfo 来源");
+    const targetProject = repo.createProject("v1 userinfo 目标");
+    const source = {
+      ...portableInput(),
+      projectId: sourceProject.id,
+      variables: [
+        { name: "username", type: "string" as const, required: false, defaultValue: canary },
+        { name: "password", type: "string" as const, required: false, defaultValue: canary },
+      ],
+      steps: [
+        {
+          id: "navigate-raw-userinfo",
+          type: "navigate" as const,
+          url: "https://{{username}}:{{password}}@example.test/raw",
+        },
+        {
+          id: "wait-encoded-userinfo",
+          type: "wait" as const,
+          condition: "urlIncludes" as const,
+          urlIncludes:
+            "https://%257B%257Busername%257D%257D:%257B%257Bpassword%257D%257D@example.test/encoded",
+        },
+      ],
+    };
+    repo.saveFlow(sourceProject.id, source);
+
+    const exported = repo.exportFlow(sourceProject.id, source.id);
+    const imported = repo.importFlow(targetProject.id, source);
+    const targetStore = resolveProjectStorePath(targetProject.id, dataDir);
+    const escapedCanary = JSON.stringify(canary).slice(1, -1);
+    const serializedExport = JSON.stringify(exported);
+    const serializedImport = JSON.stringify(imported);
+
+    expect(serializedExport).not.toContain(canary);
+    expect(serializedExport).not.toContain(escapedCanary);
+    expect(serializedImport).not.toContain(canary);
+    expect(serializedImport).not.toContain(escapedCanary);
+    expect(exported.schemaVersion === FLOW_SCHEMA_VERSION && exported.variables).toEqual([
+      { name: "username", type: "string", required: true },
+      { name: "password", type: "string", required: true },
+    ]);
+    expect(imported.flow.schemaVersion === FLOW_SCHEMA_VERSION && imported.flow.variables).toEqual([
+      { name: "username", type: "string", required: true },
+      { name: "password", type: "string", required: true },
+    ]);
+    expect(JSON.stringify(exported.steps)).not.toContain("@");
+    expect(JSON.stringify(imported.flow.steps)).not.toContain("@");
+    expect(imported.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "sensitive-variable-hardened", variableName: "username" }),
+        expect.objectContaining({ code: "sensitive-variable-hardened", variableName: "password" }),
+      ]),
+    );
+    expect(JSON.stringify(imported.warnings)).not.toContain(canary);
+    expect(JSON.stringify(imported.warnings)).not.toContain(escapedCanary);
+    expectNoSensitiveBytesInProjectStore(targetStore, canary);
   });
 
   it("未知版本和不安全 v2 upload 路径失败时零写入", () => {
