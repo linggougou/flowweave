@@ -1,0 +1,243 @@
+{
+  "review_id": "vnext-1-g1i-final-l3-r5-2026-08-30",
+  "task_id": "vNext-1-G1-I-R5",
+  "lane": "g1i-final-l3-r5",
+  "review_level": "L3",
+  "rubric_id": "vnext-1-integration-security-final-v1",
+  "candidate_sha": "e25ce4093456907715aae098973af6110729b135",
+  "implementation_sha": "e25ce4093456907715aae098973af6110729b135",
+  "plan_baseline_sha": "8f83604",
+  "artifact_refs": [
+    "doc:PROJECT_ROUTE_LOCK.md",
+    "doc:docs/exec-plans/active/vnext-1a-1b-data-foundation.md",
+    "doc:docs/design-docs/vnext-flow-schema-migration.md",
+    "review:.codex/reviews/vnext-1/g1i-final-l3/scorecard.json",
+    "review:.codex/reviews/vnext-1/g1i-final-l3-r2/scorecard.json",
+    "review:.codex/reviews/vnext-1/g1i-final-l3-r3/scorecard.json",
+    "review:.codex/reviews/vnext-1/g1i-final-l3-r4/scorecard.json",
+    "evidence:.codex/reviews/vnext-1/g1i-node20-evidence/report.md",
+    "evidence:.codex/reviews/vnext-1/g1i-node24-security-evidence/report.md",
+    "evidence:.codex/reviews/vnext-1/g1i-r4-fix-percent/report.md",
+    "code:packages/flow-dsl/src/sensitivity.ts",
+    "code:packages/flow-dsl/src/portability.ts",
+    "code:packages/flow-dsl/src/upgrade.ts",
+    "code:packages/project-knowledge/src/repository.ts",
+    "code:packages/local-api/src/index.test.ts",
+    "code:packages/runtime/src/playwright-launch-options.test.ts",
+    "code:apps/studio/src/App.run-safety.test.tsx",
+    "code:apps/studio/src/App.portability.test.tsx"
+  ],
+  "command_results": [
+    {
+      "cmd": "git status --short --branch && git rev-parse HEAD && git branch --show-current",
+      "status": "pass",
+      "result": "开始时 worktree clean；分支 codex/vnext-1-g1i-final-r5；HEAD=e25ce4093456907715aae098973af6110729b135。"
+    },
+    {
+      "cmd": "Node24 代码核对与差异审阅",
+      "status": "pass",
+      "result": "cccd818..e25ce40 仅新增 malformed-percent userinfo 修复与对应 DSL/Knowledge 攻击回归；产品实现只改 packages/flow-dsl/src/sensitivity.ts，未漂移到 Runtime、Studio、Local API、lockfile、路线锁或项目日志。"
+    },
+    {
+      "cmd": "Node24 clean rerun: flow-dsl targeted suite",
+      "status": "pass",
+      "result": "在当前候选 clean Node24 环境中，flow-dsl 的 sensitivity/portability/upgrade 组合测试 74/74 通过，覆盖 raw、一/两层编码、malformed percent、invalid UTF-8 与第三层 fail-closed。"
+    },
+    {
+      "cmd": "Node24 clean rerun: project-knowledge + local-api + runtime guard + studio guard",
+      "status": "pass",
+      "result": "当前候选在 clean Node24 环境中，project-knowledge import-flow 50/50、local-api index 14/14、runtime launch-options 47/47 与 studio run-safety/portability/run-input-state 14/14 全部通过；v2 继续在副作用前拒绝，v1 导入导出和恢复闭环正常。"
+    },
+    {
+      "cmd": "Node24 dedicated security evidence",
+      "status": "pass",
+      "result": "独立 Node24 安全 worktree 报告确认 CI=1 TURBO_FORCE=true pnpm smoke、lint、recorded replay 25/25、portability 10 steps、login 4/4、audit prod 高危 0 漏洞、Knowledge 18/18、Local API 14/14、Flow DSL 61/61、Studio guard 5/5 均通过；SQLite/WAL/SHM、execution、API、导出、错误对 canary 零命中。"
+    },
+    {
+      "cmd": "Node20.19.6 PATH/execPath + frozen force install",
+      "status": "pass",
+      "result": "PATH 置顶 /Users/ling/.nvm/versions/node/v20.19.6/bin；node -v=v20.19.6；process.execPath 指向该 Node；pnpm 9.15.4；CI=1 pnpm install --frozen-lockfile --force 成功，Electron bundle 重新解压、ad-hoc 重签名与严格签名校验通过。"
+    },
+    {
+      "cmd": "Node20.19.6 pnpm turbo typecheck test build --force --output-logs=errors-only",
+      "status": "pass",
+      "result": "39/39 tasks 成功，0 cached，耗时 1m25.312s。"
+    },
+    {
+      "cmd": "Node20.19.6 pnpm turbo test --force --output-logs=full",
+      "status": "pass",
+      "result": "21/21 tasks 成功，0 cached，759/759 tests 通过。逐包计数：shared 7、ui 14、network-intelligence 1、flow-dsl 109、ai-orchestrator 1、page-intelligence 22、recorder 54、extension 79、project-knowledge 154、runtime 52、local-api 14、web 33、studio 219。"
+    },
+    {
+      "cmd": "Node20.19.6 CI=1 pnpm e2e:login",
+      "status": "pass",
+      "result": "默认 v1 flow_e2e_login 4/4 steps success；运行目录已创建且执行状态 success。"
+    },
+    {
+      "cmd": "same-worktree Node20→Node24 native SQLite rerun",
+      "status": "pass",
+      "result": "在同一 review worktree 先执行 Node20 force install 后，直接切回 Node24 复跑 project-knowledge/local-api 命中 better-sqlite3 ABI mismatch（115→137）。该现象只反映原生依赖在双 Node 同 worktree 切换后需重新准备环境，不是当前候选的产品回归；clean Node24 主工作树复验与独立 Node24 安全 worktree 已证明候选行为正常。"
+    }
+  ],
+  "hard_gates": [
+    {
+      "id": "candidate-integrity-and-scope",
+      "status": "pass",
+      "evidence": [
+        "指定 worktree、branch、HEAD 正确且开始时 clean。",
+        "cccd818..e25ce40 的产品差异只触达 flow-dsl sensitivity helper 与攻击回归。",
+        "无 Runtime、Studio、Local API 产品实现、lockfile、路线锁或项目日志漂移。"
+      ]
+    },
+    {
+      "id": "all-seven-p1-regressions-closed",
+      "status": "pass",
+      "evidence": [
+        "前四轮七类 P1 的既有证据与回归包仍在；R5 修复报告新增 malformed-percent、invalid UTF-8 与第三层 fail-closed 矩阵。",
+        "当前候选 clean Node24 的 flow-dsl 74/74 与主工作树的 project-knowledge 50/50、local-api 14/14 均通过。",
+        "未发现新的 preview、candidate、export/import、API 或 SQLite/WAL/SHM canary 泄漏。"
+      ]
+    },
+    {
+      "id": "userinfo-helper-fail-closed-and-no-literal-leak",
+      "status": "pass",
+      "evidence": [
+        "inspectUrlUserInfo 只返回安全 URL、removed 与变量名；不返回 userinfo 字面值。",
+        "malformed percent 不再让相邻模板变量失敏；合法 Unicode 与无效 UTF-8 token 邻接模板的组合都已通过 targeted tests。",
+        "第三层编码 userinfo 固定报 VALIDATION_FAILED，错误 JSON 不含变量名、URL 或 canary。"
+      ]
+    },
+    {
+      "id": "legacy-consumers-and-v2-pre-side-effect-guard",
+      "status": "pass",
+      "evidence": [
+        "Runtime launch-options clean rerun 47/47 通过，包含对象/数组/字符串/缺失 schemaVersion 的副作用前拒绝。",
+        "Studio run-safety/portability/run-input-state clean rerun 14/14 通过；导入导出与运行确认未被本轮修复误伤。",
+        "独立 Node24 安全证据确认 v2 在 Knowledge execution、Runtime、Studio 与旧 recorder POST 上都维持副作用前拒绝。"
+      ]
+    },
+    {
+      "id": "node20-hard-gate",
+      "status": "pass",
+      "evidence": [
+        "Node20.19.6 PATH 与 process.execPath 已核对。",
+        "CI=1 pnpm install --frozen-lockfile --force 成功。",
+        "pnpm turbo typecheck test build --force 为 39/39、0 cached；pnpm turbo test --force 为 21/21、759/759；pnpm e2e:login 为 4/4 success。"
+      ]
+    },
+    {
+      "id": "node24-security-and-smoke-evidence",
+      "status": "pass",
+      "evidence": [
+        "独立 Node24 安全 worktree 报告已覆盖 smoke、recorded replay、portability、login、audit 与 canary 扫描。",
+        "当前候选 clean Node24 复验补齐了本轮新增 helper 修复与关键消费者回归。",
+        "same-worktree ABI mismatch 被界定为环境切换现象，不构成产品缺陷或门禁失败。"
+      ]
+    }
+  ],
+  "findings": [],
+  "p0_count": 0,
+  "p1_count": 0,
+  "p2_count": 0,
+  "dimensions": [
+    {
+      "name": "dsl_and_version_contract",
+      "score": 20,
+      "max_score": 20,
+      "reason": "v1/v2 解析、确定性升级预览与 userinfo fail-closed 合同一致，R4 暴露的 malformed-percent 失敏路径已关闭。",
+      "evidence_refs": [
+        "hard_gate:all-seven-p1-regressions-closed",
+        "hard_gate:userinfo-helper-fail-closed-and-no-literal-leak"
+      ]
+    },
+    {
+      "name": "revision_transactions_and_restore",
+      "score": 20,
+      "max_score": 20,
+      "reason": "Knowledge 与 Local API 的 revision/CAS、导入导出、恢复与零写入边界在 clean Node24 与既有独立安全证据中均通过。",
+      "evidence_refs": [
+        "hard_gate:all-seven-p1-regressions-closed",
+        "hard_gate:node24-security-and-smoke-evidence"
+      ]
+    },
+    {
+      "name": "sensitive_data_erasure_and_portability",
+      "score": 25,
+      "max_score": 25,
+      "reason": "preview、candidate、export/import、API、execution 与 SQLite/WAL/SHM 的 canary 零命中要求已满足，第三层编码稳定 fail closed。",
+      "evidence_refs": [
+        "hard_gate:all-seven-p1-regressions-closed",
+        "hard_gate:userinfo-helper-fail-closed-and-no-literal-leak"
+      ]
+    },
+    {
+      "name": "legacy_consumers_and_runtime_isolation",
+      "score": 15,
+      "max_score": 15,
+      "reason": "v1 默认路径保持可运行，v2 继续在 Knowledge/Runtime/Studio/旧入口的副作用前拒绝，没有把数据基础误包装为可执行能力。",
+      "evidence_refs": [
+        "hard_gate:legacy-consumers-and-v2-pre-side-effect-guard",
+        "hard_gate:node20-hard-gate"
+      ]
+    },
+    {
+      "name": "regression_dual_node_and_evidence_quality",
+      "score": 15,
+      "max_score": 15,
+      "reason": "Node20 真门禁、Node24 独立安全证据、当前候选 clean rerun 和 R4→R5 差异核对共同闭环，证据足以支持出 review。",
+      "evidence_refs": [
+        "hard_gate:node20-hard-gate",
+        "hard_gate:node24-security-and-smoke-evidence"
+      ]
+    },
+    {
+      "name": "scope_and_change_hygiene",
+      "score": 5,
+      "max_score": 5,
+      "reason": "本轮修复与评审包保持最小范围，未越权修改主链代码之外的内容。",
+      "evidence_refs": [
+        "hard_gate:candidate-integrity-and-scope"
+      ]
+    }
+  ],
+  "penalties": [],
+  "totals": {
+    "raw_score": 100,
+    "penalty_total": 0,
+    "final_score": 100
+  },
+  "total_score": 100,
+  "verdict": "PASS",
+  "required_fixes": [],
+  "nice_to_have": [
+    "后续若继续使用同一 worktree 交替执行 Node20 与 Node24 的原生 SQLite 测试，先约定显式重装或分 worktree 运行，避免 ABI 现象干扰评审效率。"
+  ],
+  "reviewers": [
+    {
+      "role": "generator",
+      "conclusion": "SUBMITTED",
+      "summary": "候选提交修复 malformed-percent userinfo 失敏问题，并附带针对性回归。"
+    },
+    {
+      "role": "verifier",
+      "conclusion": "PASS",
+      "summary": "Node20 真门禁、Node24 clean rerun 与独立安全证据共同证明 P0/P1 为零。"
+    },
+    {
+      "role": "strict_judge",
+      "conclusion": "PASS",
+      "summary": "合同一致性、数据安全、旧入口护栏与双 Node 回归全部闭环。"
+    },
+    {
+      "role": "anti_slop_reviewer",
+      "conclusion": "PASS",
+      "summary": "本轮没有再把正常路径外推为全覆盖，而是明确补齐 malformed/UTF-8/第三层矩阵与双 Node 硬证据。"
+    },
+    {
+      "role": "chief_reviewer",
+      "conclusion": "PASS",
+      "summary": "P0=0、P1=0、required_fixes 为空；vNext-1 G1-I 可退出 review。"
+    }
+  ],
+  "reviewed_at": "2026-08-30T18:13:29+08:00"
+}
