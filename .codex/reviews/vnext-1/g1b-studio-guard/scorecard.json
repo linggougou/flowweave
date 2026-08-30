@@ -1,0 +1,180 @@
+{
+  "review_id": "vnext-1-g1b-studio-guard-2026-08-30",
+  "task_id": "vNext-1B",
+  "lane": "g1b-studio-guard",
+  "review_level": "L2",
+  "rubric_id": "vnext-1-g1b-studio-guard-l2-v1",
+  "reviewed_sha": "66b3e84",
+  "artifact_refs": [
+    "baseline:fff2c89",
+    "reviewed-commit:66b3e84fc9486fc2930dda324163a0794a153509",
+    "branch:codex/vnext-1b-studio-guard-review",
+    "doc:PROJECT_ROUTE_LOCK.md",
+    "doc:docs/exec-plans/active/vnext-1a-1b-data-foundation.md",
+    "code:apps/studio/electron/services.ts",
+    "code:apps/studio/electron/services.test.ts"
+  ],
+  "command_results": [
+    {
+      "cmd": "git diff --stat fff2c89..66b3e84",
+      "status": "pass",
+      "result": "最终净 diff 仅命中 apps/studio/electron/services.ts 与 apps/studio/electron/services.test.ts，共 77 insertions、2 deletions。"
+    },
+    {
+      "cmd": "git diff --check fff2c89..66b3e84",
+      "status": "pass",
+      "result": "未发现空白符错误或大文件格式 churn。"
+    },
+    {
+      "cmd": "pnpm typecheck",
+      "status": "pass",
+      "result": "fresh turbo typecheck 21/21 successful。"
+    },
+    {
+      "cmd": "pnpm lint",
+      "status": "pass",
+      "result": "fresh turbo lint 13/13 successful。"
+    },
+    {
+      "cmd": "pnpm build",
+      "status": "pass",
+      "result": "fresh turbo build 13/13 successful。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/app-studio test",
+      "status": "pass",
+      "result": "串行 fresh 复跑通过：40 files / 214 tests passed。"
+    },
+    {
+      "cmd": "pnpm test",
+      "status": "pass",
+      "result": "全仓串行复跑通过：turbo 21/21 successful；其中 @flowweave/app-studio 为 40 files / 214 tests passed。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/app-studio test 与 pnpm test 并行首轮",
+      "status": "skipped",
+      "result": "首轮并行验证互相踩到 apps/studio/electron/flow-portability-files.test.ts 共用的 .tmp-g5-file-tests 临时目录，出现 ENOENT；随后单文件证明和串行重跑均全绿，判定为既有测试隔离问题，不属于本候选净 diff。"
+    },
+    {
+      "cmd": "pnpm exec vitest run electron/flow-portability-files.test.ts",
+      "status": "pass",
+      "result": "单文件独立复核通过：14 tests passed，证明首轮 ENOENT 来自并行测试互扰，而非候选回归。"
+    }
+  ],
+  "hard_gates": [
+    {
+      "id": "net-diff-scope-clean",
+      "status": "pass",
+      "evidence": [
+        "git diff fff2c89..66b3e84 的净改动只在 Studio 主进程 services 与对应测试文件。",
+        "git diff --check fff2c89..66b3e84 无格式化噪音或无关大文件 churn。"
+      ]
+    },
+    {
+      "id": "studio-guard-after-resolve-before-side-effects",
+      "status": "pass",
+      "evidence": [
+        "apps/studio/electron/services.ts:621-640 新增 assertStudioRunSchemaVersion，对非 v1 直接抛 FLOW_SCHEMA_MISMATCH。",
+        "apps/studio/electron/services.ts:662-669 在 resolveFlowForRun 之后立刻调用 guard，且早于 apiAllocateRunDirectory、resolveRunEnvironment/saveEnvironment、ensureStorageStatePathExists。",
+        "apps/studio/electron/services.ts:671-687 与 689-695 证明 guard 也早于 Chromium 检查、executeFlow、progress 回调、apiSaveExecution 与 apiSavePageSnapshot。"
+      ]
+    },
+    {
+      "id": "safe-diagnostics-no-payload-leak",
+      "status": "pass",
+      "evidence": [
+        "apps/studio/electron/services.ts:626-631 将 receivedVersion 归一化为 finite number / \"missing\" / \"invalid\"，不把 raw object/array/string 原样放入 details。",
+        "apps/studio/electron/services.test.ts:361-408 覆盖 v2、对象、数组、字符串、缺失五类 schemaVersion，并断言 JSON.stringify(error) 不包含 studio-schema-canary/private-token。"
+      ]
+    },
+    {
+      "id": "zero-side-effects-on-non-v1",
+      "status": "pass",
+      "evidence": [
+        "apps/studio/electron/services.test.ts:401-407 断言非 v1 输入下 apiAllocateRunDirectory、isChromiumInstalled、executeFlow、onProgress、apiSaveExecution、apiSavePageSnapshot、saveEnvironment 全部未调用。"
+      ]
+    },
+    {
+      "id": "v1-regression-unchanged",
+      "status": "pass",
+      "evidence": [
+        "fresh pnpm --filter @flowweave/app-studio test 通过 40 files / 214 tests。",
+        "fresh pnpm test 全仓 21/21 successful，未见 Studio v1 回归。"
+      ]
+    },
+    {
+      "id": "fresh-typecheck-lint-build-green",
+      "status": "pass",
+      "evidence": [
+        "fresh pnpm typecheck -> 21/21 successful。",
+        "fresh pnpm lint -> 13/13 successful。",
+        "fresh pnpm build -> 13/13 successful。"
+      ]
+    }
+  ],
+  "findings": [],
+  "p0_count": 0,
+  "p1_count": 0,
+  "p2_count": 0,
+  "dimensions": [
+    {
+      "name": "correctness",
+      "score": 25,
+      "max_score": 25,
+      "reason": "Studio guard 的插入位置与路线锁/执行计划要求一致，非 v1 在所有运行副作用前被拒绝，v1 路径保持不变。"
+    },
+    {
+      "name": "security",
+      "score": 25,
+      "max_score": 25,
+      "reason": "raw/cast schemaVersion 不再把任意 payload 挂进 FlowWeaveError.details，参数化测试对对象/数组/字符串/缺失都验证了泄漏为零。"
+    },
+    {
+      "name": "regression_safety",
+      "score": 20,
+      "max_score": 20,
+      "reason": "Studio 定向测试、全仓测试、typecheck、lint、build 全绿，且零副作用断言覆盖 run directory、环境保存、Chromium、Runtime、progress、execution/page snapshot。"
+    },
+    {
+      "name": "route_discipline",
+      "score": 10,
+      "max_score": 10,
+      "reason": "最终净 diff 严格停留在 G1B 的 Studio guard 与测试补强，没有混入无关实现。"
+    },
+    {
+      "name": "evidence_quality",
+      "score": 20,
+      "max_score": 20,
+      "reason": "同时具备源码顺序审查、参数化安全测试、单文件排干扰复核和 fresh 全仓门禁四层证据。"
+    }
+  ],
+  "penalties": [],
+  "totals": {
+    "raw_score": 100,
+    "penalty_total": 0,
+    "final_score": 100
+  },
+  "verdict": "PASS",
+  "required_fixes": [],
+  "nice_to_have": [
+    "后续 G1-I 集成会签可顺手把 flow-portability-files 的固定临时目录改为每次用例唯一目录，减少并行验证互扰；这不是本候选的 required fix。"
+  ],
+  "reviewers": [
+    {
+      "role": "verifier",
+      "conclusion": "PASS",
+      "summary": "guard 顺序、无泄漏、零副作用与 v1 回归四项关键合同均已通过。"
+    },
+    {
+      "role": "strict_judge",
+      "conclusion": "PASS",
+      "summary": "未发现会阻断 G1B 出口的正确性、安全或行为回归问题。"
+    },
+    {
+      "role": "chief_reviewer",
+      "conclusion": "PASS",
+      "summary": "该候选已满足 Studio 旧入口 guard 的独立审查出口，可进入主代理后续集成核对。"
+    }
+  ],
+  "reviewed_at": "2026-08-30T15:05:00+08:00"
+}
