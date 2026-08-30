@@ -9,6 +9,7 @@ import type { ExecutionWithProject } from "@flowweave/project-knowledge";
 import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
 
 const mockExecuteFlow = vi.fn();
+const mockIsChromiumInstalled = vi.fn(() => true);
 const mockApiAllocateRunDirectory = vi.fn();
 const mockApiCreateProject = vi.fn();
 const mockApiDeleteExecution = vi.fn();
@@ -43,7 +44,7 @@ type ServicesModule = {
 };
 
 vi.mock("./env-setup.js", () => ({
-  isChromiumInstalled: () => true,
+  isChromiumInstalled: mockIsChromiumInstalled,
 }));
 
 vi.mock("electron", () => ({
@@ -167,6 +168,8 @@ describe("getExecution 缓存命中策略", () => {
     mockConfigureLocalKnowledgeRepository.mockReset();
     mockProjectKnowledgeRepositoryCtor.mockReset();
     mockExecuteFlow.mockReset();
+    mockIsChromiumInstalled.mockReset();
+    mockIsChromiumInstalled.mockReturnValue(true);
     mockRepoGetDefaultEnvironment.mockReset();
     mockRepoSaveEnvironment.mockReset();
     mockRepoGetLatestExecutionForFlow.mockReset();
@@ -354,6 +357,56 @@ describe("getExecution 缓存命中策略", () => {
     expect(mockExecuteFlow).not.toHaveBeenCalled();
     expect(mockApiSaveExecution).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["v2", 2, 2],
+    ["对象", { secret: "studio-schema-canary", nested: { token: "private-token" } }, "invalid"],
+    ["数组", [2, "studio-schema-canary"], "invalid"],
+    ["字符串", "studio-schema-canary", "invalid"],
+    ["缺失", undefined, "missing"],
+  ])(
+    "runFlow 在任何运行副作用前安全拒绝%s schemaVersion",
+    async (_label, schemaVersion, expectedVersion) => {
+      const onProgress = vi.fn();
+      mockApiGetFlow.mockResolvedValue({
+        ...buildFlow(),
+        schemaVersion,
+      });
+
+      const { runFlow } = await loadServicesModule();
+      let receivedError: unknown;
+      try {
+        await runFlow("project_service_history", "flow_service_history", {
+          showBrowser: false,
+          executionId: "exec_schema_guard",
+          environmentName: "不得保存的环境",
+          onProgress,
+        });
+      } catch (error) {
+        receivedError = error;
+      }
+
+      expect(receivedError).toEqual(
+        expect.objectContaining({
+          name: "FlowWeaveError",
+          code: "FLOW_SCHEMA_MISMATCH",
+          details: {
+            expectedVersion: FLOW_SCHEMA_VERSION,
+            receivedVersion: expectedVersion,
+          },
+        }),
+      );
+      expect(JSON.stringify(receivedError)).not.toContain("studio-schema-canary");
+      expect(JSON.stringify(receivedError)).not.toContain("private-token");
+      expect(mockApiAllocateRunDirectory).not.toHaveBeenCalled();
+      expect(mockIsChromiumInstalled).not.toHaveBeenCalled();
+      expect(mockExecuteFlow).not.toHaveBeenCalled();
+      expect(onProgress).not.toHaveBeenCalled();
+      expect(mockApiSaveExecution).not.toHaveBeenCalled();
+      expect(mockApiSavePageSnapshot).not.toHaveBeenCalled();
+      expect(mockRepoSaveEnvironment).not.toHaveBeenCalled();
+    },
+  );
 
   it("显式清空 baseUrl 与 storageStatePath 时，不再回退到旧默认环境", async () => {
     mockApiGetFlow.mockResolvedValue(

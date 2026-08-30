@@ -28,7 +28,7 @@ import {
   type ExecutionOptions,
   type ExecutionResult as RuntimeExecutionResult,
 } from "@flowweave/runtime";
-import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
+import { FLOW_SCHEMA_VERSION, FlowWeaveError } from "@flowweave/shared";
 import { isChromiumInstalled } from "./env-setup.js";
 import type {
   ExecutionStepLog,
@@ -618,6 +618,27 @@ function toStudioFlowRunInputVariables(
   );
 }
 
+function assertStudioRunSchemaVersion(flow: FlowDocument): void {
+  const receivedSchemaVersion = (flow as { schemaVersion?: unknown }).schemaVersion;
+  if (receivedSchemaVersion === FLOW_SCHEMA_VERSION) {
+    return;
+  }
+  const safeReceivedVersion =
+    typeof receivedSchemaVersion === "number" && Number.isFinite(receivedSchemaVersion)
+      ? receivedSchemaVersion
+      : receivedSchemaVersion === undefined
+        ? "missing"
+        : "invalid";
+  throw new FlowWeaveError(
+    "FLOW_SCHEMA_MISMATCH",
+    `当前 Studio 运行入口仅支持 Flow Schema v${FLOW_SCHEMA_VERSION}`,
+    {
+      expectedVersion: FLOW_SCHEMA_VERSION,
+      receivedVersion: safeReceivedVersion,
+    },
+  );
+}
+
 export type RunFlowServiceOptions = RunFlowOptions &
   Pick<ExecutionOptions, "executionId" | "signal" | "onProgress">;
 
@@ -639,6 +660,7 @@ export async function runFlow(
   options: RunFlowServiceOptions = {},
 ): Promise<StudioExecution> {
   const flow = await resolveFlowForRun(projectId, flowId);
+  assertStudioRunSchemaVersion(flow);
   const startedAt = new Date().toISOString();
   const executionId = options.executionId ?? randomUUID();
   const artifactDir = await apiAllocateRunDirectory(projectId, executionId);
