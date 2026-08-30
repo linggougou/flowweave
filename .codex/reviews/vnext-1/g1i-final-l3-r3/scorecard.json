@@ -1,0 +1,295 @@
+{
+  "review_id": "vnext-1-g1i-final-l3-r3-2026-08-30",
+  "task_id": "vNext-1-G1-I-R3",
+  "lane": "g1i-final-l3-r3",
+  "review_level": "L3",
+  "rubric_id": "vnext-1-integration-security-final-v1",
+  "candidate_sha": "f59ccbcd5cacf03a82a5fef0c223a38acd0f0e57",
+  "implementation_sha": "f59ccbcd5cacf03a82a5fef0c223a38acd0f0e57",
+  "plan_baseline_sha": "8f83604",
+  "artifact_refs": [
+    "doc:PROJECT_ROUTE_LOCK.md",
+    "doc:docs/exec-plans/active/vnext-1a-1b-data-foundation.md",
+    "doc:docs/design-docs/vnext-flow-schema-migration.md",
+    "doc:docs/design-docs/vnext-runtime-input-session.md",
+    "doc:docs/design-docs/vnext-studio-linear-template-editor.md",
+    "review:.codex/reviews/vnext-1/g1i-final-l3/scorecard.json",
+    "review:.codex/reviews/vnext-1/g1i-final-l3-r2/scorecard.json",
+    "evidence:.codex/reviews/vnext-1/g1i-fix-knowledge/report.md",
+    "evidence:.codex/reviews/vnext-1/g1i-fix-portability/report.md",
+    "evidence:.codex/reviews/vnext-1/g1i-r2-fix-orphan/report.md",
+    "evidence:.codex/reviews/vnext-1/g1i-r2-fix-sensitivity/report.md",
+    "code:packages/flow-dsl/src/sensitivity.ts",
+    "code:packages/flow-dsl/src/portability.ts",
+    "code:packages/flow-dsl/src/upgrade.ts",
+    "code:packages/project-knowledge/src/repository.ts"
+  ],
+  "command_results": [
+    {
+      "cmd": "git status --short --branch && git rev-parse HEAD && git branch --show-current",
+      "status": "pass",
+      "result": "开始时工作树 clean；分支 codex/vnext-1-g1i-final-r3；HEAD=f59ccbcd5cacf03a82a5fef0c223a38acd0f0e57。"
+    },
+    {
+      "cmd": "CI=1 pnpm install --frozen-lockfile",
+      "status": "pass",
+      "result": "Node24.14.0 下复用并安装 801 个包；Electron bundle 修复、重签名与严格签名校验成功；lockfile 未变化。"
+    },
+    {
+      "cmd": "独立攻击：历史删除/改名、password-hinted literal、upload、encoded URL、execution snapshot/variables 与旧版本恢复",
+      "status": "pass",
+      "result": "升级 revision=4；3 个旧版本、execution API 与 SQLite 对全部 raw/escaped canary 零命中；恢复旧 v1 到 revision=5 后仍零命中。"
+    },
+    {
+      "cmd": "独立攻击：孤立 execution variables 与已定义非敏感变量",
+      "status": "pass",
+      "result": "secret_orphan、Secret_API_Key、secret-password、SECRET.PASSWORD、普通 telemetryNote 及已定义 secret_password 全部清除；已定义非敏感 account/safe_note 原样保留；API 与 SQLite raw/escaped 零命中。"
+    },
+    {
+      "cmd": "独立攻击：物理扫描失败",
+      "status": "pass",
+      "result": "返回不含 canary 的 FLOW_PERSISTENCE_FAILED；current/schema/revision/version/execution 与 SQL recent row 逐字段不变。"
+    },
+    {
+      "cmd": "独立攻击：upgrade:after-physical-erasure-check 最后事务故障",
+      "status": "pass",
+      "result": "返回 FLOW_PERSISTENCE_FAILED；current/schema/revision/version/recent/execution 完全相等，孤立变量清理也随事务回滚。"
+    },
+    {
+      "cmd": "独立攻击：统一 helper 冻结与规范化",
+      "status": "pass",
+      "result": "SENSITIVE_PARAMETER_KEYS 为 frozen；push/赋值均抛错且内容不变；raw key、混合大小写、点/下划线/短横线、单层/双层编码全部命中，monkey/password_policy/authentication/第三层编码不误判。"
+    },
+    {
+      "cmd": "独立攻击：v2 navigate/wait URL 20 组合 import/export",
+      "status": "pass",
+      "result": "10 类 URL × navigate/wait 共 20 例；importRejected、importZeroWrite、SQLite/WAL/SHM raw+escaped clean、importErrorClean、exportRejected、exportErrorClean 均 20/20。覆盖 raw key、大小写、点/下划线/短横线、query/hash/malformed/userinfo、单层/双层编码。"
+    },
+    {
+      "cmd": "独立攻击：Flow DSL v1 userinfo 单/多变量、raw/percent-encoded、navigate/wait",
+      "status": "fail",
+      "result": "8/8 组合的 createPortableFlowDocument 都只给 url-userinfo-removed warning，却保留 username/credential default canary；upgrade fieldMappings 8/8 均 sensitive=false。4 个 raw 组合因 MIXED_TEMPLATE 阻塞；4 个 encoded 组合 blockingIssues=[] 且 preview candidate 含两个默认 canary。"
+    },
+    {
+      "cmd": "独立攻击：ProjectKnowledgeRepository v1 userinfo export/import",
+      "status": "fail",
+      "result": "navigate 与 wait authority 引用普通 credential 变量时，exportFlow 移除 userinfo 但 variables.defaultValue 仍含复杂 canary；importFlow 同样返回并写入 canary，目标 store.sqlite JSON-escaped bytes 命中。"
+    },
+    {
+      "cmd": "Node24 定向测试",
+      "status": "pass",
+      "result": "Flow DSL 77/77；Knowledge 150/150；Local API 14/14；Runtime launch/schema guard 9/9；Studio 219/219；合计 469/469 tests。"
+    },
+    {
+      "cmd": "Node24 修改包 typecheck/lint/build",
+      "status": "pass",
+      "result": "Flow DSL、Knowledge、Local API typecheck 与 lint 全通过；Flow DSL、Knowledge 及其依赖、Runtime、Local API build 全通过。"
+    },
+    {
+      "cmd": "pnpm e2e:login",
+      "status": "pass",
+      "result": "Node24 v1 flow_e2e_login 状态 success，4/4 steps。"
+    },
+    {
+      "cmd": "Node20 frozen force install 与 39/39 full gate",
+      "status": "skipped",
+      "result": "尚未开始 Node20 重装时已由公开路径确定 userinfo P1；按协调指令停止长耗时矩阵。未执行、未虚报 execPath、39/39、总测试数或 Knowledge150/DSL77 等 Node20 结果；修复后最终复审仍必须完成。"
+    },
+    {
+      "cmd": "git diff --check / scope / lockfile hash / credential pattern scan",
+      "status": "pass",
+      "result": "27cbf0a..f59ccbc 产品改动仅 Flow DSL 与 Knowledge；Runtime、Studio、Local API、配置、lockfile、路线锁、项目日志无漂移；lockfile hash 保持 e44abecd39109efc23b635c979b345ec31a745ab；常见真实凭证模式零命中。"
+    }
+  ],
+  "hard_gates": [
+    {
+      "id": "candidate-integrity-and-scope",
+      "status": "pass",
+      "evidence": [
+        "指定 worktree、branch、HEAD 正确且开始时 clean。",
+        "修复产品 diff 仅 Flow DSL/Knowledge 与对应测试，未改变 Runtime、Studio、Local API、依赖、lockfile、路线或项目日志。",
+        "本轮只生成最终 R3 评审包。"
+      ]
+    },
+    {
+      "id": "first-review-history-and-atomic-p1s",
+      "status": "pass",
+      "evidence": [
+        "历史删除/改名、密码、上传、URL、execution 与恢复攻击均 API/物理零命中。",
+        "物理扫描失败及最后事务故障均完全回滚，提交后无失败但已写入窗口。"
+      ]
+    },
+    {
+      "id": "r2-orphan-execution-variable-p1",
+      "status": "pass",
+      "evidence": [
+        "四敏感名称与普通未知名均保守删除。",
+        "已定义非敏感 account/safe_note 保留；复杂值在 API 与物理文件零命中。"
+      ]
+    },
+    {
+      "id": "r2-unified-sensitive-key-p1",
+      "status": "pass",
+      "evidence": [
+        "公开 helper 冻结且模块私有 Set 不受调用者修改。",
+        "Flow DSL 与 Knowledge 已删除平行 key 集合/regex；v2 20 类 URL 双端攻击全部通过。"
+      ]
+    },
+    {
+      "id": "v1-userinfo-variable-sensitivity",
+      "status": "fail",
+      "evidence": [
+        "portability.ts:184-208 只收集 query/hash 参数引用，不收集 authority userinfo 变量；243 起的 stripUrlUserInfo 仅删除 URL 文本。",
+        "portability.ts:498-528 因 sensitiveVariableNames 缺失而保留 default；upgrade.ts:128-149 同样只扫描 query/hash，userinfo fieldMappings 保持 sensitive=false。",
+        "公开 exportFlow/importFlow 与 percent-encoded preview candidate 均稳定暴露复杂 canary。"
+      ]
+    },
+    {
+      "id": "v1-positive-and-v2-non-executable",
+      "status": "pass",
+      "evidence": [
+        "Node24 v1 login 4/4。",
+        "Runtime guard 9/9、Studio 219/219、Knowledge 150/150、Local API 14/14；v2 仍在副作用和 execution 写入前拒绝。"
+      ]
+    },
+    {
+      "id": "node24-equivalent-targeted",
+      "status": "pass",
+      "evidence": [
+        "本 worktree Node24 修改包与消费者定向测试共 469/469。",
+        "修改包 typecheck/lint/build 通过；主集成另有协调输入称 52/52、0 cache，本裁决不以该未落本评审包的转述替代本地证据。"
+      ]
+    },
+    {
+      "id": "node20-combined-candidate",
+      "status": "skipped",
+      "evidence": [
+        "本轮未开始 Node20 重装前已确认 P1，协调指令允许停止长矩阵。",
+        "没有把祖先 Node20 证据外推为 f59ccbc 的 39/39 或 Knowledge150/DSL77 结果。"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "P1-V1-USERINFO-VARIABLE-DEFAULT-LEAK",
+      "severity": "P1",
+      "title": "v1 userinfo 中的变量未被标记敏感，默认秘密可经预览、导入和导出泄漏",
+      "location": [
+        "packages/flow-dsl/src/portability.ts:184",
+        "packages/flow-dsl/src/portability.ts:210",
+        "packages/flow-dsl/src/portability.ts:243",
+        "packages/flow-dsl/src/portability.ts:498",
+        "packages/flow-dsl/src/upgrade.ts:128",
+        "packages/project-knowledge/src/repository.ts:1586",
+        "packages/project-knowledge/src/repository.ts:1602"
+      ],
+      "impact": "v1 安全导出/导入虽然从 URL 删除 authority userinfo，却继续携带其 username/password 来源变量的 defaultValue；导入会把秘密写入目标 SQLite。percent-encoded userinfo 还绕过升级预览的模板识别，使字段被标为非敏感、blockingIssues 为空并把默认秘密放入 candidate/API。",
+      "evidence": "navigate/wait × raw/encoded × 单/多变量共 8 例均 portable default 泄漏且 mapping sensitive=false；4 个 encoded 例的 preview candidate 含两个 canary。公开 repository 探针中 exportContainsCanary=true、importContainsCanary=true、目标 store.sqlite escaped=true。",
+      "required_fix": "把 authority userinfo 变量提取并入与 query/hash 相同的统一敏感变量识别链：同时覆盖 navigate.url 与 wait.urlIncludes、username/password 两侧、单变量与多变量/混合 authority、raw 及有限 percent decode。portability 必须在 strip 前收集全部引用、删除相关 default 并 harden variable；upgrade mapping 必须 sensitive=true 且不能生成含 canary candidate。为 v1 export/import、upgrade preview/commit、API 与 SQLite/WAL/SHM raw/escaped 增加零 canary 测试；literal userinfo 继续安全删除，错误与 warning 不得回显值。"
+    }
+  ],
+  "p0_count": 0,
+  "p1_count": 1,
+  "p2_count": 0,
+  "dimensions": [
+    {
+      "name": "dsl_and_version_contract",
+      "score": 15,
+      "max_score": 20,
+      "reason": "统一 key helper、strict v2 与升级主体稳定，但 userinfo 变量未进入 portability/upgrade 的敏感映射，encoded authority 形成预览旁路。",
+      "evidence_refs": [
+        "finding:P1-V1-USERINFO-VARIABLE-DEFAULT-LEAK",
+        "hard_gate:r2-unified-sensitive-key-p1"
+      ]
+    },
+    {
+      "name": "revision_transactions_and_restore",
+      "score": 20,
+      "max_score": 20,
+      "reason": "历史清理、恢复、物理扫描与最终事务故障均通过独立 API/SQL/物理验证。",
+      "evidence_refs": [
+        "hard_gate:first-review-history-and-atomic-p1s"
+      ]
+    },
+    {
+      "name": "sensitive_data_erasure_and_portability",
+      "score": 10,
+      "max_score": 25,
+      "reason": "前两轮五项 P1 的明确攻击均修复，但 v1 userinfo 变量 default 可进入 preview/export/import/SQLite，仍违反零秘密硬门。",
+      "evidence_refs": [
+        "finding:P1-V1-USERINFO-VARIABLE-DEFAULT-LEAK",
+        "hard_gate:r2-orphan-execution-variable-p1"
+      ]
+    },
+    {
+      "name": "legacy_consumers_and_runtime_isolation",
+      "score": 15,
+      "max_score": 15,
+      "reason": "v1 登录闭环通过，v2 Runtime/Studio/Knowledge execution 继续副作用前拒绝。",
+      "evidence_refs": [
+        "hard_gate:v1-positive-and-v2-non-executable"
+      ]
+    },
+    {
+      "name": "regression_dual_node_and_evidence_quality",
+      "score": 8,
+      "max_score": 15,
+      "reason": "Node24 等价定向与修改包静态/构建门禁充分；Node20 组合候选未运行，且新增测试未覆盖 userinfo 变量来源。",
+      "evidence_refs": [
+        "hard_gate:node24-equivalent-targeted",
+        "hard_gate:node20-combined-candidate",
+        "finding:P1-V1-USERINFO-VARIABLE-DEFAULT-LEAK"
+      ]
+    },
+    {
+      "name": "scope_and_change_hygiene",
+      "score": 5,
+      "max_score": 5,
+      "reason": "候选改动保持在 Flow DSL、Knowledge 与证据测试内，无依赖、lockfile、路线或运行日志越界。",
+      "evidence_refs": [
+        "hard_gate:candidate-integrity-and-scope"
+      ]
+    }
+  ],
+  "penalties": [],
+  "totals": {
+    "raw_score": 73,
+    "penalty_total": 0,
+    "final_score": 73
+  },
+  "total_score": 73,
+  "verdict": "REVISE",
+  "required_fixes": [
+    "统一识别并安全化 navigate.url 与 wait.urlIncludes authority userinfo 中的单/多变量引用，覆盖 raw/percent-encoded username/password；portability 删除 default、upgrade mapping 标敏感且 candidate 不含值，v1 import/export/upgrade/API/SQLite/WAL/SHM raw+escaped 全部零 canary。",
+    "userinfo 修复后在组合候选上完成真实 Node20.19.6 frozen force install、execPath 核对、39/39 uncached typecheck/test/build，并记录总测试数及 Knowledge150、DSL77、Local14、Runtime guard、Studio、v1 login。"
+  ],
+  "nice_to_have": [],
+  "reviewers": [
+    {
+      "role": "generator",
+      "conclusion": "SUBMITTED",
+      "summary": "四份修复报告声明首审/R2 五项 P1 已关闭，并提供 Node24 定向证据。"
+    },
+    {
+      "role": "verifier",
+      "conclusion": "REVISE",
+      "summary": "五项既有 P1 重放通过，但 v1 userinfo 变量默认值在公开导入导出和预览路径稳定泄漏。"
+    },
+    {
+      "role": "strict_judge",
+      "conclusion": "REVISE",
+      "summary": "零秘密硬门失败且 Node20 组合证据未完成，不能离开 review。"
+    },
+    {
+      "role": "anti_slop_reviewer",
+      "conclusion": "REVISE",
+      "summary": "报告称 userinfo 无条件视为凭据，但测试只覆盖字面 userinfo/v2 拒绝，没有验证 userinfo 引用变量的 default 与 mapping，结论外推过度。"
+    },
+    {
+      "role": "chief_reviewer",
+      "conclusion": "REVISE",
+      "summary": "P0=0、P1=1、required_fixes 非空；修复后必须重新独立复审。"
+    }
+  ],
+  "reviewed_at": "2026-08-30T17:27:06+08:00"
+}
