@@ -7293,3 +7293,4 @@
 - 使用 TDD、security-review、verification-loop 与 judge-harness；Generator 不自审，Judge 只能写 `.codex/reviews/vnext-1/**`，不得修改候选实现或代替主代理集成。
 - CodeGraph 当前无可调用入口。原用途：结构调用关系与影响分析。替代流程：`rg`、源码、测试与三路只读 Sub-Agent 交叉映射；替代结果：已定位所有旧写入/运行入口和事务缺口。
 - 已创建 `docs/change-requests/2026-08-30-vnext-implementation-unfreeze.md`、`docs/exec-plans/active/vnext-1a-1b-data-foundation.md` 和 `.codex/context-summary-vnext-1a-1b-data-foundation.md`，并更新路线锁与 post-v1 总路线。
+- G1A 首轮更广 typecheck 发现通用 parser 返回 v1/v2 联合后，`ai-orchestrator` 等既有 v1-only 消费者仍隐式依赖 v1 返回类型。该缺口已进入 G1A-C：在 DSL 合入后以独立兼容 worktree 将旧消费者显式锁定 `parseFlowDocumentV1`；不把通用 parser 退回 v1，也不提前开放这些入口的 v2 能力。

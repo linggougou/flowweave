@@ -47,16 +47,18 @@ v1 Flow
 
 退出门禁：flow-dsl 单元/fixture、recorder、portability、typecheck、lint 全绿；无数据库、Electron 或 Studio UI 改动；独立 Judge PASS。
 
-### G1A-C：旧执行入口兼容护栏
+### G1A-C：旧消费者与执行入口兼容护栏
 
-所有权：`packages/runtime` 的入口 guard 与最小测试。
+所有权：`packages/runtime` 的入口 guard；以及现有 v1-only 消费者对 `parseFlowDocumentV1` 的显式锁定与最小回归。后者只解决联合 parser 上线后的类型/版本边界，不为这些消费者增加 v2 能力。
 
 实施顺序：
 
 1. 用测试证明 v2 在创建 run directory、发 progress、启动 Chromium 或写 artifact 前被拒绝。
 2. guard 只接受 v1，错误可诊断；不引入 v2 执行分支。
+3. `ai-orchestrator`、Extension 导入/导出、旧 Studio portability、Local API recorder POST、Knowledge legacy repository/debug 路径中仍属于 v1-only 的消费者改用显式 v1 parser；通用 parser 不得因兼容压力退回 v1 返回类型。
+4. 每个旧写入口对 v2 明确拒绝且无写入；Knowledge 的受控 v2 读取/保存只在 G1B 新 API 中开放。
 
-退出门禁：Runtime 定向测试与 v1 回归全绿；独立 Judge PASS。该轨可与 G1A 并行开发，但合入时依赖 G1A 的显式版本合同。
+退出门禁：Runtime 定向测试、全仓 typecheck 和相关 v1 消费者回归全绿；独立 Judge PASS。Runtime guard 可与 G1A 并行开发；旧消费者锁定补丁在 G1A 合入后执行。
 
 ### G1B：Knowledge revision 与原子升级
 
