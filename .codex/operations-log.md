@@ -7295,3 +7295,13 @@
 - 已创建 `docs/change-requests/2026-08-30-vnext-implementation-unfreeze.md`、`docs/exec-plans/active/vnext-1a-1b-data-foundation.md` 和 `.codex/context-summary-vnext-1a-1b-data-foundation.md`，并更新路线锁与 post-v1 总路线。
 - G1A 首轮更广 typecheck 发现通用 parser 返回 v1/v2 联合后，`ai-orchestrator` 等既有 v1-only 消费者仍隐式依赖 v1 返回类型。该缺口已进入 G1A-C：在 DSL 合入后以独立兼容 worktree 将旧消费者显式锁定 `parseFlowDocumentV1`；不把通用 parser 退回 v1，也不提前开放这些入口的 v2 能力。
 - 边界偏差：G1A 功能分支尚未完成最终报告和独立 Judge 时，主集成分支 reflog 出现未由主代理发起的 `cherry-pick`，将首个 DSL 提交 patch-equivalent 集成为 `35585ef`。主代理发现后停止继续集成；该提交不视为验收通过，不回写裁决。为避免破坏性改写已生成历史，暂不 reset/revert；剩余 DSL 提交必须等待独立 Judge，随后再按完整候选核对并集成。用户 stash 与其他 worktree 未受影响。
+
+## 2026-08-30 vNext-1A DSL、Runtime 与旧消费者护栏会签
+
+- G1A DSL 已实现显式 v1/v2 parser、strict v2 schema、白名单 binding compiler、确定性 v1→v2 升级预览与 fingerprint；`FLOW_SCHEMA_VERSION` 继续保持 v1。
+- 首轮 DSL Judge 为 `REVISE 75/100`：全仓联合 parser 类型回归、password-like selector 误判和 fieldId seed 碰撞共 3 项 required fixes。随后分别以显式 `parseFlowDocumentV1` 兼容轨、复用 portability 密码判定和 canonical tuple seed 完成修复。
+- G1A-C Runtime guard 在任何目录、进度、HAR 或 Chromium 副作用前拒绝非 v1；首轮 `REVISE 89/100` 指出的错误详情泄漏风险已修复，R2 `PASS 100/100`。
+- 旧消费者兼容轨显式锁定 AI orchestrator、Extension、Studio portability、Local API recorder POST、Knowledge legacy repository/debug 为 v1；新增 v2 拒绝且数据库零写入回归。
+- DSL R2 独立复审候选 `7eac93c`：`PASS 100/100`，P0/P1/P2=`0/0/0`，`required_fixes=[]`；审查证据集成为 `34ab197`。
+- 本地集成 `pnpm test` 为 21/21 workspace tasks，通过 DSL 61、Runtime 52、Studio 209、Knowledge 86 等完整回归；Judge 强制无缓存 typecheck/lint/build 为 39/39、0 cached，9 个相关包 557 项测试与 3 项攻击探针全通过。
+- 阶段判断：vNext-1A 与兼容护栏已通过独立会签，允许进入依赖它的 G1B；这不授权 vNext-2 Runtime 输入会话、Studio 编辑器、P3 或 P4。

@@ -5406,3 +5406,14 @@
 - `pnpm --filter @flowweave/project-knowledge test`：`5` files / `85` tests，全通过。
 - 路线静态检查：新变更单、执行计划、上下文摘要、路线锁与 post-v1 路线均通过 `git diff --check`；Prettier 定向检查将在 G0 提交前再次执行。
 - 阶段判断：v1 基线稳定，已具备进入 G1A/G1A-C 测试先行实施的条件；尚未实现或验证任何 v2 业务能力。
+
+## 2026-08-30 vNext-1A 本地验证与独立会签
+
+- 集成候选：`7eac93cd0e5ed820ab39478e604520bd2d9cc971`；DSL R2 审查证据提交：`34ab197`。
+- DSL R2：`PASS 100/100`，P0/P1/P2=`0/0/0`，`required_fixes=[]`。
+- Runtime guard R2：`PASS 100/100`，错误详情只暴露安全归一化版本类别，非 v1 输入在所有可观察副作用前拒绝。
+- `pnpm test`：21/21 workspace tasks；DSL `61/61`、Runtime `52/52`、Studio `209/209`、project-knowledge `86/86`、Extension `77/77`、Local API `10/10` 等均通过。
+- Judge 强制无缓存 `turbo typecheck lint build --force`：39/39 successful、0 cached；9 个相关包 557 项测试全通过。
+- 攻击探针：显式 `inputType=text` 不被 password-like selector 误判；旧拼接碰撞输入生成不同 fieldId；所有旧消费者扫描为显式 v1；Runtime v2 为零 progress、零 artifact。
+- 静态检查：`git diff --check` 通过；`FLOW_SCHEMA_VERSION` 仍为 `1`；旧 POST 与 legacy repository 对 v2 fail closed 且零数据库写入。
+- 结论：G1A/G1A-C 通过，可以进入 G1B；v2 仍不可由旧 Runtime 执行。
