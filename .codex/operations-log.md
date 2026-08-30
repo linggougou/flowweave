@@ -7282,3 +7282,14 @@
 - 审查包源提交 `f5d2f0e` patch-equivalent 集成为 `57eb4ef`，位于 `.codex/reviews/vnext-0/design-gate-final-r3/`。确认 worktree clean 后回收 R3 Agent、worktree、本地依赖目录与临时分支。
 - 全阶段资源：G1-G3、两条整改 Agent、有效 REVISE Judge、R2/R3 Judge 均已完成或中断回收；仅剩主集成工作树。所有用户 stash 保持不动。
 - 生命周期：vNext-0 S7 会签完成，执行计划迁移至 `docs/exec-plans/completed/vnext-0-design-gate.md`；下一实施阶段未开启，vNext-1、P3、P4 继续冻结。
+
+## 2026-08-30 vNext-1 数据基础解冻与开发前审计
+
+- 用户明确把项目后续落地交由当前 Agent 自主负责；结合此前“先 plan、独立 worktree、Sub-Agent 分轨、验收后回收”的指令，按冻结 DAG 只开放 vNext-1A/1B 与旧入口最小兼容护栏，vNext-2/3、P3、P4 仍冻结。
+- `codex/vnext-0-design-gate-integration` 已先以 `--ff-only` 合入 `main` 并推送 `origin/main` 到 `8f83604`，无 force push；随后创建 `codex/vnext-1a-1b-integration`。两条用户 stash 保持不动。
+- 三路只读 Sub-Agent 分别审计 flow-dsl、project-knowledge 与 Runtime/Studio/Local API 真实调用链；均未修改工作区。结论已进入变更单、执行计划和上下文摘要。
+- 关键边界：`FLOW_SCHEMA_VERSION` 保持 v1；v2 使用显式版本分派和 strict schema；迁移预览为纯函数；Knowledge 使用 expectedRevision/CAS 与单事务；vNext-2 前所有旧入口必须在副作用前拒绝 v2。
+- 安全审计将 execution `variables_json`、Local API 类型断言、legacy rename/POST、Studio 提前分配 run directory，以及 SQLite/WAL/SHM 物理残留列为 vNext-1 硬门。
+- 使用 TDD、security-review、verification-loop 与 judge-harness；Generator 不自审，Judge 只能写 `.codex/reviews/vnext-1/**`，不得修改候选实现或代替主代理集成。
+- CodeGraph 当前无可调用入口。原用途：结构调用关系与影响分析。替代流程：`rg`、源码、测试与三路只读 Sub-Agent 交叉映射；替代结果：已定位所有旧写入/运行入口和事务缺口。
+- 已创建 `docs/change-requests/2026-08-30-vnext-implementation-unfreeze.md`、`docs/exec-plans/active/vnext-1a-1b-data-foundation.md` 和 `.codex/context-summary-vnext-1a-1b-data-foundation.md`，并更新路线锁与 post-v1 总路线。

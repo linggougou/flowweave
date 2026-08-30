@@ -5397,3 +5397,12 @@
 - 静态：`git diff --check 736402e..9deb519` 无输出；14 个目标文件、36 个相对内部链接 `broken=[]`；TODO/TBD/FIXME/冲突标记无未解决命中；范围无 `apps/`、`packages/`、migration 或构建配置；当前 `FLOW_SCHEMA_VERSION=1`。
 - 安全与兼容：显式升级、expectedRevision/fingerprint、旧 Runtime 副作用前拒绝、原子回滚、HAR/截图/DOM 门禁、artifactSafety 交叉校验与独立 canary 扫描均通过跨文档核对。
 - 当前判断：vNext-0 设计 DoD 全部通过，可归档；这不授权 vNext-1 实现。
+
+## 2026-08-30 vNext-1 开发前基线
+
+- Git：`main`、`origin/main` 与 vNext-1 集成基线均为 `8f83604`；工作区在路线文档变更前 clean，用户 stash 未操作。
+- Runtime：Node `24.14.0`、pnpm `9.15.4`。
+- `pnpm --filter @flowweave/flow-dsl test`：`2` files / `18` tests，全通过。
+- `pnpm --filter @flowweave/project-knowledge test`：`5` files / `85` tests，全通过。
+- 路线静态检查：新变更单、执行计划、上下文摘要、路线锁与 post-v1 路线均通过 `git diff --check`；Prettier 定向检查将在 G0 提交前再次执行。
+- 阶段判断：v1 基线稳定，已具备进入 G1A/G1A-C 测试先行实施的条件；尚未实现或验证任何 v2 业务能力。

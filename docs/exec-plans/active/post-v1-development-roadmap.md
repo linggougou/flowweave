@@ -2,11 +2,11 @@
 
 ## 1. 当前基线
 
-- 生命周期：P2.8 post-v1 产品化与 vNext-0 设计门禁均已完成；下一实施阶段未开启。
+- 生命周期：P2.8 post-v1 产品化与 vNext-0 设计门禁均已完成；vNext-1 数据基础已于 2026-08-30 开启。
 - 已完成：P0、P1、P2；M1-M4；真实页面 recorded replay `25/25`；Node 20/24 双基线；macOS 本地预览 `.app + DMG`。
 - M5 已有最小能力：扩展清空录制、Flow JSON 导出、Studio Flow 重命名。
 - P2.5、P2.6、P2.7、P2.8 均已完成并归档。
-- vNext-0 只完成并冻结设计，不开放业务实现；vNext-1、P3 深度页面/网络理解与 P4 AI 编排继续冻结。
+- vNext-0 已冻结设计；当前只开放 vNext-1A/1B 数据基础与旧入口最小兼容护栏，vNext-2/3、P3 深度页面/网络理解与 P4 AI 编排继续冻结。
 
 ## 2. 执行顺序
 
@@ -163,7 +163,22 @@
 2. Studio 线性模板编辑模型与变量来源/消费关系。
 3. Runtime / Electron 暂停继续会话协议、取消和异常恢复语义。
 
-该阶段会改变 Flow 产品模型与 runtime 执行协议。设计真源与后续实施 DAG 已冻结，完成计划位于 `docs/exec-plans/completed/vnext-0-design-gate.md`。设计通过不等于实现授权；更新路线锁并重新获得 vNext-1 授权前，不创建输入节点实现，也不解冻 P3/P4。
+该阶段会改变 Flow 产品模型与 runtime 执行协议。设计真源与后续实施 DAG 已冻结，完成计划位于 `docs/exec-plans/completed/vnext-0-design-gate.md`。
+
+## 3.1 vNext-1 数据基础
+
+状态：进行中（2026-08-30 开启）。
+
+当前只落地：
+
+1. vNext-1A：v1/v2 parser、strict v2 schema、受控 binding compiler、确定性升级预览。
+2. vNext-1B：revision/CAS、原子保存/恢复/升级、安全最近值与幂等数据库 migration。
+3. 旧 Runtime、Studio run、recorder POST/rename 的副作用前版本/修订护栏。
+4. 数据安全 canary、双 Node 回归和独立 Judge。
+
+实施真源：`docs/exec-plans/active/vnext-1a-1b-data-foundation.md`。
+
+本阶段不实现 Runtime 暂停/继续、Electron 会话桥、Studio 模板编辑或运行态输入。vNext-2 只能在 vNext-1 独立总审 PASS 并再次更新路线锁后开放。
 
 ## 4. 暂不开发
 
@@ -182,4 +197,5 @@
 5. UX Foundation 4：2-4 天，完成运行守卫、进度和取消。
 6. UX Foundation 5：2-4 天，完成业务视图与 Web 结果收口。
 7. P2.6 Flow 可移植性与 Web 重命名、P2.7 本地资产安全维护均已完成并归档。
-8. P2.8 受控截图预览与 vNext-0 协议设计门禁均已完成并归档；下一实施阶段未开启。
+8. P2.8 受控截图预览与 vNext-0 协议设计门禁均已完成并归档。
+9. vNext-1 数据基础：当前进行中；完成后再评估 vNext-2A Runtime 输入会话。
