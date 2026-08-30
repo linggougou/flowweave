@@ -1,0 +1,220 @@
+{
+  "review_id": "vnext-1-g1a-dsl-r2-l3-2026-08-30",
+  "task_id": "vNext-1A-G1A-R2",
+  "lane": "g1a-dsl-r2",
+  "review_level": "L3",
+  "rubric_id": "vnext-1a-dsl-l3-v2",
+  "baseline_sha": "c1e78839ead00d63a029d3e324cdb84e34f50c2f",
+  "reviewed_sha": "7eac93cd0e5ed820ab39478e604520bd2d9cc971",
+  "artifact_refs": [
+    "doc:PROJECT_ROUTE_LOCK.md",
+    "doc:docs/exec-plans/active/vnext-1a-1b-data-foundation.md",
+    "doc:docs/design-docs/vnext-flow-schema-migration.md",
+    "doc:docs/adr/0009-vnext-input-node-and-schema-versioning.md",
+    "review:.codex/reviews/vnext-1/g1a-dsl/scorecard.json",
+    "code:packages/flow-dsl/src/portability.ts",
+    "code:packages/flow-dsl/src/upgrade.ts",
+    "test:packages/flow-dsl/src/upgrade.test.ts",
+    "code:packages/runtime/src/playwright-runner.ts",
+    "test:packages/runtime/src/playwright-launch-options.test.ts",
+    "code:apps/extension/lib/export-download.ts",
+    "code:apps/studio/electron/flow-portability-files.ts",
+    "code:packages/ai-orchestrator/src/generate.ts",
+    "code:packages/local-api/src/index.ts",
+    "code:packages/project-knowledge/src/repository.ts"
+  ],
+  "command_results": [
+    {
+      "cmd": "pnpm install --frozen-lockfile",
+      "status": "pass",
+      "result": "Node 24.14.0 / pnpm 9.15.4；801 个依赖从本地 store 复用，lockfile 未变化。"
+    },
+    {
+      "cmd": "pnpm turbo typecheck lint build --force",
+      "status": "pass",
+      "result": "39/39 successful，0 cached；全仓三项门禁均强制绕过 Turbo 缓存执行。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/flow-dsl test",
+      "status": "pass",
+      "result": "4 个测试文件、61 个测试通过。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/runtime test",
+      "status": "pass",
+      "result": "4 个测试文件、52 个测试通过，包含 launch-options、real-page matrix、recorded-replay matrix 与主 runner。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/app-extension test && pnpm --filter @flowweave/app-studio test",
+      "status": "pass",
+      "result": "extension 6 files / 77 tests；studio 40 files / 209 tests，全部通过。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/local-api test && pnpm --filter @flowweave/project-knowledge test && pnpm --filter @flowweave/ai-orchestrator test",
+      "status": "pass",
+      "result": "local-api 1 file / 10 tests；project-knowledge 5 files / 86 tests；ai-orchestrator 1 file / 1 test，全部通过。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/shared test && pnpm --filter @flowweave/recorder test",
+      "status": "pass",
+      "result": "shared 3 files / 7 tests；recorder 3 files / 54 tests，全部通过。"
+    },
+    {
+      "cmd": "node attack: explicit text target + ambiguous fieldId tuple + runtime v2 side effects",
+      "status": "pass",
+      "result": "inputType=text + #password-policy-note 得到 sensitive=false 且 default 保留；13 个变量生成 13 个唯一 fieldId；runtime 对 v2 返回 FLOW_SCHEMA_MISMATCH，progress=0 且 artifactDir 未创建。"
+    },
+    {
+      "cmd": "rg production parseFlowDocument consumers",
+      "status": "pass",
+      "result": "生产入口中通用 parseFlowDocument 仅保留 parser 定义；extension、studio、ai-orchestrator、local-api、project-knowledge 旧入口均显式调用 parseFlowDocumentV1。"
+    },
+    {
+      "cmd": "git diff --check && git diff --check c1e7883..7eac93c",
+      "status": "pass",
+      "result": "均无输出。"
+    },
+    {
+      "cmd": "pnpm exec prettier --check <14 reviewed source/test files>",
+      "status": "inherited-warning",
+      "result": "7 个文件仍有仓库既存格式差异；对 baseline 做相同检查时为 8 个，候选未新增格式回归。lint 硬门禁 fresh 全绿。"
+    }
+  ],
+  "hard_gates": [
+    {
+      "id": "candidate-and-review-scope",
+      "status": "pass",
+      "evidence": [
+        "审查开始时 HEAD 精确为 7eac93cd0e5ed820ab39478e604520bd2d9cc971。",
+        "仅新增 g1a-dsl-r2 的 verdict.md 与 scorecard.json；未修改候选实现、测试、路线锁或日志。"
+      ]
+    },
+    {
+      "id": "rf-p0-workspace-typecheck-and-v1-boundaries",
+      "status": "pass",
+      "evidence": [
+        "强制绕过缓存的全仓 typecheck/lint/build 为 39/39 successful。",
+        "extension export、Studio portability、ai-orchestrator、Local API recorder POST、project-knowledge legacy repository 均显式使用 parseFlowDocumentV1。",
+        "extension、Studio、Local API 与 project-knowledge 的 v2 拒绝回归通过；Local API 与 repository 用例同时验证零写入。"
+      ]
+    },
+    {
+      "id": "rf-p1-password-target-precedence",
+      "status": "pass",
+      "evidence": [
+        "upgrade 与 portability 共用 isPasswordTarget；显式 inputType=text 优先抑制 selector 中 password 字样。",
+        "回归测试与独立构造探针均得到 sensitive=false，PUBLIC_DEFAULT_MUST_SURVIVE 被完整保留。"
+      ]
+    },
+    {
+      "id": "rf-p1-ambiguity-free-field-identity",
+      "status": "pass",
+      "evidence": [
+        "fieldId seed 改为 canonicalizeJson([flow.id, index, variable.name]) 的无歧义 tuple 编码。",
+        "variables[1].name=23 与 variables[12].name=3 产生不同 ID；13 个变量生成 13 个唯一 fieldId，candidate 未被阻塞。"
+      ]
+    },
+    {
+      "id": "runtime-v2-zero-side-effect-guard",
+      "status": "pass",
+      "evidence": [
+        "schemaVersion 检查位于 executionId、artifact mkdir、progress、HAR、browser launch 之前。",
+        "runtime 52/52 回归与独立 dist probe 均确认 v2 抛 FLOW_SCHEMA_MISMATCH，progress=0、artifactDir 不存在。",
+        "非数值 schemaVersion 被规范化为 missing/invalid，错误 details 不携带原始敏感对象。"
+      ]
+    },
+    {
+      "id": "v1-v2-contract-regression",
+      "status": "pass",
+      "evidence": [
+        "flow-dsl 61/61、shared 7/7、recorder 54/54 全绿。",
+        "v1 默认版本、版本分派、全层 strict、步骤/字段/label/ref/selection、七类 allowlist、非法槽位、类型/敏感策略、纯迁移、身份保留、canonical/fingerprint 与错误脱敏既有矩阵均保持通过。"
+      ]
+    },
+    {
+      "id": "legacy-entry-v2-isolation",
+      "status": "pass",
+      "evidence": [
+        "ai-orchestrator 只产生并解析 v1；extension 导出与 Studio portability 对 v2 fail closed。",
+        "Local API recorder POST 拒绝 v2 且不写库；project-knowledge legacy save/read 路径显式锁为 v1，拒绝测试通过。"
+      ]
+    },
+    {
+      "id": "fresh-verification-and-diff-hygiene",
+      "status": "pass",
+      "evidence": [
+        "全仓 build/typecheck/lint 强制 bypass cache 全绿，九个相关包共 557 个测试通过。",
+        "git diff --check 对工作区与 remediation diff 均通过；候选未引入新的 Prettier 格式差异。"
+      ]
+    }
+  ],
+  "findings": [],
+  "p0_count": 0,
+  "p1_count": 0,
+  "p2_count": 0,
+  "dimensions": [
+    {
+      "name": "v1_compatibility_and_version_dispatch",
+      "score": 20,
+      "max_score": 20,
+      "reason": "全仓类型门禁恢复，所有旧消费边界显式锁为 v1，v2 不会进入遗留入口。"
+    },
+    {
+      "name": "strict_schema_bindings_and_selection",
+      "score": 20,
+      "max_score": 20,
+      "reason": "v2 全层 strict、引用顺序、selection、七类 allowlist、非法槽位和类型策略回归矩阵保持全绿。"
+    },
+    {
+      "name": "migration_identity_and_determinism",
+      "score": 20,
+      "max_score": 20,
+      "reason": "纯迁移、既有身份保留、canonical/fingerprint 稳定；tuple seed 闭合 index/name 边界碰撞。"
+    },
+    {
+      "name": "sensitive_policy_and_safe_errors",
+      "score": 15,
+      "max_score": 15,
+      "reason": "显式 inputType 优先级恢复，普通 default 不再误删；敏感字段与 runtime 错误均保持 fail closed 且不泄露。"
+    },
+    {
+      "name": "runtime_and_legacy_isolation",
+      "score": 15,
+      "max_score": 15,
+      "reason": "runtime 在任何副作用前拒绝 v2，五类旧消费者均有显式 v1 边界或对应负向回归。"
+    },
+    {
+      "name": "tests_evidence_and_scope",
+      "score": 10,
+      "max_score": 10,
+      "reason": "强制无缓存全仓门禁、557 个相关测试、独立攻击探针与静态消费扫描形成闭环，审查写入严格限于两份允许文件。"
+    }
+  ],
+  "penalties": [],
+  "totals": {
+    "raw_score": 100,
+    "penalty_total": 0,
+    "final_score": 100
+  },
+  "verdict": "PASS",
+  "required_fixes": [],
+  "nice_to_have": [],
+  "reviewers": [
+    {
+      "role": "verifier",
+      "conclusion": "PASS",
+      "summary": "三项首审 required fixes 均有实现、回归与独立攻击证据；全仓硬门禁强制无缓存通过。"
+    },
+    {
+      "role": "strict_judge",
+      "conclusion": "PASS",
+      "summary": "v1 旧消费边界、迁移身份和敏感策略、runtime 零副作用门禁均符合冻结合同，未发现 P0/P1/P2。"
+    },
+    {
+      "role": "anti_slop_reviewer",
+      "conclusion": "PASS",
+      "summary": "候选修复点与测试点精确对应首审缺口，无宽化 v2 入口、无数据写入旁路、无范围外实现修改。"
+    }
+  ],
+  "reviewed_at": "2026-08-30T14:41:00+08:00"
+}
