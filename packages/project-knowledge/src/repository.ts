@@ -17,10 +17,22 @@ import {
 } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 
-import type { FlowDocument } from "@flowweave/flow-dsl";
-import { createPortableFlowDocument, parseFlowDocumentV1 } from "@flowweave/flow-dsl";
+import type {
+  AnyFlowDocument,
+  FlowDocument,
+  FlowDocumentV1,
+  FlowDocumentV2,
+  InputFieldV2,
+} from "@flowweave/flow-dsl";
+import {
+  createPortableFlowDocument,
+  parseFlowDocument,
+  parseFlowDocumentV1,
+  parseFlowDocumentV2,
+  previewFlowV1Upgrade,
+} from "@flowweave/flow-dsl";
 import { and, asc, desc, eq, max } from "drizzle-orm";
-import { FlowWeaveError } from "@flowweave/shared";
+import { FLOW_SCHEMA_VERSION, FlowWeaveError } from "@flowweave/shared";
 
 import {
   closeProjectDatabase,
@@ -42,21 +54,20 @@ import type {
   ExecutionWithProject,
   FlowImportResult,
   FlowVersionRecord,
+  FlowRecentValue,
+  FlowRevisionRecord,
   PageSnapshotRecord,
   ProjectEnvironment,
   ProjectRef,
+  RestoreFlowRevisionInput,
+  SaveFlowFieldRecentValuesInput,
+  SaveFlowRevisionInput,
   StepLog,
+  UpgradeFlowToV2Input,
 } from "./types.js";
 
 const EXECUTION_STATUSES = ["success", "failed", "cancelled"] as const;
 const STEP_STATUSES = ["passed", "failed", "skipped"] as const;
-const PROJECT_ENVIRONMENT_STORAGE_STATE_COLUMN = "storage_state_path";
-const EXECUTION_STEP_DIAGNOSTIC_PATH_COLUMN = "diagnostic_path";
-const EXECUTION_FLOW_SNAPSHOT_JSON_COLUMN = "flow_snapshot_json";
-const EXECUTION_ENVIRONMENT_NAME_COLUMN = "environment_name";
-const EXECUTION_BASE_URL_COLUMN = "base_url";
-const EXECUTION_STORAGE_STATE_PATH_COLUMN = "storage_state_path";
-const EXECUTION_VARIABLES_JSON_COLUMN = "variables_json";
 const RUN_ARTIFACT_NAME_PATTERNS = [
   /^network\.har$/,
   /^step-\d+\.png$/,
@@ -69,6 +80,98 @@ const EXECUTION_SCREENSHOT_MAX_BYTES = 8 * 1024 * 1024;
 const EXECUTION_SCREENSHOT_MAX_DIMENSION = 8192;
 const EXECUTION_SCREENSHOT_MAX_PIXELS = 40_000_000;
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+
+function assertExpectedRevision(revision: number): void {
+  if (!Number.isSafeInteger(revision) || revision < 1) {
+    throw new FlowWeaveError("VALIDATION_FAILED", "expectedRevision 必须是正整数");
+  }
+}
+
+function safeSchemaVersionDetail(value: unknown): number | "missing" | "invalid" {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  return value === undefined ? "missing" : "invalid";
+}
+
+function assertFlowIdentity(
+  document: AnyFlowDocument,
+  projectId: string,
+  flowId: string,
+): void {
+  if (document.projectId !== projectId || document.id !== flowId) {
+    throw new FlowWeaveError("VALIDATION_FAILED", "Flow 路径身份与文档身份不一致");
+  }
+}
+
+function parseStoredFlow(documentJson: string): AnyFlowDocument {
+  try {
+    return parseFlowDocument(JSON.parse(documentJson));
+  } catch {
+    throw new FlowWeaveError("FLOW_PERSISTENCE_FAILED", "Flow 持久化内容不可安全解析");
+  }
+}
+
+function sanitizeV1Document(
+  document: FlowDocumentV1,
+  sensitiveVariableNames: ReadonlySet<string>,
+): FlowDocumentV1 {
+  return {
+    ...document,
+    variables: document.variables.map((variable) => {
+      if (!sensitiveVariableNames.has(variable.name) || variable.defaultValue === undefined) {
+        return variable;
+      }
+      const { defaultValue: _removed, ...safeVariable } = variable;
+      return safeVariable;
+    }),
+  };
+}
+
+function collectV2Fields(document: FlowDocumentV2): Map<string, InputFieldV2> {
+  const fields = new Map<string, InputFieldV2>();
+  for (const step of document.steps) {
+    if (step.type !== "input") {
+      continue;
+    }
+    for (const field of step.fields) {
+      fields.set(field.fieldId, field);
+    }
+  }
+  return fields;
+}
+
+function isRecentValueCompatible(field: InputFieldV2, value: unknown): value is FlowRecentValue {
+  return (
+    !field.sensitive &&
+    field.remember === "lastValue" &&
+    typeof value === field.type &&
+    (typeof value !== "number" || Number.isFinite(value))
+  );
+}
+
+function redactSensitiveStrings(
+  value: string | null,
+  sensitiveValues: ReadonlySet<string>,
+): string | null {
+  if (value === null) {
+    return null;
+  }
+  let redacted = value;
+  for (const sensitiveValue of sensitiveValues) {
+    if (sensitiveValue.length > 0) {
+      redacted = redacted.split(sensitiveValue).join("[已清理]");
+    }
+  }
+  return redacted;
+}
+
+function persistenceFailure(error: unknown): never {
+  if (error instanceof FlowWeaveError) {
+    throw error;
+  }
+  throw new FlowWeaveError("FLOW_PERSISTENCE_FAILED", "Flow 原子持久化失败");
+}
 
 type FileIdentity = {
   dev: number;
@@ -282,68 +385,6 @@ function parseStepStatus(status: string): StepLog["status"] {
     : "failed";
 }
 
-function ensureProjectEnvironmentStorageStateColumn(
-  sqlite: Parameters<typeof closeProjectDatabase>[0],
-): void {
-  const columns = sqlite.pragma("table_info(project_environments)") as Array<{ name: string }>;
-  if (columns.some((column) => column.name === PROJECT_ENVIRONMENT_STORAGE_STATE_COLUMN)) {
-    return;
-  }
-  sqlite.exec(`
-    ALTER TABLE project_environments
-    ADD COLUMN storage_state_path TEXT
-  `);
-}
-
-function ensureExecutionStepDiagnosticPathColumn(
-  sqlite: Parameters<typeof closeProjectDatabase>[0],
-): void {
-  const columns = sqlite.pragma("table_info(execution_steps)") as Array<{ name: string }>;
-  if (columns.some((column) => column.name === EXECUTION_STEP_DIAGNOSTIC_PATH_COLUMN)) {
-    return;
-  }
-  sqlite.exec(`
-    ALTER TABLE execution_steps
-    ADD COLUMN diagnostic_path TEXT
-  `);
-}
-
-function ensureExecutionRunContextColumns(
-  sqlite: Parameters<typeof closeProjectDatabase>[0],
-): void {
-  const columns = sqlite.pragma("table_info(executions)") as Array<{ name: string }>;
-  if (!columns.some((column) => column.name === EXECUTION_FLOW_SNAPSHOT_JSON_COLUMN)) {
-    sqlite.exec(`
-      ALTER TABLE executions
-      ADD COLUMN flow_snapshot_json TEXT
-    `);
-  }
-  if (!columns.some((column) => column.name === EXECUTION_ENVIRONMENT_NAME_COLUMN)) {
-    sqlite.exec(`
-      ALTER TABLE executions
-      ADD COLUMN environment_name TEXT
-    `);
-  }
-  if (!columns.some((column) => column.name === EXECUTION_BASE_URL_COLUMN)) {
-    sqlite.exec(`
-      ALTER TABLE executions
-      ADD COLUMN base_url TEXT
-    `);
-  }
-  if (!columns.some((column) => column.name === EXECUTION_STORAGE_STATE_PATH_COLUMN)) {
-    sqlite.exec(`
-      ALTER TABLE executions
-      ADD COLUMN storage_state_path TEXT
-    `);
-  }
-  if (!columns.some((column) => column.name === EXECUTION_VARIABLES_JSON_COLUMN)) {
-    sqlite.exec(`
-      ALTER TABLE executions
-      ADD COLUMN variables_json TEXT
-    `);
-  }
-}
-
 function serializeExecutionVariables(
   variables: ExecutionRunContext["variables"],
 ): string | null {
@@ -397,8 +438,30 @@ function parseExecutionFlowSnapshot(
     return undefined;
   }
 
+  let parsed: unknown;
   try {
-    return parseFlowDocumentV1(JSON.parse(flowSnapshotJson));
+    parsed = JSON.parse(flowSnapshotJson);
+  } catch {
+    return undefined;
+  }
+  if (
+    parsed &&
+    typeof parsed === "object" &&
+    "schemaVersion" in parsed &&
+    (parsed as { schemaVersion?: unknown }).schemaVersion !== FLOW_SCHEMA_VERSION
+  ) {
+    throw new FlowWeaveError(
+      "FLOW_SCHEMA_VERSION_UNSUPPORTED",
+      "vNext-2 前不能读取 v2 execution 快照",
+      {
+        schemaVersion: safeSchemaVersionDetail(
+          (parsed as { schemaVersion?: unknown }).schemaVersion,
+        ),
+      },
+    );
+  }
+  try {
+    return parseFlowDocumentV1(parsed);
   } catch {
     return undefined;
   }
@@ -453,6 +516,9 @@ export class ProjectKnowledgeRepository {
 
   /** @internal 仅供故障注入测试模拟截图读取后的路径身份漂移。 */
   protected beforeExecutionScreenshotFileRevalidation(): void {}
+
+  /** @internal 仅供 vNext 原子事务故障注入测试。 */
+  protected beforeVNextPersistenceStep(_step: string): void {}
 
   /** 为单次执行创建 `runs/<executionId>/` 目录 */
   allocateRunDirectory(projectId: string, executionId: string): string {
@@ -586,7 +652,6 @@ export class ProjectKnowledgeRepository {
     const now = new Date().toISOString();
     const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
     try {
-      ensureProjectEnvironmentStorageStateColumn(sqlite);
       if (isDefault) {
         db.update(dbSchema.projectEnvironments)
           .set({ isDefault: 0 })
@@ -620,7 +685,6 @@ export class ProjectKnowledgeRepository {
   getDefaultEnvironment(projectId: string): ProjectEnvironment | null {
     const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
     try {
-      ensureProjectEnvironmentStorageStateColumn(sqlite);
       const row =
         db
           .select()
@@ -713,37 +777,504 @@ export class ProjectKnowledgeRepository {
 
     const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
     try {
-      const now = new Date().toISOString();
-      const row = {
-        id: document.id,
-        projectId,
-        name: document.name,
-        documentJson,
-        schemaVersion: document.schemaVersion,
-        createdAt: document.meta.createdAt,
-        updatedAt: now,
-      };
+      const saveTransaction = sqlite.transaction(() => {
+        const now = new Date().toISOString();
+        const existing = db
+          .select()
+          .from(dbSchema.flows)
+          .where(eq(dbSchema.flows.id, document.id))
+          .get();
+        if (existing && existing.projectId !== projectId) {
+          throw new FlowWeaveError("VALIDATION_FAILED", "Flow 不属于目标项目");
+        }
+        if (existing && existing.schemaVersion !== FLOW_SCHEMA_VERSION) {
+          throw new FlowWeaveError(
+            "FLOW_SCHEMA_VERSION_UNSUPPORTED",
+            "legacy saveFlow 只允许保存 v1 Flow",
+          );
+        }
 
-      const existing = db
+        if (existing?.documentJson !== documentJson) {
+          if (existing) {
+            this.appendFlowVersion(db, {
+              projectId,
+              flowId: document.id,
+              documentJson: existing.documentJson,
+              schemaVersion: existing.schemaVersion,
+              sourceRevision: existing.revision,
+              changeMessage: changeMessage ?? "保存前自动快照",
+              createdAt: now,
+            });
+          }
+          const row = {
+            id: document.id,
+            projectId,
+            name: document.name,
+            documentJson,
+            schemaVersion: document.schemaVersion,
+            revision: existing ? existing.revision + 1 : 1,
+            createdAt: existing?.createdAt ?? document.meta.createdAt,
+            updatedAt: now,
+          };
+          if (existing) {
+            db.update(dbSchema.flows).set(row).where(eq(dbSchema.flows.id, document.id)).run();
+          } else {
+            db.insert(dbSchema.flows).values(row).run();
+          }
+        }
+      });
+      saveTransaction.immediate();
+    } finally {
+      closeProjectDatabase(sqlite);
+    }
+  }
+
+  /** 通用 v1/v2 读取；旧消费者继续使用显式 v1 的 getFlowInProject。 */
+  getFlowRevision(projectId: string, flowId: string): FlowRevisionRecord | null {
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
+    try {
+      const row = db
         .select()
         .from(dbSchema.flows)
-        .where(eq(dbSchema.flows.id, document.id))
+        .where(and(eq(dbSchema.flows.projectId, projectId), eq(dbSchema.flows.id, flowId)))
         .get();
+      if (!row) {
+        return null;
+      }
+      const document = parseStoredFlow(row.documentJson);
+      assertFlowIdentity(document, projectId, flowId);
+      if (document.schemaVersion !== row.schemaVersion) {
+        throw new FlowWeaveError("FLOW_PERSISTENCE_FAILED", "Flow schema 元数据不一致");
+      }
+      return {
+        document,
+        revision: row.revision,
+        updatedAt: row.updatedAt,
+      };
+    } finally {
+      closeProjectDatabase(sqlite);
+    }
+  }
 
-      if (existing) {
-        if (existing.documentJson !== documentJson) {
-          this.appendFlowVersion(db, {
-            projectId,
-            flowId: document.id,
-            documentJson: existing.documentJson,
-            changeMessage: changeMessage ?? "保存前自动快照",
-            createdAt: now,
+  /** 使用 expectedRevision 保存 v1/v2；文档、版本、清理与 CAS 在同一事务。 */
+  saveFlowRevision(input: SaveFlowRevisionInput): FlowRevisionRecord {
+    assertExpectedRevision(input.expectedRevision);
+    const document = parseFlowDocument(input.document);
+    assertFlowIdentity(document, input.projectId, input.flowId);
+    const documentJson = JSON.stringify(document);
+    const { db, sqlite } = openProjectDatabase(
+      input.projectId,
+      this.dataDir,
+      this.databaseOptions,
+    );
+    try {
+      const saveTransaction = sqlite.transaction(() => {
+        const existing = db
+          .select()
+          .from(dbSchema.flows)
+          .where(
+            and(
+              eq(dbSchema.flows.projectId, input.projectId),
+              eq(dbSchema.flows.id, input.flowId),
+            ),
+          )
+          .get();
+        if (!existing) {
+          throw new FlowWeaveError("VALIDATION_FAILED", "Flow 不存在");
+        }
+        if (existing.revision !== input.expectedRevision) {
+          throw new FlowWeaveError("FLOW_REVISION_CONFLICT", "Flow revision 已变化", {
+            expectedRevision: input.expectedRevision,
+            currentRevision: existing.revision,
           });
         }
-        db.update(dbSchema.flows).set(row).where(eq(dbSchema.flows.id, document.id)).run();
-      } else {
-        db.insert(dbSchema.flows).values(row).run();
+        const currentDocument = parseStoredFlow(existing.documentJson);
+        assertFlowIdentity(currentDocument, input.projectId, input.flowId);
+        if (
+          existing.schemaVersion !== currentDocument.schemaVersion ||
+          currentDocument.schemaVersion !== document.schemaVersion
+        ) {
+          throw new FlowWeaveError(
+            "FLOW_SCHEMA_MISMATCH",
+            "跨 schema 保存必须使用升级或恢复命令",
+          );
+        }
+        if (existing.documentJson === documentJson) {
+          return {
+            document,
+            revision: existing.revision,
+            updatedAt: existing.updatedAt,
+          };
+        }
+
+        const now = new Date().toISOString();
+        this.appendFlowVersion(db, {
+          projectId: input.projectId,
+          flowId: input.flowId,
+          documentJson: existing.documentJson,
+          schemaVersion: existing.schemaVersion,
+          sourceRevision: existing.revision,
+          changeMessage: input.changeMessage ?? "保存前自动快照",
+          createdAt: now,
+        });
+        this.beforeVNextPersistenceStep("save:after-version");
+        this.cleanRecentValues(db, input.flowId, document);
+        this.beforeVNextPersistenceStep("save:after-recent-cleanup");
+
+        const nextRevision = existing.revision + 1;
+        const update = db
+          .update(dbSchema.flows)
+          .set({
+            name: document.name,
+            documentJson,
+            schemaVersion: document.schemaVersion,
+            revision: nextRevision,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(dbSchema.flows.projectId, input.projectId),
+              eq(dbSchema.flows.id, input.flowId),
+              eq(dbSchema.flows.revision, input.expectedRevision),
+            ),
+          )
+          .run();
+        if (update.changes !== 1) {
+          throw new FlowWeaveError("FLOW_REVISION_CONFLICT", "Flow revision 已变化", {
+            expectedRevision: input.expectedRevision,
+          });
+        }
+        return { document, revision: nextRevision, updatedAt: now };
+      });
+      return saveTransaction.immediate();
+    } catch (error: unknown) {
+      persistenceFailure(error);
+    } finally {
+      closeProjectDatabase(sqlite);
+    }
+  }
+
+  /** 在事务内重新预览并核对 fingerprint，禁止调用方直接提交未复核 candidate。 */
+  upgradeFlowToV2(input: UpgradeFlowToV2Input): FlowRevisionRecord {
+    assertExpectedRevision(input.expectedRevision);
+    if (!/^[a-f0-9]{64}$/.test(input.reportFingerprint)) {
+      throw new FlowWeaveError("FLOW_UPGRADE_BLOCKED", "迁移报告 fingerprint 无效");
+    }
+    const { db, sqlite } = openProjectDatabase(
+      input.projectId,
+      this.dataDir,
+      this.databaseOptions,
+    );
+    try {
+      const upgradeTransaction = sqlite.transaction(() => {
+        const existing = db
+          .select()
+          .from(dbSchema.flows)
+          .where(
+            and(
+              eq(dbSchema.flows.projectId, input.projectId),
+              eq(dbSchema.flows.id, input.flowId),
+            ),
+          )
+          .get();
+        if (!existing) {
+          throw new FlowWeaveError("VALIDATION_FAILED", "Flow 不存在");
+        }
+        if (existing.revision !== input.expectedRevision) {
+          throw new FlowWeaveError("FLOW_REVISION_CONFLICT", "Flow revision 已变化", {
+            expectedRevision: input.expectedRevision,
+            currentRevision: existing.revision,
+          });
+        }
+        const currentV1 = parseFlowDocumentV1(JSON.parse(existing.documentJson));
+        assertFlowIdentity(currentV1, input.projectId, input.flowId);
+        const preview = previewFlowV1Upgrade(currentV1, {
+          rememberSelections: input.rememberSelections,
+        });
+        if (
+          preview.blockingIssues.length > 0 ||
+          !preview.candidate ||
+          preview.reportFingerprint !== input.reportFingerprint
+        ) {
+          throw new FlowWeaveError("FLOW_UPGRADE_BLOCKED", "迁移报告已变化或存在阻塞项", {
+            reportFingerprint: preview.reportFingerprint,
+          });
+        }
+
+        const sensitiveNames = new Set(
+          preview.fieldMappings
+            .filter((mapping) => mapping.sensitive)
+            .map((mapping) => mapping.variableName),
+        );
+        const cleanup = this.sanitizeUpgradeHistory(
+          db,
+          input.projectId,
+          input.flowId,
+          currentV1,
+          sensitiveNames,
+        );
+        if (
+          [...cleanup.sensitiveValues].some((value) =>
+            JSON.stringify(preview.candidate).includes(value),
+          )
+        ) {
+          throw new FlowWeaveError(
+            "FLOW_UPGRADE_BLOCKED",
+            "迁移候选仍包含已识别敏感值",
+          );
+        }
+        this.beforeVNextPersistenceStep("upgrade:after-history-cleanup");
+
+        const now = new Date().toISOString();
+        this.appendFlowVersion(db, {
+          projectId: input.projectId,
+          flowId: input.flowId,
+          documentJson: JSON.stringify(cleanup.safeCurrent),
+          schemaVersion: cleanup.safeCurrent.schemaVersion,
+          sourceRevision: existing.revision,
+          changeMessage: "升级到 Flow schema v2 前安全快照",
+          createdAt: now,
+        });
+        this.beforeVNextPersistenceStep("upgrade:after-safe-version");
+        db.delete(dbSchema.flowFieldRecentValues)
+          .where(eq(dbSchema.flowFieldRecentValues.flowId, input.flowId))
+          .run();
+        this.beforeVNextPersistenceStep("upgrade:after-recent-cleanup");
+
+        const candidate = parseFlowDocumentV2(preview.candidate);
+        const nextRevision = existing.revision + 1;
+        const update = db
+          .update(dbSchema.flows)
+          .set({
+            name: candidate.name,
+            documentJson: JSON.stringify(candidate),
+            schemaVersion: candidate.schemaVersion,
+            revision: nextRevision,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(dbSchema.flows.projectId, input.projectId),
+              eq(dbSchema.flows.id, input.flowId),
+              eq(dbSchema.flows.revision, input.expectedRevision),
+            ),
+          )
+          .run();
+        if (update.changes !== 1) {
+          throw new FlowWeaveError("FLOW_REVISION_CONFLICT", "Flow revision 已变化", {
+            expectedRevision: input.expectedRevision,
+          });
+        }
+        this.beforeVNextPersistenceStep("upgrade:after-cas");
+        return { document: candidate, revision: nextRevision, updatedAt: now };
+      });
+      const result = upgradeTransaction.immediate();
+      sqlite.pragma("wal_checkpoint(TRUNCATE)");
+      return result;
+    } catch (error: unknown) {
+      persistenceFailure(error);
+    } finally {
+      closeProjectDatabase(sqlite);
+    }
+  }
+
+  /** 跨 v1/v2 原子恢复；恢复本身也产生新的单调 revision。 */
+  restoreFlowRevision(input: RestoreFlowRevisionInput): FlowRevisionRecord {
+    assertExpectedRevision(input.expectedRevision);
+    const { db, sqlite } = openProjectDatabase(
+      input.projectId,
+      this.dataDir,
+      this.databaseOptions,
+    );
+    try {
+      const restoreTransaction = sqlite.transaction(() => {
+        const current = db
+          .select()
+          .from(dbSchema.flows)
+          .where(
+            and(
+              eq(dbSchema.flows.projectId, input.projectId),
+              eq(dbSchema.flows.id, input.flowId),
+            ),
+          )
+          .get();
+        if (!current) {
+          throw new FlowWeaveError("VALIDATION_FAILED", "Flow 不存在");
+        }
+        if (current.revision !== input.expectedRevision) {
+          throw new FlowWeaveError("FLOW_REVISION_CONFLICT", "Flow revision 已变化", {
+            expectedRevision: input.expectedRevision,
+            currentRevision: current.revision,
+          });
+        }
+        const version = db
+          .select()
+          .from(dbSchema.flowVersions)
+          .where(
+            and(
+              eq(dbSchema.flowVersions.projectId, input.projectId),
+              eq(dbSchema.flowVersions.flowId, input.flowId),
+              eq(dbSchema.flowVersions.id, input.versionId),
+            ),
+          )
+          .get();
+        if (!version) {
+          throw new FlowWeaveError("VALIDATION_FAILED", "Flow 版本不存在或归属不匹配");
+        }
+        const target = parseStoredFlow(version.documentJson);
+        assertFlowIdentity(target, input.projectId, input.flowId);
+        if (target.schemaVersion !== version.schemaVersion) {
+          throw new FlowWeaveError("FLOW_PERSISTENCE_FAILED", "Flow 版本 schema 元数据不一致");
+        }
+        const now = new Date().toISOString();
+        this.appendFlowVersion(db, {
+          projectId: input.projectId,
+          flowId: input.flowId,
+          documentJson: current.documentJson,
+          schemaVersion: current.schemaVersion,
+          sourceRevision: current.revision,
+          changeMessage: input.changeMessage ?? "版本恢复前自动快照",
+          createdAt: now,
+        });
+        this.beforeVNextPersistenceStep("restore:after-version");
+        this.cleanRecentValues(db, input.flowId, target);
+        this.beforeVNextPersistenceStep("restore:after-recent-cleanup");
+        const nextRevision = current.revision + 1;
+        const update = db
+          .update(dbSchema.flows)
+          .set({
+            name: target.name,
+            documentJson: JSON.stringify(target),
+            schemaVersion: target.schemaVersion,
+            revision: nextRevision,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(dbSchema.flows.projectId, input.projectId),
+              eq(dbSchema.flows.id, input.flowId),
+              eq(dbSchema.flows.revision, input.expectedRevision),
+            ),
+          )
+          .run();
+        if (update.changes !== 1) {
+          throw new FlowWeaveError("FLOW_REVISION_CONFLICT", "Flow revision 已变化", {
+            expectedRevision: input.expectedRevision,
+          });
+        }
+        return { document: target, revision: nextRevision, updatedAt: now };
+      });
+      return restoreTransaction.immediate();
+    } catch (error: unknown) {
+      persistenceFailure(error);
+    } finally {
+      closeProjectDatabase(sqlite);
+    }
+  }
+
+  /** 只保存当前 v2 明确允许 remember:lastValue 的非敏感标量。 */
+  saveFlowFieldRecentValues(input: SaveFlowFieldRecentValuesInput): void {
+    assertExpectedRevision(input.expectedRevision);
+    const { db, sqlite } = openProjectDatabase(
+      input.projectId,
+      this.dataDir,
+      this.databaseOptions,
+    );
+    try {
+      const saveTransaction = sqlite.transaction(() => {
+        const row = db
+          .select()
+          .from(dbSchema.flows)
+          .where(
+            and(
+              eq(dbSchema.flows.projectId, input.projectId),
+              eq(dbSchema.flows.id, input.flowId),
+            ),
+          )
+          .get();
+        if (!row) {
+          throw new FlowWeaveError("VALIDATION_FAILED", "Flow 不存在");
+        }
+        if (row.revision !== input.expectedRevision) {
+          throw new FlowWeaveError("FLOW_REVISION_CONFLICT", "Flow revision 已变化", {
+            expectedRevision: input.expectedRevision,
+            currentRevision: row.revision,
+          });
+        }
+        const document = parseFlowDocumentV2(JSON.parse(row.documentJson));
+        const fields = collectV2Fields(document);
+        const entries = Object.entries(input.values);
+        for (const [fieldId, value] of entries) {
+          const field = fields.get(fieldId);
+          if (!field || !isRecentValueCompatible(field, value)) {
+            throw new FlowWeaveError(
+              "FLOW_SENSITIVE_POLICY_INVALID",
+              "字段不允许保存最近值",
+            );
+          }
+        }
+        const now = new Date().toISOString();
+        for (const [fieldId, value] of entries) {
+          db.insert(dbSchema.flowFieldRecentValues)
+            .values({
+              flowId: input.flowId,
+              fieldId,
+              valueJson: JSON.stringify(value),
+              updatedAt: now,
+            })
+            .onConflictDoUpdate({
+              target: [
+                dbSchema.flowFieldRecentValues.flowId,
+                dbSchema.flowFieldRecentValues.fieldId,
+              ],
+              set: { valueJson: JSON.stringify(value), updatedAt: now },
+            })
+            .run();
+        }
+      });
+      saveTransaction.immediate();
+    } catch (error: unknown) {
+      persistenceFailure(error);
+    } finally {
+      closeProjectDatabase(sqlite);
+    }
+  }
+
+  getFlowFieldRecentValues(projectId: string, flowId: string): Record<string, FlowRecentValue> {
+    const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
+    try {
+      const row = db
+        .select()
+        .from(dbSchema.flows)
+        .where(and(eq(dbSchema.flows.projectId, projectId), eq(dbSchema.flows.id, flowId)))
+        .get();
+      if (!row) {
+        throw new FlowWeaveError("VALIDATION_FAILED", "Flow 不存在");
       }
+      const parsed = parseStoredFlow(row.documentJson);
+      if (parsed.schemaVersion === FLOW_SCHEMA_VERSION) {
+        return {};
+      }
+      const document = parsed;
+      const fields = collectV2Fields(document);
+      const result: Record<string, FlowRecentValue> = {};
+      for (const recent of db
+        .select()
+        .from(dbSchema.flowFieldRecentValues)
+        .where(eq(dbSchema.flowFieldRecentValues.flowId, flowId))
+        .all()) {
+        let value: unknown;
+        try {
+          value = JSON.parse(recent.valueJson);
+        } catch {
+          continue;
+        }
+        const field = fields.get(recent.fieldId);
+        if (field && isRecentValueCompatible(field, value)) {
+          result[recent.fieldId] = value;
+        }
+      }
+      return result;
     } finally {
       closeProjectDatabase(sqlite);
     }
@@ -829,10 +1360,17 @@ export class ProjectKnowledgeRepository {
       const row = db
         .select()
         .from(dbSchema.flows)
-        .where(eq(dbSchema.flows.id, flowId))
+        .where(and(eq(dbSchema.flows.projectId, projectId), eq(dbSchema.flows.id, flowId)))
         .get();
       if (!row) {
         return null;
+      }
+      if (row.schemaVersion !== FLOW_SCHEMA_VERSION) {
+        throw new FlowWeaveError(
+          "FLOW_SCHEMA_VERSION_UNSUPPORTED",
+          "legacy getFlowInProject 只允许读取 v1 Flow",
+          { schemaVersion: row.schemaVersion },
+        );
       }
       return parseFlowDocumentV1(JSON.parse(row.documentJson));
     } finally {
@@ -877,6 +1415,13 @@ export class ProjectKnowledgeRepository {
       if (!row) {
         return null;
       }
+      if (row.schemaVersion !== FLOW_SCHEMA_VERSION) {
+        throw new FlowWeaveError(
+          "FLOW_SCHEMA_VERSION_UNSUPPORTED",
+          "legacy getFlowVersion 只允许读取 v1 Flow",
+          { schemaVersion: row.schemaVersion },
+        );
+      }
       return parseFlowDocumentV1(JSON.parse(row.documentJson));
     } finally {
       closeProjectDatabase(sqlite);
@@ -898,6 +1443,8 @@ export class ProjectKnowledgeRepository {
       projectId: string;
       flowId: string;
       documentJson: string;
+      schemaVersion: number;
+      sourceRevision: number;
       changeMessage?: string;
       createdAt: string;
     },
@@ -916,16 +1463,211 @@ export class ProjectKnowledgeRepository {
         projectId: input.projectId,
         version: nextVersion,
         documentJson: input.documentJson,
+        schemaVersion: input.schemaVersion,
+        sourceRevision: input.sourceRevision,
         changeMessage: input.changeMessage ?? null,
         createdAt: input.createdAt,
       })
       .run();
   }
 
+  private cleanRecentValues(
+    db: ReturnType<typeof openProjectDatabase>["db"],
+    flowId: string,
+    document: AnyFlowDocument,
+  ): void {
+    if (document.schemaVersion === FLOW_SCHEMA_VERSION) {
+      db.delete(dbSchema.flowFieldRecentValues)
+        .where(eq(dbSchema.flowFieldRecentValues.flowId, flowId))
+        .run();
+      return;
+    }
+
+    const fields = collectV2Fields(document);
+    const rows = db
+      .select()
+      .from(dbSchema.flowFieldRecentValues)
+      .where(eq(dbSchema.flowFieldRecentValues.flowId, flowId))
+      .all();
+    for (const row of rows) {
+      let value: unknown;
+      try {
+        value = JSON.parse(row.valueJson);
+      } catch {
+        value = undefined;
+      }
+      const field = fields.get(row.fieldId);
+      if (!field || !isRecentValueCompatible(field, value)) {
+        db.delete(dbSchema.flowFieldRecentValues)
+          .where(
+            and(
+              eq(dbSchema.flowFieldRecentValues.flowId, flowId),
+              eq(dbSchema.flowFieldRecentValues.fieldId, row.fieldId),
+            ),
+          )
+          .run();
+      }
+    }
+  }
+
+  private sanitizeUpgradeHistory(
+    db: ReturnType<typeof openProjectDatabase>["db"],
+    projectId: string,
+    flowId: string,
+    current: FlowDocumentV1,
+    sensitiveVariableNames: ReadonlySet<string>,
+  ): { safeCurrent: FlowDocumentV1; sensitiveValues: ReadonlySet<string> } {
+    const sensitiveValues = new Set<string>();
+    const collectDefaults = (document: FlowDocumentV1) => {
+      for (const variable of document.variables) {
+        if (
+          sensitiveVariableNames.has(variable.name) &&
+          typeof variable.defaultValue === "string" &&
+          variable.defaultValue.length > 0
+        ) {
+          sensitiveValues.add(variable.defaultValue);
+        }
+      }
+    };
+    collectDefaults(current);
+
+    const versionRows = db
+      .select()
+      .from(dbSchema.flowVersions)
+      .where(
+        and(
+          eq(dbSchema.flowVersions.projectId, projectId),
+          eq(dbSchema.flowVersions.flowId, flowId),
+        ),
+      )
+      .all();
+    const sanitizedVersions = versionRows.map((row) => {
+      const document = parseStoredFlow(row.documentJson);
+      assertFlowIdentity(document, projectId, flowId);
+      if (document.schemaVersion !== FLOW_SCHEMA_VERSION) {
+        return { row, document };
+      }
+      collectDefaults(document);
+      return { row, document: sanitizeV1Document(document, sensitiveVariableNames) };
+    });
+
+    const executionRows = db
+      .select()
+      .from(dbSchema.executions)
+      .where(
+        and(
+          eq(dbSchema.executions.projectId, projectId),
+          eq(dbSchema.executions.flowId, flowId),
+        ),
+      )
+      .all();
+    const sanitizedExecutions = executionRows.map((row) => {
+      let variables: Record<string, unknown> | undefined;
+      if (row.variablesJson !== null) {
+        try {
+          const parsed = JSON.parse(row.variablesJson) as unknown;
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            throw new Error("invalid variables");
+          }
+          variables = { ...(parsed as Record<string, unknown>) };
+        } catch {
+          throw new FlowWeaveError(
+            "FLOW_PERSISTENCE_FAILED",
+            "历史执行上下文不可安全清理",
+          );
+        }
+        for (const name of sensitiveVariableNames) {
+          const value = variables[name];
+          if (typeof value === "string" && value.length > 0) {
+            sensitiveValues.add(value);
+          }
+          delete variables[name];
+        }
+      }
+
+      let flowSnapshotJson = row.flowSnapshotJson;
+      if (row.flowSnapshotJson !== null) {
+        const snapshot = parseStoredFlow(row.flowSnapshotJson);
+        if (snapshot.schemaVersion !== FLOW_SCHEMA_VERSION) {
+          throw new FlowWeaveError(
+            "FLOW_SCHEMA_VERSION_UNSUPPORTED",
+            "vNext-2 前不允许清理 v2 execution 快照",
+          );
+        }
+        collectDefaults(snapshot);
+        flowSnapshotJson = JSON.stringify(
+          sanitizeV1Document(snapshot, sensitiveVariableNames),
+        );
+      }
+      return {
+        row,
+        variablesJson: variables === undefined ? null : JSON.stringify(variables),
+        flowSnapshotJson,
+      };
+    });
+
+    for (const entry of sanitizedVersions) {
+      const safeDocumentJson = redactSensitiveStrings(
+        JSON.stringify(entry.document),
+        sensitiveValues,
+      );
+      db.update(dbSchema.flowVersions)
+        .set({
+          documentJson: safeDocumentJson ?? JSON.stringify(entry.document),
+          schemaVersion: entry.document.schemaVersion,
+          changeMessage: redactSensitiveStrings(entry.row.changeMessage, sensitiveValues),
+        })
+        .where(eq(dbSchema.flowVersions.id, entry.row.id))
+        .run();
+    }
+    for (const entry of sanitizedExecutions) {
+      db.update(dbSchema.executions)
+        .set({
+          variablesJson: entry.variablesJson,
+          flowSnapshotJson: entry.flowSnapshotJson,
+          environmentName: redactSensitiveStrings(entry.row.environmentName, sensitiveValues),
+          baseUrl: redactSensitiveStrings(entry.row.baseUrl, sensitiveValues),
+          storageStatePath: redactSensitiveStrings(entry.row.storageStatePath, sensitiveValues),
+        })
+        .where(eq(dbSchema.executions.id, entry.row.id))
+        .run();
+
+      const stepRows = db
+        .select()
+        .from(dbSchema.executionSteps)
+        .where(eq(dbSchema.executionSteps.executionId, entry.row.id))
+        .all();
+      for (const step of stepRows) {
+        db.update(dbSchema.executionSteps)
+          .set({
+            errorMessage: redactSensitiveStrings(step.errorMessage, sensitiveValues),
+            screenshotPath: redactSensitiveStrings(step.screenshotPath, sensitiveValues),
+            diagnosticPath: redactSensitiveStrings(step.diagnosticPath, sensitiveValues),
+          })
+          .where(eq(dbSchema.executionSteps.id, step.id))
+          .run();
+      }
+    }
+    const safeCurrent = sanitizeV1Document(current, sensitiveVariableNames);
+    const redactedCurrentJson = redactSensitiveStrings(
+      JSON.stringify(safeCurrent),
+      sensitiveValues,
+    );
+    return {
+      safeCurrent: parseFlowDocumentV1(
+        JSON.parse(redactedCurrentJson ?? JSON.stringify(safeCurrent)),
+      ),
+      sensitiveValues,
+    };
+  }
+
   private toFlowVersionRecord(
     row: typeof dbSchema.flowVersions.$inferSelect,
   ): FlowVersionRecord {
-    const doc = parseFlowDocumentV1(JSON.parse(row.documentJson));
+    const doc = parseStoredFlow(row.documentJson);
+    if (doc.schemaVersion !== row.schemaVersion) {
+      throw new FlowWeaveError("FLOW_PERSISTENCE_FAILED", "Flow 版本 schema 元数据不一致");
+    }
     return {
       id: row.id,
       flowId: row.flowId,
@@ -933,6 +1675,8 @@ export class ProjectKnowledgeRepository {
       version: row.version,
       name: doc.name,
       stepCount: doc.steps.length,
+      schemaVersion: doc.schemaVersion,
+      sourceRevision: row.sourceRevision,
       createdAt: row.createdAt,
       changeMessage: row.changeMessage ?? undefined,
     };
@@ -944,9 +1688,42 @@ export class ProjectKnowledgeRepository {
     this.assertExistingProject(projectId);
     const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
     try {
-      ensureExecutionRunContextColumns(sqlite);
-      ensureExecutionStepDiagnosticPathColumn(sqlite);
       const saveTransaction = sqlite.transaction(() => {
+        const flow = db
+          .select({
+            id: dbSchema.flows.id,
+            projectId: dbSchema.flows.projectId,
+            schemaVersion: dbSchema.flows.schemaVersion,
+            documentJson: dbSchema.flows.documentJson,
+          })
+          .from(dbSchema.flows)
+          .where(
+            and(
+              eq(dbSchema.flows.projectId, projectId),
+              eq(dbSchema.flows.id, result.flowId),
+            ),
+          )
+          .get();
+        if (!flow) {
+          throw new FlowWeaveError("VALIDATION_FAILED", "执行引用的 Flow 不存在");
+        }
+        if (flow.schemaVersion !== FLOW_SCHEMA_VERSION) {
+          throw new FlowWeaveError(
+            "FLOW_SCHEMA_VERSION_UNSUPPORTED",
+            "vNext-2 前不能保存 v2 execution",
+            { schemaVersion: flow.schemaVersion },
+          );
+        }
+        const storedFlow = parseFlowDocumentV1(JSON.parse(flow.documentJson));
+        if (storedFlow.id !== result.flowId || storedFlow.projectId !== projectId) {
+          throw new FlowWeaveError("FLOW_PERSISTENCE_FAILED", "execution 引用的 Flow 身份不一致");
+        }
+        if (result.flowSnapshot) {
+          const snapshot = parseFlowDocumentV1(result.flowSnapshot);
+          if (snapshot.id !== result.flowId || snapshot.projectId !== projectId) {
+            throw new FlowWeaveError("VALIDATION_FAILED", "execution 快照身份不一致");
+          }
+        }
         db.insert(dbSchema.executions)
           .values({
             id: result.executionId,
@@ -1440,6 +2217,7 @@ export class ProjectKnowledgeRepository {
           createdAt: dbSchema.flows.createdAt,
         })
         .from(dbSchema.flows)
+        .where(eq(dbSchema.flows.projectId, projectId))
         .orderBy(desc(dbSchema.flows.createdAt))
         .all();
     } finally {
@@ -1459,10 +2237,18 @@ export class ProjectKnowledgeRepository {
       const row = db
         .select()
         .from(dbSchema.flows)
-        .where(eq(dbSchema.flows.id, flowId))
+        .where(and(eq(dbSchema.flows.projectId, projectId), eq(dbSchema.flows.id, flowId)))
         .get();
       if (!row) {
         throw new Error("Flow 不存在");
+      }
+
+      if (row.schemaVersion !== FLOW_SCHEMA_VERSION) {
+        throw new FlowWeaveError(
+          "FLOW_SCHEMA_VERSION_UNSUPPORTED",
+          "legacy renameFlow 只允许更新 v1 Flow",
+          { schemaVersion: row.schemaVersion },
+        );
       }
 
       const document = parseFlowDocumentV1(JSON.parse(row.documentJson));
@@ -1476,14 +2262,26 @@ export class ProjectKnowledgeRepository {
         },
       };
 
-      db.update(dbSchema.flows)
+      const update = db.update(dbSchema.flows)
         .set({
           name: trimmed,
           documentJson: JSON.stringify(updated),
+          revision: row.revision + 1,
           updatedAt: now,
         })
-        .where(eq(dbSchema.flows.id, flowId))
+        .where(
+          and(
+            eq(dbSchema.flows.projectId, projectId),
+            eq(dbSchema.flows.id, flowId),
+            eq(dbSchema.flows.revision, row.revision),
+          ),
+        )
         .run();
+      if (update.changes !== 1) {
+        throw new FlowWeaveError("FLOW_REVISION_CONFLICT", "Flow revision 已变化", {
+          expectedRevision: row.revision,
+        });
+      }
 
       return updated;
     } finally {
@@ -1515,6 +2313,13 @@ export class ProjectKnowledgeRepository {
           .where(eq(dbSchema.flows.id, flowId))
           .get();
         if (row) {
+          if (row.schemaVersion !== FLOW_SCHEMA_VERSION) {
+            throw new FlowWeaveError(
+              "FLOW_SCHEMA_VERSION_UNSUPPORTED",
+              "legacy getFlow 只允许读取 v1 Flow",
+              { schemaVersion: row.schemaVersion },
+            );
+          }
           return parseFlowDocumentV1(JSON.parse(row.documentJson));
         }
       } finally {
@@ -1528,8 +2333,6 @@ export class ProjectKnowledgeRepository {
   listExecutions(projectId: string, limit = 50): ExecutionResult[] {
     const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
     try {
-      ensureExecutionRunContextColumns(sqlite);
-      ensureExecutionStepDiagnosticPathColumn(sqlite);
       const rows = db
         .select()
         .from(dbSchema.executions)
@@ -1547,8 +2350,6 @@ export class ProjectKnowledgeRepository {
   getLatestExecutionForFlow(projectId: string, flowId: string): ExecutionResult | null {
     const { db, sqlite } = openProjectDatabase(projectId, this.dataDir, this.databaseOptions);
     try {
-      ensureExecutionRunContextColumns(sqlite);
-      ensureExecutionStepDiagnosticPathColumn(sqlite);
       const row = db
         .select()
         .from(dbSchema.executions)
@@ -1585,8 +2386,6 @@ export class ProjectKnowledgeRepository {
 
       const { db, sqlite } = openProjectDatabase(entry, this.dataDir, this.databaseOptions);
       try {
-        ensureExecutionRunContextColumns(sqlite);
-        ensureExecutionStepDiagnosticPathColumn(sqlite);
         const row = db
           .select()
           .from(dbSchema.executions)

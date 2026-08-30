@@ -1,15 +1,17 @@
 export const PROJECT_KNOWLEDGE_PHASE = "P2" as const;
 
-export {
-  getDefaultDataDir,
-  resolveRunDirectory,
-  assertSafeResourceId,
-} from "./paths.js";
+export { getDefaultDataDir, resolveRunDirectory, assertSafeResourceId } from "./paths.js";
 export type {
   ProjectRef,
   ProjectEnvironment,
   PageSnapshotRecord,
   FlowVersionRecord,
+  FlowRevisionRecord,
+  SaveFlowRevisionInput,
+  RestoreFlowRevisionInput,
+  UpgradeFlowToV2Input,
+  FlowRecentValue,
+  SaveFlowFieldRecentValuesInput,
   FlowImportResult,
   ExecutionRunContext,
   ExecutionResult,

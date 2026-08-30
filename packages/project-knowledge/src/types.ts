@@ -1,4 +1,9 @@
-import type { FlowDocument, FlowPortabilityWarning } from "@flowweave/flow-dsl";
+import type {
+  AnyFlowDocument,
+  FlowDocument,
+  FlowPortabilityWarning,
+  FlowV1UpgradePreviewOptions,
+} from "@flowweave/flow-dsl";
 
 export type ProjectRef = {
   id: string;
@@ -19,8 +24,50 @@ export type FlowVersionRecord = {
   version: number;
   name: string;
   stepCount: number;
+  /** 旧调用方兼容：新迁移后的 repository 始终返回该元数据。 */
+  schemaVersion?: 1 | 2;
+  sourceRevision?: number;
   createdAt: string;
   changeMessage?: string;
+};
+
+export type FlowRevisionRecord = {
+  document: AnyFlowDocument;
+  revision: number;
+  updatedAt: string;
+};
+
+export type SaveFlowRevisionInput = {
+  projectId: string;
+  flowId: string;
+  document: AnyFlowDocument;
+  expectedRevision: number;
+  changeMessage?: string;
+};
+
+export type RestoreFlowRevisionInput = {
+  projectId: string;
+  flowId: string;
+  versionId: string;
+  expectedRevision: number;
+  changeMessage?: string;
+};
+
+export type UpgradeFlowToV2Input = {
+  projectId: string;
+  flowId: string;
+  expectedRevision: number;
+  reportFingerprint: string;
+  rememberSelections?: FlowV1UpgradePreviewOptions["rememberSelections"];
+};
+
+export type FlowRecentValue = string | number | boolean;
+
+export type SaveFlowFieldRecentValuesInput = {
+  projectId: string;
+  flowId: string;
+  expectedRevision: number;
+  values: Record<string, FlowRecentValue>;
 };
 
 export type ProjectEnvironment = {

@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockDatabase = vi.fn(() => ({
-  pragma: vi.fn(),
-  exec: vi.fn(),
-  close: vi.fn(),
-}));
+const mockDatabase = vi.fn(() => {
+  const database = {
+    pragma: vi.fn((statement: string) => (statement.startsWith("table_info(") ? [] : undefined)),
+    exec: vi.fn(),
+    close: vi.fn(),
+    transaction: vi.fn((callback: () => void) => ({ immediate: callback })),
+  };
+  return database;
+});
 
 const mockDrizzle = vi.fn(() => ({ kind: "mock-db" }));
 
@@ -34,11 +38,8 @@ describe("openProjectDatabase", () => {
       },
     );
 
-    expect(mockDatabase).toHaveBeenCalledWith(
-      expect.stringContaining("project_native_binding"),
-      {
-        nativeBinding: "/tmp/flowweave-electron/better_sqlite3.node",
-      },
-    );
+    expect(mockDatabase).toHaveBeenCalledWith(expect.stringContaining("project_native_binding"), {
+      nativeBinding: "/tmp/flowweave-electron/better_sqlite3.node",
+    });
   });
 });

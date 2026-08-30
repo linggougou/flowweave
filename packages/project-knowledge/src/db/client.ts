@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS flows (
   name TEXT NOT NULL,
   document_json TEXT NOT NULL,
   schema_version INTEGER NOT NULL,
+  revision INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -84,8 +85,18 @@ CREATE TABLE IF NOT EXISTS flow_versions (
   project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   version INTEGER NOT NULL,
   document_json TEXT NOT NULL,
+  schema_version INTEGER NOT NULL DEFAULT 1,
+  source_revision INTEGER NOT NULL DEFAULT 1,
   change_message TEXT,
   created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS flow_field_recent_values (
+  flow_id TEXT NOT NULL REFERENCES flows(id) ON DELETE CASCADE,
+  field_id TEXT NOT NULL,
+  value_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (flow_id, field_id)
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_flow_versions_flow_version
@@ -98,6 +109,58 @@ CREATE INDEX IF NOT EXISTS idx_page_snapshots_project_id ON page_snapshots(proje
 CREATE INDEX IF NOT EXISTS idx_executions_project_id ON executions(project_id);
 CREATE INDEX IF NOT EXISTS idx_execution_steps_execution_id ON execution_steps(execution_id);
 `;
+
+function hasColumn(sqlite: Database.Database, table: string, column: string): boolean {
+  const columns = sqlite.pragma(`table_info(${table})`) as Array<{ name: string }>;
+  return columns.some((entry) => entry.name === column);
+}
+
+/**
+ * 所有可写打开统一经过此幂等迁移入口。
+ * 迁移只增列、增表和增索引，既有 v1 行用默认 revision/schema 元数据补齐。
+ */
+function runWritableMigrations(sqlite: Database.Database): void {
+  const migrate = sqlite.transaction(() => {
+    if (!hasColumn(sqlite, "project_environments", "storage_state_path")) {
+      sqlite.exec("ALTER TABLE project_environments ADD COLUMN storage_state_path TEXT");
+    }
+    if (!hasColumn(sqlite, "execution_steps", "diagnostic_path")) {
+      sqlite.exec("ALTER TABLE execution_steps ADD COLUMN diagnostic_path TEXT");
+    }
+    for (const [column, declaration] of [
+      ["flow_snapshot_json", "TEXT"],
+      ["environment_name", "TEXT"],
+      ["base_url", "TEXT"],
+      ["storage_state_path", "TEXT"],
+      ["variables_json", "TEXT"],
+    ] as const) {
+      if (!hasColumn(sqlite, "executions", column)) {
+        sqlite.exec(`ALTER TABLE executions ADD COLUMN ${column} ${declaration}`);
+      }
+    }
+    if (!hasColumn(sqlite, "flows", "revision")) {
+      sqlite.exec("ALTER TABLE flows ADD COLUMN revision INTEGER NOT NULL DEFAULT 1");
+    }
+    if (!hasColumn(sqlite, "flow_versions", "schema_version")) {
+      sqlite.exec("ALTER TABLE flow_versions ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1");
+    }
+    if (!hasColumn(sqlite, "flow_versions", "source_revision")) {
+      sqlite.exec(
+        "ALTER TABLE flow_versions ADD COLUMN source_revision INTEGER NOT NULL DEFAULT 1",
+      );
+    }
+    sqlite.exec(`
+      CREATE TABLE IF NOT EXISTS flow_field_recent_values (
+        flow_id TEXT NOT NULL REFERENCES flows(id) ON DELETE CASCADE,
+        field_id TEXT NOT NULL,
+        value_json TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (flow_id, field_id)
+      )
+    `);
+  });
+  migrate.immediate();
+}
 
 /** 将 `~` 展开为本机 home 目录 */
 export function expandHomePath(path: string): string {
@@ -133,7 +196,9 @@ export function openProjectDatabase(
     : new Database(storePath);
   sqlite.pragma("journal_mode = WAL");
   sqlite.pragma("foreign_keys = ON");
+  sqlite.pragma("secure_delete = ON");
   sqlite.exec(INIT_SQL);
+  runWritableMigrations(sqlite);
 
   const db = drizzle(sqlite, { schema });
   return { db, sqlite, storePath };

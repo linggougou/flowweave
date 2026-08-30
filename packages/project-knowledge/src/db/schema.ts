@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const projects = sqliteTable("projects", {
   id: text("id").primaryKey(),
@@ -15,6 +15,7 @@ export const flows = sqliteTable("flows", {
   name: text("name").notNull(),
   documentJson: text("document_json").notNull(),
   schemaVersion: integer("schema_version").notNull(),
+  revision: integer("revision").notNull().default(1),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 });
@@ -29,9 +30,24 @@ export const flowVersions = sqliteTable("flow_versions", {
     .references(() => projects.id, { onDelete: "cascade" }),
   version: integer("version").notNull(),
   documentJson: text("document_json").notNull(),
+  schemaVersion: integer("schema_version").notNull().default(1),
+  sourceRevision: integer("source_revision").notNull().default(1),
   changeMessage: text("change_message"),
   createdAt: text("created_at").notNull(),
 });
+
+export const flowFieldRecentValues = sqliteTable(
+  "flow_field_recent_values",
+  {
+    flowId: text("flow_id")
+      .notNull()
+      .references(() => flows.id, { onDelete: "cascade" }),
+    fieldId: text("field_id").notNull(),
+    valueJson: text("value_json").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.flowId, table.fieldId] })],
+);
 
 export const executions = sqliteTable("executions", {
   id: text("id").primaryKey(),
