@@ -1,0 +1,167 @@
+{
+  "review_id": "vnext-1-g1a-runtime-guard-r2-2026-08-30",
+  "task_id": "vNext-1A-C",
+  "lane": "g1a-runtime-guard-r2",
+  "review_level": "L2",
+  "rubric_id": "vnext-1-g1a-c-runtime-guard-l2-v2",
+  "reviewed_sha": "d92ce75",
+  "artifact_refs": [
+    "baseline:37cf717",
+    "previous-candidate:093e92e",
+    "reviewed-commit:d92ce75",
+    "doc:PROJECT_ROUTE_LOCK.md",
+    "doc:docs/exec-plans/active/vnext-1a-1b-data-foundation.md",
+    "code:packages/runtime/src/playwright-runner.ts",
+    "code:packages/runtime/src/playwright-launch-options.test.ts"
+  ],
+  "command_results": [
+    {
+      "cmd": "git diff --stat 37cf717..d92ce75",
+      "status": "pass",
+      "result": "最终净 diff 仅命中 packages/runtime/src/playwright-runner.ts 与 packages/runtime/src/playwright-launch-options.test.ts。"
+    },
+    {
+      "cmd": "git log --oneline --max-count=4",
+      "status": "pass",
+      "result": "确认 d92ce75 之下含 7a90284 与其回滚 f1f201d；最终 HEAD 只保留安全归一化与测试补强的净效果，无无关净改动。"
+    },
+    {
+      "cmd": "pnpm typecheck",
+      "status": "pass",
+      "result": "turbo typecheck 21/21 successful。"
+    },
+    {
+      "cmd": "pnpm lint",
+      "status": "pass",
+      "result": "turbo lint 13/13 successful。"
+    },
+    {
+      "cmd": "pnpm build",
+      "status": "pass",
+      "result": "turbo build 13/13 successful。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/runtime test",
+      "status": "pass",
+      "result": "重跑后 4 test files / 52 tests 全绿；其中新增 launch-options suite 为 9 tests，整体覆盖 playwright-runner、real-page matrix、recorded-replay matrix。"
+    },
+    {
+      "cmd": "node malformed-schemaVersion probe",
+      "status": "pass",
+      "result": "object/array/string schemaVersion 均返回 {expectedVersion:1, receivedVersion:\"invalid\"}，missing 返回 \"missing\"，错误对象序列化均不含 top-secret/abc。"
+    },
+    {
+      "cmd": "首次 pnpm --filter @flowweave/runtime test",
+      "status": "skipped",
+      "result": "在 workspace 依赖尚未构建前先报包入口解析失败；随后经 fresh build 后重跑通过，判定为验证顺序问题，不是候选回归。"
+    }
+  ],
+  "hard_gates": [
+    {
+      "id": "net-diff-scope-clean",
+      "status": "pass",
+      "evidence": [
+        "baseline..HEAD 只改 runtime 实现与对应测试文件。",
+        "已核对中间 revert 历史，最终净 diff 无格式化噪音或路线外文件。"
+      ]
+    },
+    {
+      "id": "reject-non-v1-before-runtime-side-effects",
+      "status": "pass",
+      "evidence": [
+        "packages/runtime/src/playwright-runner.ts:2233-2248 在 artifactDir/mkdir、progress、Chromium 前先比较 schemaVersion 并抛 FLOW_SCHEMA_MISMATCH。",
+        "packages/runtime/src/playwright-launch-options.test.ts:71-137 覆盖 v2、object、array、string、missing 五类输入，统一断言 artifactDir 未创建、progress 未发送、launch / launchPersistentContext 未调用。"
+      ]
+    },
+    {
+      "id": "error-details-no-raw-object-leak",
+      "status": "pass",
+      "evidence": [
+        "packages/runtime/src/playwright-runner.ts:2235-2240 将 receivedVersion 归一化为 number / \"missing\" / \"invalid\"。",
+        "独立 node probe 输出 object/array/string 均为 receivedVersion:\"invalid\"，missing 为 \"missing\"，且 JSON 序列化不包含 top-secret/abc。"
+      ]
+    },
+    {
+      "id": "v1-runtime-regression-green",
+      "status": "pass",
+      "evidence": [
+        "fresh `pnpm --filter @flowweave/runtime test` 通过 52/52。",
+        "src/playwright-runner.test.ts 38/38、src/real-page-matrix.test.ts 4/4、src/recorded-replay-matrix.test.ts 1/1 均通过，v1 主链路保持回归全绿。"
+      ]
+    },
+    {
+      "id": "fresh-typecheck-lint-build-green",
+      "status": "pass",
+      "evidence": [
+        "`pnpm typecheck` -> 21/21 successful。",
+        "`pnpm lint` -> 13/13 successful。",
+        "`pnpm build` -> 13/13 successful。"
+      ]
+    }
+  ],
+  "findings": [],
+  "p0_count": 0,
+  "p1_count": 0,
+  "p2_count": 0,
+  "dimensions": [
+    {
+      "name": "correctness",
+      "score": 25,
+      "max_score": 25,
+      "reason": "guard 顺序正确，新增归一化逻辑闭合了首审的错误 details 缺口。"
+    },
+    {
+      "name": "security",
+      "score": 25,
+      "max_score": 25,
+      "reason": "raw/cast schemaVersion 不再把任意对象带进 FlowWeaveError.details，独立 probe 也验证未泄漏敏感哨兵。"
+    },
+    {
+      "name": "regression_safety",
+      "score": 20,
+      "max_score": 20,
+      "reason": "runtime 全量回归 52/52，全仓 typecheck/lint/build 全绿；新增参数化测试已把首审边界固化。"
+    },
+    {
+      "name": "route_discipline",
+      "score": 10,
+      "max_score": 10,
+      "reason": "最终净 diff 严格停留在 G1A-C runtime guard 与测试补强，没有无关净改动。"
+    },
+    {
+      "name": "evidence_quality",
+      "score": 20,
+      "max_score": 20,
+      "reason": "同时具备净 diff 审查、fresh 门禁、参数化测试和独立 probe 四层证据。"
+    }
+  ],
+  "penalties": [],
+  "totals": {
+    "raw_score": 100,
+    "penalty_total": 0,
+    "final_score": 100
+  },
+  "verdict": "PASS",
+  "required_fixes": [],
+  "nice_to_have": [
+    "后续 G1B 或集成轨可继续把 Studio 级 run directory 分配前拒绝也固化为跨入口测试。"
+  ],
+  "reviewers": [
+    {
+      "role": "verifier",
+      "conclusion": "PASS",
+      "summary": "首审两项 required fixes 已闭合，fresh 门禁与 v1 回归全绿。"
+    },
+    {
+      "role": "strict_judge",
+      "conclusion": "PASS",
+      "summary": "修订候选范围克制，修复点与测试点对齐，没有发现新的正确性或安全回归。"
+    },
+    {
+      "role": "chief_reviewer",
+      "conclusion": "PASS",
+      "summary": "当前分轨已满足独立 Judge 出口，可按 PASS 进入主代理后续集成核对。"
+    }
+  ],
+  "reviewed_at": "2026-08-30T14:31:00+08:00"
+}
