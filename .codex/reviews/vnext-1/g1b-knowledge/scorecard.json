@@ -1,0 +1,326 @@
+{
+  "review_id": "vnext-1-g1b-knowledge-l3-2026-08-30",
+  "task_id": "vNext-1B-G1B",
+  "lane": "g1b-knowledge",
+  "review_level": "L3",
+  "rubric_id": "vnext-1b-knowledge-l3-v1",
+  "baseline_sha": "fff2c89",
+  "reviewed_sha": "b60fb3a0ac1795ff7714f8f1b858e7720e9a5996",
+  "artifact_refs": [
+    "doc:PROJECT_ROUTE_LOCK.md",
+    "doc:docs/exec-plans/active/vnext-1a-1b-data-foundation.md",
+    "doc:docs/design-docs/vnext-flow-schema-migration.md",
+    "doc:docs/adr/0009-vnext-input-node-and-schema-versioning.md",
+    "code:packages/project-knowledge/src/db/client.ts",
+    "code:packages/project-knowledge/src/db/schema.ts",
+    "code:packages/project-knowledge/src/repository.ts",
+    "code:packages/project-knowledge/src/types.ts",
+    "code:packages/project-knowledge/src/index.ts",
+    "test:packages/project-knowledge/src/vnext-persistence.test.ts",
+    "code:packages/local-api/src/index.ts"
+  ],
+  "command_results": [
+    {
+      "cmd": "pnpm install --frozen-lockfile",
+      "status": "pass",
+      "result": "Node 24.14.0 / pnpm 9.15.4；801 个依赖从本地 store 复用，lockfile 未变化。"
+    },
+    {
+      "cmd": "pnpm turbo typecheck lint build --force",
+      "status": "pass",
+      "result": "39/39 successful，0 cached；全仓 typecheck/lint/build 均强制绕过 Turbo 缓存执行。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/project-knowledge test",
+      "status": "pass",
+      "result": "6 个测试文件、100 个测试通过。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/flow-dsl test",
+      "status": "pass",
+      "result": "4 个测试文件、61 个测试通过。"
+    },
+    {
+      "cmd": "node attack: two real processes use expectedRevision=1",
+      "status": "pass",
+      "result": "两个独立 Node 进程同刻写入；结果恰为 1 success + 1 FLOW_REVISION_CONFLICT，最终 revision=2。"
+    },
+    {
+      "cmd": "node attack: legacy write after revision-aware update",
+      "status": "fail",
+      "result": "saveFlowRevision 先把 Flow 写到 rev2；无 expectedRevision 的 legacy saveFlow 接受旧快照并覆盖到 rev3，renameFlow 随后同样无 caller revision 写到 rev4。"
+    },
+    {
+      "cmd": "node attack: JSON-escaped sensitive default copied into v2",
+      "status": "fail",
+      "result": "包含引号、反斜杠和换行的已识别 secret 同时位于 sensitive default 与 description；raw includes 检查返回 false，升级成功，v2 当前文档和 SQLite document_json 解码后仍等于 secret，主文件包含 JSON-escaped secret bytes。"
+    },
+    {
+      "cmd": "node attack: execution flow_snapshot_json cleanup",
+      "status": "fail",
+      "result": "普通 ASCII canary 的 variables_json 被清理，但 flow_snapshot_json.description 未清理；SQLite 主文件和 getExecution API 均仍包含 canary。"
+    },
+    {
+      "cmd": "node attack: live SQLite reader during successful upgrade",
+      "status": "fail",
+      "result": "只读事务保持旧页后升级仍返回成功并提交 revision=2；wal_checkpoint(TRUNCATE) 的 busy 结果被忽略，SQLite 主文件继续命中简单 canary。"
+    },
+    {
+      "cmd": "git diff --check fff2c89..b60fb3a && git diff --check",
+      "status": "pass",
+      "result": "均无输出。"
+    },
+    {
+      "cmd": "pnpm exec prettier --check <7 reviewed files>",
+      "status": "inherited-warning",
+      "result": "repository.ts 仍有文件级格式差异；baseline 同文件已不满足当前 Prettier，候选未新增文件级格式失败，fresh lint 通过。"
+    }
+  ],
+  "hard_gates": [
+    {
+      "id": "candidate-and-scope",
+      "status": "pass",
+      "evidence": [
+        "HEAD 精确为 b60fb3a0ac1795ff7714f8f1b858e7720e9a5996，baseline 为 fff2c89。",
+        "候选净 diff 只涉及 project-knowledge 的 7 个实现/测试文件；审查未修改候选代码。"
+      ]
+    },
+    {
+      "id": "idempotent-writable-migration",
+      "status": "pass",
+      "evidence": [
+        "旧库增列 revision/schema_version/source_revision 并创建 recent-values 表，重复打开测试通过。",
+        "迁移使用 immediate transaction，既有 v1 Flow revision 初始化为 1；实现未删除旧 Flow、版本或 execution 表数据。"
+      ]
+    },
+    {
+      "id": "revision-aware-core-transactions",
+      "status": "pass",
+      "evidence": [
+        "saveFlowRevision、upgradeFlowToV2、restoreFlowRevision 均调用 better-sqlite3 transaction.immediate，事务体内无 async。",
+        "版本快照、recent cleanup、当前文档更新与最终 revision CAS 位于同一同步事务；no-op 保存不建版本也不递增 revision。",
+        "真实双进程攻击证明相同 expectedRevision 恰有一个成功，另一方返回 FLOW_REVISION_CONFLICT。"
+      ]
+    },
+    {
+      "id": "all-mutation-paths-enforce-caller-cas",
+      "status": "fail",
+      "evidence": [
+        "packages/project-knowledge/src/repository.ts:770-826 的 saveFlow 可更新既有 v1，但 API 没有 expectedRevision，UPDATE 也没有 revision predicate。",
+        "packages/project-knowledge/src/repository.ts:2229-2286 的 renameFlow 虽用内部读到的 revision 做 UPDATE 条件，却没有 caller expectedRevision，因此陈旧请求仍会基于最新行成功写入。",
+        "packages/project-knowledge/src/repository.ts:1431-1437 的 restoreFlowVersion 继续经 saveFlow 恢复；Local API POST/PATCH/restore 路由均未接收 expectedRevision。",
+        "独立攻击实际观察到 rev2 被 legacy saveFlow 的旧快照覆盖为 rev3，随后无 expectedRevision rename 写为 rev4。"
+      ]
+    },
+    {
+      "id": "upgrade-fingerprint-cleanup-and-zero-secret",
+      "status": "fail",
+      "evidence": [
+        "fingerprint 在 immediate transaction 内重算，blocking/stale 路径和故障注入回滚矩阵通过。",
+        "packages/project-knowledge/src/repository.ts:1016-1019 在 JSON.stringify 后搜索未转义 secret；含 JSON 转义字符的 secret 可绕过检查并进入 v2 当前 document_json。",
+        "packages/project-knowledge/src/repository.ts:1588-1600 只移除 flow snapshot 的 sensitive default，1624-1628 原样回写 flowSnapshotJson，其他字段中的已识别 secret 未被清理。",
+        "packages/project-knowledge/src/repository.ts:1071-1073 忽略 wal_checkpoint(TRUNCATE) busy 结果；活跃 reader 下升级返回成功但主数据库仍命中 canary。"
+      ]
+    },
+    {
+      "id": "recent-values-policy",
+      "status": "pass",
+      "evidence": [
+        "写入只接受当前 v2 中 sensitive:false、remember:lastValue 且类型匹配的有限标量。",
+        "save/restore 对字段删除、敏感化、remember 收紧做事务内清理，恢复 v1 清空该 Flow 全部最近值；敏感写入错误不回显输入值。"
+      ]
+    },
+    {
+      "id": "legacy-v2-fail-closed",
+      "status": "pass",
+      "evidence": [
+        "legacy save/read/rename/get-version 对 v2 fail closed，saveExecution 在写 execution/steps 前查询当前 Flow 并拒绝 v2。",
+        "v1 repository 回归保持 100/100 Knowledge 测试全绿。"
+      ]
+    },
+    {
+      "id": "v2-import-export-contract",
+      "status": "fail",
+      "evidence": [
+        "packages/project-knowledge/src/repository.ts:1284-1338 的 importFlow 仍只调用 v1 createPortableFlowDocument；现有测试把 schemaVersion=2 定义为无效输入。",
+        "FlowImportResult.flow 仍固定为 v1 FlowDocument，旧 Studio export 也经 v1-only getFlowInProject/createPortableFlowDocument；没有冻结设计要求的 v2 独立副本导入与同版本安全导出边界。"
+      ]
+    },
+    {
+      "id": "safe-errors-and-evidence-quality",
+      "status": "fail",
+      "evidence": [
+        "结构化 persistence/revision/policy 错误本身未观察到 Flow、default、SQL、绝对路径或 canary 回显。",
+        "但现有 canary 测试未提供 flowSnapshot、只使用无需 JSON 转义的字符串，且关闭并释放所有 reader 后才扫描，因此无法证明真实 SQLite/WAL/SHM 零命中；独立三类攻击均推翻其安全结论。"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "P0-01",
+      "severity": "P0",
+      "title": "legacy save/rename/restore 仍可在调用方没有 expectedRevision 时覆盖 v1",
+      "evidence_refs": [
+        "packages/project-knowledge/src/repository.ts:770",
+        "packages/project-knowledge/src/repository.ts:819",
+        "packages/project-knowledge/src/repository.ts:1431",
+        "packages/project-knowledge/src/repository.ts:2229",
+        "packages/local-api/src/index.ts:120",
+        "packages/local-api/src/index.ts:186",
+        "packages/local-api/src/index.ts:285",
+        "attack:rev2 -> legacy save rev3 -> rename rev4"
+      ],
+      "impact": "旧 recorder POST 或重命名/恢复请求可在 revision-aware 编辑之后静默覆盖较新的 v1 内容。内部先读再比较当前 revision 只能防同一瞬间的 SQL race，不能检测调用方持有的陈旧基线，直接违反冻结的所有写路径 CAS 红线。"
+    },
+    {
+      "id": "P0-02",
+      "severity": "P0",
+      "title": "升级安全清理可把已识别秘密写入 v2、execution API 与 SQLite，现有 canary 测试产生假阴性",
+      "evidence_refs": [
+        "packages/project-knowledge/src/repository.ts:153",
+        "packages/project-knowledge/src/repository.ts:1016",
+        "packages/project-knowledge/src/repository.ts:1071",
+        "packages/project-knowledge/src/repository.ts:1588",
+        "packages/project-knowledge/src/repository.ts:1624",
+        "packages/project-knowledge/src/vnext-persistence.test.ts:448",
+        "attack:JSON-escaped secret persisted in current v2",
+        "attack:plain canary persisted in execution flow_snapshot_json/API",
+        "attack:live reader leaves canary in main SQLite after reported success"
+      ],
+      "impact": "显式升级成功并不满足敏感值零落盘合同：秘密可成为新的 v2 当前文档内容、继续通过 execution detail 返回，或在活跃 reader 阻止 checkpoint 时残留于数据库主文件。该问题直接破坏阶段安全门禁，且现有绿测不能检出。"
+    },
+    {
+      "id": "P1-01",
+      "severity": "P1",
+      "title": "冻结的 v2 导入/导出数据闭环尚未实现",
+      "evidence_refs": [
+        "docs/design-docs/vnext-flow-schema-migration.md:443",
+        "docs/design-docs/vnext-flow-schema-migration.md:455",
+        "docs/design-docs/vnext-flow-schema-migration.md:565",
+        "packages/project-knowledge/src/repository.ts:1284",
+        "packages/project-knowledge/src/types.ts:14",
+        "packages/project-knowledge/src/import-flow.test.ts:113"
+      ],
+      "impact": "合法 strict v2 无法按设计导入为 revision=1 的独立副本，也没有受控的同版本安全导出路径；候选测试反而把 v2 标成无效 schema，G1B 退出门禁中的 v2 import/export 往返没有证据。"
+    }
+  ],
+  "p0_count": 2,
+  "p1_count": 1,
+  "p2_count": 0,
+  "dimensions": [
+    {
+      "name": "migration_and_metadata",
+      "score": 19,
+      "max_score": 20,
+      "reason": "集中幂等增量迁移、revision 与版本 schema/source 元数据主路径成立；旧库重复打开测试通过。"
+    },
+    {
+      "name": "atomicity_revision_and_cas",
+      "score": 23,
+      "max_score": 25,
+      "reason": "新 API 的 immediate transaction、final CAS、no-op 和真实双进程竞争均正确；legacy 绕过作为独立 P0 penalty。"
+    },
+    {
+      "name": "sensitive_data_and_error_safety",
+      "score": 22,
+      "max_score": 25,
+      "reason": "策略模型与安全错误表面较完整，但多条真实秘密残留路径作为独立 P0 penalty。"
+    },
+    {
+      "name": "compatibility_and_api_contract",
+      "score": 13,
+      "max_score": 15,
+      "reason": "v1 与 v2 读取/执行隔离正确；v2 import/export 缺失作为独立 P1 penalty。"
+    },
+    {
+      "name": "tests_scope_and_evidence",
+      "score": 13,
+      "max_score": 15,
+      "reason": "100 项 Knowledge、61 项 DSL 和全仓无缓存门禁均绿，但 canary fixture、legacy CAS 与并发形态没有覆盖关键攻击面。"
+    }
+  ],
+  "penalties": [
+    {
+      "id": "P0-01",
+      "severity": "P0",
+      "deduction": 12,
+      "reason": "legacy mutation surface 缺少 caller expectedRevision，真实攻击可静默覆盖较新 revision。",
+      "evidence_refs": [
+        "packages/project-knowledge/src/repository.ts:770",
+        "packages/project-knowledge/src/repository.ts:2229",
+        "attack:legacy overwrite"
+      ]
+    },
+    {
+      "id": "P0-02",
+      "severity": "P0",
+      "deduction": 15,
+      "reason": "升级成功后可在 v2 当前文档、execution snapshot/API 或活跃 reader 持有的 SQLite 主文件中留下秘密。",
+      "evidence_refs": [
+        "packages/project-knowledge/src/repository.ts:1016",
+        "packages/project-knowledge/src/repository.ts:1072",
+        "packages/project-knowledge/src/repository.ts:1588",
+        "attack:three sensitive persistence paths"
+      ]
+    },
+    {
+      "id": "P1-01",
+      "severity": "P1",
+      "deduction": 5,
+      "reason": "G1B 冻结合同要求的 strict v2 独立导入与同版本安全导出没有实现或验证。",
+      "evidence_refs": [
+        "packages/project-knowledge/src/repository.ts:1284",
+        "packages/project-knowledge/src/types.ts:14"
+      ]
+    }
+  ],
+  "totals": {
+    "raw_score": 90,
+    "penalty_total": 32,
+    "final_score": 58
+  },
+  "verdict": "REVISE",
+  "required_fixes": [
+    {
+      "id": "RF-P0-01",
+      "priority": "P0",
+      "fix": "关闭所有 legacy v1 写入口的 CAS 旁路：既有 Flow 的 recorder save、rename 和 restore 必须接收并向 repository 传递 caller expectedRevision，或将 legacy save 严格限制为 create-only；陈旧请求必须返回 FLOW_REVISION_CONFLICT 且零写入。同步补 Local API、Studio local repository 与 HTTP 路径的负向/竞争测试。"
+    },
+    {
+      "id": "RF-P0-02",
+      "priority": "P0",
+      "fix": "以解析后的结构语义清理所有已识别秘密，再序列化并逐一复验 current candidate、安全 v1 version、全部历史 version、execution variables/flow snapshot/metadata/step detail；不得在 JSON 文本上用未转义原值做 split。处理并验证 checkpoint busy/活跃 reader 情形，升级不得在 SQLite/WAL/SHM 仍含 canary 时报告成功；增加含引号、反斜杠、换行、flowSnapshot 与活跃 reader 的真实字节扫描。"
+    },
+    {
+      "id": "RF-P1-01",
+      "priority": "P1",
+      "fix": "按冻结合同补齐 strict v2 导入为新 flowId/revision=1 的原子独立副本，以及同版本安全导出/往返；不导入版本、最近值、execution 或本地路径，并增加 v1/v2/未知版本、失败零写入和秘密零命中的测试。"
+    }
+  ],
+  "nice_to_have": [
+    "为 saveFlowRevision 与 restoreFlowRevision 增加和 upgrade 同级的逐 SQL 故障注入矩阵，避免未来调整破坏已由静态路径确认的回滚语义。"
+  ],
+  "reviewers": [
+    {
+      "role": "verifier",
+      "conclusion": "FAIL",
+      "summary": "工程门禁与目标测试全绿，但 legacy CAS、安全 canary 和 v2 import/export 三个硬门禁失败。"
+    },
+    {
+      "role": "strict_judge",
+      "conclusion": "REVISE",
+      "summary": "新 revision-aware 核心事务质量较好且真实竞争成立；两个 P0 均可定向修复，但在修复前不能离开 G1B review。"
+    },
+    {
+      "role": "anti_slop_reviewer",
+      "conclusion": "REVISE",
+      "summary": "大 diff 基本围绕 Knowledge 数据基础，没有明显路线外扩张；但现有 canary 测试以过窄 fixture 证明了错误的安全结论。"
+    },
+    {
+      "role": "chief_reviewer",
+      "conclusion": "REVISE",
+      "summary": "58/100；P0/P1/P2=2/1/0，必须修复 CAS 旁路、秘密残留与 v2 import/export 后再做独立 R2。"
+    }
+  ],
+  "reviewed_at": "2026-08-30T15:15:00+08:00"
+}
