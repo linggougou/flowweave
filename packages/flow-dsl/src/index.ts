@@ -42,6 +42,11 @@ export {
   type FlowPortabilityWarningCode,
   type PortableFlowDocumentResult,
 } from "./portability.js";
+export {
+  SENSITIVE_PARAMETER_KEYS,
+  isSensitiveParameterKey,
+  normalizeSensitiveParameterKey,
+} from "./sensitivity.js";
 export { canonicalizeJson, sha256Hex } from "./canonical-json.js";
 export {
   previewFlowV1Upgrade,

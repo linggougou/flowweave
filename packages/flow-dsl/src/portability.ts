@@ -5,6 +5,7 @@ import {
   type NormalizedStep,
   type Target,
 } from "./schema.js";
+import { isSensitiveParameterKey } from "./sensitivity.js";
 
 export type FlowPortabilityWarningCode =
   | "secret-default-removed"
@@ -34,22 +35,6 @@ const secretVariablePattern = /^secret_/i;
 const passwordTargetPattern = /password|passwd|passcode|pwd|密码|口令/i;
 const absoluteWindowsPathPattern = /^[a-z]:[\\/]/i;
 const urlWithAuthorityPattern = /^([a-z][a-z\d+.-]*:\/\/)([^/?#]*)(.*)$/i;
-const sensitiveQueryKeys = new Set([
-  "token",
-  "accesstoken",
-  "refreshtoken",
-  "idtoken",
-  "sessiontoken",
-  "bearertoken",
-  "apikey",
-  "key",
-  "secret",
-  "clientsecret",
-  "password",
-  "passwd",
-  "auth",
-  "authorization",
-]);
 
 function normalizeVariableToken(value: string, fallback: string): string {
   const normalized = value
@@ -174,18 +159,10 @@ function decodeQueryKey(value: string): string {
   }
 }
 
-function normalizeQueryKey(value: string): string {
-  return decodeQueryKey(value).trim().toLowerCase().replace(/[._-]/g, "");
-}
-
-function isSensitiveQueryKey(value: string): boolean {
-  return sensitiveQueryKeys.has(normalizeQueryKey(value));
-}
-
 function hasBareSensitiveParameters(value: string): boolean {
   return value.split("&").some((part) => {
     const separatorIndex = part.indexOf("=");
-    return separatorIndex > 0 && isSensitiveQueryKey(part.slice(0, separatorIndex));
+    return separatorIndex > 0 && isSensitiveParameterKey(part.slice(0, separatorIndex));
   });
 }
 
@@ -194,7 +171,7 @@ function collectSensitiveParameterVariables(rawParameters: string, names: Set<st
     const separatorIndex = part.indexOf("=");
     const rawKey = separatorIndex >= 0 ? part.slice(0, separatorIndex) : part;
     const rawValue = separatorIndex >= 0 ? part.slice(separatorIndex + 1) : "";
-    if (!rawKey || !isSensitiveQueryKey(rawKey)) {
+    if (!rawKey || !isSensitiveParameterKey(rawKey)) {
       continue;
     }
     const variableName = getSingleTemplateVariableName(decodeQueryKey(rawValue));
@@ -301,7 +278,7 @@ function sanitizeUrlParameters(
     const separatorIndex = part.indexOf("=");
     const rawKey = separatorIndex >= 0 ? part.slice(0, separatorIndex) : part;
     const rawValue = separatorIndex >= 0 ? part.slice(separatorIndex + 1) : "";
-    if (!rawKey || !isSensitiveQueryKey(rawKey)) {
+    if (!rawKey || !isSensitiveParameterKey(rawKey)) {
       return part;
     }
 

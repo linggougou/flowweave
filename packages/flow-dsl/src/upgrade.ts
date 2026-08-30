@@ -2,6 +2,7 @@ import { extractTemplateVariables, getSingleTemplateVariableName } from "@flowwe
 import { canonicalizeJson, sha256Hex } from "./canonical-json.js";
 import { parseFlowDocumentV1 } from "./parsers.js";
 import { isPasswordTarget } from "./portability.js";
+import { isSensitiveParameterKey } from "./sensitivity.js";
 import {
   flowDocumentV2Schema,
   type FlowDocumentV2,
@@ -64,22 +65,6 @@ type Slot = {
 };
 
 const secretVariablePattern = /^secret_/i;
-const sensitiveQueryKeys = new Set([
-  "token",
-  "accesstoken",
-  "refreshtoken",
-  "idtoken",
-  "sessiontoken",
-  "bearertoken",
-  "apikey",
-  "key",
-  "secret",
-  "clientsecret",
-  "password",
-  "passwd",
-  "auth",
-  "authorization",
-]);
 
 function deepClone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -140,14 +125,6 @@ function collectAllowedSlots(step: MutableStep, stepIndex: number): Slot[] {
   return slots;
 }
 
-function normalizeQueryKey(value: string): string {
-  try {
-    return decodeURIComponent(value.replace(/\+/g, " ")).trim().toLowerCase().replace(/[._-]/g, "");
-  } catch {
-    return value.trim().toLowerCase().replace(/[._-]/g, "");
-  }
-}
-
 function collectSensitiveUrlVariableNames(value: string, target: Set<string>): void {
   const parameterSections = [
     value.includes("?") ? (value.slice(value.indexOf("?") + 1).split("#", 1)[0] ?? "") : "",
@@ -156,7 +133,7 @@ function collectSensitiveUrlVariableNames(value: string, target: Set<string>): v
   parameterSections.forEach((section) => {
     section.split("&").forEach((part) => {
       const separator = part.indexOf("=");
-      if (separator <= 0 || !sensitiveQueryKeys.has(normalizeQueryKey(part.slice(0, separator)))) {
+      if (separator <= 0 || !isSensitiveParameterKey(part.slice(0, separator))) {
         return;
       }
       const rawValue = part.slice(separator + 1);

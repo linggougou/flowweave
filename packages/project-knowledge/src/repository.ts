@@ -28,6 +28,7 @@ import type {
 } from "@flowweave/flow-dsl";
 import {
   createPortableFlowDocument,
+  isSensitiveParameterKey,
   parseFlowDocument,
   parseFlowDocumentV1,
   parseFlowDocumentV2,
@@ -204,33 +205,12 @@ function collectStringValues(value: unknown, target: Set<string>): void {
   }
 }
 
-const HISTORY_SENSITIVE_URL_KEYS = new Set([
-  "token",
-  "accesstoken",
-  "refreshtoken",
-  "idtoken",
-  "sessiontoken",
-  "bearertoken",
-  "apikey",
-  "key",
-  "secret",
-  "clientsecret",
-  "password",
-  "passwd",
-  "auth",
-  "authorization",
-]);
-
 function decodeUrlPart(value: string): string {
   try {
     return decodeURIComponent(value.replace(/\+/g, " "));
   } catch {
     return value;
   }
-}
-
-function normalizeSensitiveUrlKey(value: string): string {
-  return decodeUrlPart(value).trim().toLowerCase().replace(/[._-]/g, "");
 }
 
 function collectSensitiveUrlParameterValues(value: string, target: Set<string>): void {
@@ -240,7 +220,7 @@ function collectSensitiveUrlParameterValues(value: string, target: Set<string>):
       continue;
     }
     const rawKey = part.slice(0, separator);
-    if (!HISTORY_SENSITIVE_URL_KEYS.has(normalizeSensitiveUrlKey(rawKey))) {
+    if (!isSensitiveParameterKey(rawKey)) {
       continue;
     }
     const rawValue = part.slice(separator + 1);
@@ -277,9 +257,7 @@ function collectSensitiveUrlLiterals(value: string, target: Set<string>): void {
   const queryStart = beforeHash.indexOf("?");
   if (queryStart >= 0) {
     collectSensitiveUrlParameterValues(beforeHash.slice(queryStart + 1), target);
-  } else if (
-    HISTORY_SENSITIVE_URL_KEYS.has(normalizeSensitiveUrlKey(beforeHash.split("=", 1)[0] ?? ""))
-  ) {
+  } else if (isSensitiveParameterKey(beforeHash.split("=", 1)[0] ?? "")) {
     collectSensitiveUrlParameterValues(beforeHash, target);
   }
 
@@ -371,39 +349,24 @@ function assertNoSensitiveValue(
   }
 }
 
-const PORTABLE_SENSITIVE_QUERY_KEY = /(token|secret|password|passwd|api[-_]?key|auth)/i;
 const PORTABLE_URL_PARSE_BASE = "https://flowweave.invalid/";
 
-function decodePortableUrlComponent(value: string): string {
-  let decoded = value;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      const next = decodeURIComponent(decoded);
-      if (next === decoded) {
-        break;
-      }
-      decoded = next;
-    } catch {
-      break;
-    }
-  }
-  return decoded;
-}
-
-function hasPortableSensitiveQueryKey(params: URLSearchParams): boolean {
-  return [...params.keys()].some((key) =>
-    PORTABLE_SENSITIVE_QUERY_KEY.test(decodePortableUrlComponent(key)),
-  );
+function hasPortableSensitiveParameters(value: string): boolean {
+  return value.split("&").some((part) => {
+    const separator = part.indexOf("=");
+    const rawKey = separator >= 0 ? part.slice(0, separator) : part;
+    return rawKey.length > 0 && isSensitiveParameterKey(rawKey);
+  });
 }
 
 function hasPortableSensitiveFragmentKey(hash: string): boolean {
-  const fragment = decodePortableUrlComponent(hash.replace(/^#/, ""));
+  const fragment = hash.replace(/^#/, "");
   const queryStart = fragment.indexOf("?");
   if (queryStart >= 0) {
-    return hasPortableSensitiveQueryKey(new URLSearchParams(fragment.slice(queryStart + 1)));
+    return hasPortableSensitiveParameters(fragment.slice(queryStart + 1));
   }
   if (!fragment.includes("/") && fragment.includes("=")) {
-    return hasPortableSensitiveQueryKey(new URLSearchParams(fragment));
+    return hasPortableSensitiveParameters(fragment);
   }
   return false;
 }
@@ -414,7 +377,7 @@ function hasPortableSensitiveUnparsedUrl(value: string): boolean {
   const queryStart = beforeHash.indexOf("?");
   if (
     queryStart >= 0 &&
-    hasPortableSensitiveQueryKey(new URLSearchParams(beforeHash.slice(queryStart + 1)))
+    hasPortableSensitiveParameters(beforeHash.slice(queryStart + 1))
   ) {
     return true;
   }
@@ -431,7 +394,7 @@ function assertPortableUrlHasNoCredentials(value: string): void {
     if (
       url.username ||
       url.password ||
-      hasPortableSensitiveQueryKey(url.searchParams) ||
+      hasPortableSensitiveParameters(url.search.replace(/^\?/, "")) ||
       hasPortableSensitiveFragmentKey(url.hash)
     ) {
       throw new FlowWeaveError(

@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FLOW_SCHEMA_VERSION } from "@flowweave/shared";
-import {
-  createPortableFlowDocument,
-  parseFlowDocument,
-  type FlowDocument,
-} from "./index.js";
+import { createPortableFlowDocument, parseFlowDocument, type FlowDocument } from "./index.js";
 
 function createFlow(overrides: Partial<FlowDocument> = {}): FlowDocument {
   return {
@@ -376,6 +372,39 @@ describe("createPortableFlowDocument", () => {
         path: "steps[0].urlIncludes.query.access_token",
       }),
     ]);
+  });
+
+  it("对 navigate 与 wait 统一处理 raw key、点分隔和双层编码敏感键", () => {
+    const input = createFlow({
+      steps: [
+        {
+          id: "raw-key",
+          type: "navigate",
+          url: "https://example.test/path?key=raw-secret",
+        },
+        {
+          id: "dot-credential",
+          type: "navigate",
+          url: "https://example.test/path?client.secret=dot-secret",
+        },
+        {
+          id: "encoded-credential",
+          type: "wait",
+          condition: "urlIncludes",
+          urlIncludes: "?%2561%2570%2569%255F%256B%2565%2579=encoded-secret",
+        },
+      ],
+    });
+
+    const result = createPortableFlowDocument(input);
+    const serialized = JSON.stringify(result.document);
+
+    expect(serialized).not.toContain("raw-secret");
+    expect(serialized).not.toContain("dot-secret");
+    expect(serialized).not.toContain("encoded-secret");
+    expect(
+      result.warnings.filter((warning) => warning.code === "url-query-variableized"),
+    ).toHaveLength(3);
   });
 
   it("保留普通业务文本、相对 URL、普通 query 与已有模板变量", () => {

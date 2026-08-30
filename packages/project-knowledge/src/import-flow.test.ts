@@ -81,107 +81,45 @@ function portableV2Input(): FlowDocumentV2 {
 
 const URL_CREDENTIAL_CANARY = "FLOWWEAVE_G1I_URL_CANARY_91f8e3";
 
+const portableUrlCredentialValues = [
+  ["query raw key", `https://example.test/path?key=${URL_CREDENTIAL_CANARY}`],
+  ["query mixed-case key", `https://example.test/path?AcCeSs_ToKeN=${URL_CREDENTIAL_CANARY}`],
+  ["query dot separator", `https://example.test/path?client.secret=${URL_CREDENTIAL_CANARY}`],
+  ["query underscore separator", `https://example.test/path?api_key=${URL_CREDENTIAL_CANARY}`],
+  ["query dash separator", `https://example.test/path?api-key=${URL_CREDENTIAL_CANARY}`],
+  ["fragment-query", `https://example.test/#?authorization=${URL_CREDENTIAL_CANARY}`],
+  ["malformed absolute URL query", `https://[invalid-host]?auth=${URL_CREDENTIAL_CANARY}`],
+  ["userinfo", `https://user:${URL_CREDENTIAL_CANARY}@example.test/path`],
+  [
+    "single percent-encoded key",
+    `https://example.test/path?%61%70%69%5F%6B%65%79=${URL_CREDENTIAL_CANARY}`,
+  ],
+  [
+    "double percent-encoded key",
+    `https://example.test/path?%2561%2570%2569%255F%256B%2565%2579=${URL_CREDENTIAL_CANARY}`,
+  ],
+] as const;
+
 const portableUrlCredentialAttacks: Array<{
   label: string;
   step: FlowDocumentV2["steps"][number];
-}> = [
+}> = portableUrlCredentialValues.flatMap(([label, value], index) => [
   {
-    label: "navigate query raw key",
-    step: {
-      id: "navigate_query_raw",
-      type: "navigate",
-      url: `https://example.test/path?token=${URL_CREDENTIAL_CANARY}`,
-    },
+    label: `navigate ${label}`,
+    step: { id: `navigate_credential_${index}`, type: "navigate", url: value },
   },
   {
-    label: "navigate query mixed-case key",
+    label: `wait ${label}`,
     step: {
-      id: "navigate_query_case",
-      type: "navigate",
-      url: `https://example.test/path?AcCeSs_ToKeN=${URL_CREDENTIAL_CANARY}`,
-    },
-  },
-  {
-    label: "navigate fragment-query",
-    step: {
-      id: "navigate_fragment_query",
-      type: "navigate",
-      url: `https://example.test/#?access_token=${URL_CREDENTIAL_CANARY}`,
-    },
-  },
-  {
-    label: "navigate userinfo",
-    step: {
-      id: "navigate_userinfo",
-      type: "navigate",
-      url: `https://user:${URL_CREDENTIAL_CANARY}@example.test/path`,
-    },
-  },
-  {
-    label: "navigate percent-encoded lower-hex key",
-    step: {
-      id: "navigate_encoded_lower",
-      type: "navigate",
-      url: `https://example.test/path?%74%6f%6b%65%6e=${URL_CREDENTIAL_CANARY}`,
-    },
-  },
-  {
-    label: "navigate fragment percent-encoded upper-hex key",
-    step: {
-      id: "navigate_fragment_encoded_upper",
-      type: "navigate",
-      url: `https://example.test/#?%41%50%49%5F%4B%45%59=${URL_CREDENTIAL_CANARY}`,
-    },
-  },
-  {
-    label: "navigate malformed absolute URL query",
-    step: {
-      id: "navigate_malformed_query",
-      type: "navigate",
-      url: `https://[invalid-host]?token=${URL_CREDENTIAL_CANARY}`,
-    },
-  },
-  {
-    label: "wait query raw key",
-    step: {
-      id: "wait_query_raw",
+      id: `wait_credential_${index}`,
       type: "wait",
       condition: "urlIncludes",
-      urlIncludes: `https://example.test/path?token=${URL_CREDENTIAL_CANARY}`,
+      urlIncludes: value,
     },
   },
-  {
-    label: "wait fragment-query",
-    step: {
-      id: "wait_fragment_query",
-      type: "wait",
-      condition: "urlIncludes",
-      urlIncludes: `https://example.test/#?access_token=${URL_CREDENTIAL_CANARY}`,
-    },
-  },
-  {
-    label: "wait userinfo",
-    step: {
-      id: "wait_userinfo",
-      type: "wait",
-      condition: "urlIncludes",
-      urlIncludes: `https://user:${URL_CREDENTIAL_CANARY}@example.test/path`,
-    },
-  },
-  {
-    label: "wait percent-encoded mixed-hex key",
-    step: {
-      id: "wait_encoded_mixed",
-      type: "wait",
-      condition: "urlIncludes",
-      urlIncludes: `/path?%61%55%74%48=${URL_CREDENTIAL_CANARY}`,
-    },
-  },
-];
+]);
 
-function withPortableUrlAttack(
-  step: FlowDocumentV2["steps"][number],
-): FlowDocumentV2 {
+function withPortableUrlAttack(step: FlowDocumentV2["steps"][number]): FlowDocumentV2 {
   const source = portableV2Input();
   return { ...source, steps: [...source.steps, step] };
 }

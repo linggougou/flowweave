@@ -216,6 +216,34 @@ describe("v1 → v2 纯升级预览", () => {
     expect(url.blockingIssues.map((issue) => issue.code)).toContain("MIXED_TEMPLATE");
   });
 
+  it.each([
+    ["navigate raw key", "navigate", "https://example.test?key={{credential}}"],
+    ["navigate dot key", "navigate", "https://example.test?client.secret={{credential}}"],
+    ["wait double encoded key", "wait", "?%2561%2570%2569%255F%256B%2565%2579={{credential}}"],
+  ])("%s 复用统一敏感键策略并阻塞混合 URL 迁移", (_label, type, value) => {
+    const step =
+      type === "navigate"
+        ? { id: "url-sensitive", type: "navigate" as const, url: value }
+        : {
+            id: "url-sensitive",
+            type: "wait" as const,
+            condition: "urlIncludes" as const,
+            urlIncludes: value,
+          };
+    const report = previewFlowV1Upgrade(
+      buildV1({
+        variables: [{ name: "credential", type: "string", required: true }],
+        steps: [step],
+      }),
+    );
+
+    expect(report.fieldMappings).toContainEqual(
+      expect.objectContaining({ variableName: "credential", sensitive: true }),
+    );
+    expect(report.candidate).toBeNull();
+    expect(report.blockingIssues.map((issue) => issue.code)).toContain("MIXED_TEMPLATE");
+  });
+
   it("类型不兼容的合法 v1 引用以结构化问题阻塞", () => {
     const report = previewFlowV1Upgrade(
       buildV1({
