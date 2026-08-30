@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "gate": "vnext-1-g1i-node24-security",
+  "verdict": "PASS",
+  "candidate": {
+    "branch": "codex/vnext-1-g1i-node24-security",
+    "sha": "cccd818aadee53f090caf7bf6c0f265d9e8beb8f"
+  },
+  "environment": {
+    "node": "v24.14.0",
+    "pnpm": "9.15.4",
+    "platform": "darwin",
+    "architecture": "arm64"
+  },
+  "results": {
+    "frozenInstall": {
+      "status": "PASS",
+      "packagesReused": 801,
+      "lockfileChanged": false
+    },
+    "smokeForcedUncached": {
+      "status": "PASS",
+      "typecheckTasks": { "passed": 21, "total": 21, "cached": 0 },
+      "testTasks": { "passed": 21, "total": 21, "cached": 0 },
+      "tests": { "passed": 663, "failed": 0 },
+      "buildTasks": { "passed": 13, "total": 13, "cached": 0 },
+      "loginSteps": { "passed": 4, "total": 4 }
+    },
+    "lintForcedUncached": {
+      "status": "PASS",
+      "tasks": { "passed": 13, "total": 13, "cached": 0 }
+    },
+    "recordedPages": {
+      "status": "PASS",
+      "passed": 25,
+      "failed": 0,
+      "realFixtures": 23,
+      "runtimeTemporaryPages": 2
+    },
+    "portability": {
+      "status": "PASS",
+      "warnings": 4,
+      "steps": 10
+    },
+    "loginE2E": {
+      "status": "PASS",
+      "schemaVersion": 1,
+      "passedSteps": 4,
+      "failedSteps": 0
+    },
+    "productionAudit": {
+      "status": "PASS",
+      "registry": "https://registry.npmjs.org",
+      "auditLevel": "high",
+      "knownVulnerabilities": 0
+    },
+    "targeted": {
+      "knowledgeVnextPersistence": { "status": "PASS", "passed": 18, "failed": 0 },
+      "localApi": { "status": "PASS", "passed": 14, "failed": 0 },
+      "runtimeGuard": { "status": "PASS", "passed": 9, "failed": 0 },
+      "studioRunGuard": { "status": "PASS", "passed": 5, "failed": 0, "skipped": 15 },
+      "studioPortability": { "status": "PASS", "passed": 16, "failed": 0 },
+      "flowDsl": { "status": "PASS", "passed": 61, "failed": 0 }
+    },
+    "securityAssertions": {
+      "syntheticCanaryOnly": true,
+      "sqliteMainRawOrEscapedCanaryHits": 0,
+      "sqliteWalRawOrEscapedCanaryHits": 0,
+      "sqliteShmRawOrEscapedCanaryHits": 0,
+      "executionCanaryHitsAfterUpgrade": 0,
+      "activeReaderUpgradeFailsBeforeWrite": true,
+      "v2RuntimeRejectedBeforeSideEffects": true,
+      "v2StudioRejectedBeforeSideEffects": true,
+      "v2KnowledgeExecutionRejected": true,
+      "v1DefaultFlowRuns": true,
+      "commonCredentialPatternMatchesInCandidateDiff": 0
+    },
+    "repositoryIntegrityBeforeEvidence": {
+      "statusShortClean": true,
+      "diffCheckClean": true,
+      "trackedCandidateCodeChanged": false,
+      "lockfileChanged": false
+    }
+  },
+  "nonBlockingRisks": [
+    "Node DEP0169 warns that an indirect dependency still uses legacy url.parse(); official production audit reports no known vulnerabilities.",
+    "prebuild-install 7.1.3 is a deprecated transitive dependency in the Electron native-binding build.",
+    "E2E scripts create local test project/run artifacts under ~/.flowweave/projects outside the Git candidate."
+  ],
+  "scopeBoundary": "Node 24 and security evidence only; does not replace Node 20 validation, final integration Judge, user acceptance, release, or vNext-2 unfreeze."
+}
