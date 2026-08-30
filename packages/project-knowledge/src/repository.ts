@@ -1968,18 +1968,27 @@ export class ProjectKnowledgeRepository {
         .map((entry) => entry.flowSnapshot)
         .filter((snapshot): snapshot is FlowDocumentV1 => snapshot !== undefined),
     ];
+    const definedHistoricalVariableNames = new Set(
+      historicalV1Documents.flatMap((document) =>
+        document.variables.map((variable) => variable.name),
+      ),
+    );
     for (const document of historicalV1Documents) {
       collectV1SensitiveMaterial(document, mergedSensitiveVariableNames, sensitiveValues);
     }
     for (const document of historicalV1Documents) {
       collectDefaults(document);
     }
+    const shouldDeleteExecutionVariable = (name: string) =>
+      mergedSensitiveVariableNames.has(name) || !definedHistoricalVariableNames.has(name);
     for (const entry of parsedExecutions) {
       if (!entry.variables) {
         continue;
       }
-      for (const name of mergedSensitiveVariableNames) {
-        collectStringValues(entry.variables[name], sensitiveValues);
+      for (const [name, value] of Object.entries(entry.variables)) {
+        if (shouldDeleteExecutionVariable(name)) {
+          collectStringValues(value, sensitiveValues);
+        }
       }
     }
 
@@ -2014,8 +2023,10 @@ export class ProjectKnowledgeRepository {
     for (const entry of parsedExecutions) {
       const variables = entry.variables === undefined ? undefined : { ...entry.variables };
       if (variables) {
-        for (const name of mergedSensitiveVariableNames) {
-          delete variables[name];
+        for (const name of Object.keys(variables)) {
+          if (shouldDeleteExecutionVariable(name)) {
+            delete variables[name];
+          }
         }
       }
       const safeVariables =

@@ -21,19 +21,33 @@ const HISTORY_PASSWORD_LITERAL = "FLOWWEAVE_HISTORY_PASSWORD_LITERAL_vnext_1_62b
 const HISTORY_UPLOAD_LITERAL = "/private/FLOWWEAVE_HISTORY_UPLOAD_vnext_1_807a.pdf";
 const HISTORY_URL_LITERAL = 'FLOWWEAVE_HISTORY_URL_vnext_1_b1d4"\\line\nnext';
 const HISTORY_URL_ENCODED = encodeURIComponent(HISTORY_URL_LITERAL);
+const ORPHAN_EXECUTION_VARIABLES = {
+  secret_orphan: 'FLOWWEAVE_ORPHAN_SECRET_vnext_1_1a2b"\\line\nnext',
+  Secret_API_Key: 'FLOWWEAVE_ORPHAN_API_KEY_vnext_1_2b3c"\\line\nnext',
+  "secret-password": 'FLOWWEAVE_ORPHAN_PASSWORD_DASH_vnext_1_3c4d"\\line\nnext',
+  "SECRET.PASSWORD": 'FLOWWEAVE_ORPHAN_PASSWORD_DOT_vnext_1_4d5e"\\line\nnext',
+  telemetryNote: 'FLOWWEAVE_ORPHAN_ORDINARY_NAME_vnext_1_5e6f"\\line\nnext',
+} as const;
+const ORPHAN_EXECUTION_CANARIES = Object.values(ORPHAN_EXECUTION_VARIABLES);
 
-function assertNoCanaryBytes(storePath: string): void {
-  const escapedCanary = JSON.stringify(SECRET_CANARY).slice(1, -1);
+function assertNoValuesInPhysicalStore(storePath: string, values: readonly string[]): void {
   for (const path of [storePath, `${storePath}-wal`, `${storePath}-shm`]) {
     if (!existsSync(path)) {
       continue;
     }
     const bytes = readFileSync(path);
-    expect(bytes.includes(Buffer.from(SECRET_CANARY)), `${path} 含 raw canary`).toBe(false);
-    expect(bytes.includes(Buffer.from(escapedCanary)), `${path} 含 JSON escaped canary`).toBe(
-      false,
-    );
+    for (const value of values) {
+      const escapedValue = JSON.stringify(value).slice(1, -1);
+      expect(bytes.includes(Buffer.from(value)), `${path} 含 raw ${value}`).toBe(false);
+      expect(bytes.includes(Buffer.from(escapedValue)), `${path} 含 escaped ${value}`).toBe(
+        false,
+      );
+    }
   }
+}
+
+function assertNoCanaryBytes(storePath: string): void {
+  assertNoValuesInPhysicalStore(storePath, [SECRET_CANARY]);
 }
 
 function buildV1(projectId: string, flowId: string): FlowDocumentV1 {
@@ -343,7 +357,12 @@ describe("vNext-1B Knowledge 数据基础", () => {
       executionId: "exec_before_upgrade_fault",
       flowId: flow.id,
       status: "success",
-      runContext: { variables: { secret_password: SECRET_CANARY } },
+      runContext: {
+        variables: {
+          secret_password: SECRET_CANARY,
+          telemetryNote: ORPHAN_EXECUTION_VARIABLES.telemetryNote,
+        },
+      },
       steps: [],
     });
     const prepared = prepareUpgrade(flow);
@@ -368,7 +387,60 @@ describe("vNext-1B Knowledge 数据基础", () => {
     expect(repo.listFlowVersions(project.id, flow.id)).toEqual([]);
     expect(repo.getExecution("exec_before_upgrade_fault")?.runContext?.variables).toEqual({
       secret_password: SECRET_CANARY,
+      telemetryNote: ORPHAN_EXECUTION_VARIABLES.telemetryNote,
     });
+  });
+
+  it("升级会清除全部无历史定义来源的 execution variables 并保留已定义非敏感变量", () => {
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-vnext-orphan-execution-"));
+    const repo = new ProjectKnowledgeRepository({ dataDir });
+    const project = repo.createProject("孤立 execution variables 清理");
+    const flow = buildV1(project.id, "flow_orphan_execution_variables");
+    repo.saveFlow(project.id, flow);
+    repo.saveExecution(project.id, {
+      executionId: "exec_orphan_execution_variables",
+      flowId: flow.id,
+      status: "success",
+      runContext: {
+        variables: {
+          account: "alice",
+          ...ORPHAN_EXECUTION_VARIABLES,
+        },
+      },
+      steps: [],
+    });
+    const prepared = prepareUpgrade(flow);
+
+    const upgraded = repo.upgradeFlowToV2({
+      projectId: project.id,
+      flowId: flow.id,
+      expectedRevision: 1,
+      reportFingerprint: prepared.preview.reportFingerprint,
+      rememberSelections: prepared.rememberSelections,
+    });
+    expect(upgraded).toMatchObject({ revision: 2, document: { schemaVersion: 2 } });
+
+    const versions = repo.listFlowVersions(project.id, flow.id);
+    const apiEvidence = JSON.stringify({
+      current: repo.getFlowRevision(project.id, flow.id),
+      versions,
+      versionDocuments: versions.map((version) =>
+        repo.getFlowVersionInFlow(project.id, flow.id, version.id),
+      ),
+      execution: repo.getExecution("exec_orphan_execution_variables"),
+    });
+    for (const canary of ORPHAN_EXECUTION_CANARIES) {
+      expect(apiEvidence).not.toContain(canary);
+      expect(apiEvidence).not.toContain(JSON.stringify(canary).slice(1, -1));
+    }
+    expect(repo.getExecution("exec_orphan_execution_variables")?.runContext?.variables).toEqual({
+      account: "alice",
+    });
+
+    assertNoValuesInPhysicalStore(
+      resolveProjectStorePath(project.id, dataDir),
+      ORPHAN_EXECUTION_CANARIES,
+    );
   });
 
   it("历史已删除或改名的敏感字段、密码字面量、上传与 URL 会统一从历史和 execution 清除", () => {
