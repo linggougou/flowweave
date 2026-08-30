@@ -5459,3 +5459,20 @@
 
 - 本地总验收：通过。
 - 剩余门禁：推送集成分支与 `main`，等待 GitHub Actions Node 20 / 24 双矩阵会签，然后归档 vNext-1 执行计划并更新路线锁。
+
+## 2026-08-30 vNext-1 最终会签与阶段切换验证
+
+- 集成分支 run `33306104617`：Node 24 job `99242844118`、Node 20 job `99242844290`，均成功。
+- `main` run `33306283165`：Node 20 job `99243314186`、Node 24 job `99243314286`，均成功。
+- Git 复核：`main`、`origin/main` 同步为 `b84c548c61050e3b062cdd1de45de576717ba76a`；vNext-1 全部实现、审查包与留痕均已在线性历史中，无 force push、无用户改动覆盖。
+- 归档复核：`docs/exec-plans/completed/vnext-1-data-foundation.md` 已标记完成；`PROJECT_ROUTE_LOCK.md`、`docs/change-requests/2026-08-30-vnext-2a-planning-unfreeze.md`、`docs/exec-plans/active/vnext-2a-runtime-session-planning.md` 与 `.codex/context-summary-vnext-2a-runtime-session-planning.md` 相互一致。
+- 范围复核：本次阶段切换只涉及路线锁、计划、变更单与 `.codex` 留痕；未新增任何生产代码改动。
+- 结论：vNext-1 已完成并归档；当前允许继续推进 vNext-2A 规划冻结，但仍未授权进入 2A 实施。
+
+## 2026-08-30 vNext-1 最终证据提交复验
+
+- 最终证据提交：`655caeebc33ea061865867e95d1e4fa9685854e8`；包含 R5 独立 Judge 正式包与 Node20 独立兼容证据，不改变已验收的产品代码。
+- 集成分支 run `33306501874`：Node 20 job `99243880702`（`3m30s`）、Node 24 job `99243880788`（`3m18s`）均成功，冻结安装、Playwright Chromium、lint 与完整 smoke 全部通过。
+- `main` run `33306502288`：Node 20 job `99243882173`（`3m44s`）、Node 24 job `99243882082`（`3m17s`）均成功，冻结安装、Playwright Chromium、lint 与完整 smoke 全部通过。
+- 远端 `codex/vnext-1a-1b-integration` 与 `main` 均指向 `655caee`；未 force push，用户 stash 未触碰。
+- 最终判断：vNext-1 S7 会签与归档门禁完整通过；v2 仍不可运行，下一阶段只开放 vNext-2A 规划。

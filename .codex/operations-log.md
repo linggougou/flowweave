@@ -7325,3 +7325,18 @@
 - 独立 R5 Judge 包已在 review-only worktree 形成并以 `3a73cdd` 提交，随后 patch-equivalent 回收到集成分支为 `994ce9f`；裁决 `PASS 100/100`，`P0/P1/P2=0/0/0`，`required_fixes=[]`。
 - 环境注记：同一 review worktree 先执行 Node20 force install 后直接切回 Node24 跑 SQLite 原生测试，会命中 `better-sqlite3` ABI mismatch（115→137）。这是双 Node 共用原生依赖的环境现象，不是产品回归；clean Node24 主工作树复验与独立 Node24 安全 worktree 已闭环证明候选行为正常。
 - 当前状态：vNext-1 本地总验收与最终集成 Judge 已通过；下一步推送 `codex/vnext-1a-1b-integration` 跑远端 Node 20/24 CI，通过后再快进 `main`、补最终会签、归档计划并评估是否开放 vNext-2A 规划。
+
+## 2026-08-30 vNext-1 远端会签完成与 vNext-2A 规划解冻
+
+- 集成分支 `codex/vnext-1a-1b-integration` 已推送并完成 run `33306104617`：Node 24 job `99242844118` 于 `2026-08-30T10:20:38Z` 成功，Node 20 job `99242844290` 于 `2026-08-30T10:21:00Z` 成功。
+- `main` 已从 `8f83604` fast-forward 到 `b84c548` 并推送；main run `33306283165` 成功：Node 20 job `99243314186`（`3m23s`）、Node 24 job `99243314286`（`3m25s`）。
+- vNext-1 执行计划已迁移到 `docs/exec-plans/completed/vnext-1-data-foundation.md`；当前路线锁、change request、active plan 与上下文摘要已切换到 `vNext-2A Runtime 输入会话规划`，范围仍只包含 `PROJECT_ROUTE_LOCK.md`、`docs/` 与 `.codex/`。
+- 本次阶段切换不包含任何 `apps/`、`packages/`、数据库 migration、lockfile 或构建配置改动；只解冻 2A 规划，不授权 2A 实施、2B/3、P3 或 P4 编码。
+
+## 2026-08-30 vNext-1 最终证据复验与归档校正
+
+- R5 独立 Judge 与 Node20 独立兼容证据均已 patch-equivalent 集成，最终归档候选为 `655caee`。
+- 远端复验：集成分支 run `33306501874` 与 main run `33306502288` 均为 success；四条 Node 20/24 job 全部完成 frozen install、Chromium、lint 与完整 smoke。
+- 归档草稿最初引用 `b84c548` 与较早双绿 run；主代理等待最终证据提交的远端矩阵完成后，将基线和完成证据统一校正到 `655caee` 与本轮 run，避免提前归档。
+- 路线只切换到 vNext-2A S4 规划冻结；生产代码、数据库、lockfile、P3/P4 均未解冻。
+- 用户 stash `stash@{0}`、`stash@{1}` 保持原样；没有 force push、reset 或用户资产清理。

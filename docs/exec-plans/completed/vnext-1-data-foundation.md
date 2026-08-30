@@ -1,8 +1,12 @@
 # vNext-1A/1B 数据基础执行计划
 
-状态：Active（S4 计划冻结）  
-日期：2026-08-30  
+状态：已完成（2026-08-30；R5 PASS + 集成/main Node 20/24 CI 双绿）
+日期：2026-08-30
 基线：`8f83604`（vNext-0 R3 PASS 后的归档提交）
+
+## 0. 归档结论
+
+vNext-1 已按原计划完成：v1/v2 parser、严格 v2 schema、确定性升级预览、revision/CAS、原子保存/恢复、安全最近值，以及旧 Runtime / Studio / Local API / recorder 对 v2 的副作用前拒绝全部闭合。最终实现候选 `e25ce40` 通过本地 Node20 `39/39`、`759/759`、`login 4/4`，clean Node24 定向复验和独立 R5 Judge `PASS 100/100`；补齐审查与 Node20 证据后的归档候选 `655caee` 又通过集成分支 run `33306501874` 与 `main` run `33306502288` 的 Node 20 / 24 双矩阵会签。
 
 ## 1. 阶段目标
 

@@ -2,11 +2,11 @@
 
 ## 1. 当前基线
 
-- 生命周期：P2.8 post-v1 产品化与 vNext-0 设计门禁均已完成；vNext-1 数据基础已于 2026-08-30 开启。
+- 生命周期：P2.8 post-v1 产品化、vNext-0 设计门禁与 vNext-1 数据基础均已完成；当前进入 vNext-2A 计划冻结。
 - 已完成：P0、P1、P2；M1-M4；真实页面 recorded replay `25/25`；Node 20/24 双基线；macOS 本地预览 `.app + DMG`。
 - M5 已有最小能力：扩展清空录制、Flow JSON 导出、Studio Flow 重命名。
 - P2.5、P2.6、P2.7、P2.8 均已完成并归档。
-- vNext-0 已冻结设计；当前只开放 vNext-1A/1B 数据基础与旧入口最小兼容护栏，vNext-2/3、P3 深度页面/网络理解与 P4 AI 编排继续冻结。
+- vNext-0 已冻结设计；vNext-1 已完成并归档；当前只开放 vNext-2A Runtime 输入会话规划，vNext-2A 实施、vNext-2B/3、P3 深度页面/网络理解与 P4 AI 编排继续冻结。
 
 ## 2. 执行顺序
 
@@ -167,7 +167,7 @@
 
 ## 3.1 vNext-1 数据基础
 
-状态：进行中（2026-08-30 开启）。
+状态：已完成（2026-08-30）。
 
 当前只落地：
 
@@ -176,9 +176,26 @@
 3. 旧 Runtime、Studio run、recorder POST/rename 的副作用前版本/修订护栏。
 4. 数据安全 canary、双 Node 回归和独立 Judge。
 
-实施真源：`docs/exec-plans/active/vnext-1a-1b-data-foundation.md`。
+实施真源：`docs/exec-plans/completed/vnext-1-data-foundation.md`。
 
-本阶段不实现 Runtime 暂停/继续、Electron 会话桥、Studio 模板编辑或运行态输入。vNext-2 只能在 vNext-1 独立总审 PASS 并再次更新路线锁后开放。
+完成证据：本地 Node20 `39/39`、`759/759`、`login 4/4`；clean Node24 targeted rerun、独立 Node24 安全证据、R5 最终独立 Judge `PASS 100/100`；最终证据提交 `655caee` 的集成分支 run `33306501874` 与 main run `33306502288` 的 Node 20/24 双矩阵全部成功。
+
+本阶段只证明 v2 数据基础可用，不代表 v2 已可运行。当前已满足进入 vNext-2A 规划冻结的条件，但尚未开放 2A 实施。
+
+## 3.2 vNext-2A Runtime 输入会话规划
+
+状态：进行中（2026-08-30 开启）。
+
+当前只落地：
+
+1. Runtime waitingForInput 会话内核的现状审计。
+2. 状态机、事件顺序、取消/超时/幂等与资源回收的计划冻结。
+3. 安全/回滚/双 Node/独立 Judge 的验证矩阵。
+4. 2A 实施 worktree / subagent / review lane 的拆分方案。
+
+实施真源：`docs/exec-plans/active/vnext-2a-runtime-session-planning.md`。
+
+本阶段不写 Runtime 生产代码，不进入 Electron bridge、Studio 输入 UI 或模板编辑。只有再次更新路线锁后，才可把 2A 从规划切到实施。
 
 ## 4. 暂不开发
 
@@ -198,4 +215,5 @@
 6. UX Foundation 5：2-4 天，完成业务视图与 Web 结果收口。
 7. P2.6 Flow 可移植性与 Web 重命名、P2.7 本地资产安全维护均已完成并归档。
 8. P2.8 受控截图预览与 vNext-0 协议设计门禁均已完成并归档。
-9. vNext-1 数据基础：当前进行中；完成后再评估 vNext-2A Runtime 输入会话。
+9. vNext-1 数据基础：已完成。
+10. vNext-2A Runtime 输入会话：当前处于计划冻结；计划完成后再决定是否进入实现。
