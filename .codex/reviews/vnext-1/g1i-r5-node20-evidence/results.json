@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "gate": "vNext-1 G1-I R5 Node 20 compatibility",
+  "verdict": "PASS",
+  "verifiedAt": "2026-08-30T18:23:20+08:00",
+  "candidate": {
+    "commit": "e25ce4093456907715aae098973af6110729b135",
+    "branch": "codex/vnext-1-g1i-r5-node20",
+    "worktree": "/Volumes/2T/CODE/A_Mine/flowweave-worktrees/vnext1-g1i-r5-node20"
+  },
+  "environment": {
+    "nodeVersion": "v20.19.6",
+    "nodeExecPath": "/Users/ling/.nvm/versions/node/v20.19.6/bin/node",
+    "pnpmVersion": "9.15.4",
+    "pathPrefix": "/Users/ling/.nvm/versions/node/v20.19.6/bin",
+    "platform": "darwin",
+    "architecture": "arm64"
+  },
+  "install": {
+    "command": "CI=1 pnpm install --frozen-lockfile --force",
+    "status": "PASS",
+    "durationSeconds": 5.1,
+    "packages": 951,
+    "packagesReused": 951,
+    "electronPostinstall": "PASS",
+    "lockfileChanged": false,
+    "lockfileSha256Before": "b3416f39ff5fa8413c8503130028e3e0f9c833a627115a2fd16b0781aabcfb9a",
+    "lockfileSha256After": "b3416f39ff5fa8413c8503130028e3e0f9c833a627115a2fd16b0781aabcfb9a"
+  },
+  "fullGate": {
+    "command": "pnpm turbo typecheck test build --force --output-logs=full",
+    "status": "PASS",
+    "tasks": {
+      "passed": 39,
+      "total": 39,
+      "cached": 0
+    },
+    "tests": {
+      "passed": 759,
+      "total": 759,
+      "failed": 0
+    },
+    "durationSeconds": 83.536,
+    "testCountsByPackage": {
+      "@flowweave/shared": 7,
+      "@flowweave/ui": 14,
+      "@flowweave/network-intelligence": 1,
+      "@flowweave/flow-dsl": 109,
+      "@flowweave/ai-orchestrator": 1,
+      "@flowweave/page-intelligence": 22,
+      "@flowweave/recorder": 54,
+      "@flowweave/app-extension": 79,
+      "@flowweave/project-knowledge": 154,
+      "@flowweave/local-api": 14,
+      "@flowweave/app-web": 33,
+      "@flowweave/app-studio": 219,
+      "@flowweave/runtime": 52
+    }
+  },
+  "targetedSuites": [
+    {
+      "name": "Knowledge",
+      "command": "pnpm --filter @flowweave/project-knowledge test",
+      "status": "PASS",
+      "files": 6,
+      "passed": 154,
+      "total": 154,
+      "durationMs": 1940
+    },
+    {
+      "name": "Flow DSL",
+      "command": "pnpm --filter @flowweave/flow-dsl test",
+      "status": "PASS",
+      "files": 5,
+      "passed": 109,
+      "total": 109,
+      "durationMs": 240
+    },
+    {
+      "name": "Local API",
+      "command": "pnpm --filter @flowweave/local-api test",
+      "status": "PASS",
+      "files": 1,
+      "passed": 14,
+      "total": 14,
+      "durationMs": 3470
+    },
+    {
+      "name": "Runtime schema guard",
+      "command": "pnpm --filter @flowweave/runtime exec vitest run src/playwright-launch-options.test.ts",
+      "status": "PASS",
+      "files": 1,
+      "passed": 9,
+      "total": 9,
+      "durationMs": 210
+    },
+    {
+      "name": "Studio",
+      "command": "pnpm --filter @flowweave/app-studio test",
+      "status": "PASS",
+      "files": 40,
+      "passed": 219,
+      "total": 219,
+      "durationMs": 1540
+    }
+  ],
+  "e2e": {
+    "name": "login",
+    "command": "pnpm e2e:login",
+    "status": "PASS",
+    "executionStatus": "success",
+    "passed": 4,
+    "total": 4,
+    "failed": 0,
+    "unit": "steps"
+  },
+  "failures": [],
+  "failureRetries": 0,
+  "skipped": [],
+  "integrity": {
+    "candidateHeadBeforeEvidence": "e25ce4093456907715aae098973af6110729b135",
+    "codeChanged": false,
+    "configurationChanged": false,
+    "lockfileChanged": false,
+    "protectedPathDiffEmpty": true,
+    "allowedEvidenceFilesOnly": true
+  },
+  "scopeBoundary": "Node 20 compatibility evidence only; does not replace Node 24/security validation, final integration Judge, user acceptance, release, or vNext-2 unfreeze."
+}
