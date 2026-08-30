@@ -106,12 +106,7 @@ const inputFieldV2Schema = z
       );
     }
     if (field.defaultValue !== undefined) {
-      addIssue(
-        ctx,
-        ["defaultValue"],
-        "FLOW_SENSITIVE_POLICY_INVALID",
-        "敏感字段禁止 defaultValue",
-      );
+      addIssue(ctx, ["defaultValue"], "FLOW_SENSITIVE_POLICY_INVALID", "敏感字段禁止 defaultValue");
     }
   });
 
@@ -264,7 +259,13 @@ type AllowedSlot = {
   path: (string | number)[];
   displayPath: string;
   types: readonly InputFieldV2["type"][];
-  kind: "fill.value" | "select.values[0]" | "setChecked.checked" | "navigate.url" | "wait.urlIncludes" | "target";
+  kind:
+    | "fill.value"
+    | "select.values[0]"
+    | "setChecked.checked"
+    | "navigate.url"
+    | "wait.urlIncludes"
+    | "target";
 };
 
 function displayPath(path: (string | number)[]): string {
@@ -312,19 +313,9 @@ function collectAllowedSlots(step: FlowStepV2, stepIndex: number): AllowedSlot[]
   if ("target" in step && step.target) {
     step.target.strategies.forEach((strategy, strategyIndex) => {
       if (strategy.kind === "role") {
-        add(
-          strategy.name,
-          ["target", "strategies", strategyIndex, "name"],
-          ["string"],
-          "target",
-        );
+        add(strategy.name, ["target", "strategies", strategyIndex, "name"], ["string"], "target");
       } else if (strategy.kind === "text") {
-        add(
-          strategy.text,
-          ["target", "strategies", strategyIndex, "text"],
-          ["string"],
-          "target",
-        );
+        add(strategy.text, ["target", "strategies", strategyIndex, "text"], ["string"], "target");
       }
     });
   }
@@ -451,12 +442,7 @@ function validateFlowDocumentV2(flow: FlowDocumentV2, ctx: z.RefinementCtx): voi
     walkStrings(step, ["steps", stepIndex], (value, path) => {
       const pathText = displayPath(path);
       if (!allowedPaths.has(pathText) && hasTemplateReference(value)) {
-        addIssue(
-          ctx,
-          path,
-          "FLOW_BINDING_TARGET_FORBIDDEN",
-          `字段引用禁止出现在 ${pathText}`,
-        );
+        addIssue(ctx, path, "FLOW_BINDING_TARGET_FORBIDDEN", `字段引用禁止出现在 ${pathText}`);
       }
     });
 
@@ -544,12 +530,14 @@ function validateFlowDocumentV2(flow: FlowDocumentV2, ctx: z.RefinementCtx): voi
     if (!step.selectionContext) {
       return;
     }
-    const path = ["steps", stepIndex, "selectionContext", "searchStepId"] as (
-      | string
-      | number
-    )[];
+    const path = ["steps", stepIndex, "selectionContext", "searchStepId"] as (string | number)[];
     if (!step.target) {
-      addIssue(ctx, path, "FLOW_SELECTION_CONTEXT_INVALID", "selectionContext 的选择步骤必须提供 target");
+      addIssue(
+        ctx,
+        path,
+        "FLOW_SELECTION_CONTEXT_INVALID",
+        "selectionContext 的选择步骤必须提供 target",
+      );
       return;
     }
     const searchIndex = stepIds.get(step.selectionContext.searchStepId);
@@ -588,13 +576,11 @@ function validateFlowDocumentV2(flow: FlowDocumentV2, ctx: z.RefinementCtx): voi
   });
 }
 
-export const flowDocumentV2Schema = flowDocumentV2BaseSchema.superRefine(validateFlowDocumentV2);
+export const flowDocumentV2Schema: z.ZodType<FlowDocumentV2> =
+  flowDocumentV2BaseSchema.superRefine(validateFlowDocumentV2);
 
 export function collectFlowBindingsV2(flow: FlowDocumentV2): FlowBindingV2[] {
-  const fields = new Map<
-    string,
-    { field: InputFieldV2; inputNodeId: string }
-  >();
+  const fields = new Map<string, { field: InputFieldV2; inputNodeId: string }>();
   flow.steps.forEach((step) => {
     if (step.type === "input") {
       step.fields.forEach((field) => fields.set(field.fieldId, { field, inputNodeId: step.id }));

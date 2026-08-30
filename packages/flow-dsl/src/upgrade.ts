@@ -96,7 +96,11 @@ function isPasswordTarget(target: Target): boolean {
     if (strategy.kind === "css") {
       return passwordTargetPattern.test(strategy.selector);
     }
-    return strategy.kind === "role" && strategy.name !== undefined && passwordTargetPattern.test(strategy.name);
+    return (
+      strategy.kind === "role" &&
+      strategy.name !== undefined &&
+      passwordTargetPattern.test(strategy.name)
+    );
   });
 }
 
@@ -161,10 +165,7 @@ function collectAllowedSlots(step: MutableStep, stepIndex: number): Slot[] {
 
 function normalizeQueryKey(value: string): string {
   try {
-    return decodeURIComponent(value.replace(/\+/g, " "))
-      .trim()
-      .toLowerCase()
-      .replace(/[._-]/g, "");
+    return decodeURIComponent(value.replace(/\+/g, " ")).trim().toLowerCase().replace(/[._-]/g, "");
   } catch {
     return value.trim().toLowerCase().replace(/[._-]/g, "");
   }
@@ -193,7 +194,11 @@ function collectSensitiveUrlVariableNames(value: string, target: Set<string>): v
   });
 }
 
-function walkStrings(value: unknown, path: string, visit: (value: string, path: string) => void): void {
+function walkStrings(
+  value: unknown,
+  path: string,
+  visit: (value: string, path: string) => void,
+): void {
   if (typeof value === "string") {
     visit(value, path);
   } else if (Array.isArray(value)) {
@@ -236,7 +241,9 @@ export function previewFlowV1Upgrade(
   const blockingIssues: FlowUpgradeIssue[] = [];
   const warnings: FlowUpgradeIssue[] = [];
   const sensitiveNames = new Set<string>(
-    flow.variables.filter((variable) => secretVariablePattern.test(variable.name)).map((variable) => variable.name),
+    flow.variables
+      .filter((variable) => secretVariablePattern.test(variable.name))
+      .map((variable) => variable.name),
   );
   const variableCounts = new Map<string, number>();
   flow.variables.forEach((variable, index) => {
@@ -400,7 +407,11 @@ export function previewFlowV1Upgrade(
         fieldId: mapping.fieldId,
       });
     }
-    if (!variable.required && variable.defaultValue === undefined && (usageCounts.get(variable.name) ?? 0) > 0) {
+    if (
+      !variable.required &&
+      variable.defaultValue === undefined &&
+      (usageCounts.get(variable.name) ?? 0) > 0
+    ) {
       addUniqueIssue(blockingIssues, {
         code: "OPTIONAL_FIELD_WITHOUT_DEFAULT",
         path: `variables[${index}]`,

@@ -74,12 +74,42 @@ describe("FlowDocument v2 结构与引用合同", () => {
     expect(compileFlowDocumentV2(flow).bindings).toHaveLength(2);
   });
 
-  it.each([
-    ["stepId", [inputStep("input_profile_01", "field_name_01"), { id: "input_profile_01", type: "navigate", url: "https://example.com" }]],
-    ["fieldId", [
+  it("label 重命名不改变 fieldId 绑定，JSON 往返保持同构", () => {
+    const flow = buildFlow([
       inputStep("input_profile_01", "field_name_01"),
-      inputStep("input_profile_02", "field_name_01"),
-    ]],
+      { id: "fill_1", type: "fill", target, value: "{{field_name_01}}" },
+    ]);
+    const input = flow.steps[0];
+    if (input?.type === "input") {
+      input.fields[0]!.label = "新名称";
+    }
+    const parsed = parseFlowDocumentV2(JSON.parse(JSON.stringify(flow)));
+    expect(parsed).toEqual(flow);
+    expect(compileFlowDocumentV2(parsed).bindings[0]?.fieldId).toBe("field_name_01");
+  });
+
+  it.each([
+    ["input id", inputStep("bad_input", "field_name_01")],
+    ["field id", inputStep("input_profile_01", "bad_field")],
+  ])("拒绝不满足前缀合同的 %s", (_label, step) => {
+    expect(() => parseFlowDocumentV2(buildFlow([step]))).toThrow(/invalid|正则/i);
+  });
+
+  it.each([
+    [
+      "stepId",
+      [
+        inputStep("input_profile_01", "field_name_01"),
+        { id: "input_profile_01", type: "navigate", url: "https://example.com" },
+      ],
+    ],
+    [
+      "fieldId",
+      [
+        inputStep("input_profile_01", "field_name_01"),
+        inputStep("input_profile_02", "field_name_01"),
+      ],
+    ],
   ])("拒绝重复 %s", (_label, steps) => {
     expect(() => parseFlowDocumentV2(buildFlow(steps as FlowDocumentV2["steps"]))).toThrow(/重复/);
   });
@@ -157,7 +187,15 @@ describe("FlowDocument v2 结构与引用合同", () => {
 
   it.each([
     ["混合模板", { id: "fill", type: "fill", target, value: "前缀{{field_name_01}}" }, /完整|混合/],
-    ["CSS", { id: "click", type: "click", target: { strategies: [{ kind: "css", selector: "{{field_name_01}}" }] } }, /禁止/],
+    [
+      "CSS",
+      {
+        id: "click",
+        type: "click",
+        target: { strategies: [{ kind: "css", selector: "{{field_name_01}}" }] },
+      },
+      /禁止/,
+    ],
     ["按键", { id: "press", type: "press", key: "{{field_name_01}}" }, /禁止/],
     ["上传", { id: "upload", type: "upload", target, files: ["{{field_name_01}}"] }, /禁止/],
     ["等待毫秒", { id: "wait", type: "wait", ms: 10, label: "{{field_name_01}}" }, /禁止/],
@@ -231,18 +269,12 @@ describe("FlowDocument v2 结构与引用合同", () => {
     });
     expect(() =>
       parseFlowDocumentV2(
-        buildFlow([
-          sensitive,
-          { id: "nav", type: "navigate", url: "{{field_secret_01}}" },
-        ]),
+        buildFlow([sensitive, { id: "nav", type: "navigate", url: "{{field_secret_01}}" }]),
       ),
     ).toThrow(/敏感.*fill\.value/);
     expect(() =>
       parseFlowDocumentV2(
-        buildFlow([
-          sensitive,
-          { id: "fill", type: "fill", target, value: "{{field_secret_01}}" },
-        ]),
+        buildFlow([sensitive, { id: "fill", type: "fill", target, value: "{{field_secret_01}}" }]),
       ),
     ).not.toThrow();
   });
@@ -285,7 +317,9 @@ describe("FlowDocument v2 结构与引用合同", () => {
     expect(() => parseFlowDocumentV2(valid)).not.toThrow();
 
     const invalid = structuredClone(valid);
-    (invalid.steps[2] as Extract<FlowDocumentV2["steps"][number], { type: "click" }>).selectionContext = {
+    (
+      invalid.steps[2] as Extract<FlowDocumentV2["steps"][number], { type: "click" }>
+    ).selectionContext = {
       searchStepId: "choose",
     };
     expect(() => parseFlowDocumentV2(invalid)).toThrow(/selectionContext|搜索/);

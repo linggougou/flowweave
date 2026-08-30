@@ -53,11 +53,12 @@ describe("v1 → v2 纯升级预览", () => {
     expect(sha256Hex("abc")).toBe(
       "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
     );
-    expect(sha256Hex("")).toBe(
-      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    );
+    expect(sha256Hex("")).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
     expect(sha256Hex("织流🧵")).toBe(
       "ddd56d8155878d869fdc2ad37f9b078e5bf1137ffcbf29950fbb3f9759d33cbd",
+    );
+    expect(sha256Hex("\ud800")).toBe(
+      "83d544ccc223c057d2bf80d3f2a32982c32c3c0db8e2674820da5064783fb097",
     );
   });
   it("相同输入生成稳定身份、candidate、canonical JSON 与 fingerprint", () => {
@@ -79,9 +80,12 @@ describe("v1 → v2 纯升级预览", () => {
 
   it("重写完整引用、默认 remember=never 且移除敏感 default", () => {
     const report = previewFlowV1Upgrade(buildV1());
-    const fields = report.candidate?.steps[0]?.type === "input" ? report.candidate.steps[0].fields : [];
+    const fields =
+      report.candidate?.steps[0]?.type === "input" ? report.candidate.steps[0].fields : [];
     const nameMapping = report.fieldMappings.find((item) => item.variableName === "hotel_name");
-    const secretMapping = report.fieldMappings.find((item) => item.variableName === "secret_password");
+    const secretMapping = report.fieldMappings.find(
+      (item) => item.variableName === "secret_password",
+    );
 
     expect(fields).toHaveLength(2);
     expect(fields.every((field) => field.remember === "never")).toBe(true);
@@ -119,11 +123,64 @@ describe("v1 → v2 纯升级预览", () => {
   });
 
   it.each([
-    ["重复变量", { variables: [{ name: "same", type: "string", required: true }, { name: "same", type: "string", required: true }] }, "DUPLICATE_VARIABLE_NAME"],
-    ["未知引用", { variables: [], steps: [{ id: "fill", type: "fill", target: { strategies: [{ kind: "css", selector: "#x" }] }, value: "{{missing}}" }] }, "UNKNOWN_VARIABLE_REFERENCE"],
-    ["混合模板", { variables: [{ name: "name", type: "string", required: true }], steps: [{ id: "fill", type: "fill", target: { strategies: [{ kind: "css", selector: "#x" }] }, value: "hello {{name}}" }] }, "MIXED_TEMPLATE"],
-    ["禁止槽位", { variables: [{ name: "name", type: "string", required: true }], steps: [{ id: "press", type: "press", key: "{{name}}" }] }, "FORBIDDEN_BINDING_TARGET"],
-    ["重复步骤", { steps: [{ id: "same", type: "navigate", url: "https://a.example" }, { id: "same", type: "navigate", url: "https://b.example" }] }, "DUPLICATE_STEP_ID"],
+    [
+      "重复变量",
+      {
+        variables: [
+          { name: "same", type: "string", required: true },
+          { name: "same", type: "string", required: true },
+        ],
+      },
+      "DUPLICATE_VARIABLE_NAME",
+    ],
+    [
+      "未知引用",
+      {
+        variables: [],
+        steps: [
+          {
+            id: "fill",
+            type: "fill",
+            target: { strategies: [{ kind: "css", selector: "#x" }] },
+            value: "{{missing}}",
+          },
+        ],
+      },
+      "UNKNOWN_VARIABLE_REFERENCE",
+    ],
+    [
+      "混合模板",
+      {
+        variables: [{ name: "name", type: "string", required: true }],
+        steps: [
+          {
+            id: "fill",
+            type: "fill",
+            target: { strategies: [{ kind: "css", selector: "#x" }] },
+            value: "hello {{name}}",
+          },
+        ],
+      },
+      "MIXED_TEMPLATE",
+    ],
+    [
+      "禁止槽位",
+      {
+        variables: [{ name: "name", type: "string", required: true }],
+        steps: [{ id: "press", type: "press", key: "{{name}}" }],
+      },
+      "FORBIDDEN_BINDING_TARGET",
+    ],
+    [
+      "重复步骤",
+      {
+        steps: [
+          { id: "same", type: "navigate", url: "https://a.example" },
+          { id: "same", type: "navigate", url: "https://b.example" },
+        ],
+      },
+      "DUPLICATE_STEP_ID",
+    ],
   ])("%s 会阻塞迁移且不生成 candidate", (_label, overrides, code) => {
     const report = previewFlowV1Upgrade(buildV1(overrides as Partial<FlowDocument>));
     expect(report.candidate).toBeNull();
@@ -134,7 +191,14 @@ describe("v1 → v2 纯升级预览", () => {
     const upload = previewFlowV1Upgrade(
       buildV1({
         variables: [{ name: "secret_file", type: "string", required: true }],
-        steps: [{ id: "upload", type: "upload", target: { strategies: [{ kind: "css", selector: "input[type=file]" }] }, files: ["{{secret_file}}"] }],
+        steps: [
+          {
+            id: "upload",
+            type: "upload",
+            target: { strategies: [{ kind: "css", selector: "input[type=file]" }] },
+            files: ["{{secret_file}}"],
+          },
+        ],
       }),
     );
     expect(upload.candidate).toBeNull();
@@ -143,11 +207,33 @@ describe("v1 → v2 纯升级预览", () => {
     const url = previewFlowV1Upgrade(
       buildV1({
         variables: [{ name: "secret_token", type: "string", required: true }],
-        steps: [{ id: "open", type: "navigate", url: "https://example.com?token={{secret_token}}" }],
+        steps: [
+          { id: "open", type: "navigate", url: "https://example.com?token={{secret_token}}" },
+        ],
       }),
     );
     expect(url.candidate).toBeNull();
     expect(url.blockingIssues.map((issue) => issue.code)).toContain("MIXED_TEMPLATE");
+  });
+
+  it("类型不兼容的合法 v1 引用以结构化问题阻塞", () => {
+    const report = previewFlowV1Upgrade(
+      buildV1({
+        variables: [{ name: "count", type: "number", required: true }],
+        steps: [
+          {
+            id: "select",
+            type: "select",
+            target: { strategies: [{ kind: "css", selector: "#count" }] },
+            values: ["{{count}}"],
+          },
+        ],
+      }),
+    );
+    expect(report.candidate).toBeNull();
+    expect(report.blockingIssues).toContainEqual(
+      expect.objectContaining({ code: "BINDING_TYPE_MISMATCH", path: "steps[0].values[0]" }),
+    );
   });
 
   it("label 截断与规范化碰撞采用确定性后缀并给出告警", () => {

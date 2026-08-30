@@ -59,17 +59,11 @@ export function parseFlowDocument(input: unknown): AnyFlowDocument {
   if (schemaVersion === FLOW_SCHEMA_VERSION_V2) {
     return parseFlowDocumentV2(input);
   }
-  throw new FlowWeaveError(
-    "FLOW_SCHEMA_VERSION_UNSUPPORTED",
-    "Flow schemaVersion 不受支持",
-    {
-      received:
-        typeof schemaVersion === "string" || typeof schemaVersion === "number"
-          ? schemaVersion
-          : null,
-      supported: [...SUPPORTED_FLOW_SCHEMA_VERSIONS],
-    },
-  );
+  throw new FlowWeaveError("FLOW_SCHEMA_VERSION_UNSUPPORTED", "Flow schemaVersion 不受支持", {
+    received:
+      typeof schemaVersion === "string" || typeof schemaVersion === "number" ? schemaVersion : null,
+    supported: [...SUPPORTED_FLOW_SCHEMA_VERSIONS],
+  });
 }
 
 export function isFlowDocumentV1(document: AnyFlowDocument): document is FlowDocumentV1 {
