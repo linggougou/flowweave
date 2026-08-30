@@ -1,0 +1,303 @@
+{
+  "review_id": "vnext-1-g1i-final-l3-r2-2026-08-30",
+  "task_id": "vNext-1-G1-I-R2",
+  "lane": "g1i-final-l3-r2",
+  "review_level": "L3",
+  "rubric_id": "vnext-1-integration-security-final-v1",
+  "candidate_sha": "27cbf0a0efdd075c9cd455a705cd860630c8e15f",
+  "implementation_sha": "27cbf0a0efdd075c9cd455a705cd860630c8e15f",
+  "plan_baseline_sha": "8f83604",
+  "artifact_refs": [
+    "doc:PROJECT_ROUTE_LOCK.md",
+    "doc:docs/exec-plans/active/vnext-1a-1b-data-foundation.md",
+    "doc:docs/design-docs/vnext-flow-schema-migration.md",
+    "doc:docs/design-docs/vnext-runtime-input-session.md",
+    "review:.codex/reviews/vnext-1/g1i-final-l3/scorecard.json",
+    "evidence:.codex/reviews/vnext-1/g1i-fix-knowledge/report.md",
+    "evidence:.codex/reviews/vnext-1/g1i-fix-portability/report.md",
+    "evidence:.codex/reviews/vnext-1/g1i-node20-evidence/results.json",
+    "evidence:.codex/reviews/vnext-1/g1i-node24-security-evidence/results.json",
+    "code:packages/project-knowledge/src/repository.ts",
+    "code:packages/project-knowledge/src/vnext-persistence.test.ts",
+    "code:packages/project-knowledge/src/import-flow.test.ts",
+    "code:packages/flow-dsl/src/portability.ts",
+    "code:packages/flow-dsl/src/upgrade.ts"
+  ],
+  "command_results": [
+    {
+      "cmd": "git status --short --branch && git rev-parse HEAD",
+      "status": "pass",
+      "result": "开始时工作树 clean，分支为 codex/vnext-1-g1i-final-r2，HEAD=27cbf0a0efdd075c9cd455a705cd860630c8e15f。"
+    },
+    {
+      "cmd": "CI=1 pnpm install --frozen-lockfile",
+      "status": "pass",
+      "result": "Node 24.14.0 下复用并安装 801 个包；Electron bundle 修复、ad-hoc 重签名及严格签名校验通过；lockfile 未变化。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/project-knowledge test",
+      "status": "pass",
+      "result": "Node 24.14.0：6/6 files，131/131 tests。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/flow-dsl test && pnpm --filter @flowweave/local-api test",
+      "status": "pass",
+      "result": "Node 24.14.0：Flow DSL 61/61；Local API 14/14。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/runtime test -- playwright-launch.test.ts flow-schema-version.test.ts",
+      "status": "setup-fail",
+      "result": "文件名过滤与仓库真实测试名不符，Vitest 未发现测试；随后按真实 src/playwright-launch-options.test.ts 重跑。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/runtime test -- src/playwright-launch-options.test.ts",
+      "status": "pass",
+      "result": "Node 24.14.0：Runtime launch/schema guard 9/9。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/app-studio test（首次）",
+      "status": "setup-fail",
+      "result": "fresh worktree 尚未构建 @flowweave/runtime 与 @flowweave/local-api dist，38 suites/196 tests 已过但 2 suites 无法解析 workspace entry；构建两依赖后正式重跑。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/app-studio test（依赖 build 后）",
+      "status": "pass",
+      "result": "Node 24.14.0：40/40 files，219/219 tests。"
+    },
+    {
+      "cmd": "pnpm e2e:login",
+      "status": "pass",
+      "result": "v1 flow_e2e_login 状态 success，4/4 steps 完成。"
+    },
+    {
+      "cmd": "独立攻击：已删除/改名 secret、password-hinted literal、upload、encoded URL、execution snapshot/variables，升级后恢复旧版本",
+      "status": "pass",
+      "result": "升级 revision=4；3 个旧版本及 execution API 对全部 raw/escaped canary 零命中；SQLite 主文件零命中且 WAL/SHM 不存在；恢复旧 v1 版本成功但无法恢复任何 canary。"
+    },
+    {
+      "cmd": "独立攻击：物理扫描失败与 upgrade:after-physical-erasure-check 故障",
+      "status": "pass",
+      "result": "两条路径都返回 FLOW_PERSISTENCE_FAILED；current document/schema/revision、version、SQL recent rows 与 execution 逐字段不变；提交后仅 best-effort close，不再形成业务失败响应。"
+    },
+    {
+      "cmd": "独立攻击：v2 navigate/wait 使用通用 key 与双重 percent-encoded key",
+      "status": "fail",
+      "result": "navigate ?key=<canary>、wait #?key=<canary>、navigate ?%256b%2565%2579=<canary> 均被 import 接受，Flow 数量 0→1，export 原样包含 canary。"
+    },
+    {
+      "cmd": "独立攻击：无 flow/version/snapshot 定义的 execution variables 敏感名称矩阵",
+      "status": "fail",
+      "result": "secret_orphan、Secret_API_Key、secret-password、SECRET.PASSWORD 四个复杂转义值在升级 revision=2 后均由 getExecution 原样返回，SQLite 主文件均命中 JSON-escaped bytes。"
+    },
+    {
+      "cmd": "git diff --name-only 00d5f9f..HEAD 与分层差异核对",
+      "status": "pass",
+      "result": "首审后产品改动仅 packages/project-knowledge/src/repository.ts 及两份 Knowledge 测试；Runtime、Studio、Local API、Flow DSL 无代码漂移，lockfile 未修改。"
+    },
+    {
+      "cmd": "Node 20 fresh full/targeted 与 Node 24 fresh forced full gate",
+      "status": "not-rerun-after-decisive-p1",
+      "result": "既有候选祖先证据为 Node20 39/39 tasks、663/663 与 Node24 52/52 tasks、0 cache、663/663；它可继承未变的 DSL/Runtime/Studio/Local API。Knowledge 修复后的 Node20 131 与组合后的 Node24 全仓矩阵本轮未虚报为已完成；两个确定 P1 已使最终结论只能 REVISE，按协调指令停止长耗时重复矩阵。"
+    }
+  ],
+  "hard_gates": [
+    {
+      "id": "candidate-integrity-and-scope",
+      "status": "pass",
+      "evidence": [
+        "指定 worktree、branch、HEAD 正确且开始时 clean。",
+        "00d5f9f..27cbf0a 产品变更仅 Knowledge repository 与测试，修复报告位于既有 review 目录。",
+        "本轮没有修改产品代码、配置、lockfile、路线锁、operations-log 或 verification-report。"
+      ]
+    },
+    {
+      "id": "historical-secret-erasure",
+      "status": "fail",
+      "evidence": [
+        "已删除/改名且可由历史 v1/snapshot 识别的秘密主路径通过 API、物理与恢复攻击。",
+        "repository.ts:1999-2021 只从 current/version/execution snapshot 建立敏感名称并按该集合读取 variables；没有 snapshot/历史定义的 execution variable 名不会进入集合。",
+        "四种大小写/分隔符敏感名称及复杂转义值升级后仍由 API 返回且 SQLite escaped bytes 命中。"
+      ]
+    },
+    {
+      "id": "revision-cas-and-atomic-failure",
+      "status": "pass",
+      "evidence": [
+        "repository.ts:1400-1404 已把物理扫描和最终故障点放在 exclusive transaction 返回前。",
+        "物理扫描故障下 current/schema/revision/version/recent 全部不变。",
+        "扫描后故障注入下 current/version/recent/execution 逐字段不变；提交后 close 异常被隔离为 best effort。"
+      ]
+    },
+    {
+      "id": "portable-v2-sensitive-url",
+      "status": "fail",
+      "evidence": [
+        "repository.ts:374 的本地 regex 不包含单独 key，而 Flow DSL portability.ts:37-52 与 upgrade.ts:67-82 的既有敏感键集合明确包含 key。",
+        "通用 key 在 navigate query、wait fragment-query 与双重 percent encoding 三条路径均可导入落盘并原样导出。",
+        "新增测试矩阵只覆盖 token/access_token/API_KEY/auth 等 11 类输入，没有覆盖通用 key。"
+      ]
+    },
+    {
+      "id": "v2-remains-non-executable",
+      "status": "pass",
+      "evidence": [
+        "Runtime launch/schema guard 9/9。",
+        "Studio 219/219 与 Knowledge 131/131 通过，且首审后 Runtime/Studio/Local API/DSL 无产品代码漂移。",
+        "v2 execution 仍在副作用与 execution 写入前拒绝；本轮未发现 guard 回退。"
+      ]
+    },
+    {
+      "id": "v1-positive-loop",
+      "status": "pass",
+      "evidence": [
+        "Node24 v1 login 4/4 steps success。",
+        "Flow DSL 61/61、Local API 14/14、Studio 219/219、Runtime guard 9/9。",
+        "首审后 v1 Runtime/Studio/Local API/DSL 实现未改变。"
+      ]
+    },
+    {
+      "id": "dual-node-and-full-gate-evidence",
+      "status": "skipped",
+      "evidence": [
+        "候选祖先已有 Node20 663/663 与 Node24 fresh forced 663/663、0 cache 证据，可继承未变组件。",
+        "组合候选 Knowledge 在本轮 Node24 131/131；修复报告还提供 Node24 typecheck/lint/build 与全仓 typecheck/lint/build。",
+        "组合候选的 Node20 Knowledge 131 与 Node24 fresh forced 全仓矩阵未重跑；因两个 P1 已确定 REVISE，不将祖先证据冒充为当前组合的完整证据。"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "P1-ORPHAN-EXECUTION-VARIABLE-SECRETS",
+      "severity": "P1",
+      "title": "无历史 Flow/snapshot 定义的敏感 execution variables 不进入升级清理集合",
+      "location": [
+        "packages/project-knowledge/src/repository.ts:1999",
+        "packages/project-knowledge/src/repository.ts:2014",
+        "packages/project-knowledge/src/repository.ts:2051"
+      ],
+      "impact": "旧 execution 若缺 snapshot、变量已脱离任一保留版本，或历史数据只剩 variables_json，升级仍会成功但历史 API 和 SQLite 继续保存真实秘密；物理扫描也因为该值未加入 sensitiveValues 而给出假阴性。",
+      "evidence": "普通当前 v1 只定义 account，execution 无 flowSnapshot 且 variables 含 secret_orphan、Secret_API_Key、secret-password、SECRET.PASSWORD 四个带双引号/反斜杠/换行的值。升级返回 revision=2；四值均由 getExecution 原样返回，store.sqlite 对四值均 escaped=true。",
+      "required_fix": "为历史 execution variables 建立确定性且大小写/分隔符一致的敏感名称识别，并与 DSL/升级策略共享同一纯函数或冻结集合；不能仅依赖当前、version 或 snapshot 反推。将命中的变量名和值纳入删除、结构化 scrub 与物理扫描；对缺少可验证来源、无法安全分类的孤立变量必须冻结为明确策略：保守清除其值或拒绝升级，禁止默认保留。覆盖缺 snapshot、孤立变量、复杂 JSON 转义和 API/SQLite/WAL/SHM 零命中。"
+    },
+    {
+      "id": "P1-V2-PORTABILITY-KEY-POLICY-DRIFT",
+      "severity": "P1",
+      "title": "Knowledge v2 URL 检测遗漏 DSL 既有通用 key，导入导出仍可携带秘密",
+      "location": [
+        "packages/project-knowledge/src/repository.ts:374",
+        "packages/flow-dsl/src/portability.ts:37",
+        "packages/flow-dsl/src/upgrade.ts:67",
+        "packages/project-knowledge/src/import-flow.test.ts:84"
+      ],
+      "impact": "带 `key=<secret>` 的 v2 navigate/wait 文档可作为正式副本写入 SQLite 并原样导出，违反阶段零秘密与 import/export fail-closed 合同；两套 helper 继续独立演进会再次产生策略漂移。",
+      "evidence": "独立探针中 navigate query `?key=<canary>`、wait fragment `#?key=<canary>` 和 double-encoded `?%256b%2565%2579=<canary>` 均 accepted=true、Flow count 0→1、exportContainsCanary=true。代码对比显示 DSL 两份集合含 key，而 Knowledge regex 不含。",
+      "required_fix": "移除 Knowledge 自建正则并复用 Flow DSL 导出的统一 URL 凭据判定/规范化契约，至少保持 token/key/secret/password/auth 全集合与大小写、`._-`、有限 percent decode 语义一致；为 navigate/wait 的 raw/query/hash/malformed/userinfo/单次及双次编码通用 key 增加 import 零写、SQLite 零命中、export fail closed、错误零 canary 测试。"
+    }
+  ],
+  "p0_count": 0,
+  "p1_count": 2,
+  "p2_count": 0,
+  "dimensions": [
+    {
+      "name": "dsl_and_version_contract",
+      "score": 19,
+      "max_score": 20,
+      "reason": "v1/v2 parser、strict v2、字段引用和升级预览保持稳定；扣分来自 Knowledge 再次复制 DSL 敏感键策略。",
+      "evidence_refs": [
+        "hard_gate:portable-v2-sensitive-url"
+      ]
+    },
+    {
+      "name": "revision_transactions_and_restore",
+      "score": 20,
+      "max_score": 20,
+      "reason": "首审 post-commit 扫描缺口已修复；两类独立故障均完整回滚，提交后没有业务失败窗口。",
+      "evidence_refs": [
+        "hard_gate:revision-cas-and-atomic-failure"
+      ]
+    },
+    {
+      "name": "sensitive_data_erasure_and_portability",
+      "score": 7,
+      "max_score": 25,
+      "reason": "已定义历史秘密的合并清理通过，但孤立 execution variables 和通用 key URL 两条公开路径仍稳定泄漏到 API/SQLite/export。",
+      "evidence_refs": [
+        "finding:P1-ORPHAN-EXECUTION-VARIABLE-SECRETS",
+        "finding:P1-V2-PORTABILITY-KEY-POLICY-DRIFT"
+      ]
+    },
+    {
+      "name": "legacy_consumers_and_runtime_isolation",
+      "score": 15,
+      "max_score": 15,
+      "reason": "v1 登录正向闭环通过；Runtime、Studio、Knowledge execution 仍在副作用前拒绝 v2。",
+      "evidence_refs": [
+        "hard_gate:v2-remains-non-executable",
+        "hard_gate:v1-positive-loop"
+      ]
+    },
+    {
+      "name": "regression_dual_node_and_evidence_quality",
+      "score": 9,
+      "max_score": 15,
+      "reason": "Node24 定向计数完整且既有双 Node 证据可继承未变组件；组合候选未完成 Node20 Knowledge131 和 Node24 fresh 全仓重跑，且修复报告的安全覆盖结论遗漏两个攻击面。",
+      "evidence_refs": [
+        "hard_gate:dual-node-and-full-gate-evidence",
+        "finding:P1-ORPHAN-EXECUTION-VARIABLE-SECRETS",
+        "finding:P1-V2-PORTABILITY-KEY-POLICY-DRIFT"
+      ]
+    },
+    {
+      "name": "scope_and_change_hygiene",
+      "score": 5,
+      "max_score": 5,
+      "reason": "改动集中在 Knowledge 安全修复与测试，没有依赖、lockfile、Runtime 或 UI 越界。",
+      "evidence_refs": [
+        "hard_gate:candidate-integrity-and-scope"
+      ]
+    }
+  ],
+  "penalties": [],
+  "totals": {
+    "raw_score": 75,
+    "penalty_total": 0,
+    "final_score": 75
+  },
+  "total_score": 75,
+  "verdict": "REVISE",
+  "required_fixes": [
+    "补齐无 Flow/version/snapshot 定义的历史 execution variables 敏感识别与不可逆清理；统一大小写/分隔符规则，并明确无法安全分类时保守清除或拒绝升级、不得默认保留；复杂值在 API 和 SQLite/WAL/SHM raw/escaped 必须零命中。",
+    "让 Knowledge import/export 复用 Flow DSL 的统一 URL 凭据策略，补齐通用 key 及双重 percent encoding；navigate/wait 导入必须零写、导出必须 fail closed、错误不得含 canary。"
+  ],
+  "nice_to_have": [
+    "完成两项修复后再运行组合候选 Node20 Knowledge131 与 Node24 fresh forced 全仓 typecheck/lint/test/build，避免把祖先证据外推到已修改的原生 SQLite 路径。"
+  ],
+  "reviewers": [
+    {
+      "role": "generator",
+      "conclusion": "SUBMITTED",
+      "summary": "候选通过两份修复报告声明已关闭首审三项 P1，并提交 Knowledge 实现与回归。"
+    },
+    {
+      "role": "verifier",
+      "conclusion": "REVISE",
+      "summary": "首审历史合并和事务回滚修复可复现，但两个新边界攻击稳定失败。"
+    },
+    {
+      "role": "strict_judge",
+      "conclusion": "REVISE",
+      "summary": "两个 P1 都能经公开 repository/import/export 路径触发，硬门不允许以现有绿灯抵消。"
+    },
+    {
+      "role": "anti_slop_reviewer",
+      "conclusion": "REVISE",
+      "summary": "修复复制了第二套敏感 URL 词表，并把 execution snapshot 覆盖误当成全部 execution variables 覆盖；证据结论超出矩阵。"
+    },
+    {
+      "role": "chief_reviewer",
+      "conclusion": "REVISE",
+      "summary": "P0=0、P1=2、required_fixes 非空，不满足最终 PASS 条件。"
+    }
+  ],
+  "reviewed_at": "2026-08-30T17:01:24+08:00"
+}
