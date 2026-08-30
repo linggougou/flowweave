@@ -1,0 +1,281 @@
+{
+  "review_id": "vnext-1-g1i-final-l3-2026-08-30",
+  "task_id": "vNext-1-G1-I",
+  "lane": "g1i-final-l3",
+  "review_level": "L3",
+  "rubric_id": "vnext-1-integration-security-final-v1",
+  "candidate_sha": "02e758876afdf2708b341a5dbbd3694375d6571c",
+  "implementation_sha": "cccd818aadee53f090caf7bf6c0f265d9e8beb8f",
+  "plan_baseline_sha": "8f83604",
+  "artifact_refs": [
+    "doc:PROJECT_ROUTE_LOCK.md",
+    "doc:docs/exec-plans/active/vnext-1a-1b-data-foundation.md",
+    "doc:docs/design-docs/vnext-flow-schema-migration.md",
+    "doc:docs/design-docs/vnext-runtime-input-session.md",
+    "doc:docs/design-docs/vnext-studio-linear-template-editor.md",
+    "code:packages/flow-dsl/src/parsers.ts",
+    "code:packages/flow-dsl/src/v2-schema.ts",
+    "code:packages/flow-dsl/src/upgrade.ts",
+    "code:packages/project-knowledge/src/repository.ts",
+    "code:packages/local-api/src/index.ts",
+    "code:packages/runtime/src/playwright-runner.ts",
+    "code:apps/studio/electron/services.ts",
+    "evidence:.codex/reviews/vnext-1/g1i-node20-evidence/results.json",
+    "evidence:.codex/reviews/vnext-1/g1i-node24-security-evidence/results.json"
+  ],
+  "command_results": [
+    {
+      "cmd": "git status --short --branch && git rev-parse HEAD",
+      "status": "pass",
+      "result": "评审开始时工作树 clean；分支正确；HEAD=02e758876afdf2708b341a5dbbd3694375d6571c。"
+    },
+    {
+      "cmd": "CI=1 pnpm install --frozen-lockfile",
+      "status": "pass",
+      "result": "Node 24.14.0 下复用 801 个包；lockfile 未变化；Electron bundle 完整性修复与签名校验成功。"
+    },
+    {
+      "cmd": "TURBO_FORCE=true pnpm turbo typecheck lint test build --force --output-logs=errors-only",
+      "status": "pass",
+      "result": "Node 24.14.0：52/52 tasks，0 cached，耗时 1m27.027s。"
+    },
+    {
+      "cmd": "Node20 DSL 与 Studio 定向测试",
+      "status": "pass",
+      "result": "Node 20.19.6：DSL 61/61；Studio 219/219。"
+    },
+    {
+      "cmd": "Node 20 首次复用 Node 24 node_modules 的 Knowledge/Local API 定向尝试",
+      "status": "environment-fail",
+      "result": "better-sqlite3 ABI 137 与 Node20 ABI 115 不匹配；不归类为候选失败，随后按 Node20 冻结重装复验。"
+    },
+    {
+      "cmd": "PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH CI=1 pnpm install --frozen-lockfile --force",
+      "status": "pass",
+      "result": "Node 20.19.6 下复用 951 个包，原生模块重建与 Electron 签名校验成功；lockfile 未变化。"
+    },
+    {
+      "cmd": "Node20 Knowledge/Local API/Runtime guard 定向测试",
+      "status": "pass",
+      "result": "project-knowledge 106/106；local-api 14/14；runtime playwright launch/版本 guard 9/9。"
+    },
+    {
+      "cmd": "PATH=/Users/ling/.nvm/versions/node/v20.19.6/bin:$PATH pnpm e2e:login",
+      "status": "pass",
+      "result": "v1 flow_e2e_login 状态 success，4/4 steps 完成。"
+    },
+    {
+      "cmd": "独立攻击：敏感字段先从当前 v1 删除、再升级 v2",
+      "status": "fail",
+      "result": "升级返回 revision=3/schema2，但旧 flow_versions 文档和 store.sqlite 主文件仍命中 FINAL_JUDGE_REMOVED_SECRET_8a91。"
+    },
+    {
+      "cmd": "独立攻击：让物理 canary 扫描在升级提交后失败",
+      "status": "fail",
+      "result": "调用抛 FLOW_PERSISTENCE_FAILED，但重新读取已是 revision=2/schema2，且已有 1 个版本；失败没有回滚。"
+    },
+    {
+      "cmd": "独立攻击：v2 wait.urlIncludes query 与 navigate hash 敏感 URL 导入导出",
+      "status": "fail",
+      "result": "两个文档均被 importFlow 接受，exportFlow 结果继续包含 FINAL_JUDGE_V2_URL_SECRET_4c2e。"
+    },
+    {
+      "cmd": "git merge-base --is-ancestor cccd818 HEAD && git diff --name-only cccd818..HEAD -- ':!/.codex/reviews/**'",
+      "status": "pass",
+      "result": "实现候选是最终 HEAD 祖先；其后只有 Node20/Node24 证据文件，没有产品代码漂移。"
+    }
+  ],
+  "hard_gates": [
+    {
+      "id": "candidate-integrity-and-scope",
+      "status": "pass",
+      "evidence": [
+        "指定 worktree/branch/HEAD 正确且评审前 clean。",
+        "cccd818..02e7588 仅增加四个 G1-I 双 Node 证据文件。",
+        "评审未修改产品代码、配置、lockfile、路线锁或项目运行日志。"
+      ]
+    },
+    {
+      "id": "dsl-v1-v2-contract",
+      "status": "pass",
+      "evidence": [
+        "v1 默认常量仍为 1；v1/v2 parser 显式分派；v2 strict、全局 fieldId、未来引用、类型、敏感消费与 selectionContext 校验存在。",
+        "Node20 DSL 61/61；Node24 fresh 全仓 52/52 tasks。"
+      ]
+    },
+    {
+      "id": "revision-cas-and-atomic-failure",
+      "status": "fail",
+      "evidence": [
+        "常规 CAS、故障注入与 restore 回归通过。",
+        "repository.ts:1177-1179 在 exclusive transaction 已提交后才执行物理 secret 扫描。",
+        "独立探针收到 FLOW_PERSISTENCE_FAILED 后，current 已是 revision=2/schema2 且版本数为 1。"
+      ]
+    },
+    {
+      "id": "sensitive-history-erasure",
+      "status": "fail",
+      "evidence": [
+        "repository.ts:1112-1123 只从当前 preview.fieldMappings 生成 sensitiveNames。",
+        "repository.ts:1688-1873 用该集合清理全部历史，没有从历史 v1 文档与 execution snapshot 扩展识别范围。",
+        "独立探针证明已从 current 删除的 secret_password 仍存在于旧版本与 SQLite 主文件。"
+      ]
+    },
+    {
+      "id": "portable-v2-sensitive-literal",
+      "status": "fail",
+      "evidence": [
+        "repository.ts:214-243 只检查 navigate 的 authority 与 searchParams，未检查 wait.urlIncludes 或 URL hash 参数。",
+        "独立探针证明 token/access_token canary 可经 v2 import 后原样 export。"
+      ]
+    },
+    {
+      "id": "v2-remains-non-executable",
+      "status": "pass",
+      "evidence": [
+        "Runtime guard 位于 executionId、artifact 目录、progress 与 Chromium 之前。",
+        "Studio guard 位于 executionId、run directory、environment、Chromium、runtime 与 persistence 之前。",
+        "Knowledge saveExecution 在插入 execution/steps 前拒绝 v2；legacy current/read/rename/recorder 写入口继续显式 v1。"
+      ]
+    },
+    {
+      "id": "v1-positive-and-dual-node-regression",
+      "status": "pass",
+      "evidence": [
+        "本轮 Node20 v1 登录 4/4 成功；Runtime guard 9/9。",
+        "本轮 Node24 fresh typecheck/lint/test/build 52/52、0 cache。",
+        "既有独立 Node20/Node24 证据中的 663/663、recorded 25/25、portability 与生产依赖 audit 与候选代码祖先关系一致。"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "P1-HISTORY-SENSITIVE-SET-INCOMPLETE",
+      "severity": "P1",
+      "title": "已从当前 v1 删除的敏感字段不会从历史版本和物理数据库清除",
+      "location": [
+        "packages/project-knowledge/src/repository.ts:1112",
+        "packages/project-knowledge/src/repository.ts:1688"
+      ],
+      "impact": "升级可被报告为成功，但旧版本、历史 execution 或 execution snapshot 仍可保留并经历史读取链返回秘密；同一秘密也继续存在于 SQLite。恢复该版本还会把不安全 v1 重新设为 current。",
+      "evidence": "先保存含 secret_password/default canary 的 v1，再以 revision save 删除该变量，最后升级 current。结果 revision=3/schema2，但 historyContainsSecret=true 且 store.sqlite raw canary=true。",
+      "required_fix": "升级提交必须对当前 Flow 的所有 v1 历史版本与 execution snapshot 运行同一确定性敏感识别器，合并敏感字段身份/值后再统一清理；覆盖历史已删除/改名字段、历史密码字面量及历史敏感 URL/上传来源，并新增物理与 API canary 回归。"
+    },
+    {
+      "id": "P1-PHYSICAL-SCAN-AFTER-COMMIT",
+      "severity": "P1",
+      "title": "物理 secret 验证失败发生在事务提交后，返回失败却留下已提交升级",
+      "location": [
+        "packages/project-knowledge/src/repository.ts:1177"
+      ],
+      "impact": "调用方依据失败响应会认为 revision/schema 未变并可能重试，但数据库已经升级、revision 已递增且版本已生成，破坏原子升级和 CAS 交互合同。",
+      "evidence": "让相同 canary 仍存在于同一 SQLite 的项目元数据，upgradeFlowToV2 抛 FLOW_PERSISTENCE_FAILED；随后 getFlowRevision 返回 revision=2/schema2，listFlowVersions 返回 1 行。",
+      "required_fix": "把所有可能失败的安全验证放到可回滚边界内，或采用可验证的临时数据库/原子替换方案；任何对外失败都必须保持 document、history、recent values 与 revision 全部不变，并为 post-commit scan failure 加红灯测试。"
+    },
+    {
+      "id": "P1-V2-PORTABILITY-URL-COVERAGE",
+      "severity": "P1",
+      "title": "v2 导入导出遗漏 wait.urlIncludes 与 URL hash 中的敏感参数",
+      "location": [
+        "packages/project-knowledge/src/repository.ts:212"
+      ],
+      "impact": "带 token/access_token 的 v2 裸文档可被正式导入并原样导出，直接违反敏感值不得进入导出与 SQLite 的阶段硬门。",
+      "evidence": "wait.urlIncludes=https://example.test/path?token=<canary> 与 navigate=https://example.test/#?access_token=<canary> 均 import accepted=true 且 exportContainsSecret=true。",
+      "required_fix": "复用统一 URL 凭据检测/安全化逻辑覆盖 navigate.url 与 wait.urlIncludes 的 query、fragment-query、userinfo、编码 key，并在 import 与 export 两端 fail closed；新增 raw/encoded/hash/wait canary 矩阵。"
+    }
+  ],
+  "p0_count": 0,
+  "p1_count": 3,
+  "p2_count": 0,
+  "dimensions": [
+    {
+      "name": "dsl_and_version_contract",
+      "score": 19,
+      "max_score": 20,
+      "reason": "版本分派、strict v2、引用/类型/作用域与确定性预览均有实现和测试；本轮未发现 DSL 阻断问题。扣 1 分仅因完整报告 fingerprint/历史清理范围仍需与修复后的安全识别联动复核。",
+      "evidence_refs": ["hard_gate:dsl-v1-v2-contract"]
+    },
+    {
+      "name": "revision_transactions_and_restore",
+      "score": 10,
+      "max_score": 20,
+      "reason": "常规 CAS/restore/fault injection 通过，但物理验证在 commit 后失败会留下 revision/schema/version 漂移，原子失败硬合同失守。",
+      "evidence_refs": ["finding:P1-PHYSICAL-SCAN-AFTER-COMMIT"]
+    },
+    {
+      "name": "sensitive_data_erasure_and_portability",
+      "score": 4,
+      "max_score": 25,
+      "reason": "当前字段 canary 路径通过，但历史已删除敏感字段和两类 v2 URL 槽位可稳定泄漏到 SQLite/历史/API 导出。",
+      "evidence_refs": [
+        "finding:P1-HISTORY-SENSITIVE-SET-INCOMPLETE",
+        "finding:P1-V2-PORTABILITY-URL-COVERAGE"
+      ]
+    },
+    {
+      "name": "legacy_consumers_and_runtime_isolation",
+      "score": 15,
+      "max_score": 15,
+      "reason": "Runtime、Studio、Knowledge execution 与旧 recorder/edit/read 路径均保持 v2 fail closed，且关键 guard 在副作用前。",
+      "evidence_refs": ["hard_gate:v2-remains-non-executable"]
+    },
+    {
+      "name": "regression_dual_node_and_evidence_quality",
+      "score": 11,
+      "max_score": 15,
+      "reason": "双 Node 证据与本轮 fresh/定向验证一致，v1 正向闭环稳定；但现有安全证据把单一路径 canary 结论外推为全局零命中，遗漏三个关键攻击面。",
+      "evidence_refs": [
+        "hard_gate:v1-positive-and-dual-node-regression",
+        "finding:P1-HISTORY-SENSITIVE-SET-INCOMPLETE",
+        "finding:P1-PHYSICAL-SCAN-AFTER-COMMIT",
+        "finding:P1-V2-PORTABILITY-URL-COVERAGE"
+      ]
+    },
+    {
+      "name": "scope_and_change_hygiene",
+      "score": 5,
+      "max_score": 5,
+      "reason": "实现与修订集中在 vNext-1 数据合同、旧消费者护栏和跨层 history/revision 闭环；未发现依赖或 lockfile 越界。",
+      "evidence_refs": ["hard_gate:candidate-integrity-and-scope"]
+    }
+  ],
+  "penalties": [],
+  "totals": {
+    "raw_score": 64,
+    "penalty_total": 0,
+    "final_score": 64
+  },
+  "total_score": 64,
+  "verdict": "REVISE",
+  "required_fixes": [
+    "从当前文档、全部历史 v1 版本与 execution snapshot 合并敏感字段识别范围，清除历史已删除/改名字段及其 raw/escaped 值，并以 API 与 SQLite/WAL/SHM canary 证明零命中。",
+    "修复物理安全验证的 post-commit 失败窗口，保证 upgradeFlowToV2 对外抛错时 document/version/recent-values/revision 全部回滚。",
+    "补全 v2 portability 对 navigate.url 与 wait.urlIncludes 的 query/hash/userinfo/编码敏感参数覆盖，导入与导出均不得让 canary 落盘或外泄。"
+  ],
+  "nice_to_have": [
+    "在后续依赖升级轨跟踪 Node DEP0169 与 prebuild-install deprecated 警告；不应与本次安全修复混在同一提交。"
+  ],
+  "reviewers": [
+    {
+      "role": "verifier",
+      "conclusion": "REVISE",
+      "summary": "fresh 回归和兼容矩阵通过，但敏感历史、失败原子性与 v2 导出三个硬门失败。"
+    },
+    {
+      "role": "strict_judge",
+      "conclusion": "REVISE",
+      "summary": "三个 P1 均可由公开 repository/import/export 路径稳定复现，不能以既有 happy-path canary 或双 Node 绿灯覆盖。"
+    },
+    {
+      "role": "anti_slop_reviewer",
+      "conclusion": "REVISE",
+      "summary": "证据包结构完整、计数可核，但“敏感扫描零命中”和“故障全回滚”的表述超出了现有攻击矩阵实际证明范围。"
+    },
+    {
+      "role": "chief_reviewer",
+      "conclusion": "REVISE",
+      "summary": "按最终门禁 P1 必须为零；候选应返回 doing，完成三项修复并重新进行独立安全复审。"
+    }
+  ],
+  "reviewed_at": "2026-08-30T16:32:29+08:00"
+}
