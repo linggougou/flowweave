@@ -7305,3 +7305,14 @@
 - DSL R2 独立复审候选 `7eac93c`：`PASS 100/100`，P0/P1/P2=`0/0/0`，`required_fixes=[]`；审查证据集成为 `34ab197`。
 - 本地集成 `pnpm test` 为 21/21 workspace tasks，通过 DSL 61、Runtime 52、Studio 209、Knowledge 86 等完整回归；Judge 强制无缓存 typecheck/lint/build 为 39/39、0 cached，9 个相关包 557 项测试与 3 项攻击探针全通过。
 - 阶段判断：vNext-1A 与兼容护栏已通过独立会签，允许进入依赖它的 G1B；这不授权 vNext-2 Runtime 输入会话、Studio 编辑器、P3 或 P4。
+
+## 2026-08-30 vNext-1B Knowledge 三轮审查与最终会签
+
+- G1B 首候选建立集中幂等 SQLite migration、Flow revision、版本 schema/source revision、最近值复合键、revision-aware save/restore/upgrade 和 execution v2 护栏；首轮 L3 Judge 为 `REVISE 58/100`，发现 legacy caller CAS 旁路、JSON 转义/flowSnapshot/活跃 reader 三类秘密残留和 v2 import/export 缺失。
+- 首轮整改将无 revision 的 legacy save 收紧为 create-only，把 expectedRevision 贯通 Extension、Local API、Studio 与 Web；秘密清理改为结构化 scrub/assert，升级前取得维护锁并在 active reader 下零写失败；补 strict v1/v2 原子导入和同版本安全导出。
+- R2 为 `REVISE 88/100`，首轮 P0 与 import/export 均关闭；唯一 P1 是正式 Local API/Studio/Web 恢复链仍先调用 legacy v1 version getter，导致合法 v2 历史版本 HTTP restore 返回 500。
+- R2 整改新增 project/flow/version 三重归属的 AnyFlowDocument 历史读取，正式恢复直接调用 revision-aware `restoreFlowRevision`，并贯通 Studio/Web 新 revision/schema；v2 当前文档仍不可运行或编辑。
+- R3 独立会签：`PASS 100/100`，P0/P1/P2=`0/0/0`，`required_fixes=[]`。独立 HTTP 连续恢复 revision `3→4→5`，400/404/409 零写、复杂 secret raw/JSON-escaped SQLite 扫描、active reader 和双写 CAS 攻击均通过。
+- G1B 功能/审查工作树在确认 apps/packages 与集成分支 patch-equivalent 且工作区 clean 后回收；临时分支删除，用户 stash 未触碰。
+- 覆盖率工具 `@vitest/coverage-v8` 未安装；原用途为生成覆盖率报告。替代流程：定向红灯/攻击测试、全仓 663 项测试、强制无缓存 typecheck/lint/build 与独立 Judge；未为追求报告擅自新增依赖。
+- 阶段判断：G1B 与 Studio guard 已独立通过；进入 G1-I Node 20/24、recorded replay、portability、依赖与安全 canary 总验收，尚不归档 vNext-1。

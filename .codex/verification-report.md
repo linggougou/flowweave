@@ -5417,3 +5417,15 @@
 - 攻击探针：显式 `inputType=text` 不被 password-like selector 误判；旧拼接碰撞输入生成不同 fieldId；所有旧消费者扫描为显式 v1；Runtime v2 为零 progress、零 artifact。
 - 静态检查：`git diff --check` 通过；`FLOW_SCHEMA_VERSION` 仍为 `1`；旧 POST 与 legacy repository 对 v2 fail closed 且零数据库写入。
 - 结论：G1A/G1A-C 通过，可以进入 G1B；v2 仍不可由旧 Runtime 执行。
+
+## 2026-08-30 vNext-1B R3 最终验证
+
+- 最终候选：`2dd86fe1ab71d73509917ed6391d0b6d68cb4124`；集成后代码提交：`d3cc554`、`39d10e4`、`55fcc70`；R3 证据集成为 `9f7f358`。
+- 独立 R3：`PASS 100/100`，P0/P1/P2=`0/0/0`，`required_fixes=[]`。
+- fresh 定向：project-knowledge `106/106`、Local API `14/14`、Studio `219/219`、Web `33/33`、DSL `61/61`、Extension `79/79`。
+- fresh 全仓强制矩阵：test 21/21 workspace tasks、共 `663` tests；typecheck 21/21；lint/build 13/13；全部 `--force`、0 cached 通过。
+- 独立攻击：真实 HTTP v2 history GET=`200/schema2`；两次 restore revision `3→4→5`；缺参 400、跨归属/未知 404、stale 409 均零写。
+- 安全攻击：caller expectedRevision 双写只有一个成功；复杂引号/反斜杠/换行 secret 在 candidate/API/version/SQLite/WAL/SHM 的 raw 与 JSON-escaped 扫描零命中；活跃 reader 时升级在业务写前失败且 revision/document/version/recent/execution 全不变。
+- 兼容：legacy v1 getter 对 v2 继续 fail closed；v1 restore 回归通过；Studio run guard 未被跨层 revision 修订覆盖，v2 当前 Flow 仍不可执行/编辑。
+- 主集成分支在 cherry-pick 后再次执行 `pnpm test && pnpm typecheck && pnpm lint && pnpm build`，21/21、21/21、13/13、13/13 全部通过；结果命中与 R3 候选代码相同的本地 Turbo cache，fresh/0-cache 证据以独立 R3 为准。
+- 结论：G1B 通过，可以进入 G1-I 总验收；vNext-1 尚未完成 Node 20/24、recorded replay、portability 与最终集成 Judge。
