@@ -64,6 +64,69 @@ describe("统一敏感参数键合同", () => {
   });
 
   it.each([
+    [
+      "变量前存在非法 percent",
+      "https://bad%ZZ%7B%7Busername%7D%7D:literal@example.test/path",
+      ["username"],
+    ],
+    [
+      "变量后存在非法 percent",
+      "https://literal:%7B%7Bpassword%7D%7D%ZZ@example.test/path",
+      ["password"],
+    ],
+    [
+      "同侧多个变量中间存在非法 percent",
+      "https://%7B%7Busername%7D%7D%ZZ%7B%7Btenant%7D%7D:literal@example.test/path",
+      ["username", "tenant"],
+    ],
+    [
+      "另一侧存在非法 percent",
+      "https://bad%ZZ:%7B%7Bpassword%7D%7D@example.test/path",
+      ["password"],
+    ],
+    [
+      "两层编码变量前存在非法 percent",
+      "https://%ZZ%257B%257Busername%257D%257D:literal@example.test/path",
+      ["username"],
+    ],
+    [
+      "两层编码变量后存在非法 percent",
+      "https://literal:%257B%257Bpassword%257D%257D%ZZ@example.test/path",
+      ["password"],
+    ],
+    [
+      "合法 Unicode 与模板位于同一连续 run",
+      "https://%E9%9B%AA%7B%7Busername%7D%7D:literal@example.test/path",
+      ["username"],
+    ],
+    [
+      "无效 UTF-8 token 与模板位于同一连续 run",
+      "https://%FF%7B%7Busername%7D%7D:literal@example.test/path",
+      ["username"],
+    ],
+  ])("容错解码 %s 且不返回 userinfo", (_label, value, variableNames) => {
+    expect(inspectUrlUserInfo(value)).toEqual({
+      url: "https://example.test/path",
+      removed: true,
+      variableNames,
+    });
+  });
+
+  it("第三层编码模板不越过两轮上限并以固定无值错误 fail closed", () => {
+    const value = "https://%25257B%25257Bcredential%25257D%25257D:literal@example.test/path";
+
+    expect(() => inspectUrlUserInfo(value)).toThrowError(
+      "URL userinfo percent 编码层级超出安全上限",
+    );
+    try {
+      inspectUrlUserInfo(value);
+    } catch (error) {
+      expect(JSON.stringify(error)).not.toContain("credential");
+      expect(JSON.stringify(error)).not.toContain("example.test");
+    }
+  });
+
+  it.each([
     "https://example.test/path?user={{username}}",
     "/relative/path?state={{state}}",
     "https://example.test/path#{{fragment}}",

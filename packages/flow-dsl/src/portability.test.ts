@@ -386,6 +386,99 @@ describe("createPortableFlowDocument", () => {
     expect(JSON.stringify(result.warnings)).not.toContain(escapedCanary);
   });
 
+  it("非法 percent 不得阻断 navigate/wait userinfo 变量硬化", () => {
+    const canary = 'FLOWWEAVE_R4_PERCENT_CANARY_"\\\n雪';
+    const input = createFlow({
+      variables: ["username", "password", "tenant"].map((name) => ({
+        name,
+        type: "string" as const,
+        required: false,
+        defaultValue: canary,
+      })),
+      steps: [
+        {
+          id: "navigate-malformed-before",
+          type: "navigate",
+          url: "https://bad%ZZ%7B%7Busername%7D%7D:literal@example.test/before",
+        },
+        {
+          id: "wait-malformed-after",
+          type: "wait",
+          condition: "urlIncludes",
+          urlIncludes: "https://literal:%7B%7Bpassword%7D%7D%ZZ@example.test/after",
+        },
+        {
+          id: "navigate-malformed-middle",
+          type: "navigate",
+          url: "https://%7B%7Busername%7D%7D%ZZ%7B%7Btenant%7D%7D:literal@example.test/middle",
+        },
+        {
+          id: "wait-double-malformed-opposite",
+          type: "wait",
+          condition: "urlIncludes",
+          urlIncludes: "https://bad%ZZ:%257B%257Bpassword%257D%257D@example.test/opposite",
+        },
+      ],
+    });
+
+    const result = createPortableFlowDocument(input);
+    const serialized = JSON.stringify(result);
+    const escapedCanary = JSON.stringify(canary).slice(1, -1);
+
+    expect(result.document.variables).toEqual([
+      { name: "username", type: "string", required: true },
+      { name: "password", type: "string", required: true },
+      { name: "tenant", type: "string", required: true },
+    ]);
+    expect(result.document.steps).toEqual([
+      { id: "navigate-malformed-before", type: "navigate", url: "https://example.test/before" },
+      {
+        id: "wait-malformed-after",
+        type: "wait",
+        condition: "urlIncludes",
+        urlIncludes: "https://example.test/after",
+      },
+      { id: "navigate-malformed-middle", type: "navigate", url: "https://example.test/middle" },
+      {
+        id: "wait-double-malformed-opposite",
+        type: "wait",
+        condition: "urlIncludes",
+        urlIncludes: "https://example.test/opposite",
+      },
+    ]);
+    expect(
+      result.warnings.filter((warning) => warning.code === "url-userinfo-removed"),
+    ).toHaveLength(4);
+    expect(serialized).not.toContain(canary);
+    expect(serialized).not.toContain(escapedCanary);
+  });
+
+  it("第三层编码 userinfo 模板以固定无值错误拒绝而非保留 default", () => {
+    const canary = 'FLOWWEAVE_R4_THIRD_LAYER_CANARY_"\\\n雪';
+    const input = createFlow({
+      variables: [{ name: "credential", type: "string", required: false, defaultValue: canary }],
+      steps: [
+        {
+          id: "third-layer-userinfo",
+          type: "navigate",
+          url: "https://%25257B%25257Bcredential%25257D%25257D:literal@example.test/path",
+        },
+      ],
+    });
+
+    let failure: unknown;
+    try {
+      createPortableFlowDocument(input);
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toBe("URL userinfo percent 编码层级超出安全上限");
+    expect(JSON.stringify(failure)).not.toContain(canary);
+    expect(JSON.stringify(failure)).not.toContain(JSON.stringify(canary).slice(1, -1));
+    expect(JSON.stringify(failure)).not.toContain("credential");
+  });
+
   it("变量化 OAuth hash 与 wait urlIncludes 中的敏感参数并保留普通片段", () => {
     const input = createFlow({
       steps: [

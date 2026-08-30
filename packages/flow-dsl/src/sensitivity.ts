@@ -1,3 +1,5 @@
+import { extractTemplateVariables, FlowWeaveError } from "@flowweave/shared";
+
 /**
  * URL 参数键的统一敏感词表。
  *
@@ -22,6 +24,9 @@ export const SENSITIVE_PARAMETER_KEYS = Object.freeze([
 
 const sensitiveParameterKeySet: ReadonlySet<string> = new Set(SENSITIVE_PARAMETER_KEYS);
 const urlWithAuthorityPattern = /^([a-z][a-z\d+.-]*:\/\/)([^/?#]*)(.*)$/i;
+const validPercentEncodingRunPattern = /(?:%[\dA-Fa-f]{2})+/g;
+const validPercentEncodingTokenPattern = /%[\dA-Fa-f]{2}/g;
+const residualEncodedBracePattern = /%7[BD]/i;
 
 export type UrlUserInfoInspection = {
   url: string;
@@ -29,18 +34,28 @@ export type UrlUserInfoInspection = {
   variableNames: string[];
 };
 
+function decodeValidPercentEncodingRun(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value.replace(validPercentEncodingTokenPattern, (token) => {
+      try {
+        return decodeURIComponent(token);
+      } catch {
+        return token;
+      }
+    });
+  }
+}
+
 function decodePercentEncodingAtMostTwice(value: string): string {
   let decoded = value;
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      const next = decodeURIComponent(decoded);
-      if (next === decoded) {
-        break;
-      }
-      decoded = next;
-    } catch {
+    const next = decoded.replace(validPercentEncodingRunPattern, decodeValidPercentEncodingRun);
+    if (next === decoded) {
       break;
     }
+    decoded = next;
   }
   return decoded;
 }
@@ -81,10 +96,12 @@ export function inspectUrlUserInfo(value: string): UrlUserInfoInspection {
   }
 
   const decodedUserInfo = decodePercentEncodingAtMostTwice(authority.slice(0, userInfoEnd));
+  if (residualEncodedBracePattern.test(decodedUserInfo)) {
+    throw new FlowWeaveError("VALIDATION_FAILED", "URL userinfo percent 编码层级超出安全上限");
+  }
   return {
     url: `${scheme}${authority.slice(userInfoEnd + 1)}${rest}`,
     removed: true,
     variableNames: [...new Set(extractTemplateVariables(decodedUserInfo))],
   };
 }
-import { extractTemplateVariables } from "@flowweave/shared";

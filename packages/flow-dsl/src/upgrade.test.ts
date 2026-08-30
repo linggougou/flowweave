@@ -320,6 +320,106 @@ describe("v1 → v2 纯升级预览", () => {
     expect(serialized).not.toContain(escapedCanary);
   });
 
+  it.each([
+    [
+      "navigate 一层编码变量前非法 percent",
+      "navigate",
+      "https://bad%ZZ%7B%7Bcredential%7D%7D:literal@example.test/path",
+      ["credential"],
+      true,
+    ],
+    [
+      "wait 一层编码变量后非法 percent",
+      "wait",
+      "https://literal:%7B%7Bcredential%7D%7D%ZZ@example.test/path",
+      ["credential"],
+      true,
+    ],
+    [
+      "navigate 同侧多变量中间非法 percent",
+      "navigate",
+      "https://%7B%7Bcredential%7D%7D%ZZ%7B%7Bsecondary%7D%7D:literal@example.test/path",
+      ["credential", "secondary"],
+      true,
+    ],
+    [
+      "wait 两层编码变量另一侧非法 percent",
+      "wait",
+      "https://bad%ZZ:%257B%257Bcredential%257D%257D@example.test/path",
+      ["credential"],
+      true,
+    ],
+    [
+      "navigate raw mixed 与非法 percent",
+      "navigate",
+      "https://bad%ZZ{{credential}}:literal@example.test/path",
+      ["credential"],
+      false,
+    ],
+  ])("%s 仍按 fail-closed 敏感策略处理", (_label, type, value, names, hasCandidate) => {
+    const canary = 'FLOWWEAVE_R4_UPGRADE_CANARY_"\\\n雪';
+    const step =
+      type === "navigate"
+        ? { id: "malformed-userinfo", type: "navigate" as const, url: value }
+        : {
+            id: "malformed-userinfo",
+            type: "wait" as const,
+            condition: "urlIncludes" as const,
+            urlIncludes: value,
+          };
+    const report = previewFlowV1Upgrade(
+      buildV1({
+        variables: names.map((name) => ({
+          name,
+          type: "string" as const,
+          required: false,
+          defaultValue: canary,
+        })),
+        steps: [step],
+      }),
+    );
+    const serialized = JSON.stringify(report);
+    const escapedCanary = JSON.stringify(canary).slice(1, -1);
+
+    for (const name of names) {
+      expect(report.fieldMappings).toContainEqual(
+        expect.objectContaining({ variableName: name, sensitive: true }),
+      );
+    }
+    expect(report.candidate !== null).toBe(hasCandidate);
+    expect(serialized).not.toContain(canary);
+    expect(serialized).not.toContain(escapedCanary);
+  });
+
+  it("第三层编码 userinfo 的 preview 不生成 candidate 且固定无值失败", () => {
+    const canary = 'FLOWWEAVE_R4_THIRD_PREVIEW_CANARY_"\\\n雪';
+    let failure: unknown;
+    try {
+      previewFlowV1Upgrade(
+        buildV1({
+          variables: [
+            { name: "credential", type: "string", required: false, defaultValue: canary },
+          ],
+          steps: [
+            {
+              id: "third-layer-userinfo",
+              type: "navigate",
+              url: "https://%25257B%25257Bcredential%25257D%25257D:literal@example.test/path",
+            },
+          ],
+        }),
+      );
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toBe("URL userinfo percent 编码层级超出安全上限");
+    expect(JSON.stringify(failure)).not.toContain(canary);
+    expect(JSON.stringify(failure)).not.toContain(JSON.stringify(canary).slice(1, -1));
+    expect(JSON.stringify(failure)).not.toContain("credential");
+  });
+
   it("无 userinfo 的普通 query 变量保持非敏感", () => {
     const report = previewFlowV1Upgrade(
       buildV1({

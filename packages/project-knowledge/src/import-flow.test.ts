@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { FlowDocumentV2 } from "@flowweave/flow-dsl";
+import { previewFlowV1Upgrade, type FlowDocumentV2 } from "@flowweave/flow-dsl";
 import {
   FLOW_SCHEMA_VERSION,
   FLOW_SCHEMA_VERSION_V2,
@@ -318,6 +318,182 @@ describe("ProjectKnowledgeRepository.importFlow", () => {
     expect(JSON.stringify(imported.warnings)).not.toContain(canary);
     expect(JSON.stringify(imported.warnings)).not.toContain(escapedCanary);
     expectNoSensitiveBytesInProjectStore(targetStore, canary);
+  });
+
+  it("malformed percent 不得绕过 v1 公开 export/import userinfo 硬化", () => {
+    const canary = 'FLOWWEAVE_R4_REPOSITORY_CANARY_"\\\n雪';
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-import-v1-malformed-percent-"));
+    const repo = new ProjectKnowledgeRepository({ dataDir });
+    const sourceProject = repo.createProject("malformed percent 来源");
+    const targetProject = repo.createProject("malformed percent 目标");
+    const source = {
+      ...portableInput(),
+      projectId: sourceProject.id,
+      variables: ["username", "password", "tenant"].map((name) => ({
+        name,
+        type: "string" as const,
+        required: false,
+        defaultValue: canary,
+      })),
+      steps: [
+        {
+          id: "navigate-malformed-before",
+          type: "navigate" as const,
+          url: "https://bad%ZZ%7B%7Busername%7D%7D:literal@example.test/before",
+        },
+        {
+          id: "wait-malformed-after",
+          type: "wait" as const,
+          condition: "urlIncludes" as const,
+          urlIncludes: "https://literal:%7B%7Bpassword%7D%7D%ZZ@example.test/after",
+        },
+        {
+          id: "navigate-malformed-middle",
+          type: "navigate" as const,
+          url: "https://%7B%7Busername%7D%7D%ZZ%7B%7Btenant%7D%7D:literal@example.test/middle",
+        },
+        {
+          id: "wait-double-malformed-opposite",
+          type: "wait" as const,
+          condition: "urlIncludes" as const,
+          urlIncludes: "https://bad%ZZ:%257B%257Bpassword%257D%257D@example.test/opposite",
+        },
+      ],
+    };
+    repo.saveFlow(sourceProject.id, source);
+
+    const exported = repo.exportFlow(sourceProject.id, source.id);
+    const imported = repo.importFlow(targetProject.id, source);
+    const targetStore = resolveProjectStorePath(targetProject.id, dataDir);
+    const serialized = JSON.stringify({ exported, imported });
+    const escapedCanary = JSON.stringify(canary).slice(1, -1);
+
+    expect(serialized).not.toContain(canary);
+    expect(serialized).not.toContain(escapedCanary);
+    expect(exported.schemaVersion === FLOW_SCHEMA_VERSION && exported.variables).toEqual([
+      { name: "username", type: "string", required: true },
+      { name: "password", type: "string", required: true },
+      { name: "tenant", type: "string", required: true },
+    ]);
+    expect(imported.flow.schemaVersion === FLOW_SCHEMA_VERSION && imported.flow.variables).toEqual([
+      { name: "username", type: "string", required: true },
+      { name: "password", type: "string", required: true },
+      { name: "tenant", type: "string", required: true },
+    ]);
+    expect(JSON.stringify(exported.steps)).not.toContain("@");
+    expect(JSON.stringify(imported.flow.steps)).not.toContain("@");
+    expect(imported.warnings).toEqual(
+      expect.arrayContaining(
+        ["username", "password", "tenant"].map((variableName) =>
+          expect.objectContaining({ code: "sensitive-variable-hardened", variableName }),
+        ),
+      ),
+    );
+    expectNoSensitiveBytesInProjectStore(targetStore, canary);
+  });
+
+  it("第三层编码 userinfo 的公开 export/import 固定拒绝且目标零写入", () => {
+    const canary = 'FLOWWEAVE_R4_THIRD_REPOSITORY_CANARY_"\\\n雪';
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-v1-third-layer-userinfo-"));
+    const repo = new ProjectKnowledgeRepository({ dataDir });
+    const sourceProject = repo.createProject("第三层编码来源");
+    const targetProject = repo.createProject("第三层编码目标");
+    const source = {
+      ...portableInput(),
+      projectId: sourceProject.id,
+      variables: [
+        { name: "credential", type: "string" as const, required: false, defaultValue: canary },
+      ],
+      steps: [
+        {
+          id: "third-layer-userinfo",
+          type: "navigate" as const,
+          url: "https://%25257B%25257Bcredential%25257D%25257D:literal@example.test/path",
+        },
+      ],
+    };
+    repo.saveFlow(sourceProject.id, source);
+
+    const failures: unknown[] = [];
+    for (const operation of [
+      () => repo.exportFlow(sourceProject.id, source.id),
+      () => repo.importFlow(targetProject.id, source),
+    ]) {
+      try {
+        operation();
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+
+    expect(failures).toHaveLength(2);
+    expect(failures.map((failure) => (failure as Error).message)).toEqual([
+      "URL userinfo percent 编码层级超出安全上限",
+      "Flow 文档格式无效",
+    ]);
+    for (const failure of failures) {
+      expect(failure).toBeInstanceOf(FlowWeaveError);
+      expect((failure as FlowWeaveError).code).toBe("VALIDATION_FAILED");
+      expect(JSON.stringify(failure)).not.toContain(canary);
+      expect(JSON.stringify(failure)).not.toContain(JSON.stringify(canary).slice(1, -1));
+      expect(JSON.stringify(failure)).not.toContain("credential");
+    }
+    expect(repo.listFlows(targetProject.id)).toEqual([]);
+    expectNoSensitiveBytesInProjectStore(
+      resolveProjectStorePath(targetProject.id, dataDir),
+      canary,
+    );
+  });
+
+  it("malformed percent raw mixed 升级阻塞且不产生版本或 revision 写入", () => {
+    const canary = 'FLOWWEAVE_R4_BLOCKED_UPGRADE_CANARY_"\\\n雪';
+    dataDir = mkdtempSync(join(tmpdir(), "flowweave-upgrade-v1-malformed-percent-"));
+    const repo = new ProjectKnowledgeRepository({ dataDir });
+    const project = repo.createProject("malformed percent 升级阻塞");
+    const source = {
+      ...portableInput(),
+      projectId: project.id,
+      variables: [
+        { name: "username", type: "string" as const, required: false, defaultValue: canary },
+      ],
+      steps: [
+        {
+          id: "raw-mixed-malformed",
+          type: "navigate" as const,
+          url: "https://bad%ZZ{{username}}:literal@example.test/path",
+        },
+      ],
+    };
+    repo.saveFlow(project.id, source);
+    const preview = previewFlowV1Upgrade(source);
+    const beforeRevision = repo.getFlowRevision(project.id, source.id);
+    const beforeVersions = repo.listFlowVersions(project.id, source.id);
+    const beforeRecentValues = repo.getFlowFieldRecentValues(project.id, source.id);
+
+    expect(preview.candidate).toBeNull();
+    expect(preview.fieldMappings).toContainEqual(
+      expect.objectContaining({ variableName: "username", sensitive: true }),
+    );
+    let failure: unknown;
+    try {
+      repo.upgradeFlowToV2({
+        projectId: project.id,
+        flowId: source.id,
+        expectedRevision: beforeRevision?.revision ?? 0,
+        reportFingerprint: preview.reportFingerprint,
+      });
+    } catch (error) {
+      failure = error;
+    }
+
+    expect(failure).toBeInstanceOf(FlowWeaveError);
+    expect((failure as FlowWeaveError).code).toBe("FLOW_UPGRADE_BLOCKED");
+    expect((failure as Error).message).toBe("迁移报告已变化或存在阻塞项");
+    expect(JSON.stringify(failure)).not.toContain(canary);
+    expect(JSON.stringify(failure)).not.toContain(JSON.stringify(canary).slice(1, -1));
+    expect(repo.getFlowRevision(project.id, source.id)).toEqual(beforeRevision);
+    expect(repo.listFlowVersions(project.id, source.id)).toEqual(beforeVersions);
+    expect(repo.getFlowFieldRecentValues(project.id, source.id)).toEqual(beforeRecentValues);
   });
 
   it("未知版本和不安全 v2 upload 路径失败时零写入", () => {
