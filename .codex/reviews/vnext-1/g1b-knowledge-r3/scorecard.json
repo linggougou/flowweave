@@ -1,0 +1,224 @@
+{
+  "review_id": "vnext-1-g1b-knowledge-r3-l3-2026-08-30",
+  "task_id": "vNext-1B-G1B-R3",
+  "lane": "g1b-knowledge-r3",
+  "review_level": "L3",
+  "rubric_id": "vnext-1b-knowledge-l3-v3",
+  "implementation_baseline_sha": "fff2c895521d38bff98aeecd607a0baaafa4271a",
+  "r2_baseline_sha": "e2d1848a6975fd242e77df13b8fde97e60514db2",
+  "reviewed_sha": "2dd86fe1ab71d73509917ed6391d0b6d68cb4124",
+  "artifact_refs": [
+    "doc:PROJECT_ROUTE_LOCK.md",
+    "doc:docs/exec-plans/active/vnext-1a-1b-data-foundation.md",
+    "doc:docs/design-docs/vnext-flow-schema-migration.md",
+    "code:packages/project-knowledge/src/repository.ts",
+    "test:packages/project-knowledge/src/vnext-persistence.test.ts",
+    "code:packages/local-api/src/index.ts",
+    "test:packages/local-api/src/index.test.ts",
+    "code:apps/studio/electron/knowledge-client.ts",
+    "code:apps/studio/electron/main.ts",
+    "code:apps/studio/electron/preload.ts",
+    "code:apps/studio/electron/services.ts",
+    "code:apps/studio/src/App.tsx",
+    "code:apps/web/src/api.ts",
+    "code:apps/web/src/App.tsx"
+  ],
+  "command_results": [
+    {
+      "cmd": "pnpm install --frozen-lockfile",
+      "status": "pass",
+      "result": "fresh worktree 安装 801 个 workspace 依赖；lockfile 未变化。"
+    },
+    {
+      "cmd": "pnpm turbo build --force",
+      "status": "pass",
+      "result": "13/13 successful，0 cached。"
+    },
+    {
+      "cmd": "pnpm turbo typecheck --force",
+      "status": "pass",
+      "result": "21/21 successful，0 cached。"
+    },
+    {
+      "cmd": "pnpm turbo lint --force",
+      "status": "pass",
+      "result": "13/13 successful，0 cached。"
+    },
+    {
+      "cmd": "pnpm turbo test --force",
+      "status": "pass",
+      "result": "21/21 successful，0 cached；13 个 workspace 共 663 tests 通过，包含 runtime real-page 与 recorded-replay。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/project-knowledge test",
+      "status": "pass",
+      "result": "6 files / 106 tests。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/local-api test",
+      "status": "pass",
+      "result": "1 file / 14 tests。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/app-studio test",
+      "status": "pass",
+      "result": "40 files / 219 tests。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/app-web test",
+      "status": "pass",
+      "result": "9 files / 33 tests。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/flow-dsl test && pnpm --filter @flowweave/app-extension test",
+      "status": "pass",
+      "result": "DSL 4 files / 61 tests；Extension 7 files / 79 tests。"
+    },
+    {
+      "cmd": "independent attack: v2 historical GET/restore HTTP matrix",
+      "status": "pass",
+      "result": "合法 GET=200/schema2；缺 flowId/expectedRevision=400，跨 flow/project/未知 version=404，stale=409，失败快照零写；两次 restore 依次返回 revision 4 与 5/schema2，第二次 expectedRevision 使用第一次响应的 4。"
+    },
+    {
+      "cmd": "independent attack: legacy guards and v1 restore regression",
+      "status": "pass",
+      "result": "v2 current getter、legacy v2 version getter 与 rename 均 FLOW_SCHEMA_VERSION_UNSUPPORTED；v1 restore 返回 schema1，current revision=3。"
+    },
+    {
+      "cmd": "independent attack: CAS, complex secret and active SQLite reader",
+      "status": "pass",
+      "result": "CAS loser=FLOW_REVISION_CONFLICT；引号/反斜杠/换行 secret 在 candidate、execution、SQLite raw/escaped 均零命中且 WAL/SHM absent；active reader 返回 FLOW_PERSISTENCE_FAILED 且 revision/schema/version 不变。"
+    },
+    {
+      "cmd": "git diff --check && git diff --check e2d1848..2dd86fe",
+      "status": "pass",
+      "result": "均无输出；R3 修订恰为 19 文件。"
+    }
+  ],
+  "hard_gates": [
+    {
+      "id": "r2-v2-history-official-chain",
+      "status": "pass",
+      "evidence": [
+        "repository getFlowVersionInFlow 以 projectId、flowId、versionId 三重归属查询并严格解析 AnyFlowDocument。",
+        "Local API history GET/restore 使用 flowId 并调用通用 revision-aware restore；合法 v2 HTTP GET/restore 实测成功。",
+        "Studio 本地模式不调用 legacy getter/restore；HTTP fallback、IPC/preload、Web 均传递 flowId 与 caller revision。"
+      ]
+    },
+    {
+      "id": "sequential-revision-and-v2-run-edit-guard",
+      "status": "pass",
+      "evidence": [
+        "独立两次恢复从 revision 3 依次得到 4、5，第二次请求使用第一次响应的 revision 4。",
+        "Studio 与 Web 回归覆盖恢复响应 revision/schema 回写和第二次操作的 caller revision。",
+        "v2 current 的 legacy getter、rename/edit 继续 fail closed；Studio runtime guard 未移动到副作用之后。"
+      ]
+    },
+    {
+      "id": "history-error-mapping-and-zero-write",
+      "status": "pass",
+      "evidence": [
+        "缺 flowId 或 expectedRevision 为 400；跨 flow、跨 project、未知 version 为 404；stale 为 409。",
+        "完整失败矩阵前后 current revision、version 数与其他 Flow revision 一致。",
+        "错误响应未回退为 500，也未泄露 Flow 文档或本地路径。"
+      ]
+    },
+    {
+      "id": "legacy-v1-compatibility",
+      "status": "pass",
+      "evidence": [
+        "legacy getFlowVersion 对 v2 保持 FLOW_SCHEMA_VERSION_UNSUPPORTED。",
+        "独立 v1 save/revision/history/restore 返回 schema 1 并单调增加 revision。",
+        "现有 recorder 与 v1 默认路径在全仓测试中无回归。"
+      ]
+    },
+    {
+      "id": "first-review-security-smoke",
+      "status": "pass",
+      "evidence": [
+        "两个相同 expectedRevision 仅首个保存成功，第二个稳定冲突。",
+        "复杂 secret 在升级后的内存对象、execution 与 SQLite 物理字节中 raw/escaped 均零命中。",
+        "活跃 reader 下维护锁 fail closed，revision/schema/version 零写。"
+      ]
+    },
+    {
+      "id": "fresh-verification-and-scope",
+      "status": "pass",
+      "evidence": [
+        "fresh frozen install 后 build/typecheck/lint/test 全部强制绕过缓存通过。",
+        "定向计数与门禁要求一致：Knowledge106、Local14、Studio219、Web33、DSL61、Extension79。",
+        "19 文件 R3 diff 聚焦历史读取/恢复与 revision 状态，无无关依赖、lockfile 或路线变更。",
+        "审查只新增 g1b-knowledge-r3 的 verdict.md 与 scorecard.json。"
+      ]
+    }
+  ],
+  "findings": [],
+  "p0_count": 0,
+  "p1_count": 0,
+  "p2_count": 0,
+  "dimensions": [
+    {
+      "name": "migration_and_legacy_compatibility",
+      "score": 20,
+      "max_score": 20,
+      "reason": "R3 未改坏集中 migration、v1 默认或 legacy v2 fail-closed；v1 restore 独立回归通过。"
+    },
+    {
+      "name": "cas_transactions_and_zero_write",
+      "score": 20,
+      "max_score": 20,
+      "reason": "合法连续恢复 revision 单调，stale/归属/参数失败零写，CAS 与 active-reader smoke 通过。"
+    },
+    {
+      "name": "sensitive_data_erasure_and_safe_errors",
+      "score": 20,
+      "max_score": 20,
+      "reason": "复杂 secret 的结构与物理清理未回归；HTTP 错误分类稳定且不泄露敏感内容或路径。"
+    },
+    {
+      "name": "portability_versions_and_restore",
+      "score": 15,
+      "max_score": 15,
+      "reason": "v1/v2 历史正式读取与跨版本通用恢复闭合，三重归属和 schema metadata 校验完整。"
+    },
+    {
+      "name": "cross_layer_clients_and_runtime_isolation",
+      "score": 15,
+      "max_score": 15,
+      "reason": "Local API、Studio local/HTTP、IPC、Web 均传递完整身份和 revision；v2 run/edit 仍零副作用拒绝。"
+    },
+    {
+      "name": "tests_evidence_and_scope",
+      "score": 10,
+      "max_score": 10,
+      "reason": "663 个全仓测试、精确目标套件、fresh 强制门禁与独立真实 HTTP/SQLite 对抗证据闭合。"
+    }
+  ],
+  "penalties": [],
+  "totals": {
+    "raw_score": 100,
+    "penalty_total": 0,
+    "final_score": 100
+  },
+  "verdict": "PASS",
+  "required_fixes": [],
+  "nice_to_have": [],
+  "reviewers": [
+    {
+      "role": "verifier",
+      "conclusion": "PASS",
+      "summary": "fresh 全仓与目标套件全绿，独立 HTTP、CAS、secret 和 active-reader 探针全部满足冻结门禁。"
+    },
+    {
+      "role": "strict_judge",
+      "conclusion": "PASS",
+      "summary": "R2 唯一 P1 已经从 repository 到 Local API、Studio/Web 产品链完整闭合，错误分支零写且 v2 run/edit 仍 fail closed。"
+    },
+    {
+      "role": "anti_slop_reviewer",
+      "conclusion": "PASS",
+      "summary": "19 文件修订与测试聚焦明确，无无关 churn、弱断言或以内部方法替代正式链路的情况。"
+    }
+  ],
+  "reviewed_at": "2026-08-30T16:10:00+08:00"
+}
