@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -77,6 +77,121 @@ function portableV2Input(): FlowDocumentV2 {
       source: "manual",
     },
   };
+}
+
+const URL_CREDENTIAL_CANARY = "FLOWWEAVE_G1I_URL_CANARY_91f8e3";
+
+const portableUrlCredentialAttacks: Array<{
+  label: string;
+  step: FlowDocumentV2["steps"][number];
+}> = [
+  {
+    label: "navigate query raw key",
+    step: {
+      id: "navigate_query_raw",
+      type: "navigate",
+      url: `https://example.test/path?token=${URL_CREDENTIAL_CANARY}`,
+    },
+  },
+  {
+    label: "navigate query mixed-case key",
+    step: {
+      id: "navigate_query_case",
+      type: "navigate",
+      url: `https://example.test/path?AcCeSs_ToKeN=${URL_CREDENTIAL_CANARY}`,
+    },
+  },
+  {
+    label: "navigate fragment-query",
+    step: {
+      id: "navigate_fragment_query",
+      type: "navigate",
+      url: `https://example.test/#?access_token=${URL_CREDENTIAL_CANARY}`,
+    },
+  },
+  {
+    label: "navigate userinfo",
+    step: {
+      id: "navigate_userinfo",
+      type: "navigate",
+      url: `https://user:${URL_CREDENTIAL_CANARY}@example.test/path`,
+    },
+  },
+  {
+    label: "navigate percent-encoded lower-hex key",
+    step: {
+      id: "navigate_encoded_lower",
+      type: "navigate",
+      url: `https://example.test/path?%74%6f%6b%65%6e=${URL_CREDENTIAL_CANARY}`,
+    },
+  },
+  {
+    label: "navigate fragment percent-encoded upper-hex key",
+    step: {
+      id: "navigate_fragment_encoded_upper",
+      type: "navigate",
+      url: `https://example.test/#?%41%50%49%5F%4B%45%59=${URL_CREDENTIAL_CANARY}`,
+    },
+  },
+  {
+    label: "navigate malformed absolute URL query",
+    step: {
+      id: "navigate_malformed_query",
+      type: "navigate",
+      url: `https://[invalid-host]?token=${URL_CREDENTIAL_CANARY}`,
+    },
+  },
+  {
+    label: "wait query raw key",
+    step: {
+      id: "wait_query_raw",
+      type: "wait",
+      condition: "urlIncludes",
+      urlIncludes: `https://example.test/path?token=${URL_CREDENTIAL_CANARY}`,
+    },
+  },
+  {
+    label: "wait fragment-query",
+    step: {
+      id: "wait_fragment_query",
+      type: "wait",
+      condition: "urlIncludes",
+      urlIncludes: `https://example.test/#?access_token=${URL_CREDENTIAL_CANARY}`,
+    },
+  },
+  {
+    label: "wait userinfo",
+    step: {
+      id: "wait_userinfo",
+      type: "wait",
+      condition: "urlIncludes",
+      urlIncludes: `https://user:${URL_CREDENTIAL_CANARY}@example.test/path`,
+    },
+  },
+  {
+    label: "wait percent-encoded mixed-hex key",
+    step: {
+      id: "wait_encoded_mixed",
+      type: "wait",
+      condition: "urlIncludes",
+      urlIncludes: `/path?%61%55%74%48=${URL_CREDENTIAL_CANARY}`,
+    },
+  },
+];
+
+function withPortableUrlAttack(
+  step: FlowDocumentV2["steps"][number],
+): FlowDocumentV2 {
+  const source = portableV2Input();
+  return { ...source, steps: [...source.steps, step] };
+}
+
+function expectNoCanaryInProjectStore(storePath: string): void {
+  for (const candidate of [storePath, `${storePath}-wal`, `${storePath}-shm`]) {
+    if (existsSync(candidate)) {
+      expect(readFileSync(candidate).includes(Buffer.from(URL_CREDENTIAL_CANARY))).toBe(false);
+    }
+  }
 }
 
 describe("ProjectKnowledgeRepository.importFlow", () => {
@@ -217,4 +332,63 @@ describe("ProjectKnowledgeRepository.importFlow", () => {
     ).toThrowError(expect.objectContaining({ code: "VALIDATION_FAILED" }));
     expect(repo.listFlows(target.id)).toEqual(before);
   });
+
+  it.each(portableUrlCredentialAttacks)(
+    "v2 导入拒绝 $label 且 canary 不落盘、不进入错误",
+    ({ step }) => {
+      dataDir = mkdtempSync(join(tmpdir(), "flowweave-import-v2-url-"));
+      const repo = new ProjectKnowledgeRepository({ dataDir });
+      const target = repo.createProject("v2 URL 凭据导入防线");
+      const storePath = resolveProjectStorePath(target.id, dataDir);
+      const before = repo.listFlows(target.id);
+      let receivedError: unknown;
+
+      try {
+        repo.importFlow(target.id, withPortableUrlAttack(step));
+      } catch (error: unknown) {
+        receivedError = error;
+      }
+
+      expect(receivedError).toEqual(
+        expect.objectContaining({ code: "VALIDATION_FAILED", message: "Flow 文档格式无效" }),
+      );
+      expect(JSON.stringify(receivedError)).not.toContain(URL_CREDENTIAL_CANARY);
+      expect(repo.listFlows(target.id)).toEqual(before);
+      expectNoCanaryInProjectStore(storePath);
+    },
+  );
+
+  it.each(portableUrlCredentialAttacks)(
+    "v2 导出拒绝 $label 且 canary 不进入结果或错误",
+    ({ step }) => {
+      dataDir = mkdtempSync(join(tmpdir(), "flowweave-export-v2-url-"));
+      const repo = new ProjectKnowledgeRepository({ dataDir });
+      const target = repo.createProject("v2 URL 凭据导出防线");
+      const imported = repo.importFlow(target.id, portableV2Input()).flow;
+      const unsafe = withPortableUrlAttack(step);
+      repo.saveFlowRevision({
+        projectId: target.id,
+        flowId: imported.id,
+        document: { ...unsafe, id: imported.id, projectId: target.id },
+        expectedRevision: 1,
+      });
+      let receivedError: unknown;
+      let exported: unknown;
+
+      try {
+        exported = repo.exportFlow(target.id, imported.id);
+      } catch (error: unknown) {
+        receivedError = error;
+      }
+
+      expect(exported).toBeUndefined();
+      expect(receivedError).toEqual(
+        expect.objectContaining({
+          code: "VALIDATION_FAILED",
+          message: "v2 Flow 包含不可安全导出的 URL 凭据",
+        }),
+      );
+      expect(JSON.stringify(receivedError)).not.toContain(URL_CREDENTIAL_CANARY);
+    },
+  );
 });

@@ -210,6 +210,86 @@ function assertNoSensitiveValue(
 }
 
 const PORTABLE_SENSITIVE_QUERY_KEY = /(token|secret|password|passwd|api[-_]?key|auth)/i;
+const PORTABLE_URL_PARSE_BASE = "https://flowweave.invalid/";
+
+function decodePortableUrlComponent(value: string): string {
+  let decoded = value;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) {
+        break;
+      }
+      decoded = next;
+    } catch {
+      break;
+    }
+  }
+  return decoded;
+}
+
+function hasPortableSensitiveQueryKey(params: URLSearchParams): boolean {
+  return [...params.keys()].some((key) =>
+    PORTABLE_SENSITIVE_QUERY_KEY.test(decodePortableUrlComponent(key)),
+  );
+}
+
+function hasPortableSensitiveFragmentKey(hash: string): boolean {
+  const fragment = decodePortableUrlComponent(hash.replace(/^#/, ""));
+  const queryStart = fragment.indexOf("?");
+  if (queryStart >= 0) {
+    return hasPortableSensitiveQueryKey(new URLSearchParams(fragment.slice(queryStart + 1)));
+  }
+  if (!fragment.includes("/") && fragment.includes("=")) {
+    return hasPortableSensitiveQueryKey(new URLSearchParams(fragment));
+  }
+  return false;
+}
+
+function hasPortableSensitiveUnparsedUrl(value: string): boolean {
+  const hashStart = value.indexOf("#");
+  const beforeHash = hashStart >= 0 ? value.slice(0, hashStart) : value;
+  const queryStart = beforeHash.indexOf("?");
+  if (
+    queryStart >= 0 &&
+    hasPortableSensitiveQueryKey(new URLSearchParams(beforeHash.slice(queryStart + 1)))
+  ) {
+    return true;
+  }
+  if (hashStart >= 0 && hasPortableSensitiveFragmentKey(value.slice(hashStart))) {
+    return true;
+  }
+  const authority = value.match(/^(?:[A-Za-z][A-Za-z0-9+.-]*:)?\/\/([^/?#]*)/)?.[1];
+  return authority?.includes("@") ?? false;
+}
+
+function assertPortableUrlHasNoCredentials(value: string): void {
+  try {
+    const url = new URL(value, PORTABLE_URL_PARSE_BASE);
+    if (
+      url.username ||
+      url.password ||
+      hasPortableSensitiveQueryKey(url.searchParams) ||
+      hasPortableSensitiveFragmentKey(url.hash)
+    ) {
+      throw new FlowWeaveError(
+        "VALIDATION_FAILED",
+        "v2 Flow 包含不可安全导出的 URL 凭据",
+      );
+    }
+  } catch (error: unknown) {
+    if (error instanceof FlowWeaveError) {
+      throw error;
+    }
+    if (hasPortableSensitiveUnparsedUrl(value)) {
+      throw new FlowWeaveError(
+        "VALIDATION_FAILED",
+        "v2 Flow 包含不可安全导出的 URL 凭据",
+      );
+    }
+    // 不可规范化但未命中凭据结构时，继续保留既有同版本语义。
+  }
+}
 
 function assertPortableV2Document(document: FlowDocumentV2): void {
   for (const step of document.steps) {
@@ -219,26 +299,11 @@ function assertPortableV2Document(document: FlowDocumentV2): void {
         "v2 Flow 包含不可安全导出的本地上传路径",
       );
     }
-    if (step.type !== "navigate") {
-      continue;
+    if (step.type === "navigate") {
+      assertPortableUrlHasNoCredentials(step.url);
     }
-    try {
-      const url = new URL(step.url);
-      if (
-        url.username ||
-        url.password ||
-        [...url.searchParams.keys()].some((key) => PORTABLE_SENSITIVE_QUERY_KEY.test(key))
-      ) {
-        throw new FlowWeaveError(
-          "VALIDATION_FAILED",
-          "v2 Flow 包含不可安全导出的 URL 凭据",
-        );
-      }
-    } catch (error: unknown) {
-      if (error instanceof FlowWeaveError) {
-        throw error;
-      }
-      // 相对 URL 不携带 authority；保留其同版本语义。
+    if (step.type === "wait" && step.condition === "urlIncludes" && step.urlIncludes) {
+      assertPortableUrlHasNoCredentials(step.urlIncludes);
     }
   }
 }
