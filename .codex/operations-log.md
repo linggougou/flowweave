@@ -7294,3 +7294,4 @@
 - CodeGraph 当前无可调用入口。原用途：结构调用关系与影响分析。替代流程：`rg`、源码、测试与三路只读 Sub-Agent 交叉映射；替代结果：已定位所有旧写入/运行入口和事务缺口。
 - 已创建 `docs/change-requests/2026-08-30-vnext-implementation-unfreeze.md`、`docs/exec-plans/active/vnext-1a-1b-data-foundation.md` 和 `.codex/context-summary-vnext-1a-1b-data-foundation.md`，并更新路线锁与 post-v1 总路线。
 - G1A 首轮更广 typecheck 发现通用 parser 返回 v1/v2 联合后，`ai-orchestrator` 等既有 v1-only 消费者仍隐式依赖 v1 返回类型。该缺口已进入 G1A-C：在 DSL 合入后以独立兼容 worktree 将旧消费者显式锁定 `parseFlowDocumentV1`；不把通用 parser 退回 v1，也不提前开放这些入口的 v2 能力。
+- 边界偏差：G1A 功能分支尚未完成最终报告和独立 Judge 时，主集成分支 reflog 出现未由主代理发起的 `cherry-pick`，将首个 DSL 提交 patch-equivalent 集成为 `35585ef`。主代理发现后停止继续集成；该提交不视为验收通过，不回写裁决。为避免破坏性改写已生成历史，暂不 reset/revert；剩余 DSL 提交必须等待独立 Judge，随后再按完整候选核对并集成。用户 stash 与其他 worktree 未受影响。
