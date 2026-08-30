@@ -1,0 +1,258 @@
+{
+  "review_id": "vnext-1-g1b-knowledge-r2-l3-2026-08-30",
+  "task_id": "vNext-1B-G1B-R2",
+  "lane": "g1b-knowledge-r2",
+  "review_level": "L3",
+  "rubric_id": "vnext-1b-knowledge-l3-v2",
+  "implementation_baseline_sha": "fff2c895521d38bff98aeecd607a0baaafa4271a",
+  "remediation_baseline_sha": "b60fb3a0ac1795ff7714f8f1b858e7720e9a5996",
+  "studio_guard_sha": "8e6aaa91ceb1a597a71f826023e121a9836212b6",
+  "reviewed_sha": "e2d1848a6975fd242e77df13b8fde97e60514db2",
+  "artifact_refs": [
+    "doc:PROJECT_ROUTE_LOCK.md",
+    "doc:docs/exec-plans/active/vnext-1a-1b-data-foundation.md",
+    "doc:docs/design-docs/vnext-flow-schema-migration.md",
+    "code:packages/project-knowledge/src/db/client.ts",
+    "code:packages/project-knowledge/src/repository.ts",
+    "code:packages/project-knowledge/src/types.ts",
+    "test:packages/project-knowledge/src/vnext-persistence.test.ts",
+    "test:packages/project-knowledge/src/import-flow.test.ts",
+    "code:packages/local-api/src/index.ts",
+    "test:packages/local-api/src/index.test.ts",
+    "code:apps/extension/lib/knowledge-client.ts",
+    "code:apps/studio/electron/knowledge-client.ts",
+    "code:apps/studio/electron/services.ts",
+    "code:apps/studio/electron/main.ts",
+    "code:apps/studio/src/App.tsx",
+    "code:apps/web/src/api.ts",
+    "code:apps/web/src/App.tsx"
+  ],
+  "command_results": [
+    {
+      "cmd": "pnpm install --frozen-lockfile",
+      "status": "pass",
+      "result": "fresh worktree 安装 801 个 workspace 依赖，全部从本地 store 复用；lockfile 未变化。"
+    },
+    {
+      "cmd": "pnpm turbo build --force",
+      "status": "pass",
+      "result": "13/13 successful，0 cached；包含 Extension、Studio、Web 与全部 packages。"
+    },
+    {
+      "cmd": "pnpm turbo typecheck --force",
+      "status": "pass",
+      "result": "21/21 successful，0 cached。"
+    },
+    {
+      "cmd": "pnpm turbo lint --force",
+      "status": "pass",
+      "result": "13/13 successful，0 cached。"
+    },
+    {
+      "cmd": "pnpm turbo test --force",
+      "status": "pass",
+      "result": "21/21 tasks successful，0 cached；13 个 workspace 共 658 tests 通过，包含 runtime real-page 与 recorded-replay 矩阵。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/project-knowledge test",
+      "status": "pass",
+      "result": "6 files / 105 tests。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/local-api test && pnpm --filter @flowweave/app-extension test",
+      "status": "pass",
+      "result": "Local API 13/13；Extension 79/79。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/app-studio test && pnpm --filter @flowweave/app-web test",
+      "status": "pass",
+      "result": "Studio 218/218；Web 31/31。"
+    },
+    {
+      "cmd": "pnpm --filter @flowweave/flow-dsl test",
+      "status": "pass",
+      "result": "4 files / 61 tests。"
+    },
+    {
+      "cmd": "independent attack: stale legacy save/rename/restore + recorder create",
+      "status": "pass",
+      "result": "legacy save、revision save、rename、restore 均返回 FLOW_REVISION_CONFLICT；current/version 快照完全相等，新 Flow revision=1。"
+    },
+    {
+      "cmd": "independent attack: quoted/backslash/newline secret physical scan",
+      "status": "pass",
+      "result": "升级至 revision=2/schema=2；candidate、current/export/execution/version API JSON 以及 SQLite raw/JSON-escaped 均零命中，WAL/SHM 不存在。"
+    },
+    {
+      "cmd": "independent attack: active SQLite reader maintenance lock",
+      "status": "pass",
+      "result": "返回 FLOW_PERSISTENCE_FAILED；document、revision、schema、version、recent、execution 前后逐字段一致。"
+    },
+    {
+      "cmd": "independent attack: restore v2 historical version through Local API",
+      "status": "fail",
+      "result": "当前 v1 revision=4 时，以 expectedRevision=4 恢复同 Flow 的 v2 历史版本，HTTP 返回 500 / legacy getFlowVersion 只允许读取 v1 Flow；revision/schema 保持 4/v1。"
+    },
+    {
+      "cmd": "git diff --check && git diff --check b60fb3a..e2d1848",
+      "status": "pass",
+      "result": "均无输出；remediation diff 恰为 31 文件。"
+    }
+  ],
+  "hard_gates": [
+    {
+      "id": "first-review-cas-required-fix",
+      "status": "pass",
+      "evidence": [
+        "legacy saveFlow 已成为 create-only；既有 Flow 无 expectedRevision 时稳定返回 FLOW_REVISION_CONFLICT。",
+        "renameFlow 与 restoreFlowVersion 现在强制正整数 expectedRevision，并在最终 UPDATE 再带 revision 条件。",
+        "Extension 先读取 caller revision；Local API、Studio、Web 与 Electron IPC 将 revision 原样传到底层，成功重命名/恢复后刷新 revision。",
+        "独立 stale 攻击确认四条写路径零写，且 recorder 新建 Flow 仍为 revision=1。"
+      ]
+    },
+    {
+      "id": "first-review-secret-erasure-required-fix",
+      "status": "pass",
+      "evidence": [
+        "升级前 checkpoint/TRUNCATE 与 DELETE journal 维护锁在业务事务之前执行；可写连接启用 secure_delete。",
+        "清理覆盖当前安全快照、历史版本、execution flowSnapshot/variables/environment/baseUrl/storageStatePath 与 step error/screenshot/diagnostic details。",
+        "独立 canary 同时包含双引号、反斜杠和换行；raw 与 JSON-escaped 对 candidate、API、版本、SQLite/WAL/SHM 均零命中。",
+        "当前 Flow description 若复制了已识别秘密会 FLOW_UPGRADE_BLOCKED 且不产生 v2/版本；这是允许的 fail-closed，不把失败请求误报成功。"
+      ]
+    },
+    {
+      "id": "active-reader-zero-write-maintenance-gate",
+      "status": "pass",
+      "evidence": [
+        "活跃只读事务导致升级在任何业务写入前返回 FLOW_PERSISTENCE_FAILED。",
+        "独立探针预置 execution 与 recent 行，失败后 document/revision/schema/version/recent/execution 全部不变。",
+        "成功路径物理扫描确认主库无 canary，WAL/SHM 已移除。"
+      ]
+    },
+    {
+      "id": "strict-import-export-roundtrip",
+      "status": "pass",
+      "evidence": [
+        "v1 使用既有 portability 清理并保留 v1；v2 经过 strict parser 且不降级。",
+        "导入始终生成新 flowId、目标 projectId、revision=1 和新时间，不复制版本、最近值、执行历史或来源数据目录。",
+        "本地 upload 路径与 URL 凭据被拒绝；未知 schemaVersion 在开库写入前失败且 Flow 列表不变。",
+        "Knowledge 105/105 与独立 API/字节探针共同覆盖 roundtrip 与 canary。"
+      ]
+    },
+    {
+      "id": "cross-version-history-read-and-restore",
+      "status": "fail",
+      "evidence": [
+        "repository.restoreFlowRevision 本身可恢复 v1/v2，但对外 getFlowVersion/restoreFlowVersion 明确锁为 v1-only。",
+        "Local API GET/restore 版本路由先调用 legacy getFlowVersion，因此 v2 历史版本无法读取或恢复。",
+        "实际 HTTP 探针返回 500 与 legacy v1-only 消息；Studio 本地 repository 模式、HTTP fallback 和 Web 均复用相同 legacy 链路。"
+      ]
+    },
+    {
+      "id": "studio-runtime-v2-zero-side-effect",
+      "status": "pass",
+      "evidence": [
+        "Studio service 的 schema guard 仍位于 startedAt、executionId、run directory、环境检查、browser/runtime 之前。",
+        "e2d1848 对 8e6aaa9 的相关改动只补 revision/portability 类型与测试 fixture，未移动或删除 guard。",
+        "Studio 218/218 与全仓 runtime 52/52 通过。"
+      ]
+    },
+    {
+      "id": "fresh-verification-and-scope",
+      "status": "pass",
+      "evidence": [
+        "fresh frozen install 后 build/typecheck/lint/test 全部强制绕过缓存通过。",
+        "31 文件 remediation diff 均服务 CAS、portability、revision UI 或安全清理；未见路线外功能。",
+        "审查仅新增 g1b-knowledge-r2 的 verdict.md 与 scorecard.json。"
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "P1-01",
+      "severity": "P1",
+      "title": "v2 历史版本仍被 legacy 读取/恢复链路阻断",
+      "locations": [
+        "packages/project-knowledge/src/repository.ts:1527",
+        "packages/project-knowledge/src/repository.ts:1556",
+        "packages/local-api/src/index.ts:356",
+        "packages/local-api/src/index.ts:365",
+        "apps/studio/electron/knowledge-client.ts:255",
+        "apps/studio/electron/knowledge-client.ts:269"
+      ],
+      "observed": "在 v1→v2、保存 v2 形成 v2 version、再恢复当前为 v1 后，通过冻结 Local API endpoint 用正确 expectedRevision 恢复该 v2 version，实际返回 HTTP 500：legacy getFlowVersion 只允许读取 v1 Flow。current revision/schema 保持不变。",
+      "impact": "冻结设计要求 v1/v2 版本均可读取与恢复。当前 repository 的通用 restoreFlowRevision 能力没有通过 Local API、Studio/Web 暴露，用户无法查看或恢复 v2 历史版本；现有测试只覆盖 repository 通用方法和 v1 client 路径，未捕获跨层断链。",
+      "required_fix": "提供按 projectId+versionId 严格归属校验的 AnyFlowDocument 版本读取入口，并让 Local API/Studio/Web 的版本读取与恢复按 schema 分派到 restoreFlowRevision；保持 expectedRevision CAS、400/409 稳定映射、成功后 revision 刷新和 v1 默认行为。新增真实 v2 version 经 Local API 及 Studio 本地/HTTP fallback 恢复的回归，验证错项目/错版本/stale revision 零写。"
+    }
+  ],
+  "p0_count": 0,
+  "p1_count": 1,
+  "p2_count": 0,
+  "dimensions": [
+    {
+      "name": "migration_and_legacy_compatibility",
+      "score": 20,
+      "max_score": 20,
+      "reason": "集中幂等 migration、旧库重复打开、v1 默认与 legacy v2 fail-closed 均符合合同。"
+    },
+    {
+      "name": "cas_transactions_and_zero_write",
+      "score": 20,
+      "max_score": 20,
+      "reason": "save/upgrade/restore/recent/rename 使用真实同步事务与最终 CAS；stale、故障注入和活跃 reader 均证明零写。"
+    },
+    {
+      "name": "sensitive_data_erasure_and_safe_errors",
+      "score": 20,
+      "max_score": 20,
+      "reason": "复杂 canary 的结构清理、物理字节扫描、维护锁、checkpoint 与 secure_delete 证据闭合，未发现错误泄漏。"
+    },
+    {
+      "name": "portability_versions_and_restore",
+      "score": 9,
+      "max_score": 15,
+      "reason": "v1/v2 import/export roundtrip 合格，但 v2 历史版本无法通过正式读取/恢复 endpoint 使用。"
+    },
+    {
+      "name": "cross_layer_clients_and_runtime_isolation",
+      "score": 10,
+      "max_score": 15,
+      "reason": "CAS 与 Studio run guard 跨层正确，然而 Local API、Studio/Web 的版本客户端仍绑定 v1-only 方法。"
+    },
+    {
+      "name": "tests_evidence_and_scope",
+      "score": 9,
+      "max_score": 10,
+      "reason": "658 个全仓测试、fresh 强制门禁和四组独立攻击证据充分；缺少 v2 version 的正式 API/client 恢复回归。"
+    }
+  ],
+  "penalties": [],
+  "totals": {
+    "raw_score": 88,
+    "penalty_total": 0,
+    "final_score": 88
+  },
+  "verdict": "REVISE",
+  "required_fixes": [
+    "修复 P1-01：打通严格、CAS-aware 的 v2 历史版本读取与恢复链路，覆盖 Local API、Studio 本地/HTTP fallback 和 Web；补 v1/v2、stale revision、错归属与零写回归。"
+  ],
+  "nice_to_have": [],
+  "reviewers": [
+    {
+      "role": "verifier",
+      "conclusion": "REVISE",
+      "summary": "首审三项安全/并发修复与全仓门禁均通过，但独立 HTTP 攻击确认 v2 version 正式恢复链路不可用。"
+    },
+    {
+      "role": "strict_judge",
+      "conclusion": "REVISE",
+      "summary": "冻结合同明确要求 v1/v2 可读取和恢复；repository 内部通用方法不能替代跨层产品入口。"
+    },
+    {
+      "role": "anti_slop_reviewer",
+      "conclusion": "REVISE",
+      "summary": "31 文件修订总体聚焦且验证充分；唯一阻塞项有可重复的真实 HTTP 证据，不是风格建议。"
+    }
+  ],
+  "reviewed_at": "2026-08-30T15:51:00+08:00"
+}
